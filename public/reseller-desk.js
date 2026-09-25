@@ -30,9 +30,9 @@ async function renderHome() {
   const c = Array.isArray(comm) ? comm[0] : comm || {};
   const origin = location.origin;
   const aff = me.affiliate_code || '';
-  document.getElementById('home').innerHTML = `<div class="grid kpis">
-    <div class="card"><div class="kicker">Available</div><div class="kpi">${money(s.net || b.available)}</div><div class="faint">Your links plus commission</div></div>
-    <div class="card"><div class="kicker">Commission earned</div><div class="kpi">${money(c.commission_earned || s.reseller_commission_in)}</div><div class="faint">${Number(s.commission_percent || 0).toFixed(2)}% of team net after the platform fee</div></div>
+  const kpis = `<div class="grid kpis">
+    <div class="card"><div class="kicker">Available</div><div class="kpi">${money(s.net ?? b.available)}</div><div class="faint">Your links plus commission</div></div>
+    <div class="card"><div class="kicker">Commission earned</div><div class="kpi">${money(c.commission_earned ?? s.reseller_commission_in)}</div><div class="faint">All time, ${Daily.pct(s.commission_percent || 0)} of team net after the platform fee</div></div>
     <div class="card"><div class="kicker">Team accounts</div><div class="kpi">${Number(t.member_count || 0)}</div><div class="faint">Team available ${money(t.team_available)}</div></div>
   </div>
   <div class="card">
@@ -41,6 +41,8 @@ async function renderHome() {
     <code>${escapeHtml(origin + '/register.html?role=freelancer&ref=' + aff)}</code>
     <p class="faint" style="margin:14px 0 0">Link cost is added to what the payer pays. The platform fee is CPAY's cut. Commission is your cut of the freelancer's net. The admin can change all three.</p>
   </div>`;
+  document.getElementById('home').innerHTML = '<div class="stack" id="dailySelf"><p class="muted">Loading…</p></div>';
+  await Daily.mountSelf(document.getElementById('dailySelf'), { between: kpis, commission: true });
 }
 
 async function renderTeam() {
@@ -67,7 +69,8 @@ async function renderTeam() {
     <td class="num">${money(r.platform_fee)}</td>
     <td class="num">${money(r.commission)}</td>
   </tr>`).join('');
-  document.getElementById('team').innerHTML = `<div class="card">
+  document.getElementById('team').innerHTML = `<div class="stack" id="teamDaily"><div class="card"><p class="muted">Loading team days…</p></div></div>
+  <div class="card">
     <h3>Team link cost</h3>
     <p class="muted">Link cost is added to what the payer pays. It is separate from the platform fee and your commission. You can lock one rate on every freelancer on your team.</p>
     <div class="field short"><label for="teamCost">Link cost %</label><input id="teamCost" type="number" min="0" step="0.1" value="${Number(me.team_cost_percent || me.cost_percent || 0)}"></div>
@@ -86,6 +89,7 @@ async function renderTeam() {
     <table class="table"><thead><tr><th>Freelancer</th><th>Link</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Your cut</th></tr></thead>
     <tbody>${commRows || '<tr><td colspan="5" class="empty">No commission yet</td></tr>'}</tbody></table>
   </div>`;
+  Daily.mountTeam(document.getElementById('teamDaily'));
   document.querySelectorAll('[data-cash]').forEach((btn) => {
     btn.onclick = () => prepareWithdraw(btn.dataset.cash, btn.dataset.name, btn.dataset.avail);
   });

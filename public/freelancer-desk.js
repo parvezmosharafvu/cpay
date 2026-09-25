@@ -20,21 +20,22 @@ async function boot() {
 }
 
 async function renderHome() {
-  const [{ data: bal }, { data: day }, { data: split }] = await Promise.all([
+  const [{ data: bal }, { data: split }] = await Promise.all([
     sb.rpc('get_my_balance'),
-    sb.rpc('my_daily_settled'),
     sb.rpc('my_earnings_split'),
   ]);
   const b = Array.isArray(bal) ? bal[0] : bal || {};
-  const d = Array.isArray(day) ? day[0] : day || {};
   const s = Array.isArray(split) ? split[0] : split || {};
-  document.getElementById('home').innerHTML = `<div class="grid kpis">
-    <div class="card"><div class="kicker">Available</div><div class="kpi">${money(s.net || b.available)}</div><div class="faint">Ready to withdraw</div></div>
-    <div class="card"><div class="kicker">Settled on your links</div><div class="kpi">${money(s.settled || d.total_settled || 0)}</div><div class="faint">Paid by customers</div></div>
-    <div class="card"><div class="kicker">Platform fee</div><div class="kpi">${money(s.platform_fee)}</div><div class="faint">CPAY's fee on settled payments</div></div>
-    <div class="card"><div class="kicker">Reseller commission</div><div class="kpi">${money(s.reseller_commission_out)}</div><div class="faint">${Number(s.commission_percent || 0).toFixed(2)}% of your net after the platform fee</div></div>
-    <div class="card"><div class="kicker">Link cost</div><div class="kpi">${Number(s.cost_percent || 0).toFixed(2)}%</div><div class="faint">${s.cost_locked ? 'Set by your reseller' : 'Added to what the payer pays'}</div></div>
+  const kpis = `<div class="grid kpis">
+    <div class="card"><div class="kicker">Available</div><div class="kpi">${money(s.net ?? b.available)}</div><div class="faint">Ready to withdraw</div></div>
+    <div class="card"><div class="kicker">Settled on your links</div><div class="kpi">${money(s.settled)}</div><div class="faint">All time, paid by customers</div></div>
+    <div class="card"><div class="kicker">Platform fee</div><div class="kpi">${money(s.platform_fee)}</div><div class="faint">All time, CPAY's fee on settled payments</div></div>
+    <div class="card"><div class="kicker">Reseller commission</div><div class="kpi">${money(s.reseller_commission_out)}</div><div class="faint">${Daily.pct(s.commission_percent || 0)} of your net after the platform fee</div></div>
+    <div class="card"><div class="kicker">Link cost</div><div class="kpi">${Daily.pct(s.cost_percent || 0)}</div><div class="faint">${s.cost_locked ? 'Set by your reseller' : 'Added to what the payer pays'}</div></div>
   </div>`;
+  const home = document.getElementById('home');
+  home.innerHTML = '<div class="stack" id="dailySelf"><p class="muted">Loading…</p></div>';
+  await Daily.mountSelf(document.getElementById('dailySelf'), { between: kpis });
 }
 
 async function renderLinks() {

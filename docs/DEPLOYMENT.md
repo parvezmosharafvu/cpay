@@ -3,36 +3,39 @@
 ## 1. Supabase
 
 - [ ] Create a new Supabase project
-- [ ] Run migrations in order from `supabase/migrations/`, **0001 → 0091**,
+- [ ] Run migrations in order from `supabase/migrations/`, **0001 → 0101**,
       one file at a time in the SQL Editor. 0018 is required — without it the
       database has a privilege-escalation hole and two conflicting balance
       definitions.
 - [ ] Run the verification queries at the bottom of this file
 - [ ] Deploy the Edge Functions:
 
-      supabase functions deploy btcpay-webhook  --no-verify-jwt
+      supabase functions deploy admin-actions
+      supabase functions deploy auth-settings
       supabase functions deploy create-invoice  --no-verify-jwt
       supabase functions deploy user-withdraw
       supabase functions deploy daily-report    --no-verify-jwt
       supabase functions deploy ledger-backup   --no-verify-jwt
       supabase functions deploy og-image        --no-verify-jwt
-      supabase functions deploy reconcile       --no-verify-jwt
       supabase functions deploy health          --no-verify-jwt
 
       Why the flags differ:
-        * btcpay-webhook  — BTCPay cannot send a Supabase JWT. It authenticates
-                            with an HMAC signature instead, checked in code.
-                            Its two admin routes verify an admin JWT themselves.
         * create-invoice  — paying customers have no account, so there is no
                             JWT to send. Abuse is capped by a per-link rate
                             limit inside the function.
-        * user-withdraw   — always called by a signed-in creator, so leave JWT
-                            verification ON.
+        * user-withdraw,
+          admin-actions,
+          auth-settings   — always called by a signed-in creator or admin, so
+                            leave JWT verification ON. admin-actions and
+                            auth-settings check the admin role again in code.
         * daily-report,
           ledger-backup   — called by pg_cron, which sends `x-cron-secret`,
                             not a JWT. Both fail closed if CRON_SECRET is unset.
 
-- [ ] Add all secrets listed in `docs/ENV_VARS.md`
+- [ ] Add all secrets listed in `docs/ENV_VARS.md`. For the sign-up email
+      confirmation switch that includes `CPAY_SUPABASE_ACCESS_TOKEN`, a
+      Supabase personal access token: account-level and powerful, so it
+      lives only as an edge-function secret.
 - [ ] Create your own account through the app, then in the SQL Editor:
       `update profiles set role = 'admin' where email = 'you@example.com';`
       (This has to be done in SQL. A creator cannot promote themselves — 0018
@@ -44,19 +47,13 @@
 
       Then run `supabase/functions/ledger-backup/ledger-backup-trigger.sql`.
 
-## 2. BTCPay Server
+## 2. Payment provider
 
-- [ ] Create a Store, connect a Lightning node
-- [ ] Add a webhook: URL = `https://YOUR-PROJECT.supabase.co/functions/v1/btcpay-webhook`,
-      secret = same value as `BTCPAY_WEBHOOK_SECRET`
-- [ ] Subscribe the webhook to at least: InvoiceSettled, InvoiceExpired,
-      InvoiceInvalid, InvoiceProcessing, InvoiceReceivedPayment
-- [ ] Store invoice currency must be **USD** — the webhook only accepts a
-      settled amount from BTCPay when the invoice currency matches the column
-      it is being written into, and falls back to the requested amount otherwise
-- [ ] Enable the Payout Processor plugin (needed for the automated
-      Lightning payout path)
-- [ ] Set invoice expiration to 60 minutes, matching `create-invoice`
+- [ ] Run the payment service (`payment-service/README.md`) on a host with
+      a persistent disk, and set `PAYMENT_SERVICE_URL` and
+      `PAYMENT_SERVICE_SECRET` as Edge Function secrets.
+- [ ] Mainnet needs a Breez API key, and the custody question (cpay holds
+      creators' money in its wallet) settled first.
 
 ## 3. Frontend hosting (Cloudflare Pages direct upload or GitHub Pages)
 
@@ -88,15 +85,15 @@
 ## 5. End-to-end test
 
 - [ ] Register a test account, log in, create a payment link
-- [ ] Send a small BTCPay testnet Lightning payment to a generated invoice
+- [ ] Pay a generated invoice with a small test Lightning payment (needs the payment provider)
 - [ ] Confirm the invoice page flips to "settled" live, with no refresh
 - [ ] Confirm the creator dashboard's "available" figure matches
       `select * from get_balance_for('<user-id>')`
 - [ ] Submit a withdrawal request as the test user
 - [ ] In the admin panel: approve/reject a pending request, and mark a
       bKash/Nagad request paid manually
-- [ ] Double-click "Force BTCPay Payout" — the second click must return
-      "Already processed", not a second payout
+- [ ] Double-click "Mark Paid" on a pending withdrawal — the second click
+      must return "Already processed"
 - [ ] Paste a payment link into WhatsApp and confirm the link preview renders
 
 ## 5b. This update's new pieces (migration 0033 + headers + alerts)

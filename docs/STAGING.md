@@ -53,14 +53,12 @@ but point them at test resources:
 
 | Secret | Staging value |
 |---|---|
-| `BTCPAY_URL` | A BTCPay **testnet** store, or leave unset to test the failure path |
-| `BTCPAY_API_KEY*` | Testnet keys only |
 | `GITHUB_REPO` | A throwaway repo, or unset so ledger-backup no-ops |
 | `ALERT_WEBHOOK_URL` | A separate channel, so staging noise never reaches the real one |
 | `CRON_SECRET` | Different from production |
 
-**Never point staging at the production BTCPay store.** A test payout
-run against a live Lightning node spends real sats.
+**Never point staging at a production payment wallet.** A test payout
+run against a live Lightning wallet spends real sats.
 
 **6. A staging copy of the site.** Either a second Cloudflare Pages
 project on a `staging` branch, or run it locally — the site is static
@@ -103,13 +101,14 @@ most of what a migration can break.
 
 After migrations `0079` and `0080`, Admin → Health → **Run preflight** and the
 **Staging sign-off ledger** provide a
-read-only snapshot of active shops, payment domains, orphan links, pending
-and processing withdrawals, profile states, emergency flags and receiving
-QR records. It is a configuration check, not a BTCPay network probe.
+read-only snapshot of payment domains, pending and processing
+withdrawals, profile states, emergency flags and receiving QR records. It
+is a configuration check, not a payment provider network probe.
 
-Use `docs/BTCPAY-STAGING-RUNBOOK.md` for invoice, webhook, duplicate delivery
-and payout tests. Use `docs/PRODUCTION-READINESS.md` before any production
-money movement.
+Invoice, payment event, duplicate delivery and payout tests run against
+the payment service on regtest (receive) and small mainnet amounts
+(stablecoin withdrawals, which are mainnet only). Use
+`docs/PRODUCTION-READINESS.md` before any production money movement.
 
 ## Keeping the two in step
 

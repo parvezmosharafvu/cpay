@@ -7,9 +7,8 @@
 --   select vault.create_secret('https://YOUR-PROJECT.supabase.co',
 --                              'cpay_functions_url');
 --
--- One BTCPay shop is enough. Link cost_percent is set by the
--- freelancer or locked by their reseller; it is not a shop setting.
--- Admin profit is platform_fee on settled earnings, not shop spread.
+-- Link cost_percent is set by the freelancer or locked by their
+-- reseller. Admin profit is platform_fee on settled earnings.
 -- ============================================================
 
 select cron.unschedule('reseller-digest-trigger')

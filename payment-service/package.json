@@ -1,0 +1,14 @@
+{
+  "name": "cpay-payment-service",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@breeztech/breez-sdk-spark": "0.26.0",
+    "pg": "^8.13.0"
+  }
+}

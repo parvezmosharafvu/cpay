@@ -1,7 +1,7 @@
 # CPAY Owner Guide — new project only
 
 এই গাইডটি নতুন `cpay` project-এর জন্য। পুরনো CPAY production project,
-তার Supabase database, BTCPay store বা Cloudflare route-এ এই ধাপগুলো চালাবেন না।
+তার Supabase database, payment wallet বা Cloudflare route-এ এই ধাপগুলো চালাবেন না।
 
 ## Current boundary
 
@@ -10,7 +10,7 @@
 - Cloudflare: the separate `cpay` Workers & Pages project
 - Old production: unchanged and out of scope
 - Public browser configuration: `public/config.js` contains only the Supabase URL
-  and anon key. Never add a service-role key, database password, BTCPay token,
+  and anon key. Never add a service-role key, database password, payment provider key,
   webhook secret or GitHub token to this file.
 
 ## Phase 1 delivered locally
@@ -44,7 +44,7 @@
 1. Open the **new CPAY Supabase project**.
 2. Take a backup/snapshot if the project already has data.
 3. Run the files in `supabase/migrations/` in numeric order.
-4. The new project currently ends at migration `0091`.
+4. The new project currently ends at migration `0101`.
 5. Confirm the following objects exist:
 
 ```sql
@@ -128,31 +128,25 @@ The local sandbox may not have the optional Amplitude package installed. If
 dependencies in the Cloudflare build environment or run `npm install` locally;
 do not edit `node_modules` or commit generated secrets.
 
-## BTCPay comes after onboarding
+## Payments come after onboarding
 
-Create a separate CPAY BTCPay store and testnet/staging flow first. The safe
-order is:
-
-1. Create the store and connect the Lightning node.
-2. Configure the CPAY invoice currency and expiry.
-3. Deploy `create-invoice` and `btcpay-webhook`.
-4. Add the CPAY webhook URL and a new webhook secret.
-5. Test invoice creation, settlement, expiry and duplicate webhook delivery.
-6. Only then test Lightning withdrawals.
-7. On-chain withdrawals remain disabled until address validation, provider
-   behavior, fees, confirmations, retry, idempotency and an emergency stop are
-   verified in staging.
-
-Never reuse the old project's BTCPay token, webhook secret or production store
-without an explicit migration plan.
+Payments run on Breez SDK Spark through `payment-service/` (see
+`docs/ARCHITECTURE.md`). Receiving is proven on the Breez regtest network.
+Instant USDT/USDC withdrawals go out through the payment service (mainnet
+only); bKash, Nagad, Binance Pay, Lightning and bank withdrawals are paid by
+hand and marked paid in the admin panel. Test invoice creation,
+settlement, expiry and duplicate event delivery in staging with small
+mainnet amounts before any withdrawal testing. On-chain withdrawals remain disabled
+until address validation, provider behavior, fees, confirmations, retry,
+idempotency and an emergency stop are verified in staging.
 
 ## What happens next
 
-1. Apply migrations `0067` through `0091` to the new CPAY Supabase project.
+1. Apply migrations `0067` through `0101` to the new CPAY Supabase project.
 2. Deploy the new Edge Functions and configure secrets in Supabase.
 3. Push the local CPAY changes to the new GitHub repository.
 4. Run the onboarding, link, invoice and QR test checklist.
 5. Review the admin profile workspace, permission matrix, domain assignment, audit timeline and payment themes.
-6. Use `docs/BTCPAY-STAGING-RUNBOOK.md` to complete BTCPay staging and withdrawal hardening.
+6. Complete payment staging and withdrawal hardening once the payment provider exists.
 7. Review Admin → Health and `docs/PRODUCTION-READINESS.md`.
 8. Only after staging passes, consider production money movement.

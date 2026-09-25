@@ -13,8 +13,8 @@ cp public/config.example.js public/config.js
 ```
 
 Edit `public/config.js` with the new CPAY Supabase URL and public anon key.
-The anon key is public by design. Never place a service-role key, BTCPay token
-or webhook secret in this file.
+The anon key is public by design. Never place a service-role key, payment
+provider key or webhook secret in this file.
 
 Then run:
 
@@ -42,19 +42,20 @@ The direct frontend upload does not deploy Supabase SQL or Edge Functions.
 Apply migrations `0001` through `0080` only to the new CPAY staging project,
 then deploy the Edge Functions using `docs/DEPLOYMENT.md`.
 
-Do not connect the direct-upload project to previous Supabase project, BTCPay,
-Cloudflare routes or secrets.
+Do not connect the direct-upload project to previous Supabase project, payment
+wallets, Cloudflare routes or secrets.
 
 ## 3. Verify after upload
 
 1. Open the CPAY home page.
 2. Open `/login.html` and `/register.html`.
 3. Open an unknown test slug and confirm CPAY's payment/404 surface appears.
-4. Open `/theme-preview.html`.
+4. Open a test payment link and confirm the checkout page renders. Open
+   `/theme-preview.html` and click through the ten designs.
 5. Confirm the site favicon and payment favicon are different.
 6. Open Admin → Health and run the preflight after migrations `0079` and
    `0080` are applied; then review the staging sign-off ledger.
 
-Use a staging domain first. Do not enable real BTCPay money movement until
+Use a staging domain first. Do not enable real money movement until
 the sign-off ledger, webhook tests, reconciliation and rollback evidence are
 complete.

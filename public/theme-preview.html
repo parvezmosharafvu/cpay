@@ -1,50 +1,150 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b0f0c">
-  <title>CPAY — Payment design preview</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon-payment.svg">
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
-  <style>
-    :root{--bg:#0b0f0c;--panel:#131916;--panel-hi:#1a221d;--line:rgba(255,255,255,.10);--text:#f2f7f3;--dim:rgba(242,247,243,.58);--green:#00d632;--on:#04240d}
-    *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--text)}
-    body{padding:28px 18px 48px;background:radial-gradient(circle at 50% -8%,rgba(0,214,50,.15),transparent 42%),var(--bg)}
-    .page{max-width:1050px;margin:auto}.top{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:24px}
-    .brand{display:flex;align-items:center;gap:10px;font-weight:700}.mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(145deg,#00d632,#9bd31a);display:grid;place-items:center;color:#04240d}
-    .eyebrow{color:var(--green);font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.title{font-size:clamp(24px,4vw,38px);margin:10px 0 6px}.sub{color:var(--dim);font-size:13px;line-height:1.5;max-width:570px}
-    .layout{display:grid;grid-template-columns:minmax(220px,1fr) minmax(300px,420px);gap:24px;align-items:start}
-    .panel{background:rgba(19,25,22,.92);border:1px solid var(--line);border-radius:18px;padding:16px}.panel-title{font-weight:700;font-size:14px}.panel-sub{font-size:11px;color:var(--dim);margin-top:3px}
-    .theme-list{display:grid;gap:8px;margin-top:15px}.theme-option{width:100%;display:flex;align-items:center;justify-content:space-between;text-align:left;gap:12px;background:var(--panel-hi);border:1px solid var(--line);border-radius:11px;color:var(--text);padding:11px;cursor:pointer}
-    .theme-option.active{border-color:var(--green);box-shadow:0 0 0 1px rgba(0,214,50,.24)}.theme-option strong{display:block;font-size:12px}.theme-option span{display:block;color:var(--dim);font-size:10px;margin-top:3px}.theme-dot{width:28px;height:28px;border-radius:8px;flex:0 0 auto;background:var(--green)}
-    .phone-wrap{display:flex;justify-content:center}.phone{width:min(100%,360px);min-height:650px;border-radius:30px;padding:16px;box-shadow:0 24px 60px rgba(0,0,0,.35);background:#0b1710;color:#effff2;border:1px solid rgba(255,255,255,.12)}
-    .phone-top{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:13px}.avatar{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:rgba(0,214,50,.18);color:var(--green);border:1px solid rgba(0,214,50,.35)}
-    .merchant{margin-top:18px;text-align:center;border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:16px;background:rgba(255,255,255,.035)}.secure{display:inline-block;background:var(--green);color:var(--on);padding:5px 13px;border-radius:999px;font-size:10px;font-weight:800}.merchant-avatar{width:54px;height:54px;border-radius:16px;display:grid;place-items:center;margin:10px auto 8px;background:var(--green);color:var(--on);font-size:28px;font-weight:700}.merchant-name{font-weight:700;font-size:19px}.merchant-sub{font-size:10px;color:rgba(239,255,242,.58);margin-top:4px}
-    .amount{font:700 72px 'JetBrains Mono';text-align:center;margin:34px 0 24px;letter-spacing:-5px}.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.key{border:0;background:rgba(255,255,255,.035);color:inherit;border-radius:9px;padding:13px 5px;font-size:23px}.quick{width:100%;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:inherit;border-radius:11px;padding:12px;margin-top:5px;font-weight:700}.pay{width:100%;border:0;background:var(--green);color:var(--on);border-radius:12px;padding:14px;margin-top:10px;font-size:16px;font-weight:800}.nav{display:flex;justify-content:space-between;align-items:center;margin-top:26px;color:rgba(239,255,242,.64);font-size:12px}.nav-center{width:43px;height:43px;border-radius:50%;display:grid;place-items:center;background:var(--green);color:var(--on);font-size:22px}
-    html[data-theme="classic"] .phone{background:#f3faf5;color:#102018}html[data-theme="classic"] .merchant{background:#fff;border-color:#d3e3d7}html[data-theme="classic"] .secure{background:#0d1b11;color:#8dffa8}html[data-theme="classic"] .merchant-avatar{background:#0d1b11;color:#8dffa8}html[data-theme="classic"] .merchant-sub,html[data-theme="classic"] .nav{color:rgba(16,32,24,.58)}html[data-theme="classic"] .amount{margin:32px 0 27px}html[data-theme="classic"] .key{background:#eaf4ed}html[data-theme="classic"] .quick{background:#d7ecdc;color:#0d6526;border-color:#b8d9c0}html[data-theme="classic"] .pay{background:#0d1b11;color:#8dffa8}
-    html[data-theme="tile"] .phone{background:#050a07}html[data-theme="tile"] .merchant{background:rgba(0,0,0,.14)}html[data-theme="tile"] .key{background:rgba(255,255,255,.16);border-radius:6px}html[data-theme="tile"] .pay{background:rgba(0,0,0,.32);color:#fff}
-    html[data-theme="focus"] .phone{background:#101912}html[data-theme="focus"] .merchant{background:rgba(255,255,255,.04)}html[data-theme="focus"] .amount{margin:24px 0 18px;font-size:64px}html[data-theme="focus"] .key{background:transparent;padding:10px 5px}html[data-theme="focus"] .pay{background:#00d632;color:#04240d}
-    html[data-theme="receipt"]{background:#eaf2ec}html[data-theme="receipt"] body{background:#eaf2ec;color:#102016}html[data-theme="receipt"] .phone{background:#eaf2ec;color:#102016;border-color:#d1e1d5}html[data-theme="receipt"] .merchant{background:#fff;border-color:#d1e1d5}html[data-theme="receipt"] .secure{background:#0d1b11;color:#8dffa8}html[data-theme="receipt"] .merchant-avatar{background:#0d1b11;color:#8dffa8}html[data-theme="receipt"] .merchant-sub,html[data-theme="receipt"] .nav{color:rgba(16,32,24,.58)}html[data-theme="receipt"] .key{background:#f5fbf6;color:#102016}html[data-theme="receipt"] .quick{background:#d7ecdc;color:#0d6526;border-color:#b8d9c0}html[data-theme="receipt"] .pay{background:#0d1b11;color:#8dffa8}
-    @media(max-width:700px){body{padding:18px 12px 34px}.layout{grid-template-columns:1fr}.phone{min-height:610px}.top{margin-bottom:18px}}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Checkout designs · CPAY</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="cpay.css">
+<!-- qrcode.min.js draws the sample QR; theme.js holds the ten designs. No
+     account or database is needed: everything on this page is sample data. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="theme.js"></script>
 </head>
 <body>
-  <main class="page">
-    <div class="top"><div class="brand"><span class="mark">⚡</span><span>CPAY design studio</span></div><span class="eyebrow">Payment link preview</span></div>
-    <div class="eyebrow">Customer-facing layouts</div>
-    <h1 class="title">Choose a payment experience that fits your brand.</h1>
-    <p class="sub">Preview the five CPAY layouts before you create a link. The selected design is only a visual layout; payment security and server-side controls stay the same.</p>
-    <section class="layout">
-      <div class="panel"><div class="panel-title">Available designs</div><div class="panel-sub">Select a layout to update the live preview.</div><div class="theme-list" id="themeList"></div></div>
-      <div class="phone-wrap"><div class="phone"><div class="phone-top"><span>Amina Studio</span><span class="avatar">A</span></div><div class="merchant"><span class="secure">✓ Secure Payment</span><div class="merchant-avatar">A</div><div class="merchant-name">Amina Studio</div><div class="merchant-sub">Instant · Lightning</div></div><div class="amount">$0</div><div class="keypad"><button class="key">1</button><button class="key">2</button><button class="key">3</button><button class="key">4</button><button class="key">5</button><button class="key">6</button><button class="key">7</button><button class="key">8</button><button class="key">9</button><button class="key">·</button><button class="key">0</button><button class="key">⌫</button></div><button class="quick">Quick amount</button><button class="pay">Pay</button><div class="nav"><span>$0</span><span class="nav-center">$</span><span>◷</span></div></div></div>
+<main class="wrap preview-page">
+  <nav class="nav"><a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a><a class="btn ghost sm" href="dashboard.html">Back to dashboard</a></nav>
+  <header class="preview-intro">
+    <div class="kicker">Checkout designs</div>
+    <h1>Pick how your payers see the checkout</h1>
+    <p class="muted">Every design shows the same things: who is being paid, the amount, the status, the time left, the Lightning QR code and the buttons to pay. Only the look changes. Choose a design when you create a link.</p>
+  </header>
+
+  <div class="preview-layout">
+    <section class="card preview-list" aria-label="Designs">
+      <div class="designs" id="designList"></div>
     </section>
-  </main>
-  <script>
-    const themes={keypad:['Keypad','Bold green checkout with a large numeric pad.'],classic:['Classic','Familiar amount entry with quick-select chips.'],tile:['Tile','High-contrast full-green payment experience.'],focus:['Focus','Dark glass layout with a premium, quiet feel.'],receipt:['Receipt','Bright structured checkout with transparent total.']};
-    const labels=Object.entries(themes);const params=new URLSearchParams(location.search);let current=themes[params.get('theme')]?params.get('theme'):'keypad';
-    function render(){document.documentElement.dataset.theme=current;document.getElementById('themeList').innerHTML=labels.map(([id,m])=>`<button class="theme-option ${id===current?'active':''}" onclick="current='${id}';render()"><span><strong>${m[0]}</strong><span>${m[1]}</span></span><i class="theme-dot"></i></button>`).join('');}
-    render();
-  </script>
+
+    <section>
+      <div class="preview-tabs" role="tablist" aria-label="Page">
+        <button type="button" class="pill active" role="tab" aria-selected="true" data-view="invoice">Invoice page</button>
+        <button type="button" class="pill" role="tab" aria-selected="false" data-view="pay">Payment page</button>
+      </div>
+      <div class="theme-stage" id="stage">
+        <div class="checkout-head">
+          <span class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</span>
+          <span class="secure"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Secure checkout</span>
+        </div>
+
+        <!-- Sample invoice: same classes as invoice-cpay-v2.html. -->
+        <div class="checkout-card" data-view="invoice">
+          <div class="invoice-top">
+            <div class="merchant">
+              <div class="merchant-avatar">A</div>
+              <div><div class="merchant-name">Amina Studio</div><div class="merchant-sub">Brand and web design</div></div>
+            </div>
+            <span class="icon-btn" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18L18 6M6 6l12 12"/></svg></span>
+          </div>
+          <div class="divider"></div>
+          <div class="amount-due">
+            <div class="kicker">Amount due</div>
+            <div class="amount-value">$61.50</div>
+            <div class="row" style="justify-content:center">
+              <span class="status-chip">Waiting for payment</span>
+              <span class="timer-pill">14:32</span>
+            </div>
+          </div>
+          <div class="qr-link-button">
+            <div class="qr-frame">
+              <div id="qrcode"></div>
+              <div class="qr-logo"><span class="mark"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span></div>
+            </div>
+          </div>
+          <div class="invoice-text">lnbc615u1sample0invoice0for0preview0only</div>
+          <div class="action-footer">
+            <button class="pill-btn btn-copy" type="button" tabindex="-1">Copy invoice</button>
+            <button class="pill-btn btn-pay" type="button" tabindex="-1">Open Cash App</button>
+          </div>
+          <p class="pay-hint">Scan the code with Cash App or any Lightning wallet. The amount is already in the invoice.</p>
+        </div>
+
+        <!-- Sample payment page: same classes as 404.html. -->
+        <div class="checkout-card" data-view="pay" hidden>
+          <div class="merchant">
+            <div class="merchant-avatar">A</div>
+            <div><div class="merchant-label">You are paying</div><div class="merchant-name">Amina Studio</div></div>
+          </div>
+          <div class="amount-display">
+            <div class="amount-text">$61.50</div>
+            <div class="charge-summary visible">You pay $63.04 · includes 2.5% service fee</div>
+          </div>
+          <div class="keypad" aria-hidden="true">
+            <span class="key">1</span><span class="key">2</span><span class="key">3</span>
+            <span class="key">4</span><span class="key">5</span><span class="key">6</span>
+            <span class="key">7</span><span class="key">8</span><span class="key">9</span>
+            <span class="key">.</span><span class="key">0</span><span class="key">&larr;</span>
+          </div>
+          <div class="classic-body">
+            <div class="classic-label">Amount</div>
+            <div class="classic-inputwrap"><span class="classic-dollar">$</span><input type="text" value="61.50" aria-label="Sample amount" readonly tabindex="-1"></div>
+            <div class="classic-label">Quick amounts</div>
+            <div class="classic-chips"><span class="classic-chip">$10</span><span class="classic-chip">$20</span><span class="classic-chip selected">$50</span></div>
+          </div>
+          <div id="walletHint">Pay with Cash App or any Lightning wallet</div>
+          <button class="pay-btn" type="button" tabindex="-1">Continue to payment</button>
+        </div>
+        <p class="checkout-foot">Payments are sent over the Bitcoin Lightning Network.</p>
+      </div>
+      <p class="faint preview-note" id="designNote"></p>
+    </section>
+  </div>
+</main>
+<script>
+const stage = document.getElementById('stage');
+const list = document.getElementById('designList');
+const note = document.getElementById('designNote');
+const layouts = window.CPAY_LAYOUTS;
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+Object.keys(layouts).forEach(loadDesignFont);
+
+// Which older saved values show this design.
+function alsoUsedFor(id) {
+  const inv = Object.keys(CPAY_INVOICE_THEME_MAP).filter(k => CPAY_INVOICE_THEME_MAP[k] === id);
+  const store = Object.keys(CPAY_STORE_THEME_MAP).filter(k => CPAY_STORE_THEME_MAP[k] === id);
+  const parts = [];
+  if (inv.length) parts.push('invoice design "' + inv.join('", "') + '"');
+  if (store.length) parts.push('store theme "' + store.join('", "') + '"');
+  return parts.length ? ' Also used for ' + parts.join(' and ') + '.' : '';
+}
+
+let current = resolveDesign(new URLSearchParams(location.search).get('theme')) || 'keypad';
+function render() {
+  setDesign(current, stage);
+  list.innerHTML = Object.entries(layouts).map(([id, m]) =>
+    `<button type="button" class="design ${id === current ? 'on' : ''}" data-theme="${id}" aria-pressed="${id === current}"><span class="swatch" data-layout="${id}" aria-hidden="true"></span><span>${esc(m.label)}<span class="faint">${esc(m.help)}</span></span></button>`
+  ).join('');
+  const m = layouts[current];
+  note.textContent = m.label + ': ' + (m.entry === 'field' ? 'payers type an amount into a field.' : 'payers tap the amount on a number pad.') + alsoUsedFor(current);
+  history.replaceState(null, '', '?theme=' + current);
+}
+list.addEventListener('click', (e) => {
+  const btn = e.target.closest('.design');
+  if (btn) { current = btn.dataset.theme; render(); }
+});
+document.querySelectorAll('.preview-tabs [data-view]').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.preview-tabs [data-view]').forEach(t => {
+      const on = t === tab;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', String(on));
+    });
+    stage.querySelectorAll('.checkout-card[data-view]').forEach(c => { c.hidden = c.dataset.view !== tab.dataset.view; });
+  });
+});
+if (window.QRCode) new QRCode(document.getElementById('qrcode'), { text: 'lightning:lnbc615u1pj9x7zrpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpusp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygs9qrsgq', width: 440, height: 440, correctLevel: QRCode.CorrectLevel.M });
+render();
+</script>
 </body>
 </html>

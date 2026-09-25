@@ -8,7 +8,7 @@ change to the previous production project.
 - [ ] `python3 ci/check_frontend.py` passes.
 - [ ] `npm run build` passes.
 - [ ] A backup or snapshot exists for the new CPAY Supabase project.
-- [ ] Migrations `0001` through `0080` apply in order on staging.
+- [ ] Migrations `0001` through `0101` apply in order on staging.
 - [ ] Migration history and the live schema agree.
 - [ ] RLS and security-definer search-path checks pass.
 - [ ] The owner has recorded the rollback or restore plan.
@@ -23,16 +23,17 @@ change to the previous production project.
 - [ ] Emergency suspension hides public payment pages and stops auto-queue
   behavior.
 
-## BTCPay and webhooks
+## Payment provider and events
 
-- [ ] CPAY has its own BTCPay store and credentials.
-- [ ] Invoice creation, settlement, expiry and duplicate webhook delivery
+- [ ] CPAY has its own mainnet Breez wallet (mnemonic stored offline) and
+  API key, and the custody decision is made.
+- [ ] Invoice creation, settlement, expiry and duplicate event delivery
   passed in staging.
 - [ ] Public payment and QR invoice controls pass keyboard/screen-reader
   checks; `python3 ci/check_frontend.py` reports payment accessibility and
   QR ownership guards as green.
-- [ ] Webhook signature validation is enabled.
-- [ ] The live health function reports every active shop correctly.
+- [ ] Payment event signature validation is enabled.
+- [ ] The live health function reports the payment provider correctly.
 - [ ] The operator knows where to inspect an ambiguous `processing` payout.
 
 ## Withdrawals
@@ -42,6 +43,22 @@ change to the previous production project.
 - [ ] Per-profile invoice, single-withdrawal and daily limits were tested.
 - [ ] On-chain withdrawals remain disabled unless separately approved with
   evidence for address validation, fees, confirmations, retries and rollback.
+- [ ] Instant stablecoin withdrawal passed a small mainnet send on each coin
+  and network offered (see `payment-service/README.md`): quote shown, row
+  `sending` then `paid` with `amount_out` matching what arrived, and a
+  deliberately failed or refunded send leaves the balance restored once.
+- [ ] Single and daily withdrawal limits are set for accounts that may use
+  instant withdrawals, since nothing waits for an admin.
+- [ ] Withdrawal platform fee: the global default is 0% (0100) and new
+  accounts inherit it (0101). An account whose fee equalled the global
+  default when 0101 ran now inherits; any other value stays as that
+  account's override. Check the Withdraw fee column in the admin Accounts
+  tab and clear or set overrides as intended.
+- [ ] Reseller self-withdraw: every reseller starts with it off (0101), so
+  their freelancers cannot withdraw by themselves until the reseller or an
+  admin turns it on. Tell resellers before launch, and keep
+  `feature_reseller_team_withdraw` on, or only an admin can withdraw for
+  those freelancers.
 
 ## Cloudflare and public site
 
@@ -51,7 +68,7 @@ change to the previous production project.
 - [ ] Separate site and payment favicons render on the intended domains.
 - [ ] Headers, HTTPS, custom domains, OG preview routing and CORS were
   checked.
-- [ ] No old CPAY URL, Supabase project reference, store ID or secret is
+- [ ] No old CPAY URL, Supabase project reference, wallet mnemonic or secret is
   present in the CPAY deployment.
 
 ## Operational sign-off
@@ -61,7 +78,7 @@ change to the previous production project.
   every required gate.
 - [ ] The scheduled health endpoint runs with a rotated cron secret.
 - [ ] Daily reconciliation, ledger backup and alert delivery were observed.
-- [ ] The owner has the BTCPay staging runbook and emergency-stop procedure.
+- [ ] The owner has the payment staging runbook and emergency-stop procedure.
 - [ ] A small, controlled production rollout is planned.
 
 Do not call CPAY production-ready until every unchecked item has a named

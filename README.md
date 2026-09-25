@@ -1,14 +1,19 @@
 # CPAY
 
 Lightning Network payment links for freelancers and online shop owners.
-Generate a payment link, share it, get paid — withdrawals to bKash,
-Nagad, or Binance with an admin-reviewed payout flow.
+Generate a payment link, share it, get paid. Withdraw instantly as USDT or
+USDC on any network Breez routes to, or to bKash, Nagad, Binance Pay or a
+bank through an admin-reviewed payout.
 
 ## Stack
 
 - **Frontend:** Vanilla HTML/CSS/JS + Supabase JS v2 (no build step)
 - **Backend:** Supabase — Postgres, Row Level Security, Edge Functions
-- **Payments:** BTCPay Server (Lightning Network only)
+- **Payments:** Breez SDK Spark, through `payment-service/` (a small
+  Node 22 process holding the cpay wallet). Lightning receive works on the
+  Breez regtest network. Instant USDT/USDC withdrawals go through Breez
+  cross-chain sends, which exist on mainnet only; bKash, Nagad, Binance Pay
+  and bank withdrawals are paid by hand
 - **Edge routing:** Cloudflare Worker — renders correct link-preview
   metadata for WhatsApp/Telegram/Facebook when a payment link is shared
 
@@ -28,21 +33,27 @@ public/                          → static site root
   invoice-cpay-v2.html     → preserved legacy customer-facing payment/QR page
   admin.html                     → admin panel (approvals, stats, settings)
   moderator.html                 → limited staff panel, scoped to assigned creators
-  theme.js                       → per-domain LAYOUT switching (not colour —
-                                   the brand palette is the same everywhere)
+  theme.js                       → the ten checkout designs; maps every saved
+                                   link, invoice and store theme onto one of them
+  theme-preview.html             → preview of all ten designs with sample data
+  cpay.css                       → the one stylesheet: design tokens and components
   config.example.js              → copy to config.js, fill in your keys
 
 supabase/
-  migrations/                    → run in numeric order, 0001 → 0091
+  migrations/                    → run in numeric order, 0001 → 0101
   functions/
-    create-invoice/              → creates a BTCPay invoice for a slug
-    btcpay-webhook/              → BTCPay webhook + admin withdrawal actions
+    create-invoice/              → validates and prices a payment, has the payment service invoice it
+    admin-actions/               → admin mark-settled + withdrawal actions
+    auth-settings/               → admin switch for sign-up email confirmation
+                                   (Supabase Management API, mailer_autoconfirm)
     user-withdraw/               → creator-initiated withdrawal
     daily-report/                → nightly rollup into daily_stats
     ledger-backup/               → nightly ledger snapshot to a private repo
     og-image/                    → generated link-preview images
-    reconcile/                   → daily BTCPay vs ledger comparison
     health/                      → system health checks + alerting
+
+payment-service/                 → Node 22 process holding the cpay Breez wallet:
+                                   invoices, payment events, catch-up, /health
 
 ci/
   bootstrap.sql                  → Supabase-shaped scaffolding for CI only.
@@ -54,6 +65,10 @@ worker/
   wrangler.jsonc
 
 docs/
+  ARCHITECTURE.md                → how the pieces fit, data shape, idempotency,
+                                   receive and withdraw flows, fees
+  RUNBOOKS.md                    → restart, leaf-error retry, reconcile, backups
+  LOCAL-DEV.md                   → run locally, env var names, run the CI
   DEPLOYMENT.md                  → full setup checklist
   CPAY-OWNER-GUIDE.md            → new-project owner and staging guide
   ENV_VARS.md                    → what secrets go where
@@ -71,18 +86,22 @@ There is exactly one definition of a creator's withdrawable balance, and it
 lives in SQL:
 
 ```
-available = sum(settled payments) − sum(withdrawals that are not rejected)
+available = sum(settled payments) − sum(withdrawals that are not rejected or failed)
 ```
 
 `get_balance_for()` computes it. `get_my_balance()` is the creator-facing
-wrapper the dashboard calls. `request_withdrawal()` and
-`system_queue_withdrawal()` both check against it while holding a lock on the
-creator's profile row, which serialises concurrent requests.
+wrapper the dashboard calls. `request_withdrawal()`,
+`system_queue_withdrawal()` and `reserve_stablecoin_withdrawal()` all check
+against it while holding a lock on the creator's profile row, which
+serialises concurrent requests.
 
 Nothing else may write to `withdrawals` — there is no client INSERT policy on
 that table, so a browser cannot mint a request that skips the balance check.
 Status transitions to `paid`/`processing`/`rejected` go through
-`system_claim_withdrawal()`, which is atomic and only fires once.
+`system_claim_withdrawal()`, which is atomic and only fires once. An instant
+stablecoin withdrawal is inserted as `sending` and leaves it only through
+`finalize_stablecoin_withdrawal()` (to `paid`, or `failed`, which is the
+refund), which likewise only fires once.
 
 If you change any of this, change it in one place. Two functions with two
 slightly different balance formulas is how the same money gets paid out twice.
@@ -93,7 +112,7 @@ slightly different balance formulas is how the same money gets paid out twice.
   run `update profiles set role = 'admin'` on their own row, insert
   withdrawals directly, and read every payment in the system.
 - Migration **0033** is not optional either. It adds the `webhook_events`
-  table that makes BTCPay webhook deliveries idempotent (without it,
+  table that makes payment webhook deliveries idempotent (without it,
   concurrent retries of the same event can be processed twice) and CHECK
   constraints that make negative or zero amounts unwritable no matter which
   code path tries.
@@ -123,9 +142,8 @@ All five run through `pg_cron` + `pg_net`, reading their secrets from Vault.
 
 | Job | When (UTC) | What it does |
 |---|---|---|
-| `cpay-health` | every 15 min | BTCPay reachable, webhooks arriving, cron alive, withdrawals not stuck, links have shops. Alerts on failure. |
+| `cpay-health` | every 15 min | Payment service reachable and synced, cron alive, withdrawals not stuck. Alerts on failure. |
 | `prune-webhook-events` | 03:20 | 90-day retention on `webhook_events` |
-| `cpay-reconcile` | 04:10 | Compares BTCPay's settled invoices with the ledger; alerts on any gap |
 | `ledger-backup-trigger` | 11:05 | Full ledger snapshot committed to the ledger repo |
 | `daily-report-trigger` | 18:10 | Writes the `daily_stats` archive |
 
@@ -140,10 +158,48 @@ select jobname, schedule, active from cron.job order by jobname;
 Every daily figure in this system runs **5:00 PM to 5:00 PM Asia/Dhaka**,
 not midnight to midnight, and a cycle is named after the date it *started*.
 
-One SQL function defines it — `daily_totals_for_cycle()` — and everything
-else derives from that: `admin_daily_settled()`, `staff_daily_settled()`,
-`my_daily_settled()`, and the `daily-report` cron. They cannot drift apart
-because there is only one definition.
+`business_day(ts)` (migration 0096) is the one definition: day D runs from
+`business_day_start(D)` (D 17:00 Dhaka) to `business_day_end(D)`.
+`admin_daily_settled()`, `staff_daily_settled()`, `my_daily_settled()`,
+`daily_totals_for_cycle()`, `reseller_cycle_digest()` and the dashboard RPCs
+below all call it. The `daily-report` cron computes the same date in TypeScript
+and then asks `daily_totals_for_cycle()` for the numbers.
+
+Dashboard RPCs (0096), one row per person or link per business day:
+
+| RPC | Who | Rows |
+|---|---|---|
+| `my_daily_summary(p_days)` | anyone signed in | own book per day |
+| `reseller_team_daily_summary(p_days)` | reseller | self + team per day, with email |
+| `admin_daily_summary(p_days, p_user_id, p_reseller_id)` | admin | per person per day, with profile, email, reseller |
+| `admin_daily_timeseries(p_days, p_user_id, p_reseller_id)` | admin | platform (or filtered) totals per day, for the graph |
+| `daily_link_breakdown(p_days, p_user_id)` | self, their reseller, admin | per link per day with cost rate charged |
+
+`earnings` is `settled - platform_fee - reseller_commission`, the same formula
+as the balance. The cost rate charged is stored on each payment
+(`payments.cost_percent`) from 0096 on; older payments show the link's current
+rate.
+
+0098 adds `my_dashboard_profile()` (profile card: email, role, reseller,
+links used of the limit) and `admin_link_usage()` (links used and limit per
+account for the admin Accounts tab). A name with several variant spellings
+counts as one link, and no account can go above 10.
+
+The daily withdrawal cap resets at the same 17:00 Dhaka edge as everything
+else since 0097 (`request_withdrawal`, `system_queue_withdrawal`,
+`reserve_stablecoin_withdrawal`).
+
+0099 grants `service_role` INSERT on `audit_log` (and its id sequence), so
+the `auth-settings` function can record sign-up email confirmation changes.
+
+0101 adds `reseller_settings`: each reseller's "let my freelancers withdraw
+by themselves" switch (off by default, and off for every existing reseller)
+and an optional team withdrawal fee. The withdrawal fee resolves as the
+account's own override, else the reseller team fee, else the global default
+(`resolve_withdrawal_fee()`); see docs/ARCHITECTURE.md.
+
+`public/daily-desk.js` renders these RPCs on the freelancer Overview, the
+reseller Overview and Team accounts, and the admin Daily earnings tab.
 
 ## Alerting
 
@@ -155,7 +211,7 @@ ALERT_TELEGRAM_BOT_TOKEN     Telegram bot token
 ALERT_TELEGRAM_CHAT_ID       Telegram chat to post into
 ```
 
-`health` and `reconcile` both use these. With neither set they log a
+`health` uses these. With neither set they log a
 warning and carry on — nothing breaks, but nobody is told.
 
 ## Checking things by hand
@@ -164,10 +220,6 @@ warning and carry on — nothing breaks, but nobody is told.
 # Is everything alive? (?alert=0 keeps it out of the alert channel)
 curl -H "x-cron-secret: $CRON_SECRET" \
   "$SUPABASE_URL/functions/v1/health?alert=0"
-
-# Does BTCPay agree with the ledger for the last week?
-curl -H "x-cron-secret: $CRON_SECRET" \
-  "$SUPABASE_URL/functions/v1/reconcile?days=7"
 
 # Force a ledger snapshot and verify it is complete
 curl -H "x-cron-secret: $CRON_SECRET" \
@@ -188,7 +240,7 @@ live ledger and flags any row that has drifted.
 | Job | Blocking | Checks |
 |---|---|---|
 | Migrations | no | Every migration applies in order to an empty Postgres; migration numbers are unique |
-| Edge functions | yes | `deno check` on every function — a real type-check, unlike a bundler |
+| Edge functions | yes | `deno check` on every function — a real type-check, unlike a bundler — and `auth-settings` tested against a local mock Management API |
 | Pages | yes | Inline JS parses; every element id and on-handler exists; every `rpc()` call matches its SQL definition |
 | Ledger snapshots | no | Reports whether ledger snapshots are tracked in this repo |
 
@@ -198,9 +250,10 @@ repository stays private.
 
 ## Auditing
 
-`audit_log` records who changed a fee, a role, a moderator assignment or a
-creator's instant-payout access — with the old value alongside the new
-one. It is append-only: there is no update or delete policy for anyone,
+`audit_log` records who changed a fee, a role, a moderator assignment, a
+creator's instant-payout access, or sign-up email confirmation
+(`settings.signup_email_confirmation`, written by `auth-settings`) — with
+the old value alongside the new one. It is append-only: there is no update or delete policy for anyone,
 including admins.
 
 ```sql

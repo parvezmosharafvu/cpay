@@ -2,12 +2,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const BTCPAY_URL = Deno.env.get("BTCPAY_URL")!;
-const BTCPAY_API_KEY = Deno.env.get("BTCPAY_API_KEY")!;
-const BTCPAY_STORE_ID = Deno.env.get("BTCPAY_STORE_ID")!;
+const PAYMENT_SERVICE_URL = Deno.env.get("PAYMENT_SERVICE_URL") ?? "";
+const PAYMENT_SERVICE_SECRET = Deno.env.get("PAYMENT_SERVICE_SECRET") ?? "";
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-// Only browser calls need CORS (server-to-server callers like BTCPay and
-// pg_cron ignore these headers entirely). The allowed-origin list is read
+// Only browser calls need CORS (server-to-server callers like pg_cron
+// ignore these headers entirely). The allowed-origin list is read
 // from the site_domains table — the same registry the admin panel manages —
 // so adding a domain in the admin panel enables it here within one cache
 // window, with no secret change and no redeploy. The optional ALLOWED_ORIGINS
@@ -83,222 +82,204 @@ status,
 headers: { "Content-Type": "application/json", ...cors },
 });
 }
-const VALID_METHODS = ["bkash", "nagad", "binance", "lightning", "usdt_bep20", "bank"];
+// Manual methods, paid by an admin. USDT goes through the instant
+// stablecoin actions below instead.
+const VALID_METHODS = ["bkash", "nagad", "binance", "lightning", "bank"];
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Calls the payment service, which holds the platform wallet.
+async function paymentService(path: string, init: { method: string; body?: unknown }, timeoutMs: number) {
+  const res = await fetch(`${PAYMENT_SERVICE_URL}${path}`, {
+    method: init.method,
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${PAYMENT_SERVICE_SECRET}` },
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const payload = await res.json().catch(() => ({}));
+  return { status: res.status, payload };
+}
 
-/**
-* Best-effort ops alerts. Payment failures must wake a human up, not sit in
-* a log file. Two channels are supported — either one, or both at once:
-*   ALERT_WEBHOOK_URL         — Discord or Slack incoming webhook
-*   ALERT_TELEGRAM_BOT_TOKEN  — from @BotFather (/newbot)
-*   ALERT_TELEGRAM_CHAT_ID    — chat/group id (see docs/ENV_VARS.md)
-* Never awaited in a way that can break the money path — every call site
-* uses .catch(), and an alert failure only ever lands in the function log.
-*/
-function sendAlert(message: string) {
-const text = `🚨 CPAY: ${message}`;
-const webhook = Deno.env.get("ALERT_WEBHOOK_URL");
-if (webhook) {
-fetch(webhook, {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ content: text }),
-}).catch((e) => console.error("Discord/Slack alert delivery failed:", e));
+// What the browser may see. Freelancers and resellers get an allowlisted
+// copy of each payment-service answer: no processor name, payment ids, sats,
+// rates, provider or admin notes, and the swap plus network fee travels as
+// networkFeeUsd. A field the service adds later stays server-side until it
+// is added here.
+type Json = Record<string, unknown>;
+const str = (v: unknown) => (v === undefined || v === null ? null : String(v));
+const PROVIDER_WORDS = /breez|spark|sdk|orchestra|boltz|internal error/i;
+const GENERIC_ERROR = "Instant withdrawals are temporarily unavailable. Try again later.";
+// Same text as self_withdraw_off_message() in the database (0101).
+const SELF_WITHDRAW_OFF = "Your reseller handles withdrawals for your account. Ask them to withdraw for you.";
+
+// Service error messages are written for users, but anything that names the
+// processor or looks like a raw library error is replaced.
+function publicError(payload: Json | null | undefined, fallback = GENERIC_ERROR): string {
+  const msg = typeof payload?.error === "string" ? payload.error : "";
+  if (!msg || msg.length > 200 || PROVIDER_WORDS.test(msg)) return fallback;
+  return msg;
 }
-const tgToken = Deno.env.get("ALERT_TELEGRAM_BOT_TOKEN");
-const tgChat = Deno.env.get("ALERT_TELEGRAM_CHAT_ID");
-if (tgToken && tgChat) {
-fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ chat_id: tgChat, text }),
-}).catch((e) => console.error("Telegram alert delivery failed:", e));
+
+function publicRoute(r: Json) {
+  return {
+    id: str(r.id), asset: str(r.asset), chain: str(r.chain), family: str(r.family),
+    minUsd: r.minUsd ?? null, maxUsd: r.maxUsd ?? null,
+  };
 }
-if (!webhook && !(tgToken && tgChat)) {
-console.warn("sendAlert called but no alert channel is configured.");
+
+function publicQuote(q: Json) {
+  const route = (q.route ?? {}) as Json;
+  return {
+    quoteId: str(q.quoteId), expiresAt: str(q.expiresAt),
+    route: { id: str(route.id), asset: str(route.asset), chain: str(route.chain), family: str(route.family) },
+    address: str(q.address), asset: str(q.asset),
+    amountUsd: str(q.amountUsd), feePercent: str(q.feePercent), platformFeeUsd: str(q.platformFeeUsd),
+    sendUsd: str(q.sendUsd), networkFeeUsd: str(q.networkFeeUsd),
+    receive: str(q.receive), receiveMin: str(q.receiveMin), maxSlippageBps: q.maxSlippageBps ?? null,
+  };
 }
+
+function publicWithdrawal(w: Json) {
+  return {
+    withdrawalId: str(w.withdrawalId), status: str(w.status),
+    amountUsd: str(w.amountUsd), feePercent: str(w.feePercent), sendUsd: str(w.sendUsd),
+    asset: str(w.asset), chain: str(w.chain), address: str(w.address), amountOut: str(w.amountOut),
+    requestedAt: str(w.requestedAt), processedAt: str(w.processedAt),
+  };
 }
+
+type Body = {
+  action?: unknown; amount?: unknown; method?: unknown; destination?: unknown;
+  routeId?: unknown; address?: unknown; quoteId?: unknown;
+};
 
 Deno.serve(async (req) => {
-const cors = await corsHeaders(req);
-if (req.method === "OPTIONS") return new Response(null, { headers: cors });
-if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
-const authHeader = req.headers.get("Authorization");
-if (!authHeader) return json({ error: "Unauthorized" }, 401, cors);
-// The caller client carries the user's JWT, so request_withdrawal() runs as
-// that user and every check inside it (auth, balance, fee, row lock) applies.
-const callerClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-global: { headers: { Authorization: authHeader } },
-});
-const { data: { user }, error: userErr } = await callerClient.auth.getUser();
-if (userErr || !user) return json({ error: "Invalid session" }, 401, cors);
-let body: { amount?: unknown; method?: unknown; destination?: unknown };
-try {
-body = await req.json();
-} catch {
-return json({ error: "Invalid JSON body" }, 400, cors);
-}
-const amount = Number(body.amount);
-const method = String(body.method ?? "").trim();
-const destination = String(body.destination ?? "").trim();
-// Cheap client-side-mirroring checks. The authoritative versions all live
-// in request_withdrawal(); these only exist to return a nicer error faster.
-if (!Number.isFinite(amount) || amount < 5) {
-return json({ error: "Minimum withdrawal is $5" }, 400, cors);
-}
-if (!VALID_METHODS.includes(method)) {
-return json({ error: "Invalid withdrawal method" }, 400, cors);
-}
-if (!destination) {
-return json({ error: "Destination account is required" }, 400, cors);
-}
-// Two shapes are valid for a Lightning destination, and BTCPay payouts
-// accept both: a bolt11 invoice (one-shot, expires within the hour) and
-// a Lightning Address (static, resolved via LNURL-pay at payout time).
-// The address form is what makes automatic payouts possible at all — a
-// bolt11 saved in a profile would be dead long before the next payout.
-const LN_INVOICE = /^ln(bc|tb|bcrt)[0-9a-z]+$/i;
-const LN_ADDRESS = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
-if (method === "lightning" && !LN_INVOICE.test(destination) && !LN_ADDRESS.test(destination)) {
-return json({
-error: "That does not look like a Lightning invoice or a Lightning Address (you@wallet.com)",
-}, 400, cors);
-}
-// ---- Single source of truth: the database decides ----
-// Previously this function did its own balance maths against a different
-// definition than request_withdrawal(), which let the same money be
-// withdrawn twice. Now there is one code path.
-const { data: withdrawal, error: rpcErr } = await callerClient
-.rpc("request_withdrawal", {
-p_amount: amount,
-p_method: method,
-p_destination: destination,
-});
-if (rpcErr || !withdrawal) {
-// Postgres RAISE messages here are user-facing and intentionally safe
-// ("Insufficient balance. Available: $12.40").
-return json({ error: rpcErr?.message ?? "Could not create withdrawal request" }, 400, cors);
-}
-const row = Array.isArray(withdrawal) ? withdrawal[0] : withdrawal;
-const withdrawalId = row.id as string;
-const amountAfterFee = Number(row.amount_after_fee);
-// ---- Instant Lightning payout, if the creator is allowed one ----
-const { data: profile } = await supabaseAdmin
-.from("profiles")
-.select("auto_withdraw_enabled")
-.eq("id", user.id)
-.single();
-const { data: settingRows } = await supabaseAdmin
-.from("app_settings")
-.select("key, value")
-.in("key", ["auto_withdraw_threshold", "auto_withdraw_enabled"]);
-const settings = Object.fromEntries((settingRows ?? []).map((r) => [r.key, r.value]));
-const autoThreshold = Number(settings.auto_withdraw_threshold?.amount ?? 50);
+  const cors = await corsHeaders(req);
+  if (req.method === "OPTIONS") return new Response(null, { headers: cors });
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return json({ error: "Unauthorized" }, 401, cors);
+  // The caller client carries the user's JWT, so the RPCs below run as that
+  // user and every check inside them (auth, balance, fee, row lock) applies.
+  const callerClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: { user }, error: userErr } = await callerClient.auth.getUser();
+  if (userErr || !user) return json({ error: "Invalid session" }, 401, cors);
+  let body: Body;
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400, cors);
+  }
+  const action = String(body.action ?? "request");
 
-// The GLOBAL master switch, which was not being checked at all.
-//
-// The admin panel says of this toggle: "Off here means no creator gets an
-// instant payout, whatever their own profile says." That was not true —
-// only the per-creator flag was consulted here, so turning the master
-// switch off did nothing for any creator who already had their own flag
-// on. They kept receiving instant real-money payouts.
-//
-// Defaults to false: a missing or unreadable row must never be read as
-// permission to move money.
-const globalAutoWithdraw =
-settings.auto_withdraw_enabled === true ||
-String(settings.auto_withdraw_enabled) === "true";
+  // A freelancer whose reseller has self-withdraw off may not start any
+  // withdrawal here (the database and the payment service refuse too).
+  // Their reseller withdraws for them from the reseller desk.
+  const { data: settings, error: settingsErr } = await callerClient.rpc("my_withdraw_settings");
+  if (settingsErr || !settings) {
+    console.error("my_withdraw_settings failed:", settingsErr);
+    return json({ error: "Withdrawals are temporarily unavailable. Try again later." }, 503, cors);
+  }
+  if ((settings as Json).self_withdraw_allowed !== true) {
+    return json({ error: SELF_WITHDRAW_OFF }, 403, cors);
+  }
 
-const instantEligible =
-method === "lightning" &&
-globalAutoWithdraw &&
-profile?.auto_withdraw_enabled === true &&
-amount < autoThreshold;
-if (!instantEligible) {
-return json({
-status: "pending",
-withdrawalId,
-msg: "Request queued for admin approval.",
-}, 200, cors);
-}
-// Atomically claim the row. If anything else already moved it, stop —
-// this is what prevents a duplicate real-money payout.
-const { data: claimed } = await supabaseAdmin
-.rpc("system_claim_withdrawal", {
-p_withdrawal_id: withdrawalId,
-p_next_status: "processing",
-});
-if (claimed !== true) {
-return json({ status: "pending", withdrawalId, msg: "Request queued for admin approval." }, 200, cors);
-}
-try {
-const payoutRes = await fetch(
-`${BTCPAY_URL}/api/v1/stores/${BTCPAY_STORE_ID}/payouts`,
-{
-method: "POST",
-headers: {
-"Content-Type": "application/json",
-"Authorization": `token ${BTCPAY_API_KEY}`,
-},
-body: JSON.stringify({
-destination,
-amount: amountAfterFee.toFixed(2),
-paymentMethod: "BTC-LightningNetwork",
-}),
-},
-);
-if (payoutRes.ok) {
-const payoutData = await payoutRes.json();
-// BTCPay has now definitely paid this out. If the write that records
-// that fact fails, the row is left at "processing" rather than told
-// to the client as "paid" while the database disagrees — a silently
-// swallowed error here was exactly how a row could get stuck at
-// "processing" forever, invisible to every stuck-withdrawal check.
-const { error: markPaidErr } = await supabaseAdmin.from("withdrawals").update({
-status: "paid",
-processed_at: new Date().toISOString(),
-admin_note: `Auto BTCPay payout: ${payoutData.id}`,
-}).eq("id", withdrawalId);
-if (markPaidErr) {
-console.error("Failed to record a successful payout as paid:", markPaidErr.message);
-sendAlert(`BTCPay paid withdrawal ${withdrawalId} (payout ${payoutData.id}) but recording it as "paid" failed: ${markPaidErr.message}. The row is stuck at "processing" — verify with BTCPay and fix by hand.`);
-return json({ status: "processing", withdrawalId, msg: "Payout sent, but recording it failed — an admin has been alerted." }, 200, cors);
-}
-return json({ status: "paid", withdrawalId, msg: "Instant payout successful!" }, 200, cors);
-}
-const errText = await payoutRes.text();
-console.error("BTCPay payout rejected:", errText);
-sendAlert(`Auto-payout REJECTED by BTCPay for withdrawal ${withdrawalId} — sent to manual review.`);
-await supabaseAdmin.from("withdrawals").update({
-status: "pending",
-admin_note: "Auto-payout failed, sent for manual review",
-}).eq("id", withdrawalId);
-// The BTCPay error body can contain node/store internals — log it, don't ship it.
-return json({
-status: "pending",
-withdrawalId,
-msg: "Auto-payout could not complete. Sent to admin for manual review.",
-}, 200, cors);
-} catch (e) {
-console.error("BTCPay unreachable:", e);
-// This is the one branch that must never revert to "pending". A
-// timeout or a dropped connection here means BTCPay MAY have already
-// sent the payout — we genuinely do not know. "pending" is a status
-// system_claim_withdrawal() will happily hand out again, so reverting
-// to it on an ambiguous failure was a real double-payout path: BTCPay
-// pays once for real, then a retry or a manual approval pays the same
-// withdrawal a second time.
-//
-// The row is left exactly where it was claimed to — "processing" —
-// which nothing can re-claim, and the health check (updated alongside
-// this) now surfaces a "processing" row that has sat for more than a
-// few minutes so an admin resolves the ambiguity by hand: check BTCPay
-// directly, then either confirm it as paid or void it.
-sendAlert(`BTCPay unreachable during auto-payout for withdrawal ${withdrawalId} — status left at "processing" because the payout may have already gone through. Check BTCPay directly, then confirm paid or void.`);
-return json({
-status: "processing",
-withdrawalId,
-msg: "Payment provider unreachable mid-payout. Left for admin review rather than guessed at — do not retry automatically.",
-}, 200, cors);
-}
+  if (action === "routes" || action === "quote" || action === "confirm") {
+    if (!PAYMENT_SERVICE_URL || !PAYMENT_SERVICE_SECRET) {
+      console.error("PAYMENT_SERVICE_URL or PAYMENT_SERVICE_SECRET is not set");
+      return json({ error: "Instant withdrawals are temporarily unavailable" }, 503, cors);
+    }
+    try {
+      if (action === "routes") {
+        const { status, payload } = await paymentService("/withdraw/routes", { method: "GET" }, 15000);
+        const routes = Array.isArray(payload.routes) ? payload.routes.map(publicRoute) : [];
+        return json(status === 200 ? { routes } : { error: "Could not load networks" }, status === 200 ? 200 : 502, cors);
+      }
+      if (action === "quote") {
+        const amount = String(body.amount ?? "").trim();
+        if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) < 5) {
+          return json({ error: "Minimum withdrawal is $5" }, 400, cors);
+        }
+        // Early answer for the common mistake. The payment service checks
+        // again, and reserve_stablecoin_withdrawal() decides at confirm.
+        const { data: bal, error: balErr } = await callerClient.rpc("get_my_balance");
+        const available = Number((Array.isArray(bal) ? bal[0] : bal)?.available ?? 0);
+        if (balErr) return json({ error: balErr.message }, 400, cors);
+        if (Number(amount) > available) {
+          return json({ error: `Insufficient balance. Available: $${available.toFixed(2)}` }, 400, cors);
+        }
+        const { status, payload } = await paymentService("/withdraw/quote", {
+          method: "POST",
+          body: { userId: user.id, routeId: String(body.routeId ?? ""), address: String(body.address ?? "").trim(), amountUsd: amount },
+        }, 30000);
+        if (status !== 200) return json({ error: publicError(payload, "Could not get a quote. Try again.") }, status, cors);
+        return json(publicQuote(payload), 200, cors);
+      }
+      const quoteId = String(body.quoteId ?? "");
+      if (!UUID.test(quoteId)) return json({ error: "Get a quote first" }, 400, cors);
+      const { status, payload } = await paymentService("/withdraw/confirm", {
+        method: "POST", body: { userId: user.id, quoteId },
+      }, 45000);
+      if (status === 200) return json(publicWithdrawal(payload), 200, cors);
+      // An expired quote comes back with a fresh one to show.
+      const fresh = payload?.quote ? { quote: publicQuote(payload.quote as Json) } : {};
+      return json({ error: publicError(payload, "The withdrawal did not go through. Try again."), ...fresh }, status, cors);
+    } catch (e) {
+      console.error(`payment service ${action} failed:`, e);
+      // A confirm that timed out may still have reserved and sent. The row
+      // is in the user's withdrawals either way, so say so rather than
+      // inviting a second attempt.
+      const msg = action === "confirm"
+        ? "The withdrawal may still be going through. Check your withdrawals before trying again."
+        : "Instant withdrawals are temporarily unavailable";
+      return json({ error: msg }, 502, cors);
+    }
+  }
+
+  const amount = Number(body.amount);
+  const method = String(body.method ?? "").trim();
+  const destination = String(body.destination ?? "").trim();
+  // Cheap client-side-mirroring checks. The authoritative versions all live
+  // in request_withdrawal(); these only exist to return a nicer error faster.
+  if (!Number.isFinite(amount) || amount < 5) {
+    return json({ error: "Minimum withdrawal is $5" }, 400, cors);
+  }
+  if (method === "usdt_bep20") {
+    return json({ error: "USDT withdrawals are sent instantly. Choose Stablecoin (instant) instead." }, 400, cors);
+  }
+  if (!VALID_METHODS.includes(method)) {
+    return json({ error: "Invalid withdrawal method" }, 400, cors);
+  }
+  if (!destination) {
+    return json({ error: "Destination account is required" }, 400, cors);
+  }
+  // Two shapes are valid for a Lightning destination: a bolt11 invoice
+  // (one-shot, expires within the hour) and a Lightning Address (static,
+  // resolved via LNURL-pay at payout time).
+  const LN_INVOICE = /^ln(bc|tb|bcrt)[0-9a-z]+$/i;
+  const LN_ADDRESS = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+  if (method === "lightning" && !LN_INVOICE.test(destination) && !LN_ADDRESS.test(destination)) {
+    return json({
+      error: "That does not look like a Lightning invoice or a Lightning Address (you@wallet.com)",
+    }, 400, cors);
+  }
+  // One code path for balance maths: the database decides.
+  const { data: withdrawal, error: rpcErr } = await callerClient
+    .rpc("request_withdrawal", {
+      p_amount: amount,
+      p_method: method,
+      p_destination: destination,
+    });
+  if (rpcErr || !withdrawal) {
+    // Postgres RAISE messages here are user-facing and intentionally safe
+    // ("Insufficient balance. Available: $12.40").
+    return json({ error: rpcErr?.message ?? "Could not create withdrawal request" }, 400, cors);
+  }
+  const row = Array.isArray(withdrawal) ? withdrawal[0] : withdrawal;
+  return json({
+    status: "pending",
+    withdrawalId: row.id,
+    msg: "Request queued for admin approval.",
+  }, 200, cors);
 });

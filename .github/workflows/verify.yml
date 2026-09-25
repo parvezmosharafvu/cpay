@@ -87,6 +87,40 @@ jobs:
           # just applied to, so it leaves nothing behind.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/cloudai_regression.sql
 
+      - name: Dashboard data layer and business day (0096 onward)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # 0096 and every later migration must survive a second apply, then
+          # the RPCs are checked with seeded payments either side of the
+          # 17:00 Dhaka cutoff, the 10-link ceiling, who-sees-whom, the daily
+          # withdrawal limit and the profile card. BEGIN/ROLLBACK, like above.
+          # Re-applying through the newest file (not only 0096-0098) leaves
+          # the latest function bodies in place for the payment service
+          # tests below; 0101 replaces withdrawal functions 0097 defines.
+          for f in supabase/migrations/*.sql; do
+            n=$(basename "$f" | cut -c1-4)
+            [ $((10#$n)) -ge 96 ] || continue
+            psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/dashboards_test.sql
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Payment service settles each payment once
+        working-directory: payment-service
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: |
+          # settle_breez_payment against the database the migrations just
+          # built: a replayed event, a second payment for a settled hash,
+          # an unknown hash, an underpayment and an expired invoice must
+          # credit nothing. Rolled back at the end.
+          npm ci --no-audit --no-fund
+          node --test
+
   functions:
     name: Edge functions type-check
     runs-on: ubuntu-latest
@@ -104,6 +138,13 @@ jobs:
             deno check "${d}index.ts" || fail=1
           done
           exit $fail
+      - name: auth-settings against a mock Management API
+        # Local mock servers only: no call to api.supabase.com, no real token.
+        # Covers the admin check (a non-admin is refused before any
+        # Management API call), the mailer_autoconfirm mapping, the audit
+        # row, and that neither the token nor the auth config's secrets
+        # ever reach a response.
+        run: deno test --allow-net=127.0.0.1 --allow-env supabase/functions/auth-settings/
 
   frontend:
     name: Pages parse and reference real things

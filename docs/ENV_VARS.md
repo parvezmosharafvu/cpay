@@ -9,14 +9,15 @@ platform's dashboard.
 injected automatically into every function. The rest you add yourself under
 Dashboard → Edge Functions → Secrets (they are project-wide, not per-function).
 
-Used by `btcpay-webhook`, `create-invoice`, `user-withdraw`:
+Used by `create-invoice`, `user-withdraw`, `admin-actions` and `health`:
 
-- [ ] `BTCPAY_URL` — e.g. https://your-btcpay-server.com (no trailing slash)
-- [ ] `BTCPAY_API_KEY` — store API key with invoice + payout permissions
-- [ ] `BTCPAY_STORE_ID`
-- [ ] `BTCPAY_WEBHOOK_SECRET` — from BTCPay → Store → Webhooks.
-      **Required.** The webhook rejects every request if this is unset, rather
-      than HMAC-ing against an empty string that anyone could reproduce.
+- [ ] `PAYMENT_SERVICE_URL` — base URL of the payment service
+      (`payment-service/`), e.g. `https://pay.internal.example`.
+- [ ] `PAYMENT_SERVICE_SECRET` — long random string, the same value the
+      payment service has. Sent as `Authorization: Bearer`.
+
+The payment service's own settings (wallet mnemonic, database URL) are in
+`payment-service/.env.example`. The mnemonic never goes into Supabase.
 
 Used by `daily-report` and `ledger-backup`:
 
@@ -25,14 +26,13 @@ Used by `daily-report` and `ledger-backup`:
 
 New in this update:
 
-- [ ] `ALERT_WEBHOOK_URL` — a Discord/Slack/Telegram-bot webhook URL. When a
-      BTCPay payout fails, BTCPay is unreachable, the ledger backup cannot
-      commit, or the daily report skips a day, the function posts a `🚨`
+- [ ] `ALERT_WEBHOOK_URL` — a Discord/Slack/Telegram-bot webhook URL. When the
+      health check fails, the ledger backup cannot commit, or the daily report skips a day, the function posts a `🚨`
       message here. Payment failures wake a human up instead of sitting in a
       log file. Unset = alerts are silently skipped.
 
 CORS origins — **no secret needed**. The allowed browser origins for
-`btcpay-webhook` (admin routes) and `user-withdraw` are read live from the
+`admin-actions` and `user-withdraw` are read live from the
 `site_domains` table — the same registry the admin panel manages. Add a
 domain in the admin panel and it is allowed within ~5 minutes (cache
 window); deactivate it and it stops working. No secret edit, no redeploy.
@@ -43,6 +43,32 @@ window); deactivate it and it stops working. No secret edit, no redeploy.
       panel's domain registry. `create-invoice` keeps its wildcard by
       design — payment links are embedded on creator-owned domains, and it
       is defended by a per-link rate limit instead.
+
+Used by `auth-settings` only (the ops panel's **Settings → Sign-up email
+confirmation** switch):
+
+- [ ] `CPAY_SUPABASE_ACCESS_TOKEN` — a Supabase **personal access token**
+      (Account → Access Tokens), i.e. what the CLI calls
+      `SUPABASE_ACCESS_TOKEN`. The function uses it for exactly one thing:
+      reading and setting `mailer_autoconfirm` through the Management API
+      (`GET`/`PATCH /v1/projects/{ref}/config/auth`).
+      **This is a powerful, account-level token.** It is not scoped to this
+      project: it can change settings of, or delete, every project and
+      organization its owner can reach. It must only ever exist as this
+      edge-function secret — never in `public/config.js`, a `.env` that is
+      committed, the payment service, a chat or a ticket. Create it from an
+      account that is Owner/Admin of this project's organization (ideally a
+      dedicated one), give it an expiry, and revoke it in the Supabase
+      dashboard if it is ever exposed.
+      Why the `CPAY_` prefix: hosted Supabase refuses secret names that start
+      with `SUPABASE_` (that prefix is reserved). The function also reads
+      `SUPABASE_ACCESS_TOKEN` if present, which only matters for local
+      `supabase functions serve`.
+      Unset = the switch shows "Not set up" and the setting stays wherever the
+      Supabase dashboard has it (Authentication → Sign In / Providers → Email →
+      Confirm email).
+- [ ] `CPAY_PROJECT_REF` *(optional)* — only needed if `SUPABASE_URL` is not
+      `https://<ref>.supabase.co`; the ref is worked out from it otherwise.
 
 Used by `ledger-backup` only:
 

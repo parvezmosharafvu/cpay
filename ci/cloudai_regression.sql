@@ -7,11 +7,11 @@ update profiles set email = 'admin@test.invalid', display_name = 'Test Admin', r
 update profiles set email = 'creator@test.invalid', display_name = 'Test Creator', role = 'creator' where id = :'creator_id';
 create or replace function auth.uid() returns uuid language sql stable as $$ select '11111111-1111-1111-1111-111111111111'::uuid $$;
 insert into payment_links(user_id, slug, display_name, is_active) values (:'creator_id', 'MixedCaseLink', 'Mixed Case Link', true);
-insert into payments(payment_link_id, user_id, btcpay_invoice_id, method, amount_requested, status, expires_at)
+insert into payments(payment_link_id, user_id, invoice_ref, method, amount_requested, status, expires_at)
 select id, :'creator_id', 'cloudai-runtime-invoice', 'lightning', 10, 'new', now() + interval '1 hour' from payment_links where slug = 'MixedCaseLink';
 do $$ begin
   begin
-    perform admin_mark_payment((select id from payments where btcpay_invoice_id = 'cloudai-runtime-invoice'), 'settled', 1000);
+    perform admin_mark_payment((select id from payments where invoice_ref = 'cloudai-runtime-invoice'), 'settled', 1000);
     raise exception 'over-credit was accepted';
   exception when others then
     if sqlerrm = 'over-credit was accepted' then raise; end if;

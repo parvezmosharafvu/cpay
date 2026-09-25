@@ -13,6 +13,7 @@ Checks, in order of how often each has actually caught something here:
   4. every rpc() call names a real function and passes real parameters
   5. payment surfaces keep accessible controls and QR ownership guards
   6. admin release gates stay server-backed and audited
+  7. the payment processor is not named on any non-admin page
 """
 import glob
 import re
@@ -268,7 +269,7 @@ def check_direct_upload_contract() -> None:
     needles = [
         '"prepare:upload": "node scripts/prepare-direct-upload.mjs"',
         "const outputDir = path.join(root, \"dist\")",
-        "BTCPAY_API_KEY|WEBHOOK_SECRET",
+        "SUPABASE_SERVICE_ROLE|WEBHOOK_SECRET",
         "Deploy Supabase migrations and Edge Functions separately.",
         "0001` through `0080`",
     ]
@@ -279,6 +280,31 @@ def check_direct_upload_contract() -> None:
         print("ok   direct-upload bundle guard")
 
 
+def check_provider_name_hidden() -> None:
+    """Freelancer, reseller and customer pages never name the processor.
+
+    Everything under public/ except the admin pages (admin*.html,
+    admin-*.js) is served to freelancers, resellers or payers: markup,
+    comments, meta tags, scripts and the built bundle alike.
+    """
+    files = [
+        p for p in sorted(glob.glob("public/**/*", recursive=True))
+        if os.path.isfile(p)
+        and os.path.splitext(p)[1] in (".html", ".js", ".css", ".json", ".map", ".svg", ".txt")
+        and not os.path.basename(p).startswith("admin")
+    ]
+    hits = []
+    for path in files:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for n, line in enumerate(fh, 1):
+                if re.search(r"breez", line, re.I):
+                    hits.append(f"{path}:{n}")
+    if hits:
+        failures.append(f"provider name on a non-admin page: {hits[:10]}")
+    else:
+        print(f"ok   provider name absent from {len(files)} non-admin public files")
+
+
 check_js_syntax()
 check_dom_references()
 check_rpc_signatures()
@@ -286,6 +312,7 @@ check_reserved_slug_lists()
 check_payment_accessibility_and_qr()
 check_admin_release_gates()
 check_direct_upload_contract()
+check_provider_name_hidden()
 
 if failures:
     print("\n".join(f"FAIL {f}" for f in failures), file=sys.stderr)

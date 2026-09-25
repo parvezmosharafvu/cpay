@@ -79,17 +79,17 @@ return rows;
 /**
 * Strip anything that must never sit in a Git repository.
 *
-* The email column was already excluded for this reason, but three more
-* fields were going in unredacted, and the committed snapshots prove what
-* that costs: a customer's bKash number in plaintext, 988 bolt11 invoice
-* strings, and the BTCPay store IDs.
+* The email column was already excluded for this reason, but more fields
+* were going in unredacted, and the committed snapshots prove what that
+* costs: a customer's bKash number in plaintext and 988 bolt11 invoice
+* strings.
 *
 * The bolt11 strings matter more than they look. lookup_payment_status()
 * accepts a full Lightning address as proof-of-knowledge and returns that
 * payment's amount and status — so anyone who cloned the repo could query
 * every one of those 988 payments. They are dropped entirely: a restore
-* never needs them, because btcpay_invoice_id is the key that reconciles
-* against BTCPay.
+* never needs them, because invoice_ref is the key that reconciles
+* against the payment provider.
 *
 * The withdrawal destination is kept only as a last-4 fingerprint. That is
 * enough to confirm a payout went where it should during an audit, and not
@@ -102,7 +102,7 @@ return trimmed.length <= 4 ? "****" : `****${trimmed.slice(-4)}`;
 }
 
 function redactPayment(row: Record<string, unknown>) {
-const { lightning_invoice: _ln, btcpay_store_id: _sid, btcpay_api_key_env: _env, ...rest } = row;
+const { lightning_invoice: _ln, ...rest } = row;
 return rest;
 }
 

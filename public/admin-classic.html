@@ -2207,7 +2207,7 @@ function renderAllPayments(){
     if (statusFilter && p.status !== statusFilter) return false;
     if (!withinTimeFilter(p.created_at, timeFilter)) return false;
     if (search){
-      const ln = (p.lightning_invoice || '').toLowerCase(); const inv = (p.btcpay_invoice_id || '').toLowerCase();
+      const ln = (p.lightning_invoice || '').toLowerCase(); const inv = (p.invoice_ref || '').toLowerCase();
       if (!ln.includes(search) && !inv.includes(search) && !(p.creator_email||'').toLowerCase().includes(search) && !(p.link_slug||'').toLowerCase().includes(search)) return false;
     }
     return true;
@@ -2220,7 +2220,7 @@ function renderAllPayments(){
       actions = `<button class="act-btn act-approve" onclick="markPayment('${escapeAttr(p.id)}','settled',this)">Approve</button>
                  <button class="act-btn act-reject" onclick="markPayment('${escapeAttr(p.id)}','expired',this)">Mark expired</button>`;
     }
-    const inv = p.btcpay_invoice_id || '\u2014';
+    const inv = p.invoice_ref || '\u2014';
     const shortInv = inv.length > 15 ? inv.slice(0, 8) + '...' + inv.slice(-7) : inv;
     const ln = p.lightning_invoice || '';
     const shortLn = ln.length > 25 ? ln.slice(0, 16) + '...' + ln.slice(-10) : ln;

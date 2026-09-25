@@ -12,10 +12,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 *   * provider unreachable → invoices cannot be created; the payment page
 *                            fails for every customer, and no row is
 *                            written to notice it by.
-*   * webhooks stopped     → payments settle at the provider and never reach
+*   * events stopped       → payments arrive in the wallet and never reach
 *                            the ledger. Creators are not credited. The
 *                            site looks completely normal.
-*   * cron stopped         → backups, reconciliation and the daily
+*   * cron stopped         → backups and the daily
 *                            archive all quietly stop.
 *   * withdrawals stuck    → a creator asked for money days ago and
 *                            nobody noticed the request.
@@ -75,54 +75,32 @@ Deno.serve(async (req) => {
   const checks: Check[] = [];
   const now = Date.now();
 
-  // ---------- 1. Is the payment provider answering? ----------
-  // TODO(breez): ask the Breez SDK Spark payment service whether it is
-  // connected and synced. Until it exists invoices cannot be created, so
-  // this check fails on purpose.
-  checks.push({ name: "payment_provider", ok: false, detail: "no payment provider is configured" });
-
-  // ---------- 2. Are webhooks still arriving? ----------
-  // Threshold is generous on purpose. A quiet night is not an outage, so
-  // this only complains when a payment was CREATED recently and nothing
-  // has settled since — that combination means invoices are being made
-  // and their outcomes are not coming back.
-  const { data: lastWebhook } = await supabase
-    .from("webhook_events")
-    .select("received_at")
-    .order("received_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const { data: recentPayment } = await supabase
-    .from("payments")
-    .select("created_at")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const lastHookMs = lastWebhook?.received_at ? new Date(lastWebhook.received_at).getTime() : 0;
-  const lastPayMs = recentPayment?.created_at ? new Date(recentPayment.created_at).getTime() : 0;
-  const hookAge = lastHookMs ? now - lastHookMs : Infinity;
-  const payAge = lastPayMs ? now - lastPayMs : Infinity;
-
-  if (payAge > 6 * HOUR) {
-    checks.push({
-      name: "webhooks",
-      ok: true,
-      informational: true,
-      detail: lastHookMs
-        ? `last webhook ${Math.round(hookAge / MIN)}m ago; no new invoices in 6h, so nothing expected`
-        : "no webhooks recorded yet",
-    });
+  // ---------- 1. Is the payment service answering? ----------
+  // The service holds the Breez wallet, creates every invoice and settles
+  // every received payment. It reports itself unhealthy when it cannot
+  // reach the database or its wallet has not synced in 10 minutes, which
+  // is also when payment events would stop reaching the ledger.
+  const serviceUrl = Deno.env.get("PAYMENT_SERVICE_URL") ?? "";
+  const serviceSecret = Deno.env.get("PAYMENT_SERVICE_SECRET") ?? "";
+  if (!serviceUrl || !serviceSecret) {
+    checks.push({ name: "payment_provider", ok: false, detail: "PAYMENT_SERVICE_URL or PAYMENT_SERVICE_SECRET is not set" });
   } else {
-    const stale = hookAge > 30 * MIN;
-    checks.push({
-      name: "webhooks",
-      ok: !stale,
-      detail: lastHookMs
-        ? `last webhook ${Math.round(hookAge / MIN)}m ago (invoice activity ${Math.round(payAge / MIN)}m ago)`
-        : "invoices are being created but NO webhook has ever been received",
-    });
+    try {
+      const res = await fetch(`${serviceUrl}/health`, {
+        headers: { "Authorization": `Bearer ${serviceSecret}` },
+        signal: AbortSignal.timeout(10000),
+      });
+      const body = await res.json().catch(() => ({}));
+      checks.push({
+        name: "payment_provider",
+        ok: res.ok && body.ok === true,
+        detail: res.ok
+          ? `${body.network}, last synced ${body.lastSyncedAt}, balance ${body.balanceSats} sats`
+          : `payment service answered ${res.status}: db=${body.db} synced=${body.synced}`,
+      });
+    } catch (e) {
+      checks.push({ name: "payment_provider", ok: false, detail: `payment service unreachable: ${e}` });
+    }
   }
 
   // ---------- 3. Is cron still running? ----------

@@ -40,13 +40,6 @@ verify_jwt = false
 [functions.ledger-backup]
 verify_jwt = false
 
-# Compares the payment provider's settled payments against the CPAY
-# ledger (stubbed until TODO(breez)). Called by
-# pg_cron with an x-cron-secret header, same as the two above, and fails
-# closed if CRON_SECRET is unset.
-[functions.reconcile]
-verify_jwt = false
-
 # Health monitor. Called by pg_cron, and optionally by an external uptime
 # monitor pointed at the same URL with the same header. Returns 503 when
 # something is wrong so a monitor can page on the status code alone.

@@ -2,6 +2,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+// The cpay payment service (payment-service/) holds the Breez wallet and
+// makes the Lightning invoice for a payments row this function inserts.
+const PAYMENT_SERVICE_URL = Deno.env.get("PAYMENT_SERVICE_URL") ?? "";
+const PAYMENT_SERVICE_SECRET = Deno.env.get("PAYMENT_SERVICE_SECRET") ?? "";
+const INVOICE_MINUTES = 60;
 // Wildcard origin is intentional here: payment links are embedded on
 // creator-owned custom domains, so any site must be able to POST. The
 // endpoint is unauthenticated by design and defends itself with the
@@ -113,12 +118,84 @@ error: "This link's current price is too high to invoice. Lower the link's cost 
 }, 400);
 }
 
-// TODO(breez): claim_invoice_rate_limit(link.user_id), create a Lightning
-// invoice for chargedAmount through Breez SDK Spark, then insert the
-// payments row (invoice_ref = payment hash, lightning_invoice = bolt11,
-// buyer_amount = amount, amount_requested = chargedAmount). Until that
-// exists no invoice can be issued.
-return json({ error: "Payments are temporarily unavailable" }, 503);
+if (!PAYMENT_SERVICE_URL || !PAYMENT_SERVICE_SECRET) {
+  console.error("PAYMENT_SERVICE_URL or PAYMENT_SERVICE_SECRET is not set");
+  return json({ error: "Payments are temporarily unavailable" }, 503);
+}
+
+// This endpoint is unauthenticated by design (customers have no account),
+// so it needs its own brake. Scoped by the link's OWNER, not the link:
+// create_link_variants() gives one name up to four links.
+const { data: rateAllowed, error: rateErr } = await supabaseAdmin.rpc("claim_invoice_rate_limit", {
+  p_user_id: link.user_id, p_limit: 30, p_window_seconds: 60,
+});
+if (rateErr) {
+  console.error("rate-limit claim failed, refusing:", rateErr.message);
+  return json({ error: "Temporarily unavailable. Please try again in a moment." }, 503);
+}
+if (rateAllowed !== true) {
+  return json({ error: "Too many invoices. Please wait a moment and try again." }, 429);
+}
+const releaseRateClaim = async () => {
+  const { error } = await supabaseAdmin.rpc("release_invoice_rate_limit", { p_user_id: link.user_id });
+  if (error) console.error("rate-limit release failed:", error.message);
+};
+
+// The row comes first and the invoice second, so a payment can never
+// arrive for a row that does not exist yet.
+const expiresAt = new Date(Date.now() + INVOICE_MINUTES * 60 * 1000).toISOString();
+const { data: payment, error: insertErr } = await supabaseAdmin
+  .from("payments")
+  .insert({
+    payment_link_id: link.link_id,
+    user_id: link.user_id,
+    method: "lightning",
+    // What the payer typed, before markup. Display only.
+    buyer_amount: amount,
+    // What the payer is charged, and what the owner is credited on settle.
+    amount_requested: chargedAmount,
+    status: "new",
+    expires_at: expiresAt,
+    customer_city: req.headers.get("cf-ipcity") || null,
+    customer_country: req.headers.get("cf-ipcountry") || null,
+  })
+  .select("id")
+  .single();
+if (insertErr || !payment) {
+  console.error("Failed to record payment:", insertErr);
+  await releaseRateClaim();
+  return json({ error: "Could not record payment" }, 500);
+}
+
+let bolt11 = "";
+try {
+  const res = await fetch(`${PAYMENT_SERVICE_URL}/invoices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${PAYMENT_SERVICE_SECRET}` },
+    body: JSON.stringify({ paymentId: payment.id }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (res.ok && typeof body.bolt11 === "string") bolt11 = body.bolt11;
+  else console.error("payment service refused invoice:", res.status, body);
+} catch (e) {
+  console.error("payment service unreachable:", e);
+}
+if (!bolt11) {
+  // No payer ever saw an invoice for this row, so nothing can settle it.
+  const { error } = await supabaseAdmin.from("payments").delete().eq("id", payment.id);
+  if (error) console.error("Could not delete invoiceless payment", payment.id, error.message);
+  await releaseRateClaim();
+  return json({ error: "Could not create invoice" }, 502);
+}
+
+return json({
+  paymentId: payment.id,
+  payCode: bolt11,
+  payUrl: `lightning:${bolt11}`,
+  amountRequested: chargedAmount,
+  expiresAt,
+});
 });
 function json(body: unknown, status = 200) {
 return new Response(JSON.stringify(body), {

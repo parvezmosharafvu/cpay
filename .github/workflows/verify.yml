@@ -87,6 +87,16 @@ jobs:
           # just applied to, so it leaves nothing behind.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/cloudai_regression.sql
 
+      - name: Dashboard daily summaries (0096)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # 0096 must survive a second apply, then its RPCs are checked with
+          # seeded payments either side of the 17:00 Dhaka cutoff, the
+          # 10-link ceiling and who-sees-whom. BEGIN/ROLLBACK, like above.
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -f supabase/migrations/0096_dashboard_daily_summaries.sql
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/dashboards_test.sql
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

@@ -174,6 +174,18 @@ as the balance. The cost rate charged is stored on each payment
 (`payments.cost_percent`) from 0096 on; older payments show the link's current
 rate.
 
+0098 adds `my_dashboard_profile()` (profile card: email, role, reseller,
+links used of the limit) and `admin_link_usage()` (links used and limit per
+account for the admin Accounts tab). A name with several variant spellings
+counts as one link, and no account can go above 10.
+
+The daily withdrawal cap resets at the same 17:00 Dhaka edge as everything
+else since 0097 (`request_withdrawal`, `system_queue_withdrawal`,
+`reserve_stablecoin_withdrawal`).
+
+`public/daily-desk.js` renders these RPCs on the freelancer Overview, the
+reseller Overview and Team accounts, and the admin Daily earnings tab.
+
 ## Alerting
 
 Set either or both, in Supabase → Edge Functions → Secrets:

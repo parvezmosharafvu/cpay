@@ -87,6 +87,22 @@ jobs:
           # just applied to, so it leaves nothing behind.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/cloudai_regression.sql
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Payment service settles each payment once
+        working-directory: payment-service
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: |
+          # settle_breez_payment against the database the migrations just
+          # built: a replayed event, a second payment for a settled hash,
+          # an unknown hash, an underpayment and an expired invoice must
+          # credit nothing. Rolled back at the end.
+          npm ci --no-audit --no-fund
+          node --test
+
   functions:
     name: Edge functions type-check
     runs-on: ubuntu-latest

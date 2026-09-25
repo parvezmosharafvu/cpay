@@ -8,7 +8,8 @@ Nagad, or Binance with an admin-reviewed payout flow.
 
 - **Frontend:** Vanilla HTML/CSS/JS + Supabase JS v2 (no build step)
 - **Backend:** Supabase — Postgres, Row Level Security, Edge Functions
-- **Payments:** BTCPay Server (Lightning Network only)
+- **Payments:** being rebuilt on Breez SDK Spark (TODO(breez)); invoice
+  creation answers 503 until then
 - **Edge routing:** Cloudflare Worker — renders correct link-preview
   metadata for WhatsApp/Telegram/Facebook when a payment link is shared
 
@@ -35,13 +36,13 @@ public/                          → static site root
 supabase/
   migrations/                    → run in numeric order, 0001 → 0091
   functions/
-    create-invoice/              → creates a BTCPay invoice for a slug
-    btcpay-webhook/              → BTCPay webhook + admin withdrawal actions
+    create-invoice/              → validates and prices an invoice for a slug (provider call stubbed)
+    admin-actions/               → admin mark-settled + withdrawal actions
     user-withdraw/               → creator-initiated withdrawal
     daily-report/                → nightly rollup into daily_stats
     ledger-backup/               → nightly ledger snapshot to a private repo
     og-image/                    → generated link-preview images
-    reconcile/                   → daily BTCPay vs ledger comparison
+    reconcile/                   → daily provider vs ledger comparison (stubbed)
     health/                      → system health checks + alerting
 
 ci/
@@ -93,7 +94,7 @@ slightly different balance formulas is how the same money gets paid out twice.
   run `update profiles set role = 'admin'` on their own row, insert
   withdrawals directly, and read every payment in the system.
 - Migration **0033** is not optional either. It adds the `webhook_events`
-  table that makes BTCPay webhook deliveries idempotent (without it,
+  table that makes payment webhook deliveries idempotent (without it,
   concurrent retries of the same event can be processed twice) and CHECK
   constraints that make negative or zero amounts unwritable no matter which
   code path tries.
@@ -123,9 +124,9 @@ All five run through `pg_cron` + `pg_net`, reading their secrets from Vault.
 
 | Job | When (UTC) | What it does |
 |---|---|---|
-| `cpay-health` | every 15 min | BTCPay reachable, webhooks arriving, cron alive, withdrawals not stuck, links have shops. Alerts on failure. |
+| `cpay-health` | every 15 min | Payment provider reachable, webhooks arriving, cron alive, withdrawals not stuck. Alerts on failure. |
 | `prune-webhook-events` | 03:20 | 90-day retention on `webhook_events` |
-| `cpay-reconcile` | 04:10 | Compares BTCPay's settled invoices with the ledger; alerts on any gap |
+| `cpay-reconcile` | 04:10 | Provider vs ledger comparison; skipped until the provider exists |
 | `ledger-backup-trigger` | 11:05 | Full ledger snapshot committed to the ledger repo |
 | `daily-report-trigger` | 18:10 | Writes the `daily_stats` archive |
 
@@ -155,7 +156,7 @@ ALERT_TELEGRAM_BOT_TOKEN     Telegram bot token
 ALERT_TELEGRAM_CHAT_ID       Telegram chat to post into
 ```
 
-`health` and `reconcile` both use these. With neither set they log a
+`health` uses these. With neither set they log a
 warning and carry on — nothing breaks, but nobody is told.
 
 ## Checking things by hand
@@ -165,7 +166,7 @@ warning and carry on — nothing breaks, but nobody is told.
 curl -H "x-cron-secret: $CRON_SECRET" \
   "$SUPABASE_URL/functions/v1/health?alert=0"
 
-# Does BTCPay agree with the ledger for the last week?
+# Does the provider agree with the ledger for the last week? (stubbed)
 curl -H "x-cron-secret: $CRON_SECRET" \
   "$SUPABASE_URL/functions/v1/reconcile?days=7"
 

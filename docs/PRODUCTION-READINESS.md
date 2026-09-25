@@ -23,16 +23,16 @@ change to the previous production project.
 - [ ] Emergency suspension hides public payment pages and stops auto-queue
   behavior.
 
-## BTCPay and webhooks
+## Payment provider and events
 
-- [ ] CPAY has its own BTCPay store and credentials.
-- [ ] Invoice creation, settlement, expiry and duplicate webhook delivery
+- [ ] CPAY has its own payment provider wallet and credentials (TODO(breez)).
+- [ ] Invoice creation, settlement, expiry and duplicate event delivery
   passed in staging.
 - [ ] Public payment and QR invoice controls pass keyboard/screen-reader
   checks; `python3 ci/check_frontend.py` reports payment accessibility and
   QR ownership guards as green.
-- [ ] Webhook signature validation is enabled.
-- [ ] The live health function reports every active shop correctly.
+- [ ] Payment event signature validation is enabled.
+- [ ] The live health function reports the payment provider correctly.
 - [ ] The operator knows where to inspect an ambiguous `processing` payout.
 
 ## Withdrawals
@@ -61,7 +61,7 @@ change to the previous production project.
   every required gate.
 - [ ] The scheduled health endpoint runs with a rotated cron secret.
 - [ ] Daily reconciliation, ledger backup and alert delivery were observed.
-- [ ] The owner has the BTCPay staging runbook and emergency-stop procedure.
+- [ ] The owner has the payment staging runbook and emergency-stop procedure.
 - [ ] A small, controlled production rollout is planned.
 
 Do not call CPAY production-ready until every unchecked item has a named

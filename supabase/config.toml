@@ -40,7 +40,8 @@ verify_jwt = false
 [functions.ledger-backup]
 verify_jwt = false
 
-# Compares BTCPay's settled invoices against the CPAY ledger. Called by
+# Compares the payment provider's settled payments against the CPAY
+# ledger (stubbed until TODO(breez)). Called by
 # pg_cron with an x-cron-secret header, same as the two above, and fails
 # closed if CRON_SECRET is unset.
 [functions.reconcile]
@@ -59,7 +60,6 @@ verify_jwt = false
 
 # Per-reseller Telegram/Discord settled digest at 5pm Asia/Dhaka.
 # Same cron-secret pattern as daily-report. Cost % in the message is
-# payer markup on the link — it is not the BTCPay shop rate and not
-# the admin platform fee.
+# payer markup on the link — it is not the admin platform fee.
 [functions.reseller-digest]
 verify_jwt = false

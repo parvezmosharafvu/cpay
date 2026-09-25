@@ -24,7 +24,7 @@ ashbe (payment off hobe na — tao age database kora bhalo).
   repo te jabe (ledger-backup function je khanei pathay).
 - *Moner kotha:* Git history te snapshots akhon-o ache — nicher Step 6 dekhen.
 
-**2. CORS restriction — `btcpay-webhook` + `user-withdraw` (dynamic, admin-panel-driven)**
+**2. CORS restriction — `admin-actions` + `user-withdraw` (dynamic, admin-panel-driven)**
 - *Keno:* Age shob edge function e `Access-Control-Allow-Origin: *` chilo.
   Ekhon browser shudhu apnar registered domain theke ei duto function call
   korte parbe. Random website er visitor der browser diye keu apnar
@@ -39,7 +39,7 @@ ashbe (payment off hobe na — tao age database kora bhalo).
   protected.
 
 **3. Webhook idempotency — notun `webhook_events` table (migration 0033)**
-- *Keno:* BTCPay 200 na paile same event bar bar retry kore, majhe majhe
+- *Keno:* Payment provider 200 na paile same event bar bar retry kore, majhe majhe
   ek sathe duto delivery o pathay. Age sudhu conditional update chilo. Ekhon
   prottek delivery prothome unique delivery-id claim kore — duplicate pele
   200 diye bondho. Double-settlement er possibility fully bondho.
@@ -83,7 +83,7 @@ ashbe (payment off hobe na — tao age database kora bhalo).
 ### 🔧 Operational improvements
 
 **8. `ALERT_WEBHOOK_URL` — payment failure alerts**
-- *Keno:* BTCPay payout fail, BTCPay unreachable, ledger backup fail, ba
+- *Keno:* Health check fail, ledger backup fail, ba
   daily-report er kono din miss — shob ekhon apnar Discord/Slack/Telegram e
   🚨 message pathay. Age shudhu log e thakto, keu janto na.
 
@@ -147,7 +147,7 @@ git push
 wrangler deploy
 
 # Edge functions (Supabase CLI)
-supabase functions deploy btcpay-webhook
+supabase functions deploy admin-actions
 supabase functions deploy create-invoice
 supabase functions deploy user-withdraw
 supabase functions deploy daily-report

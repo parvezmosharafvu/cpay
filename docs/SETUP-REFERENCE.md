@@ -1,7 +1,8 @@
 # CPAY — full setup reference
 
-Everything CPAY needs configured outside its own code: BTCPay Server,
-Supabase (secrets, Vault, cron), and Cloudflare (domains, Pages, Worker).
+Everything CPAY needs configured outside its own code: the payment
+provider, Supabase (secrets, Vault, cron), and Cloudflare (domains,
+Pages, Worker).
 
 Written to be followed top to bottom on a fresh deployment, and to be
 searched when something specific breaks later.
@@ -10,7 +11,7 @@ searched when something specific breaks later.
 
 ## Table of contents
 
-1. [BTCPay Server](#1-btcpay-server)
+1. [Payment provider](#1-payment-provider)
 2. [Supabase — secrets and Vault](#2-supabase--secrets-and-vault)
 3. [Supabase — extensions and cron](#3-supabase--extensions-and-cron)
 4. [Cloudflare — domains, Pages, Worker](#4-cloudflare--domains-pages-worker)
@@ -19,90 +20,11 @@ searched when something specific breaks later.
 
 ---
 
-## 1. BTCPay Server
+## 1. Payment provider
 
-### 1.1 The store's rate spread must be 0%
-
-**This is the one setting that silently changes what every customer
-pays.** CPAY now applies each user's own markup (`cost_percent`) by
-changing the invoice amount before it reaches BTCPay. If BTCPay *also*
-applies a rate spread, the two stack and every payer is overcharged by
-a percentage nobody set deliberately.
-
-```
-Store → Settings → Rates
-  Add a spread of  →  0 %
-```
-
-If you deliberately want a conversion buffer on top of user markups,
-set it here and know that it compounds: a 2% store spread with a user
-on 3% means the payer is charged roughly 5.06%, not 5%.
-
-### 1.2 Lightning must be enabled, with LNURL
-
-```
-Store → Settings → Lightning  →  connect your node (or "Internal Node")
-Store → Settings → Lightning → LNURL  →  Enabled
-```
-
-LNURL is what lets a **Lightning Address** (`you@wallet.com`) work as a
-payout destination. Without it, automatic Lightning payouts can only
-use bolt11 invoices, which expire — which is exactly the problem the
-saved-address feature exists to solve.
-
-### 1.3 API keys
-
-```
-Account → Manage Account → API Keys → Generate Key
-```
-
-Permissions needed, per store:
-
-| Permission | Why |
-|---|---|
-| `btcpay.store.cancreateinvoice` | create-invoice |
-| `btcpay.store.canviewinvoices` | webhook + reconcile |
-| `btcpay.store.cancreatenonapprovedpullpayments` | payouts |
-| `btcpay.store.canmanagepullpayments` | payouts |
-| `btcpay.store.canviewstoresettings` | health check ping |
-
-Generate one key per store you run. They map to the
-`BTCPAY_API_KEY`, `_2`, `_3`, `_4`, `_5` secrets, and a shop row's
-`api_key_env` column selects which one it uses — the column is checked
-against a whitelist in code, so a bad value can never make the function
-read an arbitrary environment variable.
-
-### 1.4 Webhooks
-
-```
-Store → Settings → Webhooks → Create Webhook
-```
-
-- **Payload URL:**
-  `https://<project-ref>.supabase.co/functions/v1/btcpay-webhook`
-- **Secret:** generate one, save it — this becomes
-  `BTCPAY_WEBHOOK_SECRET` (or `_2`.. `_5` for additional stores)
-- **Events:** `Invoice settled`, `Invoice expired`, `Invoice invalid`,
-  `Invoice payment settled`
-
-Each store generates its own secret. CPAY accepts a delivery whose
-HMAC matches **any** configured secret, so all of them must be set.
-
-> A failed (non-2xx) delivery is retried by BTCPay with the **same**
-> delivery ID. CPAY relies on this: a webhook arriving before the
-> payment row exists returns 404 on purpose and releases its dedup
-> claim, so the retry succeeds cleanly.
-
-### 1.5 Payout processor (optional, for hands-off Lightning)
-
-```
-Store → Payouts → Payout Processors → Automated Lightning Sender
-```
-
-Without this, a BTCPay payout is created and waits for manual approval
-inside BTCPay. With it, BTCPay sends automatically. CPAY's own
-`auto_withdraw_enabled` toggle controls whether a payout is *created*
-automatically; this controls whether BTCPay then *sends* it.
+Not configured yet. The previous provider was removed in migration
+0093; Breez SDK Spark replaces it (TODO(breez)). Until then
+create-invoice answers 503 and withdrawals are paid by hand.
 
 ---
 
@@ -116,12 +38,6 @@ Dashboard → Edge Functions → Secrets
 
 | Secret | Required | Notes |
 |---|---|---|
-| `BTCPAY_URL` | yes | No trailing slash |
-| `BTCPAY_STORE_ID` | yes | Default store, used for payouts |
-| `BTCPAY_API_KEY` | yes | Store 1 |
-| `BTCPAY_API_KEY_2` … `_5` | per store | Only if you run more stores |
-| `BTCPAY_WEBHOOK_SECRET` | yes | Store 1's webhook secret |
-| `BTCPAY_WEBHOOK_SECRET_2` … `_4` | per store | |
 | `CRON_SECRET` | yes | Guards the scheduled functions |
 | `ALLOWED_ORIGINS` | yes | Comma-separated; bare hosts or full URLs both work |
 | `GITHUB_TOKEN` | for backups | Repo-scoped PAT |
@@ -179,7 +95,7 @@ scheduling ones afterwards.
 |---|---|---|
 | `cpay-health` | `*/15 * * * *` | 5 checks; alerts and returns 503 when unhealthy |
 | `prune-webhook-events` | `20 3 * * *` | 90-day retention on the dedup table |
-| `cpay-reconcile` | `10 4 * * *` | Compares BTCPay's settled invoices against the ledger |
+| `cpay-reconcile` | `10 4 * * *` | Provider vs ledger comparison; skipped until the provider exists |
 | `ledger-backup-trigger` | `5 11 * * *` | Commits a redacted snapshot to GitHub |
 | `daily-report-trigger` | `10 18 * * *` | Writes the 5pm–5pm rollup into `daily_stats` |
 
@@ -281,7 +197,7 @@ Sequence matters — several steps fail silently if done out of order.
 4. **Edge Function secrets** set (§2.1)
 5. **All 8 functions deployed:**
    ```
-   supabase functions deploy btcpay-webhook --no-verify-jwt
+   supabase functions deploy admin-actions
    supabase functions deploy create-invoice --no-verify-jwt
    supabase functions deploy user-withdraw
    supabase functions deploy daily-report   --no-verify-jwt
@@ -290,8 +206,7 @@ Sequence matters — several steps fail silently if done out of order.
    supabase functions deploy reconcile      --no-verify-jwt
    supabase functions deploy health         --no-verify-jwt
    ```
-6. **BTCPay** store spread set to 0%, LNURL on, API key made, webhook
-   pointed at the deployed function (§1)
+6. **Payment provider** configured (§1)
 7. **Cloudflare** domain added, Worker route attached (§4)
 8. **`site_domains` rows** inserted for every hostname (§4.2)
 9. **Admin account** promoted:
@@ -328,15 +243,17 @@ as the *string* `"true"` fails every check silently, because
 
 ### Pricing end to end
 
-With a user's `cost_percent` at 3 and the BTCPay store spread at 0:
+With a user's `cost_percent` at 3:
 
 1. Open their $100 link
 2. The invoice should read **$103.00**
 3. After settling, their balance should read **$103.00**
 
-If it reads more than $103.00, the BTCPay store spread is not 0 (§1.1).
-
 ### Lightning payouts
+
+Instant payouts are stubbed until the Breez integration lands
+(TODO(breez)); every request currently queues for an admin. Once it
+exists:
 
 1. Save a Lightning Address in the dashboard (`you@wallet.com`)
 2. Admin → Settings: **Manual withdrawal requests** on, **Instant
@@ -349,13 +266,12 @@ required, by design: two global and one per-user.
 
 ---
 
-## Quick reference — the three percentages
+## Quick reference — the two percentages
 
 Easy to confuse, completely different:
 
 | Setting | Where | Who pays it | Who sets it | Limit |
 |---|---|---|---|---|
-| Store rate spread | BTCPay | The payer | You, in BTCPay | **Keep at 0%** |
 | `cost_percent` | CPAY profile | The payer | The freelancer/reseller themselves | None (1000% typo guard) |
 | `withdrawal_fee_percent` | CPAY profile | The user | Admin, per profile | None (100% — beyond that payout goes negative) |
 

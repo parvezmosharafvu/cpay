@@ -45,7 +45,7 @@ const config = readFileSync(configPath, "utf8");
 if (/YOUR_PROJECT_REF|YOUR_PUBLIC_ANON_KEY/i.test(config)) {
   fail("public/config.js still contains example placeholders.");
 }
-if (/service_role|SUPABASE_SERVICE_ROLE|BTCPAY_API_KEY|WEBHOOK_SECRET/i.test(config)) {
+if (/service_role|SUPABASE_SERVICE_ROLE|WEBHOOK_SECRET/i.test(config)) {
   fail("A server-side secret name appears in public/config.js. Remove it before upload.");
 }
 

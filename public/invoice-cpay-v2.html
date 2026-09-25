@@ -380,9 +380,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   if (cacheMatches && (cached.payCode || cached.qrText)){
     currentPayCode = cached.payCode || cached.qrText;
-    // payUrl from create-invoice is already `lightning:<bolt11>`. It falls
-    // back to a BTCPay checkout URL only when the node returned no bolt11,
-    // and that is an https link, which must not be treated as a deep link.
+    // payUrl from create-invoice is already `lightning:<bolt11>`. Anything
+    // else (an https checkout link) must not be treated as a deep link.
     currentPayUrl = (cached.payUrl && cached.payUrl.startsWith('lightning:'))
       ? cached.payUrl
       : 'lightning:' + currentPayCode;

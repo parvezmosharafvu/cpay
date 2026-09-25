@@ -268,7 +268,7 @@ def check_direct_upload_contract() -> None:
     needles = [
         '"prepare:upload": "node scripts/prepare-direct-upload.mjs"',
         "const outputDir = path.join(root, \"dist\")",
-        "BTCPAY_API_KEY|WEBHOOK_SECRET",
+        "SUPABASE_SERVICE_ROLE|WEBHOOK_SECRET",
         "Deploy Supabase migrations and Edge Functions separately.",
         "0001` through `0080`",
     ]

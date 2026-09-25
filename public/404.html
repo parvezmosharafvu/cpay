@@ -462,8 +462,8 @@ const RESERVED = ['index','login','register','dashboard','admin','404','config',
   'well-known','robots','sitemap','moderator','reseller','store','classic'];
 
 // NOT lowercased. /taylor-james, /TaylorJames and /taylorjames are three
-// separate links pointing at three BTCPay stores with three different
-// rates, so the slug has to reach the server exactly as it was typed.
+// separate links that can carry three different rates, so the slug has
+// to reach the server exactly as it was typed.
 const slug = window.location.pathname.replace(/^\/|\/$/g, '');
 
 const MIN_AMOUNT = 1;

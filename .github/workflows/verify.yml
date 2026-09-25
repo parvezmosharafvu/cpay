@@ -87,16 +87,17 @@ jobs:
           # just applied to, so it leaves nothing behind.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/cloudai_regression.sql
 
-      - name: Dashboard daily summaries and business day (0096, 0097)
+      - name: Dashboard data layer and business day (0096-0098)
         env:
           PGPASSWORD: postgres
         run: |
-          # 0096 and 0097 must survive a second apply, then the RPCs are
-          # checked with seeded payments either side of the 17:00 Dhaka
-          # cutoff, the 10-link ceiling, who-sees-whom and the daily
-          # withdrawal limit. BEGIN/ROLLBACK, like above.
-          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -f supabase/migrations/0096_dashboard_daily_summaries.sql
-          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -f supabase/migrations/0097_withdraw_limit_business_day.sql
+          # 0096-0098 must survive a second apply, then the RPCs are checked
+          # with seeded payments either side of the 17:00 Dhaka cutoff, the
+          # 10-link ceiling, who-sees-whom, the daily withdrawal limit and
+          # the profile card. BEGIN/ROLLBACK, like above.
+          for f in supabase/migrations/009[6-8]_*.sql; do
+            psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -f "$f"
+          done
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/dashboards_test.sql
 
       - uses: actions/setup-node@v4

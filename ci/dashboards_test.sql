@@ -310,6 +310,42 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------
+-- 8. Profile card and link usage (0098)
+-- ---------------------------------------------------------------
+set test.uid = 'c1000000-0000-0000-0000-000000000001';
+do $$
+declare r record;
+begin
+  select * into r from my_dashboard_profile();
+  if r.email <> 'aff.freelancer@gmail.test' or r.reseller_email <> 'res.one@cpay.test' or r.reseller_via <> 'signup'
+     or r.links_used <> 2 or r.link_limit <> 2 or r.cost_percent <> 2 then
+    raise exception 'aff profile card wrong: %', row_to_json(r);
+  end if;
+  begin perform * from admin_link_usage(); raise exception 'freelancer read link usage';
+  exception when others then if sqlerrm <> 'Not authorized' then raise; end if; end;
+  raise notice 'PASS profile card: % via % reseller %, links %/%', r.email, r.reseller_via, r.reseller_email, r.links_used, r.link_limit;
+end $$;
+set test.uid = 'c1000000-0000-0000-0000-000000000002';
+do $$
+begin
+  if (select reseller_via from my_dashboard_profile()) <> 'assigned'
+     or (select reseller_email from my_dashboard_profile()) <> 'res.one@cpay.test' then
+    raise exception 'assigned profile card wrong';
+  end if;
+end $$;
+set test.uid = 'a1000000-0000-0000-0000-000000000001';
+do $$
+declare r record;
+begin
+  select * into r from admin_link_usage() where user_id = 'c1000000-0000-0000-0000-000000000003';
+  -- the same count enforce_link_limit() refused the 11th link at
+  if r.links_used <> 10 or r.link_limit <> 10 or r.max_payment_links <> 50 then
+    raise exception 'solo usage wrong: %', row_to_json(r);
+  end if;
+  raise notice 'PASS admin link usage: solo %/% (profile limit % capped at 10)', r.links_used, r.link_limit, r.max_payment_links;
+end $$;
+
+-- ---------------------------------------------------------------
 -- 6. Grants
 -- ---------------------------------------------------------------
 reset test.uid;
@@ -322,7 +358,9 @@ begin
      or has_function_privilege('anon', 'my_daily_summary(integer)', 'execute')
      or not has_function_privilege('authenticated', 'admin_daily_timeseries(integer,uuid,uuid)', 'execute')
      or not has_function_privilege('authenticated', 'reseller_team_daily_summary(integer)', 'execute')
-     or not has_function_privilege('authenticated', 'daily_link_breakdown(integer,uuid)', 'execute') then
+     or not has_function_privilege('authenticated', 'daily_link_breakdown(integer,uuid)', 'execute')
+     or has_function_privilege('authenticated', 'link_usage_for(uuid)', 'execute')
+     or has_function_privilege('anon', 'my_dashboard_profile()', 'execute') then
     raise exception 'grants wrong';
   end if;
   raise notice 'PASS grants: internals and daily_totals_for_cycle closed to authenticated; RPCs closed to anon';

@@ -41,6 +41,16 @@ All of the above belong in Supabase Edge Function secrets. See `docs/ENV_VARS.md
   to `paid`, `processing` or `rejected` goes through
   `system_claim_withdrawal()`, which only succeeds from `pending`/`approved`.
   This is what stops a double-click from sending two real Lightning payouts.
+- **Instant stablecoin withdrawals send before anyone looks at them.** The
+  payment service reserves the balance with `reserve_stablecoin_withdrawal()`
+  (same checks as `request_withdrawal()`, plus the quoted fee must still be
+  the profile's fee), then calls Breez `sendPayment` with the withdrawal id as
+  the idempotency key, so a repeated confirm or a restart cannot pay twice.
+  `finalize_stablecoin_withdrawal()` only moves `sending` rows, so a refund
+  happens once. Both functions are service-role only. The controls that
+  remain are the emergency stop, `can_request_withdrawals`, account status
+  and the per-profile single and daily limits; set those before mainnet.
+  A destination address on the wrong network cannot be recovered.
 - **`payments` is readable by anon only inside the payment window** so the
   public invoice page can receive Realtime updates. Rows older than two hours
   are invisible, and the column grant hides `user_id` and internal ids.

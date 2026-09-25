@@ -43,6 +43,12 @@ change to the previous production project.
 - [ ] Per-profile invoice, single-withdrawal and daily limits were tested.
 - [ ] On-chain withdrawals remain disabled unless separately approved with
   evidence for address validation, fees, confirmations, retries and rollback.
+- [ ] Instant stablecoin withdrawal passed a small mainnet send on each coin
+  and network offered (see `payment-service/README.md`): quote shown, row
+  `sending` then `paid` with `amount_out` matching what arrived, and a
+  deliberately failed or refunded send leaves the balance restored once.
+- [ ] Single and daily withdrawal limits are set for accounts that may use
+  instant withdrawals, since nothing waits for an admin.
 
 ## Cloudflare and public site
 

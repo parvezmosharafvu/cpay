@@ -1,8 +1,9 @@
 # CPAY
 
 Lightning Network payment links for freelancers and online shop owners.
-Generate a payment link, share it, get paid — withdrawals to bKash,
-Nagad, or Binance with an admin-reviewed payout flow.
+Generate a payment link, share it, get paid. Withdraw instantly as USDT or
+USDC on any network Breez routes to, or to bKash, Nagad, Binance Pay or a
+bank through an admin-reviewed payout.
 
 ## Stack
 
@@ -10,7 +11,9 @@ Nagad, or Binance with an admin-reviewed payout flow.
 - **Backend:** Supabase — Postgres, Row Level Security, Edge Functions
 - **Payments:** Breez SDK Spark, through `payment-service/` (a small
   Node 22 process holding the cpay wallet). Lightning receive works on the
-  Breez regtest network; withdrawals are still paid by hand
+  Breez regtest network. Instant USDT/USDC withdrawals go through Breez
+  cross-chain sends, which exist on mainnet only; bKash, Nagad, Binance Pay
+  and bank withdrawals are paid by hand
 - **Edge routing:** Cloudflare Worker — renders correct link-preview
   metadata for WhatsApp/Telegram/Facebook when a payment link is shared
 
@@ -76,18 +79,22 @@ There is exactly one definition of a creator's withdrawable balance, and it
 lives in SQL:
 
 ```
-available = sum(settled payments) − sum(withdrawals that are not rejected)
+available = sum(settled payments) − sum(withdrawals that are not rejected or failed)
 ```
 
 `get_balance_for()` computes it. `get_my_balance()` is the creator-facing
-wrapper the dashboard calls. `request_withdrawal()` and
-`system_queue_withdrawal()` both check against it while holding a lock on the
-creator's profile row, which serialises concurrent requests.
+wrapper the dashboard calls. `request_withdrawal()`,
+`system_queue_withdrawal()` and `reserve_stablecoin_withdrawal()` all check
+against it while holding a lock on the creator's profile row, which
+serialises concurrent requests.
 
 Nothing else may write to `withdrawals` — there is no client INSERT policy on
 that table, so a browser cannot mint a request that skips the balance check.
 Status transitions to `paid`/`processing`/`rejected` go through
-`system_claim_withdrawal()`, which is atomic and only fires once.
+`system_claim_withdrawal()`, which is atomic and only fires once. An instant
+stablecoin withdrawal is inserted as `sending` and leaves it only through
+`finalize_stablecoin_withdrawal()` (to `paid`, or `failed`, which is the
+refund), which likewise only fires once.
 
 If you change any of this, change it in one place. Two functions with two
 slightly different balance formulas is how the same money gets paid out twice.

@@ -336,7 +336,7 @@
                                   </div>
                                   <div class="detail-section-title">Payment link limit for this Freelancer</div>
                                   <div class="w-row">
-                                    <input type="number" step="1" class="w-input" id="detailLimitInput" placeholder="5">
+                                    <input type="number" step="1" min="0" max="10" class="w-input" id="detailLimitInput" placeholder="5">
                                       <button class="btn-primary" style="flex:0 0 auto;" onclick="saveDetailLimit()">Save limit</button>
                                     </div>
                                     <div class="hint" style="font-size:11px; color:var(--faint); margin-top:6px;">How many models/payment links this Freelancer may create. Each link is automatically available on every active payment domain.</div>
@@ -581,7 +581,7 @@
                                                     <div class="panel-title">Default link limit for new Freelancers</div>
                                                   </div>
                                                   <div class="w-row" style="margin-bottom:12px;">
-                                                    <input type="number" step="1" min="1" max="500" class="w-input" id="defaultLinkLimitInput" placeholder="5">
+                                                    <input type="number" step="1" min="1" max="10" class="w-input" id="defaultLinkLimitInput" placeholder="5">
                                                   </div>
                                                   <button class="btn-primary" style="max-width:200px;" onclick="saveDefaultLinkLimit()">Save link limit</button>
                                                   <div class="hint" style="font-size:11px; color:var(--faint); margin-top:8px;">One name counts as one link even when it produces several rate variants. Applies to accounts created from now on — edit existing Freelancers from People.</div>
@@ -2062,7 +2062,7 @@ async function changeDomainTheme(id, theme){ const { error } = await window.supa
 async function toggleDomain(id, newState, btnEl){ btnEl.disabled = true; const { error } = await window.supabaseClient.from('site_domains').update({ is_active: newState }).eq('id', id); if (!error){ showToast(newState ? 'Domain enabled' : 'Domain disabled', 'ok'); await loadDomains(); } }
 async function makePrimary(id, btnEl){ btnEl.disabled = true; await window.supabaseClient.from('site_domains').update({ is_primary_site: false }).neq('id', id); const { error } = await window.supabaseClient.from('site_domains').update({ is_primary_site: true }).eq('id', id); if (!error){ showToast('Primary site domain updated', 'ok'); await loadDomains(); } }
 async function deleteDomain(id, btnEl){ if (!confirm('Remove this domain?')) return; btnEl.disabled = true; const { error } = await window.supabaseClient.from('site_domains').delete().eq('id', id); if (!error){ showToast('Domain removed', 'ok'); await loadDomains(); } }
-async function saveDetailLimit(){ const limit = parseInt(document.getElementById('detailLimitInput').value, 10); if (isNaN(limit) || limit < 0 || limit > 100){ showToast('Enter a limit 0-100', 'err'); return; } const { error } = await window.supabaseClient.rpc('admin_set_link_limit', { p_creator_id: currentDetailCreatorId, p_limit: limit }); showToast(error ? 'Failed' : 'Link limit updated', error ? 'err' : 'ok'); if (!error) await loadPeople(); }
+async function saveDetailLimit(){ const limit = parseInt(document.getElementById('detailLimitInput').value, 10); if (isNaN(limit) || limit < 0 || limit > 10){ showToast('Enter a limit 0-10. The database caps every account at 10 links.', 'err'); return; } const { error } = await window.supabaseClient.rpc('admin_set_link_limit', { p_creator_id: currentDetailCreatorId, p_limit: limit }); showToast(error ? 'Failed' : 'Link limit updated', error ? 'err' : 'ok'); if (!error) await loadPeople(); }
 
 function startEdit(id){ editingMessageId = id; loadThread(); }
 function cancelEdit(){ editingMessageId = null; loadThread(); }
@@ -2314,8 +2314,8 @@ async function loadSettings(){
 async function saveNotice(){ const text = document.getElementById('noticeInput').value.trim(); const active = document.getElementById('noticeActiveToggle').checked; const { error } = await window.supabaseClient.from('app_settings').upsert({ key: 'platform_notice', value: { text, active }, updated_at: new Date().toISOString() }); showToast(error ? 'Failed' : 'Notice saved', error ? 'err' : 'ok'); }
 async function saveDefaultLinkLimit(){
   const count = parseInt(fieldValue('defaultLinkLimitInput'), 10);
-  if (!Number.isFinite(count) || count < 1 || count > 500){
-    return showToast('Enter a limit between 1 and 500', 'err');
+  if (!Number.isFinite(count) || count < 1 || count > 10){
+    return showToast('Enter a limit between 1 and 10', 'err');
   }
   // The key handle_new_user() reads. It has existed since 0006, but
   // nothing ever wrote to it and the trigger never read it, so every new

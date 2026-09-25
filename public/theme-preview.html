@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Checkout designs · CPAY</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="cpay.css">
+<!-- qrcode.min.js draws the sample QR; theme.js holds the ten designs. No
+     account or database is needed: everything on this page is sample data. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="theme.js"></script>
+</head>
+<body>
+<main class="wrap preview-page">
+  <nav class="nav"><a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a><a class="btn ghost sm" href="dashboard.html">Back to dashboard</a></nav>
+  <header class="preview-intro">
+    <div class="kicker">Checkout designs</div>
+    <h1>Pick how your payers see the checkout</h1>
+    <p class="muted">Every design shows the same things: who is being paid, the amount, the status, the time left, the Lightning QR code and the buttons to pay. Only the look changes. Choose a design when you create a link.</p>
+  </header>
+
+  <div class="preview-layout">
+    <section class="card preview-list" aria-label="Designs">
+      <div class="designs" id="designList"></div>
+    </section>
+
+    <section>
+      <div class="preview-tabs" role="tablist" aria-label="Page">
+        <button type="button" class="pill active" role="tab" aria-selected="true" data-view="invoice">Invoice page</button>
+        <button type="button" class="pill" role="tab" aria-selected="false" data-view="pay">Payment page</button>
+      </div>
+      <div class="theme-stage" id="stage">
+        <div class="checkout-head">
+          <span class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</span>
+          <span class="secure"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Secure checkout</span>
+        </div>
+
+        <!-- Sample invoice: same classes as invoice-cpay-v2.html. -->
+        <div class="checkout-card" data-view="invoice">
+          <div class="invoice-top">
+            <div class="merchant">
+              <div class="merchant-avatar">A</div>
+              <div><div class="merchant-name">Amina Studio</div><div class="merchant-sub">Brand and web design</div></div>
+            </div>
+            <span class="icon-btn" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18L18 6M6 6l12 12"/></svg></span>
+          </div>
+          <div class="divider"></div>
+          <div class="amount-due">
+            <div class="kicker">Amount due</div>
+            <div class="amount-value">$61.50</div>
+            <div class="row" style="justify-content:center">
+              <span class="status-chip">Waiting for payment</span>
+              <span class="timer-pill">14:32</span>
+            </div>
+          </div>
+          <div class="qr-link-button">
+            <div class="qr-frame">
+              <div id="qrcode"></div>
+              <div class="qr-logo"><span class="mark"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span></div>
+            </div>
+          </div>
+          <div class="invoice-text">lnbc615u1sample0invoice0for0preview0only</div>
+          <div class="action-footer">
+            <button class="pill-btn btn-copy" type="button" tabindex="-1">Copy invoice</button>
+            <button class="pill-btn btn-pay" type="button" tabindex="-1">Open Cash App</button>
+          </div>
+          <p class="pay-hint">Scan the code with Cash App or any Lightning wallet. The amount is already in the invoice.</p>
+        </div>
+
+        <!-- Sample payment page: same classes as 404.html. -->
+        <div class="checkout-card" data-view="pay" hidden>
+          <div class="merchant">
+            <div class="merchant-avatar">A</div>
+            <div><div class="merchant-label">You are paying</div><div class="merchant-name">Amina Studio</div></div>
+          </div>
+          <div class="amount-display">
+            <div class="amount-text">$61.50</div>
+            <div class="charge-summary visible">You pay $63.04 · includes 2.5% service fee</div>
+          </div>
+          <div class="keypad" aria-hidden="true">
+            <span class="key">1</span><span class="key">2</span><span class="key">3</span>
+            <span class="key">4</span><span class="key">5</span><span class="key">6</span>
+            <span class="key">7</span><span class="key">8</span><span class="key">9</span>
+            <span class="key">.</span><span class="key">0</span><span class="key">&larr;</span>
+          </div>
+          <div class="classic-body">
+            <div class="classic-label">Amount</div>
+            <div class="classic-inputwrap"><span class="classic-dollar">$</span><input type="text" value="61.50" aria-label="Sample amount" readonly tabindex="-1"></div>
+            <div class="classic-label">Quick amounts</div>
+            <div class="classic-chips"><span class="classic-chip">$10</span><span class="classic-chip">$20</span><span class="classic-chip selected">$50</span></div>
+          </div>
+          <div id="walletHint">Pay with Cash App or any Lightning wallet</div>
+          <button class="pay-btn" type="button" tabindex="-1">Continue to payment</button>
+        </div>
+        <p class="checkout-foot">Payments are sent over the Bitcoin Lightning Network.</p>
+      </div>
+      <p class="faint preview-note" id="designNote"></p>
+    </section>
+  </div>
+</main>
+<script>
+const stage = document.getElementById('stage');
+const list = document.getElementById('designList');
+const note = document.getElementById('designNote');
+const layouts = window.CPAY_LAYOUTS;
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+Object.keys(layouts).forEach(loadDesignFont);
+
+// Which older saved values show this design.
+function alsoUsedFor(id) {
+  const inv = Object.keys(CPAY_INVOICE_THEME_MAP).filter(k => CPAY_INVOICE_THEME_MAP[k] === id);
+  const store = Object.keys(CPAY_STORE_THEME_MAP).filter(k => CPAY_STORE_THEME_MAP[k] === id);
+  const parts = [];
+  if (inv.length) parts.push('invoice design "' + inv.join('", "') + '"');
+  if (store.length) parts.push('store theme "' + store.join('", "') + '"');
+  return parts.length ? ' Also used for ' + parts.join(' and ') + '.' : '';
+}
+
+let current = resolveDesign(new URLSearchParams(location.search).get('theme')) || 'keypad';
+function render() {
+  setDesign(current, stage);
+  list.innerHTML = Object.entries(layouts).map(([id, m]) =>
+    `<button type="button" class="design ${id === current ? 'on' : ''}" data-theme="${id}" aria-pressed="${id === current}"><span class="swatch" data-layout="${id}" aria-hidden="true"></span><span>${esc(m.label)}<span class="faint">${esc(m.help)}</span></span></button>`
+  ).join('');
+  const m = layouts[current];
+  note.textContent = m.label + ': ' + (m.entry === 'field' ? 'payers type an amount into a field.' : 'payers tap the amount on a number pad.') + alsoUsedFor(current);
+  history.replaceState(null, '', '?theme=' + current);
+}
+list.addEventListener('click', (e) => {
+  const btn = e.target.closest('.design');
+  if (btn) { current = btn.dataset.theme; render(); }
+});
+document.querySelectorAll('.preview-tabs [data-view]').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.preview-tabs [data-view]').forEach(t => {
+      const on = t === tab;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', String(on));
+    });
+    stage.querySelectorAll('.checkout-card[data-view]').forEach(c => { c.hidden = c.dataset.view !== tab.dataset.view; });
+  });
+});
+if (window.QRCode) new QRCode(document.getElementById('qrcode'), { text: 'lightning:lnbc615u1pj9x7zrpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpusp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygs9qrsgq', width: 440, height: 440, correctLevel: QRCode.CorrectLevel.M });
+render();
+</script>
+</body>
+</html>

@@ -33,8 +33,9 @@ public/                          → static site root
   invoice-cpay-v2.html     → preserved legacy customer-facing payment/QR page
   admin.html                     → admin panel (approvals, stats, settings)
   moderator.html                 → limited staff panel, scoped to assigned creators
-  theme.js                       → payment-page layout (keypad or amount field)
-                                   per domain and per link; colours never change
+  theme.js                       → the ten checkout designs; maps every saved
+                                   link, invoice and store theme onto one of them
+  theme-preview.html             → preview of all ten designs with sample data
   cpay.css                       → the one stylesheet: design tokens and components
   config.example.js              → copy to config.js, fill in your keys
 

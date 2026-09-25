@@ -50,7 +50,8 @@ wallets, Cloudflare routes or secrets.
 1. Open the CPAY home page.
 2. Open `/login.html` and `/register.html`.
 3. Open an unknown test slug and confirm CPAY's payment/404 surface appears.
-4. Open a test payment link and confirm the checkout page renders.
+4. Open a test payment link and confirm the checkout page renders. Open
+   `/theme-preview.html` and click through the ten designs.
 5. Confirm the site favicon and payment favicon are different.
 6. Open Admin → Health and run the preflight after migrations `0079` and
    `0080` are applied; then review the staging sign-off ledger.

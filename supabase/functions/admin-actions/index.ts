@@ -6,6 +6,8 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+const PAYMENT_SERVICE_URL = Deno.env.get("PAYMENT_SERVICE_URL") ?? "";
+const PAYMENT_SERVICE_SECRET = Deno.env.get("PAYMENT_SERVICE_SECRET") ?? "";
 // Only browser calls need CORS (server-to-server callers like pg_cron
 // ignore these headers entirely). The allowed-origin list is read
 // from the site_domains table — the same registry the admin panel manages —
@@ -151,6 +153,20 @@ async function linkSlugFor(paymentLinkId: string | null): Promise<string> {
 }
 
 
+// Admin Wallet actions and the body fields each one passes on.
+const WALLET_ACTIONS: Record<string, string[]> = {
+    "info": [],
+    "payments": ["offset", "limit"],
+    "receive": ["amountSat", "memo"],
+    "addresses": [],
+    "send-prepare": ["destination", "amountSat"],
+    "send-confirm": ["prepareId"],
+    "stable-routes": [],
+    "stable-quote": ["routeId", "address", "amountUsd"],
+    "stable-confirm": ["quoteId"],
+    "fiat": [],
+};
+
 async function verifyAdminCaller(
     req: Request,
 ): Promise<{ ok: boolean; userId?: string; callerClient?: SupabaseClient }> {
@@ -244,6 +260,41 @@ Deno.serve(async (req) => {
         } catch (e) {
             console.error("process-withdrawal failed:", e);
             return json({ error: "Could not process withdrawal" }, 500, cors);
+        }
+    }
+    // ==========================================
+    // ROUTE: /admin-wallet
+    // The platform's own Breez wallet (admin Wallet tab). Forwards one of a
+    // fixed set of actions to the payment service with the admin's id; the
+    // service checks that id is an admin again before touching the wallet.
+    // ==========================================
+    if (url.pathname.endsWith("/admin-wallet")) {
+        const auth = await verifyAdminCaller(req);
+        if (!auth.ok) return json({ error: "Unauthorized" }, 401, cors);
+        let body: Record<string, unknown>;
+        try { body = await req.json(); } catch { return json({ error: "Invalid JSON body" }, 400, cors); }
+        const action = String(body.action ?? "");
+        const fields = WALLET_ACTIONS[action];
+        if (!fields) return json({ error: "Invalid action" }, 400, cors);
+        if (!PAYMENT_SERVICE_URL || !PAYMENT_SERVICE_SECRET) {
+            return json({ error: "The payment service is not configured" }, 503, cors);
+        }
+        const forward: Record<string, unknown> = { adminId: auth.userId };
+        for (const f of fields) if (body[f] !== undefined) forward[f] = body[f];
+        const sends = action === "send-confirm" || action === "stable-confirm";
+        try {
+            const res = await fetch(`${PAYMENT_SERVICE_URL}/admin/wallet/${action}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${PAYMENT_SERVICE_SECRET}` },
+                body: JSON.stringify(forward),
+                signal: AbortSignal.timeout(sends ? 45000 : 20000),
+            });
+            return json(await res.json().catch(() => ({ error: "Bad response from the payment service" })), res.status, cors);
+        } catch (e) {
+            console.error(`admin-wallet ${action} failed:`, e);
+            // A timed-out send may still have gone out. The wallet history
+            // and the audit log show it, so say so instead of inviting a retry.
+            return json({ error: sends ? "The send may still be going through. Check the history before trying again." : "The payment service did not answer" }, 502, cors);
         }
     }
     return json({ error: "Not found" }, 404, cors);

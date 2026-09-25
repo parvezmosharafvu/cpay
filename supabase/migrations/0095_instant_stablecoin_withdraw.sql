@@ -7,9 +7,10 @@
 -- with the withdrawal id as the idempotency key, and finalizes to 'paid'
 -- or 'failed'. 'failed' drops out of get_balance_for, which is the refund.
 --
--- Manual USDT BEP20 withdrawals and the USDT auto-queue go away. bKash,
--- Nagad, Binance Pay and bank stay manual. Rows already queued as
--- usdt_bep20 keep their method and are still processed by an admin.
+-- Manual USDT BEP20 withdrawals (own and reseller team cash-out) and the
+-- USDT auto-queue go away. bKash, Nagad, Binance Pay and bank stay manual.
+-- Rows already queued as usdt_bep20 keep their method and are still
+-- processed by an admin.
 --
 -- Safe to re-run: columns and indexes use IF NOT EXISTS, constraints are
 -- dropped and re-added NOT VALID, functions are CREATE OR REPLACE.
@@ -135,6 +136,54 @@ begin
   insert into withdrawals(user_id,amount_requested,fee_percent,amount_after_fee,method,destination,status,admin_note) values(p_user_id,v_amount,coalesce(v_profile.withdrawal_fee_percent,3.0),round(v_amount*(1-coalesce(v_profile.withdrawal_fee_percent,3.0)/100),2),v_method,trim(v_destination),'pending','Auto-queued on settlement') returning id into v_id;
   return v_id;
 end; $$;
+
+-- Reseller team cash-out: refuses usdt_bep20 like request_withdrawal.
+-- Otherwise unchanged from 0091.
+create or replace function public.reseller_request_withdrawal_for(p_user_id uuid, p_amount numeric, p_method text, p_destination text)
+returns public.withdrawals
+language plpgsql security definer set search_path = public as $_$
+declare
+  v_row withdrawals;
+  v_avail numeric;
+  v_fee numeric;
+  v_after numeric;
+begin
+  if auth.uid() is null then raise exception 'Not authenticated'; end if;
+  if not is_admin() then
+    if not is_reseller() then raise exception 'Not authorized'; end if;
+    if p_user_id <> auth.uid() and not reseller_owns(p_user_id) then
+      raise exception 'That account is not on your team';
+    end if;
+    if coalesce((select value from app_settings where key='feature_reseller_team_withdraw'),'true'::jsonb) = 'false'::jsonb then
+      raise exception 'Team withdrawals are turned off';
+    end if;
+  end if;
+  if coalesce((select value::text from app_settings where key='emergency_withdrawals_stop'),'false') = 'true' then
+    raise exception 'Withdrawals are paused';
+  end if;
+  if p_amount is null or p_amount < 5 then raise exception 'Minimum withdrawal is $5'; end if;
+  if p_method = 'usdt_bep20' then
+    raise exception 'USDT withdrawals are sent instantly from the account''s own dashboard.';
+  end if;
+  if p_method not in ('bkash','nagad','binance','lightning','bank') then
+    raise exception 'Invalid method';
+  end if;
+  if nullif(trim(p_destination),'') is null then raise exception 'Destination required'; end if;
+
+  perform 1 from profiles where id = p_user_id for update;
+  select available into v_avail from get_balance_for(p_user_id);
+  if v_avail is null or v_avail < p_amount then
+    raise exception 'Insufficient balance. Available: $%', coalesce(v_avail,0);
+  end if;
+  select coalesce(withdrawal_fee_percent, 3.0) into v_fee from profiles where id = p_user_id;
+  v_after := round(p_amount * (1 - v_fee / 100.0), 2);
+  insert into withdrawals(user_id, amount_requested, fee_percent, amount_after_fee, method, destination, status, admin_note)
+  values (p_user_id, p_amount, v_fee, v_after, p_method, trim(p_destination), 'pending',
+          case when p_user_id = auth.uid() then null else 'Submitted by reseller' end)
+  returning * into v_row;
+  return v_row;
+end;
+$_$;
 
 -- Reserve the balance for a confirmed stablecoin quote. Runs every check
 -- request_withdrawal runs (the insert triggers skip service-role callers,

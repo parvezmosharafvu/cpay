@@ -449,6 +449,11 @@ test('USDT no longer goes to the admin queue: manual requests refuse it and auto
     await client.query('begin');
     await client.query(`create or replace function auth.uid() returns uuid language sql stable as $$ select '${user}'::uuid $$`);
     await assert.rejects(client.query(`select request_withdrawal(10, 'usdt_bep20', $1)`, [EVM]), /USDT withdrawals are sent instantly/);
+    await client.query('rollback');
+    await client.query('begin');
+    await client.query(`update profiles set role = 'moderator' where id = $1`, [user]);
+    await client.query(`create or replace function auth.uid() returns uuid language sql stable as $$ select '${user}'::uuid $$`);
+    await assert.rejects(client.query(`select reseller_request_withdrawal_for($1, 10, 'usdt_bep20', $2)`, [user, EVM]), /USDT withdrawals are sent instantly/);
   } finally {
     await client.query('rollback');
     client.release();

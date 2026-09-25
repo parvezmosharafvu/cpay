@@ -1,31 +1,16 @@
 /**
- * CPAY layout engine
- * Core 3: keypad, classic, tile
- * Plus 5 original + 5 new = 8 extra layouts available at link creation
+ * CPAY payment-page layouts.
+ * A layout changes how the payer enters an amount, not the colours. The
+ * database still accepts the older names (tile, focus, receipt, ...); any
+ * name missing here falls back to the domain default, then to keypad.
  */
 const CPAY_LAYOUTS = {
-  keypad:     { label: 'Keypad', group: 'core' },
-  classic:    { label: 'Classic', group: 'core' },
-  tile:       { label: 'Tile', group: 'core' },
-  focus:      { label: 'Focus', group: 'plus' },
-  receipt:    { label: 'Receipt', group: 'plus' },
-  pulse:      { label: 'Pulse', group: 'plus' },
-  ledger:     { label: 'Ledger', group: 'plus' },
-  studio:     { label: 'Studio', group: 'plus' },
-  boulevard:  { label: 'Boulevard', group: 'plus' },
-  aurora:     { label: 'Aurora', group: 'plus' },
-};
-const CPAY_INVOICE_THEMES = {
-  default: { label: 'Default invoice' },
-  compact: { label: 'Compact' },
-  poster:  { label: 'Poster' },
-  night:   { label: 'Night desk' },
-  cashier: { label: 'Cashier' },
+  keypad:  { label: 'Keypad', help: 'Big amount over a number pad' },
+  classic: { label: 'Amount field', help: 'Type an amount or pick a preset' },
 };
 const CPAY_DEFAULT_LAYOUT = 'keypad';
 window.CPAY_LAYOUT = CPAY_DEFAULT_LAYOUT;
 window.CPAY_LAYOUTS = CPAY_LAYOUTS;
-window.CPAY_INVOICE_THEMES = CPAY_INVOICE_THEMES;
 async function applyDomainTheme() {
   const host = window.location.hostname;
   try {
@@ -48,10 +33,5 @@ function applyLinkTheme(theme) {
   const name = theme && CPAY_LAYOUTS[theme] ? theme : window.CPAY_LAYOUT;
   window.CPAY_LAYOUT = name;
   document.documentElement.setAttribute('data-layout', name);
-  return name;
-}
-function applyInvoiceTheme(theme) {
-  const name = theme && CPAY_INVOICE_THEMES[theme] ? theme : 'default';
-  document.documentElement.setAttribute('data-invoice-theme', name);
   return name;
 }

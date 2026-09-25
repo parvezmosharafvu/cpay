@@ -139,20 +139,23 @@ let returnPage = '/';
 let currentPaymentId = '';
 let merchantName = '';
 
-// The deep link is the standard `lightning:` URI — create-invoice already
-// returns exactly that as payUrl. When a wallet is registered as the
-// handler for that scheme, the OS hands it the invoice and the payment
-// screen opens pre-filled; no typing, no pasting. For a customer whose
-// only Lightning-capable app is Cash App, that is Cash App.
-//
-// It is the OS that decides, not this page, so the chain below degrades:
-//   lightning: URI  ->  open Cash App plain  ->  app store
-// and the invoice is copied to the clipboard before any of it, so a paste
-// is one tap away if nothing claims the scheme.
-const CASHAPP_APP_LINK = 'https://cash.app/launch';
-const CASHAPP_SCHEME = 'cashapp://';
-const CASHAPP_STORE_IOS = 'https://apps.apple.com/app/cash-app/id711923939';
-const CASHAPP_STORE_ANDROID = 'https://play.google.com/store/apps/details?id=com.squareup.cash';
+// Two ways out of this page on a phone:
+//   * Open Cash App: Cash App's universal link with the invoice in it,
+//     https://cash.app/launch/lightning/<bolt11>, the link Breez's own
+//     buyBitcoin returns (sdk-doc-spark.breez.technology/guide/buy_bitcoin.html).
+//     It opens Cash App on the payment when the app is installed and the
+//     Cash App website when it is not, so no scheme or store fallback.
+//   * Tapping the QR: the standard `lightning:` URI, for whichever wallet
+//     the phone has registered.
+// A desktop has neither app. The QR is the path there: scan it with the
+// phone. The QR holds the bare bolt11, which Cash App's scanner and every
+// Lightning wallet read.
+const CASHAPP_LIGHTNING = 'https://cash.app/launch/lightning/';
+
+function cashAppUrl(bolt11){
+  return CASHAPP_LIGHTNING + encodeURIComponent(String(bolt11).replace(/^lightning:/i, ''));
+}
+function isPhone(){ return /iPad|iPhone|iPod|Android/.test(navigator.userAgent); }
 
 function el(id){ return document.getElementById(id); }
 
@@ -336,56 +339,28 @@ async function copyAddress(){
 }
 
 /* ---------- Cash App ---------- */
-/**
- * Copy the invoice, then hand the `lightning:` URI to the OS.
- *
- * Each step is only reached if the one before it left the page visible.
- * When a wallet does take the URI, this tab is backgrounded and every
- * pending fallback is cancelled — which is why the timers check
- * document.hidden rather than firing blindly.
- */
+// The invoice goes on the clipboard first either way, so a paste is one tap
+// away if nothing opens.
 async function openCashApp(){
   if (!currentPayCode) return;
-
   const copied = await copyInvoice();
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const isAndroid = /Android/.test(navigator.userAgent);
-
-  if (!isIOS && !isAndroid){
-    // Desktop has no app to hand off to. The QR is the answer there.
+  if (!isPhone()){
     toast(copied ? 'Invoice copied. Scan the QR code with Cash App on your phone.'
                  : 'Scan the QR code with Cash App on your phone.');
     return;
   }
+  toast('Opening Cash App…');
+  window.location.href = cashAppUrl(currentPayCode);
+}
 
-  toast(copied ? 'Opening Cash App. Paste the invoice if it asks.'
-               : 'Opening Cash App…');
-
-  let cancelled = false;
-  const cancel = () => { cancelled = true; };
-  window.addEventListener('pagehide', cancel, { once: true });
-  window.addEventListener('blur', cancel, { once: true });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) cancel(); }, { once: true });
-
-  const step = (fn, delay) => setTimeout(() => {
-    if (cancelled || document.hidden) return;
-    fn();
-  }, delay);
-
-  // 1. The invoice itself. If a wallet owns the lightning: scheme, it
-  //    opens already loaded with this payment — nothing to paste.
+async function openWallet(){
+  if (!currentPayCode) return;
+  const copied = await copyInvoice();
+  if (!isPhone()){
+    toast(copied ? 'Invoice copied. Scan the QR code with your phone.' : 'Scan the QR code with your phone.');
+    return;
+  }
   window.location.href = currentPayUrl || ('lightning:' + currentPayCode);
-
-  // 2. Nothing claimed it: open Cash App plain, with the invoice on the
-  //    clipboard so it is a single paste away.
-  step(() => {
-    window.location.href = isAndroid ? CASHAPP_SCHEME : CASHAPP_APP_LINK;
-  }, 1400);
-
-  // 3. Cash App is not installed.
-  step(() => {
-    window.location.href = isIOS ? CASHAPP_STORE_IOS : CASHAPP_STORE_ANDROID;
-  }, 3000);
 }
 
 function openModal(){ el('howToPayModal').classList.add('open'); }
@@ -552,7 +527,7 @@ el('rcpCopyBtn').addEventListener('click', copyReference);
 el('rcpSaveBtn').addEventListener('click', saveReceipt);
 el('modalCloseBtn').addEventListener('click', closeModal);
 el('modalGotItBtn').addEventListener('click', closeModal);
-el('qrLink').addEventListener('click', openCashApp);
+el('qrLink').addEventListener('click', openWallet);
 el('howToPayModal').addEventListener('click', (e) => {
   if (e.target === el('howToPayModal')) closeModal();
 });

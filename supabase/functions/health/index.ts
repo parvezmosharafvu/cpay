@@ -9,10 +9,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 * happened. Nothing notices when something STOPS happening — and the
 * failures that matter most here are silent ones:
 *
-*   * BTCPay unreachable   → invoices cannot be created; the payment page
+*   * provider unreachable → invoices cannot be created; the payment page
 *                            fails for every customer, and no row is
 *                            written to notice it by.
-*   * webhooks stopped     → payments settle at BTCPay and never reach
+*   * webhooks stopped     → payments settle at the provider and never reach
 *                            the ledger. Creators are not credited. The
 *                            site looks completely normal.
 *   * cron stopped         → backups, reconciliation and the daily
@@ -28,16 +28,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const BTCPAY_URL = Deno.env.get("BTCPAY_URL");
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-
-const API_KEY_ENVS: Record<string, string | undefined> = {
-  BTCPAY_API_KEY: Deno.env.get("BTCPAY_API_KEY"),
-  BTCPAY_API_KEY_2: Deno.env.get("BTCPAY_API_KEY_2"),
-  BTCPAY_API_KEY_3: Deno.env.get("BTCPAY_API_KEY_3"),
-  BTCPAY_API_KEY_4: Deno.env.get("BTCPAY_API_KEY_4"),
-  BTCPAY_API_KEY_5: Deno.env.get("BTCPAY_API_KEY_5"),
-};
 
 function sendAlert(message: string) {
   const text = `🚨 CPAY health: ${message}`;
@@ -84,67 +75,11 @@ Deno.serve(async (req) => {
   const checks: Check[] = [];
   const now = Date.now();
 
-  // ---------- 1. Is BTCPay answering? ----------
-  if (!BTCPAY_URL) {
-    checks.push({ name: "btcpay", ok: false, detail: "BTCPAY_URL is not configured" });
-  } else {
-    // Every active shop, not just the default one. Previously this
-    // ordered by is_default and took a single row — so if shop #2 or #3
-    // was down while the default was fine, health reported "healthy"
-    // while every link routed to the broken shop failed silently. A
-    // partial outage is the one this check most needs to catch, because
-    // nothing else would notice it.
-    const { data: shops } = await supabase
-      .from("btcpay_shops")
-      .select("store_id, api_key_env, name")
-      .eq("is_active", true)
-      .order("is_default", { ascending: false });
-
-    if (!shops?.length) {
-      checks.push({ name: "btcpay", ok: false, detail: "no active shop configured" });
-    } else {
-      const results: string[] = [];
-      let allOk = true;
-      // Sequential rather than Promise.all: a handful of shops, and a
-      // burst of parallel requests to a node that is already struggling
-      // is the wrong thing for a health check to do.
-      for (const shop of shops) {
-        if (!shop.store_id) {
-          allOk = false;
-          results.push(`"${shop.name}": no store_id configured`);
-          continue;
-        }
-        const key = API_KEY_ENVS[shop.api_key_env || "BTCPAY_API_KEY"];
-        if (!key) {
-          allOk = false;
-          results.push(`"${shop.name}": ${shop.api_key_env || "BTCPAY_API_KEY"} is not set`);
-          continue;
-        }
-        try {
-          const started = Date.now();
-          const res = await fetch(
-            `${BTCPAY_URL}/api/v1/stores/${shop.store_id}`,
-            { headers: { "Authorization": `token ${key}` } },
-          );
-          const ms = Date.now() - started;
-          if (res.ok) {
-            results.push(`"${shop.name}": ${ms}ms`);
-          } else {
-            allOk = false;
-            results.push(`"${shop.name}": HTTP ${res.status}`);
-          }
-        } catch (e) {
-          allOk = false;
-          results.push(`"${shop.name}": unreachable (${e instanceof Error ? e.message : String(e)})`);
-        }
-      }
-      checks.push({
-        name: "btcpay",
-        ok: allOk,
-        detail: `${shops.length} shop(s) — ${results.join("; ")}`,
-      });
-    }
-  }
+  // ---------- 1. Is the payment provider answering? ----------
+  // TODO(breez): ask the Breez SDK Spark payment service whether it is
+  // connected and synced. Until it exists invoices cannot be created, so
+  // this check fails on purpose.
+  checks.push({ name: "payment_provider", ok: false, detail: "no payment provider is configured" });
 
   // ---------- 2. Are webhooks still arriving? ----------
   // Threshold is generous on purpose. A quiet night is not an outage, so
@@ -228,13 +163,13 @@ Deno.serve(async (req) => {
   });
 
   // ---------- 4b. Withdrawals stuck mid-payout ----------
-  // A row only sits at "processing" for the length of one BTCPay call —
+  // A row only sits at "processing" for the length of one payout call —
   // seconds, not hours. The one thing that leaves it there longer is the
   // exact case user-withdraw and the admin payout path now deliberately
-  // refuse to guess at: an ambiguous timeout where BTCPay may already
-  // have paid. 15 minutes is generous slack for a slow request; past
-  // that, nothing is going to finish it but a human checking BTCPay
-  // directly and confirming paid or voiding it.
+  // refuse to guess at: an ambiguous timeout where the provider may
+  // already have paid. 15 minutes is generous slack for a slow request;
+  // past that, nothing is going to finish it but a human checking the
+  // provider directly and confirming paid or voiding it.
   const fifteenMinAgo = new Date(now - 15 * MIN).toISOString();
   const { data: stuckProcessing } = await supabase
     .from("withdrawals")
@@ -249,22 +184,7 @@ Deno.serve(async (req) => {
     ok: stuckProcessingCount === 0,
     detail: stuckProcessingCount === 0
       ? "nothing stuck mid-payout"
-      : `${stuckProcessingCount} withdrawal(s) stuck at "processing" over 15m — verify against BTCPay directly, oldest from ${stuckProcessing![0].requested_at}`,
-  });
-
-  // ---------- 5. Links with no shop cannot issue invoices ----------
-  const { count: orphanLinks } = await supabase
-    .from("payment_links")
-    .select("*", { count: "exact", head: true })
-    .is("shop_id", null)
-    .eq("is_active", true);
-
-  checks.push({
-    name: "links",
-    ok: (orphanLinks ?? 0) === 0,
-    detail: (orphanLinks ?? 0) === 0
-      ? "every active link has a shop"
-      : `${orphanLinks} active link(s) have no shop — their invoices will fail`,
+      : `${stuckProcessingCount} withdrawal(s) stuck at "processing" over 15m — verify against the payment provider directly, oldest from ${stuckProcessing![0].requested_at}`,
   });
 
   const failing = checks.filter((c) => !c.ok && !c.informational);

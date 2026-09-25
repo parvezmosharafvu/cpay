@@ -152,10 +152,27 @@ select jobname, schedule, active from cron.job order by jobname;
 Every daily figure in this system runs **5:00 PM to 5:00 PM Asia/Dhaka**,
 not midnight to midnight, and a cycle is named after the date it *started*.
 
-One SQL function defines it — `daily_totals_for_cycle()` — and everything
-else derives from that: `admin_daily_settled()`, `staff_daily_settled()`,
-`my_daily_settled()`, and the `daily-report` cron. They cannot drift apart
-because there is only one definition.
+`business_day(ts)` (migration 0096) is the one definition: day D runs from
+`business_day_start(D)` (D 17:00 Dhaka) to `business_day_end(D)`.
+`admin_daily_settled()`, `staff_daily_settled()`, `my_daily_settled()`,
+`daily_totals_for_cycle()`, `reseller_cycle_digest()` and the dashboard RPCs
+below all call it. The `daily-report` cron computes the same date in TypeScript
+and then asks `daily_totals_for_cycle()` for the numbers.
+
+Dashboard RPCs (0096), one row per person or link per business day:
+
+| RPC | Who | Rows |
+|---|---|---|
+| `my_daily_summary(p_days)` | anyone signed in | own book per day |
+| `reseller_team_daily_summary(p_days)` | reseller | self + team per day, with email |
+| `admin_daily_summary(p_days, p_user_id, p_reseller_id)` | admin | per person per day, with profile, email, reseller |
+| `admin_daily_timeseries(p_days, p_user_id, p_reseller_id)` | admin | platform (or filtered) totals per day, for the graph |
+| `daily_link_breakdown(p_days, p_user_id)` | self, their reseller, admin | per link per day with cost rate charged |
+
+`earnings` is `settled - platform_fee - reseller_commission`, the same formula
+as the balance. The cost rate charged is stored on each payment
+(`payments.cost_percent`) from 0096 on; older payments show the link's current
+rate.
 
 ## Alerting
 

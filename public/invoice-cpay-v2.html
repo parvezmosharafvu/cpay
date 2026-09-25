@@ -21,9 +21,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="theme.js"></script>
+<script>setDesign(new URLSearchParams(location.search).get('theme'));</script>
 
 </head>
-<body class="checkout">
+<body class="checkout invoice">
 
 <header class="checkout-head">
   <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
@@ -39,7 +40,7 @@
 </div>
 
 <!-- INVOICE -->
-<main class="checkout-card" id="step2" style="display:none; flex-direction:column;">
+<main class="checkout-card" id="step2" hidden>
   <div class="invoice-top">
     <div class="merchant">
       <div class="merchant-avatar" id="merchantAvatar">$</div>
@@ -79,7 +80,7 @@
 </main>
 
 <!-- PAID -->
-<main class="checkout-card" id="step3" style="display:none; flex-direction:column;">
+<main class="checkout-card" id="step3" hidden>
   <div style="text-align:center">
     <div class="success-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg></div>
     <div class="state-title">Payment received</div>
@@ -157,13 +158,13 @@ function el(id){ return document.getElementById(id); }
 
 function showStep(n){
   el('statePanel').style.display = 'none';
-  el('step2').style.display = n === 2 ? 'flex' : 'none';
-  el('step3').style.display = n === 3 ? 'flex' : 'none';
+  el('step2').hidden = n !== 2;
+  el('step3').hidden = n !== 3;
 }
 
 function showState(title, sub, btnLabel, btnHref){
-  el('step2').style.display = 'none';
-  el('step3').style.display = 'none';
+  el('step2').hidden = true;
+  el('step3').hidden = true;
   el('statePanel').style.display = 'flex';
   el('stateSpinner').style.display = title ? 'none' : 'block';
   el('stateTitle').style.display = title ? 'block' : 'none';
@@ -228,7 +229,10 @@ function renderQr(qrText){
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
-  await applyDomainTheme();
+  // The design named in the URL (set by the payment page) wins; without one
+  // the page uses the domain default.
+  const domainDesign = await applyDomainTheme();
+  setDesign(new URLSearchParams(window.location.search).get('theme') || domainDesign);
 
   // The id in the URL is the source of truth. sessionStorage is only a
   // cache from the page that created this invoice, so the QR can paint

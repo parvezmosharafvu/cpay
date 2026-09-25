@@ -9,8 +9,9 @@
 <link rel="stylesheet" href="cpay.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
+<script src="theme.js"></script>
 </head>
-<body>
+<body class="store">
 <main class="wrap" style="max-width:860px">
   <nav class="nav"><a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a></nav>
   <section class="store-hero">
@@ -35,6 +36,8 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
   if(error||!data?.length){state.textContent='Store not found or unavailable.';return}
   const r=data[0];
   document.title=(r.display_name||'CPAY creator')+' · CPAY';
+  // store_theme (midnight, snow, glass, sunset) maps onto the shared checkout designs.
+  setDesign(r.theme||'midnight');
   if(/^#[0-9a-f]{6}$/i.test(r.accent||''))document.documentElement.style.setProperty('--merchant-accent',r.accent);
   name.textContent=r.display_name||'CPAY creator';
   tagline.textContent=r.tagline||'Choose a payment option';

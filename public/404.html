@@ -249,8 +249,8 @@ function setPaying(isPaying, label){
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
-  // Resolves the domain's default layout (keypad or amount field). A link's
-  // own layout below overrides it.
+  // Resolves the domain's default design. A link's own design below
+  // overrides it.
   await applyDomainTheme();
 
   if (!slug || RESERVED.includes(slug.toLowerCase()) || slug.includes('.') || slug.includes('/')){
@@ -271,6 +271,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     // A link-specific design overrides its domain default; NULL keeps the
     // domain layout inherited for existing links.
     applyLinkTheme(row.theme);
+    // The invoice page follows the link's design unless the link picked a
+    // separate invoice design. It travels in the URL so a refresh keeps it.
+    window.CPAY_INVOICE_DESIGN = invoiceDesignFor(row.invoice_theme, window.CPAY_LAYOUT);
     window.CPAY_WALLET_MODE = row.wallet_mode || 'all_wallets';
     document.documentElement.setAttribute('data-wallet', window.CPAY_WALLET_MODE);
     const walletHint = document.getElementById('walletHint');
@@ -412,7 +415,7 @@ async function startPayment(){
       payUrl: result.payUrl,
       returnUrl: window.location.pathname,
     }));
-    window.location.href = '/invoice-cpay-v2.html?id=' + encodeURIComponent(result.paymentId) + '&wallet=' + encodeURIComponent(window.CPAY_WALLET_MODE || 'all_wallets');
+    window.location.href = '/invoice-cpay-v2.html?id=' + encodeURIComponent(result.paymentId) + '&wallet=' + encodeURIComponent(window.CPAY_WALLET_MODE || 'all_wallets') + '&theme=' + encodeURIComponent(window.CPAY_INVOICE_DESIGN || window.CPAY_LAYOUT);
   } catch (e){
     console.error('create-invoice failed:', e);
     setStatus('Network error — please check your connection and try again.', 'err');

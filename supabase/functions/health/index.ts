@@ -165,6 +165,28 @@ Deno.serve(async (req) => {
       : `${stuckProcessingCount} withdrawal(s) stuck at "processing" over 15m — verify against the payment provider directly, oldest from ${stuckProcessing![0].requested_at}`,
   });
 
+  // ---------- 4c. Stablecoin withdrawals not delivered ----------
+  // The payment service moves a 'sending' row to paid or failed on its own,
+  // and refunds one with no Breez payment about 11 minutes in. A row still
+  // sending after 30 minutes has a transfer whose cross-chain delivery has
+  // not finished, or failed without a refund ("withdrawal-stuck" in the
+  // service log). Someone has to look at that Breez payment.
+  const thirtyMinAgo = new Date(now - 30 * MIN).toISOString();
+  const { data: stuckSending } = await supabase
+    .from("withdrawals")
+    .select("id, requested_at")
+    .eq("status", "sending")
+    .lt("requested_at", thirtyMinAgo)
+    .order("requested_at", { ascending: true });
+  const stuckSendingCount = (stuckSending ?? []).length;
+  checks.push({
+    name: "withdrawals_sending",
+    ok: stuckSendingCount === 0,
+    detail: stuckSendingCount === 0
+      ? "no stablecoin withdrawal sending over 30m"
+      : `${stuckSendingCount} stablecoin withdrawal(s) still sending over 30m, oldest ${stuckSending![0].id} from ${stuckSending![0].requested_at}. Check the payment service log and the Breez payment with that id.`,
+  });
+
   const failing = checks.filter((c) => !c.ok && !c.informational);
   const healthy = failing.length === 0;
 

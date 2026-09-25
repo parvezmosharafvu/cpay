@@ -62,6 +62,15 @@ to settle before mainnet.
     is refunded only after a completed sync and once its quote expired 10
     minutes ago; the SDK refuses to start an expired quote, so no transfer
     can appear after that. This is what makes a crash mid-send safe.
+  - A send that fails with `Failed to select leaves` (a stale `Swap`
+    reservation left in the SDK's local tree store by a process that died
+    mid leaf-optimization; the store drops it after 5 minutes, on the next
+    sync) is retried: back off 5 s doubling to 60 s, `syncWallet`, check
+    `getPayment(<key>)` and stop if the last attempt made a payment, then
+    send again with the same idempotency key. Retries stop after about 6
+    minutes or at the quote's expiry, whichever is first; the row stays
+    `sending` meanwhile and is then failed, which returns the balance.
+    Admin wallet sends retry the same way.
   - Cross-chain sends are mainnet only: on other networks the SDK rejects
     `crossChainConfig` and lists no routes, so the list is empty.
 

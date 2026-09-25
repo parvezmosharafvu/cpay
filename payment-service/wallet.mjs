@@ -5,7 +5,7 @@
 // it leaves and again when Breez answers.
 
 import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
-import { UserError, parseAmountCents } from './withdraw.mjs';
+import { UserError, parseAmountCents, retryLeafErrors, wait, LEAF_RETRY_MS } from './withdraw.mjs';
 
 export const PREPARE_TTL_MS = 10 * 60 * 1000;
 export const MAX_PAGE = 50;
@@ -55,7 +55,7 @@ export async function owedToCreatorsUsd(db) {
   return Number(rows[0].owed);
 }
 
-export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => Date.now(), log = () => {} }) {
+export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => Date.now(), sleep = wait, log = () => {} }) {
   const prepared = new Map();
   const inflight = new Map();
 
@@ -230,9 +230,14 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     await audit(p.adminId, 'platform_wallet.send', p.prepareId, { status: 'sending', ...record });
     let payment;
     try {
-      ({ payment } = p.lnurl
-        ? await breez.lnurlPay({ prepareResponse: p.res, idempotencyKey: p.prepareId })
-        : await breez.sendPayment({ prepareResponse: p.res, idempotencyKey: p.prepareId }));
+      ({ payment } = await retryLeafErrors({
+        breez, key: p.prepareId, now, sleep, log,
+        deadlineMs: Math.min(now() + LEAF_RETRY_MS, p.expiresAtMs),
+        attempt: () => (p.lnurl
+          ? breez.lnurlPay({ prepareResponse: p.res, idempotencyKey: p.prepareId })
+          : breez.sendPayment({ prepareResponse: p.res, idempotencyKey: p.prepareId })),
+        existing: () => withdrawals.findPayment(p.prepareId),
+      }));
     } catch (e) {
       const error = String(e?.message ?? e).slice(0, 300);
       await audit(p.adminId, 'platform_wallet.send.result', p.prepareId, { status: 'error', error, ...record }).catch(() => {});

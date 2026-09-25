@@ -95,18 +95,45 @@ function deliveredAmount(payment) {
   return fromBaseUnits(last.to.amount, last.to.asset.decimals);
 }
 
+// A process that exits during the SDK's automatic leaf-optimization swap
+// leaves a 'Swap' reservation in the local tree store. Until a sync after
+// the store's 5-minute reservation timeout clears it, every send fails
+// with this, while leaves are selected and before any transfer.
+export const isLeafError = (error) => /Failed to select leaves/.test(String(error?.message ?? error));
+
 // Errors the SDK raises before any transfer leaves the wallet.
 export function failedBeforeSend(error) {
-  return /^(Insufficient funds|Invalid input|Invalid UUID|Cross-chain route)/.test(String(error?.message ?? error));
+  return /^(Insufficient funds|Invalid input|Invalid UUID|Cross-chain route)/.test(String(error?.message ?? error)) || isLeafError(error);
 }
 
-function wait(ms) {
+export function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms).unref?.());
+}
+
+export const LEAF_RETRY_MS = 6 * 60 * 1000;
+
+// attempt() is a send with a fixed idempotency key. While it fails with the
+// leaf error: back off, sync, ask Breez whether the last attempt made a
+// payment after all (if so, that is the result and nothing is sent again),
+// and try again, until the next try would start after deadlineMs.
+export async function retryLeafErrors({ breez, key, attempt, existing, deadlineMs, now, sleep, log }) {
+  for (let delay = 5_000, n = 1; ; delay = Math.min(delay * 2, 60_000), n++) {
+    try {
+      return await attempt();
+    } catch (e) {
+      if (!isLeafError(e) || now() + delay >= deadlineMs) throw e;
+      log({ event: 'leaf-retry', key, attempt: n, delayMs: delay });
+      await sleep(delay);
+      await breez.syncWallet({}).catch((s) => log({ event: 'leaf-retry-sync-failed', key, error: String(s?.message ?? s) }));
+      const payment = await existing();
+      if (payment) return { payment };
+    }
+  }
 }
 
 // confirmWaitMs: how long confirm waits for the send before answering with
 // the row still 'sending'. The send carries on either way.
-export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(), log = () => {}, confirmWaitMs = 25_000 }) {
+export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(), sleep = wait, log = () => {}, confirmWaitMs = 25_000 }) {
   let routeCache = { at: 0, routes: [], error: null };
   const quotes = new Map();
   const inflight = new Map();
@@ -290,7 +317,13 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     let payment = null;
     let error = null;
     try {
-      ({ payment } = await breez.sendPayment({ prepareResponse: prepared, idempotencyKey: row.id }));
+      // A retry stops at the quote's expiry too: after it the SDK refuses the send.
+      ({ payment } = await retryLeafErrors({
+        breez, key: row.id, now, sleep, log,
+        deadlineMs: Math.min(now() + LEAF_RETRY_MS, new Date(row.quote_expires_at).getTime() - QUOTE_MARGIN_MS),
+        attempt: () => breez.sendPayment({ prepareResponse: prepared, idempotencyKey: row.id }),
+        existing: () => findPayment(row.id),
+      }));
     } catch (e) {
       error = e;
       log({ event: 'send-error', withdrawalId: row.id, error: String(e?.message ?? e) });

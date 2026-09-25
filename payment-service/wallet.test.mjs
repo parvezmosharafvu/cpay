@@ -51,11 +51,12 @@ function pair(chain, asset) {
 
 // The SDK calls wallet.mjs and withdraw.mjs make, with Breez-shaped answers
 // (bigint amounts, unix-second timestamps).
-function fakeBreez({ balanceSats = 1_000_000_000 } = {}) {
+function fakeBreez({ balanceSats = 1_000_000_000, leafFailures = 0 } = {}) {
   const calls = [];
   const sent = new Map();
   const fake = {
-    calls, sent, balanceSats,
+    calls, sent, balanceSats, leafFailures,
+    async syncWallet() { calls.push(['syncWallet']); return {}; },
     async getInfo() { return { identityPubkey: '02ab', balanceSats: fake.balanceSats, tokenBalances: new Map() }; },
     async listPayments(req) {
       calls.push(['listPayments', req]);
@@ -103,6 +104,7 @@ function fakeBreez({ balanceSats = 1_000_000_000 } = {}) {
     },
     async sendPayment({ prepareResponse, idempotencyKey }) {
       calls.push(['sendPayment', idempotencyKey]);
+      if (fake.leafFailures > 0) { fake.leafFailures--; throw new Error('Wallet: Tree service error: generic error: Failed to select leaves after all retries'); }
       return { payment: fake.store(idempotencyKey, prepareResponse.amount) };
     },
     async lnurlPay({ prepareResponse, idempotencyKey }) {
@@ -129,10 +131,10 @@ function fakeBreez({ balanceSats = 1_000_000_000 } = {}) {
   return fake;
 }
 
-function setup(breez = fakeBreez()) {
+function setup(breez = fakeBreez(), opts = {}) {
   const btcUsdRate = async () => RATE;
   const withdrawals = createWithdrawals({ breez, db, btcUsdRate });
-  const wallet = createWallet({ breez, db, btcUsdRate, withdrawals });
+  const wallet = createWallet({ breez, db, btcUsdRate, withdrawals, ...opts });
   return { breez, withdrawals, wallet, route: createAdminWalletRoute({ wallet, withdrawals }) };
 }
 
@@ -251,6 +253,21 @@ test('a bolt11 send shows the fee, then sends once, audits twice and leaves crea
   assert.equal(await withdrawals.onPayment(breez.sent.get(prep.prepareId)), null, 'the withdrawal tracker ignores admin sends');
 });
 
+test('an admin send that hits the leaf error is retried after a sync with the same key, and audited once', async () => {
+  const slept = [];
+  const { route, breez } = setup(fakeBreez({ leafFailures: 2 }), { sleep: async (ms) => { slept.push(ms); } });
+  const admin = await makeUser({ role: 'admin' });
+  const [, prep] = await route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 });
+  const [, sent] = await route('POST', '/admin/wallet/send-confirm', { adminId: admin, prepareId: prep.prepareId });
+  assert.equal(sent.status, 'completed');
+  assert.deepEqual(slept, [5_000, 10_000]);
+  assert.deepEqual(breez.calls.filter((c) => c[0] === 'sendPayment' || c[0] === 'syncWallet'), [
+    ['sendPayment', prep.prepareId], ['syncWallet'], ['sendPayment', prep.prepareId], ['syncWallet'], ['sendPayment', prep.prepareId],
+  ]);
+  assert.equal(breez.sent.size, 1);
+  assert.deepEqual((await auditRows(prep.prepareId)).map((r) => r.new_value.status), ['sending', 'completed']);
+});
+
 test('Lightning address sends go through LNURL-pay and Spark sends through prepareSendPayment', async () => {
   const { route, breez } = setup();
   const admin = await makeUser({ role: 'admin' });
@@ -279,9 +296,13 @@ test('a send that would dip into money owed to creators is refused', async () =>
   const breez = fakeBreez();
   const { route, wallet } = setup(breez);
   const admin = await makeUser({ role: 'admin' });
-  await makeUser({ earned: 20 });
+  await makeUser({ earned: 20_000 });
   const { owedSat } = await wallet.spendable();
-  breez.balanceSats = owedSat + 3000; // 3000 spendable, fewer if other tests add balances meanwhile
+  // The wallet holds at least 10M sats, far more than the send, but all of
+  // it is owed. The margin is for other test files, running at the same
+  // time, whose withdrawals get paid or whose users are deleted, lowering
+  // what is owed.
+  breez.balanceSats = owedSat - 10_000_000;
   await assert.rejects(route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 }), (e) => {
     assert.equal(e.status, 422);
     assert.match(e.message, /needs 5012 sats but only \d+ are spendable/);
@@ -289,7 +310,7 @@ test('a send that would dip into money owed to creators is refused', async () =>
   });
   breez.balanceSats = owedSat + 1_000_000;
   const [, prep] = await route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 });
-  breez.balanceSats = owedSat; // the balance fell between prepare and confirm
+  breez.balanceSats = owedSat - 10_000_000; // the balance fell between prepare and confirm
   await assert.rejects(route('POST', '/admin/wallet/send-confirm', { adminId: admin, prepareId: prep.prepareId }), /only 0 are spendable/);
   assert.equal(breez.calls.filter((c) => c[0] === 'sendPayment').length, 0);
   assert.deepEqual(await auditRows(prep.prepareId), [], 'nothing is audited when nothing is sent');

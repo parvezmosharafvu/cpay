@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
-import { createWithdrawals, splitFee, outcomeOf, fromBaseUnits, routeId } from './withdraw.mjs';
+import { createWithdrawals, splitFee, outcomeOf, fromBaseUnits, routeId, failedBeforeSend, LEAF_RETRY_MS } from './withdraw.mjs';
 
 // Runs against a database with every migration applied. Unlike
 // ledger.test.mjs this commits, because confirm and crash recovery need
@@ -14,27 +14,31 @@ const RATE = 100_000; // USD per BTC, so $1 = 1000 sats
 
 const TRON = 'TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL';
 const EVM = '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063';
+const BSC_USDT = '0x55d398326f99059ff775485246999027b3197955';
+const LEAF_ERROR = 'Wallet: Tree service error: generic error: Failed to select leaves after all retries';
 
-function pair(chain, asset, { provider = 'orchestra', minUsdCents = 100, maxUsdCents = 1_000_000, bitcoin = true } = {}) {
+function pair(chain, asset, { provider = 'orchestra', minUsdCents = 100, maxUsdCents = 1_000_000, bitcoin = true, decimals = 6, contractAddress } = {}) {
   return {
-    provider, chain, asset, decimals: 6, exactOutEligible: true, deliveryMethods: ['spark'],
+    provider, chain, asset, decimals, contractAddress, exactOutEligible: true, deliveryMethods: ['spark'],
     acceptedAssets: [{ asset: bitcoin ? { type: 'bitcoin' } : { type: 'token', tokenIdentifier: 'btkn1usdb' }, limits: { minUsdCents, maxUsdCents } }],
   };
 }
 
 // A stand-in for the Breez SDK with the calls withdraw.mjs makes. `mode`
-// picks how sendPayment behaves.
-function fakeBreez({ mode = 'ok', feeBase = 520_000n } = {}) {
+// picks how sendPayment behaves; the first `leafFailures` sends throw the
+// stale-reservation leaf error instead.
+function fakeBreez({ mode = 'ok', feeBase = 520_000n, leafFailures = 0, quoteTtlMs = 60_000 } = {}) {
   const payments = new Map();
-  const calls = { routes: 0, send: 0, prepare: 0 };
+  const calls = { routes: 0, send: 0, prepare: 0, sync: 0 };
   const byFamily = {
     tron: [pair('tron', 'USDT')],
-    evm: [pair('bsc', 'USDT'), pair('arbitrum', 'USDC'), pair('base', 'USDB', { bitcoin: false })],
+    // BSC USDT (BEP-20) has 18 decimals.
+    evm: [pair('bsc', 'USDT', { decimals: 18, contractAddress: BSC_USDT }), pair('arbitrum', 'USDC'), pair('base', 'USDB', { bitcoin: false })],
     solana: [pair('solana', 'USDC')],
   };
   let release;
   const fake = {
-    payments, calls, mode,
+    payments, calls, mode, leafFailures,
     releaseHang: () => release?.(),
     async getCrossChainRoutes({ addressDetails }) { calls.routes++; return byFamily[addressDetails.addressFamily] ?? []; },
     async parse(input) {
@@ -43,17 +47,20 @@ function fakeBreez({ mode = 'ok', feeBase = 520_000n } = {}) {
       throw new Error('unrecognized input');
     },
     async getInfo() { return { balanceSats: 50_000_000 }; },
+    async syncWallet() { calls.sync++; return {}; },
     async prepareSendPayment({ paymentRequest, amount, feePolicy }) {
       calls.prepare++;
       // At RATE, 1 sat = $0.001 = 1000 base units of a 6-decimal stablecoin.
-      const assetIn = amount * 1000n;
+      const scale = 10n ** BigInt(paymentRequest.route.decimals - 6);
+      const assetIn = amount * 1000n * scale;
+      const fee = feeBase * scale;
       return {
         amount, feePolicy,
         paymentMethod: {
           type: 'crossChainAddress', route: paymentRequest.route, recipientAddress: paymentRequest.address,
-          amountIn: String(amount), assetAmountIn: String(assetIn), estimatedOut: String(assetIn - feeBase), feeAmount: String(feeBase),
+          amountIn: String(amount), assetAmountIn: String(assetIn), estimatedOut: String(assetIn - fee), feeAmount: String(fee),
           serviceFeeAmount: '0', sourceTransferFeeSats: 0, feeMode: 'feesIncluded',
-          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          expiresAt: new Date(Date.now() + quoteTtlMs).toISOString(),
           providerContext: { type: 'orchestra', quoteId: randomUUID(), depositAddress: 'sprt1deposit' },
         },
       };
@@ -66,7 +73,10 @@ function fakeBreez({ mode = 'ok', feeBase = 520_000n } = {}) {
         return payments.get(idempotencyKey);
       };
       if (payments.has(idempotencyKey)) return { payment: payments.get(idempotencyKey) };
+      if (fake.leafFailures > 0) { fake.leafFailures--; throw new Error(LEAF_ERROR); }
       if (fake.mode === 'ok') return { payment: store() };
+      // The transfer went out, but the SDK still answered with the leaf error.
+      if (fake.mode === 'leaf-after-transfer') { store(); throw new Error(LEAF_ERROR); }
       if (fake.mode === 'insufficient') throw new Error('Insufficient funds');
       if (fake.mode === 'network-after-transfer') { store(); throw new Error('Network error: connection reset'); }
       if (fake.mode === 'network-no-transfer') throw new Error('Network error: connection reset');
@@ -79,14 +89,14 @@ function fakeBreez({ mode = 'ok', feeBase = 520_000n } = {}) {
       return { payment: payments.get(paymentId) };
     },
     // Moves the cross-chain leg along, as Orchestra would.
-    deliver(id, status, deliveredBase) {
+    deliver(id, status, deliveredBase, decimals = 6) {
       const p = payments.get(id);
       p.conversionDetails = {
         status,
         conversions: deliveredBase == null ? [] : [{
           provider: 'orchestra', status,
           from: { chain: { type: 'spark' }, asset: { ticker: 'BTC', decimals: 8 }, amount: String(p.amount), fee: '0' },
-          to: { chain: { type: 'external', name: 'tron' }, asset: { ticker: 'USDT', decimals: 6 }, amount: String(deliveredBase), fee: '0' },
+          to: { chain: { type: 'external', name: 'tron' }, asset: { ticker: 'USDT', decimals }, amount: String(deliveredBase), fee: '0' },
         }],
       };
       return p;
@@ -462,6 +472,105 @@ test('USDT no longer goes to the admin queue: manual requests refuse it and auto
   assert.ok((await db.query('select system_queue_withdrawal($1) as id', [user])).rows[0].id, 'bKash still auto-queues');
 });
 
+// Time for the leaf-error retry: sleep() moves the clock instead of waiting.
+function fakeClock() {
+  const c = { t: Date.now(), slept: [] };
+  c.now = () => c.t;
+  c.sleep = async (ms) => { c.slept.push(ms); c.t += ms; };
+  return c;
+}
+
+test('BSC USDT has 18 decimals: quote, stored estimate and delivered amount are read at 18', async () => {
+  assert.equal(fromBaseUnits('5380000000000000000', 18), '5.38');
+  assert.equal(fromBaseUnits('1', 18), '0.000000000000000001');
+  const user = await makeUser({ earned: 50, fee: 0 });
+  const breez = fakeBreez();
+  const w = service(breez);
+  const route = (await w.listRoutes()).find((r) => r.id === 'orchestra:bsc:usdt');
+  assert.equal(route.decimals, 18);
+  assert.equal(route.contractAddress, BSC_USDT);
+  // $5.90 = 5900 sats; the fake answers estimatedOut '5380000000000000000',
+  // the shape of a mainnet quote for 5.38 USDT.
+  const q = await w.quote({ userId: user, routeId: 'orchestra:bsc:usdt', address: EVM, amountUsd: '5.90' });
+  assert.equal(q.receive, '5.38');
+  assert.equal(q.receiveMin, '5.3262');
+  assert.deepEqual(q.providerFee, { amount: '0.52', asset: 'USDT' });
+  assert.equal(q.breezFeeUsd, '0.520000');
+  const r = await w.confirm({ userId: user, quoteId: q.quoteId });
+  assert.equal((await rows(user))[0].amount_out, '5.38000000');
+  breez.deliver(r.withdrawalId, 'completed', 5_379_123_456_789_012_345n, 18);
+  assert.equal(await w.onPayment({ id: r.withdrawalId, paymentType: 'send' }), 'paid');
+  assert.equal((await rows(user))[0].amount_out, '5.37912346');
+});
+
+test('leaf error: the send is retried after a sync with the same key, and the ledger is debited once', async () => {
+  const user = await makeUser({ earned: 100 });
+  const breez = fakeBreez({ leafFailures: 1 });
+  const clock = fakeClock();
+  const w = service(breez, { now: clock.now, sleep: clock.sleep, confirmWaitMs: 10_000 });
+  const q = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '25' });
+  const r = await w.confirm({ userId: user, quoteId: q.quoteId });
+  assert.equal(r.status, 'sending');
+  assert.equal(breez.calls.send, 2);
+  assert.equal(breez.calls.sync, 1);
+  assert.deepEqual(clock.slept, [5_000]);
+  assert.deepEqual([...breez.payments.keys()], [r.withdrawalId]);
+  assert.equal((await rows(user)).length, 1);
+  assert.equal((await balance(user)).available, '75.00000000');
+  breez.deliver(r.withdrawalId, 'completed', 24_000_000n);
+  assert.equal(await w.onPayment({ id: r.withdrawalId, paymentType: 'send' }), 'paid');
+  assert.deepEqual(await balance(user), { queued: '25.00000000', withdrawn: '24.25000000', available: '75.00000000' });
+});
+
+test('leaf error past the retry bound: the withdrawal fails and the balance comes back once', async () => {
+  const user = await makeUser({ earned: 100 });
+  const breez = fakeBreez({ leafFailures: Infinity, quoteTtlMs: 15 * 60_000 });
+  const clock = fakeClock();
+  const w = service(breez, { now: clock.now, sleep: clock.sleep, confirmWaitMs: 10_000 });
+  const q = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '25' });
+  const r = await w.confirm({ userId: user, quoteId: q.quoteId });
+  assert.equal(r.status, 'failed');
+  assert.match(r.note, /Failed to select leaves/);
+  assert.deepEqual(clock.slept, [5_000, 10_000, 20_000, 40_000, 60_000, 60_000, 60_000, 60_000]);
+  assert.ok(clock.slept.reduce((a, b) => a + b) < LEAF_RETRY_MS);
+  assert.equal(breez.calls.send, 9);
+  assert.equal(breez.calls.sync, 8);
+  assert.equal(breez.payments.size, 0);
+  assert.equal((await balance(user)).available, '100.00000000');
+  await service(breez, { now: () => Date.now() + 30 * 60_000 }).reconcile({ synced: true });
+  assert.equal((await balance(user)).available, '100.00000000');
+  assert.equal((await rows(user)).length, 1);
+});
+
+test('leaf error retries stop at the quote expiry, and the withdrawal fails cleanly', async () => {
+  const user = await makeUser({ earned: 100 });
+  const breez = fakeBreez({ leafFailures: Infinity }); // 60 s quote
+  const clock = fakeClock();
+  const w = service(breez, { now: clock.now, sleep: clock.sleep, confirmWaitMs: 10_000 });
+  const q = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '25' });
+  const r = await w.confirm({ userId: user, quoteId: q.quoteId });
+  assert.equal(r.status, 'failed');
+  assert.deepEqual(clock.slept, [5_000, 10_000, 20_000]);
+  assert.equal(breez.calls.send, 4);
+  assert.equal((await balance(user)).available, '100.00000000');
+});
+
+test('leaf error but the attempt made a payment: it is found after the sync and nothing is sent again', async () => {
+  const user = await makeUser({ earned: 100 });
+  const breez = fakeBreez({ mode: 'leaf-after-transfer' });
+  const clock = fakeClock();
+  const w = service(breez, { now: clock.now, sleep: clock.sleep, confirmWaitMs: 10_000 });
+  const q = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '25' });
+  const r = await w.confirm({ userId: user, quoteId: q.quoteId });
+  assert.equal(r.status, 'sending');
+  assert.equal(breez.calls.send, 1);
+  assert.equal(breez.calls.sync, 1);
+  assert.equal(breez.payments.size, 1);
+  breez.deliver(r.withdrawalId, 'completed', 24_000_000n);
+  assert.equal(await w.onPayment({ id: r.withdrawalId, paymentType: 'send' }), 'paid');
+  assert.deepEqual(await balance(user), { queued: '25.00000000', withdrawn: '24.25000000', available: '75.00000000' });
+});
+
 test('outcomeOf maps Breez payment states', () => {
   assert.equal(outcomeOf({ status: 'pending' }).status, 'sending');
   assert.equal(outcomeOf({ status: 'failed' }).status, 'failed');
@@ -471,4 +580,6 @@ test('outcomeOf maps Breez payment states', () => {
   assert.equal(outcomeOf({ status: 'completed', conversionDetails: { status: 'failed' } }).status, 'stuck');
   assert.equal(outcomeOf({ status: 'completed', conversionDetails: { status: 'completed' } }).status, 'paid');
   assert.equal(routeId({ provider: 'orchestra', chain: 'tron', asset: 'USDT' }), 'orchestra:tron:usdt');
+  assert.equal(failedBeforeSend(new Error(LEAF_ERROR)), true);
+  assert.equal(failedBeforeSend(new Error('Network error: connection reset')), false);
 });

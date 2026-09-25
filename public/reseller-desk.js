@@ -154,20 +154,26 @@ let refreshWithdraw = () => {};
 async function renderCash() {
   document.getElementById('cash').innerHTML = withdrawForm(`<p class="muted" id="wWho">From your own balance. To withdraw for a teammate, use Withdraw on the Team accounts page.</p>
     <input type="hidden" id="wUser" value="${me.id}">`);
+  const own = () => document.getElementById('wUser').value === me.id;
   // A teammate's fee rate is not visible to the reseller; the server applies it on submit.
-  refreshWithdraw = bindWithdraw(() => (document.getElementById('wUser').value === me.id ? Number(me.withdrawal_fee_percent ?? 3) : NaN));
-  document.getElementById('wBtn').onclick = async () => {
-    const { data, error } = await sb.rpc('reseller_request_withdrawal_for', {
-      p_user_id: document.getElementById('wUser').value,
-      p_amount: Number(document.getElementById('wAmt').value),
-      p_method: document.getElementById('wMethod').value,
-      p_destination: document.getElementById('wDest').value.trim(),
-    });
-    if (error) return toast(error.message);
-    const row = Array.isArray(data) ? data[0] : data;
-    toast(row?.amount_after_fee != null ? `Sent for admin review. Receives ${money(row.amount_after_fee)} after the fee.` : 'Sent for admin review', true);
-    renderHome(); renderTeam();
-  };
+  refreshWithdraw = bindWithdraw(() => (own() ? Number(me.withdrawal_fee_percent ?? 3) : NaN), {
+    // Instant withdrawals pay out the signed-in account only; a teammate
+    // sends their own from their dashboard.
+    instantAllowed: own,
+    submitManual: async () => {
+      const { data, error } = await sb.rpc('reseller_request_withdrawal_for', {
+        p_user_id: document.getElementById('wUser').value,
+        p_amount: Number(document.getElementById('wAmt').value),
+        p_method: document.getElementById('wMethod').value,
+        p_destination: document.getElementById('wDest').value.trim(),
+      });
+      if (error) { toast(error.message); return false; }
+      const row = Array.isArray(data) ? data[0] : data;
+      toast(row?.amount_after_fee != null ? `Sent for admin review. Receives ${money(row.amount_after_fee)} after the fee.` : 'Sent for admin review', true);
+      return true;
+    },
+    onDone: () => { renderHome(); renderTeam(); },
+  });
 }
 
 async function renderNotice() {

@@ -93,19 +93,26 @@ async function renderPays() {
 async function renderCash() {
   const { data: bal } = await sb.rpc('get_my_balance');
   const b = Array.isArray(bal) ? bal[0] : bal || {};
-  document.getElementById('cash').innerHTML = withdrawForm(`<p class="muted">Available balance <strong>${money(b.available)}</strong></p>`);
-  bindWithdraw(() => Number(me.withdrawal_fee_percent ?? 3));
-  document.getElementById('wBtn').onclick = async () => {
-    const { data, error } = await sb.rpc('request_withdrawal', {
-      p_amount: Number(document.getElementById('wAmt').value),
-      p_method: document.getElementById('wMethod').value,
-      p_destination: document.getElementById('wDest').value.trim(),
-    });
-    if (error) return toast(error.message);
-    const row = Array.isArray(data) ? data[0] : data;
-    toast(row?.amount_after_fee != null ? `Withdrawal requested. You receive ${money(row.amount_after_fee)}.` : 'Withdrawal requested', true);
-    renderHome();
-  };
+  document.getElementById('cash').innerHTML = withdrawForm(`<p class="muted">Available balance <strong id="wAvail">${money(b.available)}</strong></p>`);
+  bindWithdraw(() => Number(me.withdrawal_fee_percent ?? 3), {
+    submitManual: async () => {
+      const { data, error } = await sb.rpc('request_withdrawal', {
+        p_amount: Number(document.getElementById('wAmt').value),
+        p_method: document.getElementById('wMethod').value,
+        p_destination: document.getElementById('wDest').value.trim(),
+      });
+      if (error) { toast(error.message); return false; }
+      const row = Array.isArray(data) ? data[0] : data;
+      toast(row?.amount_after_fee != null ? `Withdrawal requested. You receive ${money(row.amount_after_fee)} after an admin approves it.` : 'Withdrawal requested', true);
+      return true;
+    },
+    onDone: async () => {
+      renderHome();
+      const { data: now } = await sb.rpc('get_my_balance');
+      const nb = Array.isArray(now) ? now[0] : now || {};
+      document.getElementById('wAvail').textContent = money(nb.available);
+    },
+  });
 }
 
 async function renderTeam() {

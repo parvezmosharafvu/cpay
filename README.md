@@ -44,6 +44,8 @@ supabase/
   functions/
     create-invoice/              → validates and prices a payment, has the payment service invoice it
     admin-actions/               → admin mark-settled + withdrawal actions
+    auth-settings/               → admin switch for sign-up email confirmation
+                                   (Supabase Management API, mailer_autoconfirm)
     user-withdraw/               → creator-initiated withdrawal
     daily-report/                → nightly rollup into daily_stats
     ledger-backup/               → nightly ledger snapshot to a private repo
@@ -187,6 +189,9 @@ The daily withdrawal cap resets at the same 17:00 Dhaka edge as everything
 else since 0097 (`request_withdrawal`, `system_queue_withdrawal`,
 `reserve_stablecoin_withdrawal`).
 
+0099 grants `service_role` INSERT on `audit_log` (and its id sequence), so
+the `auth-settings` function can record sign-up email confirmation changes.
+
 `public/daily-desk.js` renders these RPCs on the freelancer Overview, the
 reseller Overview and Team accounts, and the admin Daily earnings tab.
 
@@ -229,7 +234,7 @@ live ledger and flags any row that has drifted.
 | Job | Blocking | Checks |
 |---|---|---|
 | Migrations | no | Every migration applies in order to an empty Postgres; migration numbers are unique |
-| Edge functions | yes | `deno check` on every function — a real type-check, unlike a bundler |
+| Edge functions | yes | `deno check` on every function — a real type-check, unlike a bundler — and `auth-settings` tested against a local mock Management API |
 | Pages | yes | Inline JS parses; every element id and on-handler exists; every `rpc()` call matches its SQL definition |
 | Ledger snapshots | no | Reports whether ledger snapshots are tracked in this repo |
 
@@ -239,9 +244,10 @@ repository stays private.
 
 ## Auditing
 
-`audit_log` records who changed a fee, a role, a moderator assignment or a
-creator's instant-payout access — with the old value alongside the new
-one. It is append-only: there is no update or delete policy for anyone,
+`audit_log` records who changed a fee, a role, a moderator assignment, a
+creator's instant-payout access, or sign-up email confirmation
+(`settings.signup_email_confirmation`, written by `auth-settings`) — with
+the old value alongside the new one. It is append-only: there is no update or delete policy for anyone,
 including admins.
 
 ```sql

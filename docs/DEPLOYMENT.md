@@ -11,6 +11,7 @@
 - [ ] Deploy the Edge Functions:
 
       supabase functions deploy admin-actions
+      supabase functions deploy auth-settings
       supabase functions deploy create-invoice  --no-verify-jwt
       supabase functions deploy user-withdraw
       supabase functions deploy daily-report    --no-verify-jwt
@@ -23,14 +24,18 @@
                             JWT to send. Abuse is capped by a per-link rate
                             limit inside the function.
         * user-withdraw,
-          admin-actions   — always called by a signed-in creator or admin, so
-                            leave JWT verification ON. admin-actions checks
-                            the admin role again in code.
+          admin-actions,
+          auth-settings   — always called by a signed-in creator or admin, so
+                            leave JWT verification ON. admin-actions and
+                            auth-settings check the admin role again in code.
         * daily-report,
           ledger-backup   — called by pg_cron, which sends `x-cron-secret`,
                             not a JWT. Both fail closed if CRON_SECRET is unset.
 
-- [ ] Add all secrets listed in `docs/ENV_VARS.md`
+- [ ] Add all secrets listed in `docs/ENV_VARS.md`. For the sign-up email
+      confirmation switch that includes `CPAY_SUPABASE_ACCESS_TOKEN`, a
+      Supabase personal access token: account-level and powerful, so it
+      lives only as an edge-function secret.
 - [ ] Create your own account through the app, then in the SQL Editor:
       `update profiles set role = 'admin' where email = 'you@example.com';`
       (This has to be done in SQL. A creator cannot promote themselves — 0018

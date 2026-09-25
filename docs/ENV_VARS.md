@@ -44,6 +44,32 @@ window); deactivate it and it stops working. No secret edit, no redeploy.
       design — payment links are embedded on creator-owned domains, and it
       is defended by a per-link rate limit instead.
 
+Used by `auth-settings` only (the ops panel's **Settings → Sign-up email
+confirmation** switch):
+
+- [ ] `CPAY_SUPABASE_ACCESS_TOKEN` — a Supabase **personal access token**
+      (Account → Access Tokens), i.e. what the CLI calls
+      `SUPABASE_ACCESS_TOKEN`. The function uses it for exactly one thing:
+      reading and setting `mailer_autoconfirm` through the Management API
+      (`GET`/`PATCH /v1/projects/{ref}/config/auth`).
+      **This is a powerful, account-level token.** It is not scoped to this
+      project: it can change settings of, or delete, every project and
+      organization its owner can reach. It must only ever exist as this
+      edge-function secret — never in `public/config.js`, a `.env` that is
+      committed, the payment service, a chat or a ticket. Create it from an
+      account that is Owner/Admin of this project's organization (ideally a
+      dedicated one), give it an expiry, and revoke it in the Supabase
+      dashboard if it is ever exposed.
+      Why the `CPAY_` prefix: hosted Supabase refuses secret names that start
+      with `SUPABASE_` (that prefix is reserved). The function also reads
+      `SUPABASE_ACCESS_TOKEN` if present, which only matters for local
+      `supabase functions serve`.
+      Unset = the switch shows "Not set up" and the setting stays wherever the
+      Supabase dashboard has it (Authentication → Sign In / Providers → Email →
+      Confirm email).
+- [ ] `CPAY_PROJECT_REF` *(optional)* — only needed if `SUPABASE_URL` is not
+      `https://<ref>.supabase.co`; the ref is worked out from it otherwise.
+
 Used by `ledger-backup` only:
 
 - [ ] `GITHUB_TOKEN` — a fine-grained token with Contents: write on **one**

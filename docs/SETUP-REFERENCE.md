@@ -48,6 +48,8 @@ Dashboard → Edge Functions → Secrets
 | `ALERT_ON_SETTLED` | optional | `false` silences per-payment alerts |
 | `PAYMENT_SERVICE_URL` | yes | Base URL of the payment service |
 | `PAYMENT_SERVICE_SECRET` | yes | Shared bearer secret, same value as the service |
+| `CPAY_SUPABASE_ACCESS_TOKEN` | for the email-confirmation switch | Supabase personal access token (`SUPABASE_ACCESS_TOKEN` in CLI terms; the `SUPABASE_` prefix is reserved for secrets). **Account-level and powerful** — edge-function secret only, never anywhere else. See `docs/ENV_VARS.md` |
+| `CPAY_PROJECT_REF` | optional | Only if `SUPABASE_URL` is not `https://<ref>.supabase.co` |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are
 injected automatically — do not set them by hand.
@@ -196,9 +198,10 @@ Sequence matters — several steps fail silently if done out of order.
 2. **Migrations run** in order, `0001 → 0091`
 3. **Vault secrets** set (§2.2) — the scheduling migrations read them
 4. **Edge Function secrets** set (§2.1)
-5. **All 8 functions deployed:**
+5. **All 9 functions deployed:**
    ```
    supabase functions deploy admin-actions
+   supabase functions deploy auth-settings
    supabase functions deploy create-invoice --no-verify-jwt
    supabase functions deploy user-withdraw
    supabase functions deploy daily-report   --no-verify-jwt

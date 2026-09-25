@@ -24,6 +24,11 @@ Never commit:
 - `SUPABASE_SERVICE_ROLE_KEY` — bypasses RLS completely.
 - Payment provider API keys, wallet seeds and webhook secrets.
 - `CRON_SECRET`, `GITHUB_TOKEN`.
+- `CPAY_SUPABASE_ACCESS_TOKEN` — a Supabase personal access token. It is
+  account-level, not project-level: whoever holds it can change or delete
+  every project its owner can reach. It exists only so the `auth-settings`
+  function can flip one Auth setting (`mailer_autoconfirm`), and it must only
+  ever live as an edge-function secret.
 
 All of the above belong in Supabase Edge Function secrets. See `docs/ENV_VARS.md`.
 
@@ -37,6 +42,11 @@ All of the above belong in Supabase Edge Function secrets. See `docs/ENV_VARS.md
 - **The service role bypasses RLS entirely.** The `/process-withdrawal` and
   `/admin-mark-settled` routes therefore verify the caller's admin role in
   code, via `verifyAdminCaller()`, before doing anything.
+- **`auth-settings` holds a Supabase account token.** It runs the same admin
+  check before touching the Management API, sends the token only to the
+  fixed `https://api.supabase.com`, and returns a single boolean — never the
+  auth config, which contains SMTP and OAuth secrets. Every change writes an
+  `audit_log` row (`settings.signup_email_confirmation`).
 - **Withdrawal state transitions are claimed atomically.** Moving a withdrawal
   to `paid`, `processing` or `rejected` goes through
   `system_claim_withdrawal()`, which only succeeds from `pending`/`approved`.

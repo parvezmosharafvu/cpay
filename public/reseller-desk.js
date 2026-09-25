@@ -127,10 +127,10 @@ async function renderLinks() {
     <h3>New payment link</h3>
     <div class="field"><label for="linkName">Display name</label><input id="linkName" placeholder="The name payers see"></div>
     <div class="field"><label for="linkCost">Link cost %</label><input id="linkCost" type="number" min="0" step="0.1" value="${Number(me.cost_percent || 0)}"></div>
-    ${layoutPicker(exp.theme, exp.wallet)}
+    ${layoutPicker(exp.theme, exp.wallet, exp.invoice)}
     <button class="btn primary" id="makeLink">Create link</button>
   </div>
-  <div class="card flush"><table class="table"><thead><tr><th>Link</th><th>Layout</th><th>Wallets</th></tr></thead><tbody>${list || '<tr><td colspan="3" class="empty">No links yet</td></tr>'}</tbody></table></div>`;
+  <div class="card flush"><table class="table"><thead><tr><th>Link</th><th>Design</th><th>Wallets</th></tr></thead><tbody>${list || '<tr><td colspan="3" class="empty">No links yet</td></tr>'}</tbody></table></div>`;
   bindExperience(exp);
   document.getElementById('makeLink').onclick = async () => {
     const name = document.getElementById('linkName').value.trim();

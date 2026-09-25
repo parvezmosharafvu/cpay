@@ -52,11 +52,11 @@ async function renderLinks() {
       <div class="field"><label for="linkName">Display name</label><input id="linkName" placeholder="The name payers see"></div>
       <div class="field"><label for="linkCost">Link cost %</label><input id="linkCost" type="number" min="0" step="0.1" value="${Number(me.cost_percent || 0)}" ${me.cost_locked ? "disabled" : ""}></div>
       <p class="hint">${me.cost_locked ? "Your reseller set this rate for your account." : "Added on top of what the payer pays. This is separate from the platform fee."}</p>
-      ${layoutPicker(exp.theme, exp.wallet)}
+      ${layoutPicker(exp.theme, exp.wallet, exp.invoice)}
       <button class="btn primary" id="makeLink">Create link</button>
     </div>
     <div class="card flush">
-      <table class="table"><thead><tr><th>Link</th><th>Name</th><th>Layout</th><th>Wallets</th><th>Status</th></tr></thead>
+      <table class="table"><thead><tr><th>Link</th><th>Name</th><th>Design</th><th>Wallets</th><th>Status</th></tr></thead>
       <tbody>${list || '<tr><td colspan="5" class="empty">No links yet</td></tr>'}</tbody></table>
     </div>`;
   bindExperience(exp);

@@ -425,11 +425,16 @@
                                               <option value="both">Both</option>
                                             </select>
                                             <select class="w-input" id="newDomainTheme" style="max-width:230px;">
-                                              <option value="keypad">Layout: Keypad</option>
-                                              <option value="classic">Layout: Classic</option>
-                                              <option value="tile">Layout: Tile</option>
-                                              <option value="focus">Layout: Focus</option>
-                                              <option value="receipt">Layout: Receipt</option>
+                                              <option value="keypad">Design: Standard</option>
+                                              <option value="classic">Design: Classic</option>
+                                              <option value="tile">Design: Tile</option>
+                                              <option value="focus">Design: Focus</option>
+                                              <option value="receipt">Design: Receipt</option>
+                                              <option value="pulse">Design: Pulse</option>
+                                              <option value="ledger">Design: Ledger</option>
+                                              <option value="studio">Design: Studio</option>
+                                              <option value="boulevard">Design: Boulevard</option>
+                                              <option value="aurora">Design: Aurora</option>
                                             </select>
                                           </div>
                                           <button class="btn-primary" style="max-width:200px;" onclick="addDomain()">Add domain</button>
@@ -1676,7 +1681,7 @@ function renderHistory(){
 function renderLinks(){
   const c = document.getElementById('linksList');
   if (!allLinks.length){ c.innerHTML = '<div class="empty-state">No payment links yet</div>'; return; }
-  const themeLabels = { keypad:'Keypad', classic:'Classic', tile:'Tile', focus:'Focus', receipt:'Receipt' };
+  const themeLabels = Object.fromEntries(Object.entries(window.CPAY_LAYOUTS).map(([id, m]) => [id, m.label]));
   c.innerHTML = allLinks.map(l => `
     <div class="link-row">
       <div class="link-top">
@@ -2006,26 +2011,21 @@ async function loadDomains(){
   if (!domains.length){ c.innerHTML = '<div class="empty-state">No domains registered</div>'; return; }
 
   const purposeLabel = { payment: 'Payment links', site: 'Main site', both: 'Payment + site' };
-  // A theme is a LAYOUT of the payment page, not a palette. The brand
-  // colour is the same on every domain; only the arrangement differs.
-  const themeLabel = { keypad: 'Keypad — big amount over a 3×4 pad',
-                       classic: 'Classic — amount field + quick chips',
-                       tile: 'Tile — full-green, large keypad',
-                       focus: 'Focus — dark glass, minimal amount',
-                       receipt: 'Receipt — bright card, transparent total' };
+  // The domain's default checkout design, one of the ten in theme.js.
+  const themeLabel = Object.fromEntries(Object.entries(window.CPAY_LAYOUTS).map(([id, m]) => [id, m.label]));
   c.innerHTML = domains.map(d => `
     <div class="link-row">
       <div class="link-top">
         <div>
           <div class="link-slug">${escapeHtml(d.hostname)}</div>
           <div class="link-owner">${purposeLabel[d.purpose] || d.purpose}${d.is_primary_site ? ' · ⭐ primary site' : ''}</div>
-          <div class="link-stats">Layout: ${themeLabel[d.theme] || d.theme || 'keypad'}</div>
+          <div class="link-stats">Design: ${escapeHtml(themeLabel[d.theme] || d.theme || 'Standard')}</div>
         </div>
         <span class="badge ${d.is_active ? 'active' : 'inactive'}"><span class="badge-dot"></span>${d.is_active ? 'active' : 'disabled'}</span>
       </div>
       <div class="w-row" style="margin-top:10px;">
         <select class="w-input" onchange="changeDomainTheme('${d.id}', this.value)" style="max-width:210px;">
-          ${['keypad','classic','tile','focus','receipt'].map(t => `<option value="${t}" ${(d.theme||'keypad') === t ? 'selected' : ''}>${themeLabel[t]}</option>`).join('')}
+          ${Object.keys(themeLabel).map(t => `<option value="${t}" ${(d.theme||'keypad') === t ? 'selected' : ''}>${themeLabel[t]}</option>`).join('')}
         </select>
         <select class="w-input" onchange="changeDomainOwner('${d.id}', this.value)" style="max-width:220px;">
           <option value="">Global domain</option>

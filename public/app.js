@@ -4,7 +4,11 @@ function escapeHtml(s){
 }
 function money(n){ return '$' + Number(n || 0).toFixed(2); }
 function when(ts){ return ts ? new Date(ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : ''; }
-function layoutLabel(theme){ return (window.CPAY_LAYOUTS[theme] || window.CPAY_LAYOUTS.keypad).label; }
+// A link with no design of its own uses the site's default design.
+function layoutLabel(theme){
+  const meta = window.CPAY_LAYOUTS[resolveDesign(theme)];
+  return meta ? meta.label : 'Site default';
+}
 function badge(status){
   const s = String(status || '').toLowerCase();
   return `<span class="badge ${escapeHtml(s)}">${escapeHtml(s || 'unknown')}</span>`;
@@ -44,13 +48,26 @@ async function signOut(){
   await window.supabaseClient.auth.signOut();
   location.href = 'login.html';
 }
-function layoutPicker(selected, wallet){
+// Invoice designs the database accepts (payment_links.invoice_theme). Each
+// one other than 'default' shows the invoice in one of the ten designs.
+const INVOICE_CHOICES = [
+  ['default', 'Same as payment page'],
+  ['compact', 'Ledger'],
+  ['poster', 'Tile'],
+  ['night', 'Focus'],
+  ['cashier', 'Receipt'],
+];
+function layoutPicker(selected, wallet, invoice){
   const layouts = window.CPAY_LAYOUTS || {};
   const layoutHtml = Object.entries(layouts).map(([id, meta]) =>
-    `<button type="button" class="design ${id===selected?'on':''}" data-theme="${id}">${escapeHtml(meta.label)}<div class="faint">${escapeHtml(meta.help)}</div></button>`
+    `<button type="button" class="design ${id===selected?'on':''}" data-theme="${id}"><span class="swatch" data-layout="${id}" aria-hidden="true"></span><span>${escapeHtml(meta.label)}<span class="faint">${escapeHtml(meta.help)}</span></span></button>`
+  ).join('');
+  const invoiceHtml = INVOICE_CHOICES.map(([id, label]) =>
+    `<button type="button" class="pill ${id===(invoice||'default')?'active':''}" data-invoice="${id}">${escapeHtml(label)}</button>`
   ).join('');
   return `
-    <div class="field"><label>Payment page layout</label><div class="designs" id="themePick">${layoutHtml}</div></div>
+    <div class="field"><label>Payment page design <a class="design-preview" href="theme-preview.html?theme=${encodeURIComponent(selected || 'keypad')}" target="_blank" rel="noopener">Preview all designs</a></label><div class="designs" id="themePick">${layoutHtml}</div></div>
+    <div class="field"><label>Invoice page design</label><div class="row" id="invoicePick">${invoiceHtml}</div></div>
     <div class="field"><label>Who can pay</label>
       <div class="row">
         <button type="button" class="pill ${wallet==='cashapp'?'active':''}" data-wallet="cashapp">Cash App only</button>
@@ -63,6 +80,14 @@ function bindExperience(state){
     btn.onclick = () => {
       state.theme = btn.dataset.theme;
       document.querySelectorAll('#themePick .design').forEach(b => b.classList.toggle('on', b===btn));
+      const preview = document.querySelector('.design-preview');
+      if (preview) preview.href = 'theme-preview.html?theme=' + encodeURIComponent(state.theme);
+    };
+  });
+  document.querySelectorAll('#invoicePick [data-invoice]').forEach(btn => {
+    btn.onclick = () => {
+      state.invoice = btn.dataset.invoice;
+      document.querySelectorAll('#invoicePick [data-invoice]').forEach(b => b.classList.toggle('active', b===btn));
     };
   });
   document.querySelectorAll('[data-wallet]').forEach(btn => {

@@ -85,6 +85,11 @@ test('a payment that arrives after expiry still settles, because the sats are in
   assert.equal(await earned(), '16.49000000');
 });
 
+test('catch-up starts an hour before the oldest unsettled invoice', async () => {
+  const { rows } = await db.query(`select extract(epoch from now() - interval '1 hour')::bigint as expected`);
+  assert.equal(await ledger.catchUpSince(db), Number(rows[0].expected));
+});
+
 test('sends and non-lightning receives are ignored', async () => {
   assert.equal(await ledger.settlePayment(db, { ...receive('breez-5', 11913), paymentType: 'send' }), 'ignored');
   assert.equal(await ledger.settlePayment(db, { ...receive('breez-6', 11913), details: { type: 'deposit', txId: 'x', vout: 0 } }), 'no_hash');

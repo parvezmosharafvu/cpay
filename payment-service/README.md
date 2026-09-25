@@ -21,7 +21,7 @@ to settle before mainnet.
 - Every `paymentSucceeded` event is passed to `settle_breez_payment()`
   (migration 0094), which credits a row at most once.
 - On startup and every `CATCH_UP_INTERVAL_SECS` it lists completed
-  receives since the oldest unsettled invoice (last 7 days) and passes
+  receives since an hour before the oldest unsettled invoice (last 7 days) and passes
   each to the same function, so payments received while the service was
   down or an event was missed still settle. The same pass marks unpaid
   invoices past `expires_at` as `expired`.

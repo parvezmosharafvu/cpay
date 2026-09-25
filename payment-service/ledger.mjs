@@ -49,10 +49,11 @@ export async function settlePayment(db, payment) {
 }
 
 // Lower bound, in unix seconds, for the catch-up scan: the oldest unsettled
-// Breez invoice from the last 7 days. Null means nothing can be waiting.
+// Breez invoice from the last 7 days, minus an hour in case the database
+// clock runs ahead of Spark's. Null means nothing can be waiting.
 export async function catchUpSince(db) {
   const { rows } = await db.query(
-    `select extract(epoch from min(created_at))::bigint as since
+    `select extract(epoch from min(created_at) - interval '1 hour')::bigint as since
        from payments
       where status in ('new', 'pending', 'expired')
         and amount_sat is not null

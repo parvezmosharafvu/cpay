@@ -642,3 +642,80 @@ body.ops{padding-bottom:48px}
 .wallet-pager{padding:12px 16px;border-top:1px solid var(--line)}
 .card.flush .table td.mono{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #whRows td:first-child{white-space:nowrap}
+
+/* ---------- daily accounting (daily-desk.js) ---------- */
+.card-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px 16px;padding:16px 20px 12px;flex-wrap:wrap}
+.card:not(.flush) > .card-head{padding:0 0 14px}
+.card-head h3{margin:0 0 2px}
+.card-head .field{margin:0}
+.field.inline{flex-direction:row;align-items:center;gap:8px}
+.field.inline select{width:auto;max-width:100%;padding:7px 10px;font-size:14px}
+.scroll{overflow-x:auto}
+.table tfoot td{border-top:1px solid var(--line-strong);border-bottom:0;font-weight:600;background:var(--surface-2)}
+.table td.strong,.table th.strong{font-weight:650}
+.table td.nowrap{white-space:nowrap}
+.table tr.pick{cursor:pointer}
+.table tr.pick:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.table tbody tr.sel td{background:var(--accent-soft)}
+.table tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.table .day{font-weight:600;white-space:nowrap}
+.rates{display:flex;gap:4px}
+.rates > span{white-space:nowrap;padding:1px 7px;border-radius:6px;background:var(--surface-2);border:1px solid var(--line);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.table .who{display:flex;flex-direction:column;min-width:0}
+.table .who .faint{font-size:12px}
+.tag{display:inline-block;padding:1px 7px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;letter-spacing:.02em;vertical-align:1px}
+.profile-card .pc-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.profile-card .pc-head h3{margin:0}
+.avatar{width:42px;height:42px;border-radius:12px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-weight:700;font-size:18px;text-transform:uppercase;flex:0 0 auto}
+.facts{margin:0;display:grid}
+.facts > div{display:grid;grid-template-columns:140px minmax(0,1fr);gap:12px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.facts dt{color:var(--muted)}
+.facts dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
+.usage{height:6px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);margin-top:6px;max-width:220px;overflow:hidden}
+.usage span{display:block;height:100%;background:var(--accent);border-radius:999px}
+.usage.full span{background:var(--warn)}
+.bizday{display:flex;flex-direction:column}
+.bizday-range{font-size:18px;font-weight:650;letter-spacing:-.01em;margin:4px 0 6px}
+.bizday-range > span{white-space:nowrap}
+.bizday-close{margin:0 0 14px;font-size:14px}
+.bizday-figs{margin:0 0 12px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.bizday-figs > div{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px}
+.bizday-figs dt{font-size:12px;color:var(--faint);font-weight:600}
+.bizday-figs dd{margin:2px 0 0;font-size:18px;font-weight:650;font-variant-numeric:tabular-nums}
+.bizday > .faint:last-child{margin:auto 0 0}
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 12px}
+.totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;padding:4px 0 8px;border-top:1px solid var(--line);padding-top:14px}
+.kpi.sm{font-size:19px;margin:2px 0 0}
+.chart-wrap{margin-top:8px;min-height:120px}
+.chart{display:block;width:100%;height:auto;font-family:var(--font)}
+.chart .gl{stroke:var(--line);stroke-width:1}
+.chart .ax{fill:var(--faint);font-size:11px}
+.chart .ax.strong{fill:var(--muted);font-weight:600}
+.chart .bar{fill:var(--accent);opacity:.85}
+.chart .fee{fill:none;stroke:var(--info);stroke-width:2}
+.chart .wfee{fill:none;stroke:var(--warn);stroke-width:2;stroke-dasharray:5 3}
+.chart .fee-dot{fill:var(--info)}
+.chart .wfee-dot{fill:var(--warn)}
+.chart .hit{fill:transparent}
+.chart .hit:hover{fill:color-mix(in srgb,var(--text) 5%,transparent)}
+.legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:13px;color:var(--muted);margin-top:6px}
+.legend > span{white-space:nowrap}
+.legend .k{display:inline-block;width:14px;height:10px;border-radius:3px;margin-right:6px;vertical-align:1px}
+.legend .k.bar{background:var(--accent);opacity:.85}
+.legend .k.fee{height:3px;background:var(--info)}
+.legend .k.wfee{height:0;border-top:3px dashed var(--warn);border-radius:0}
+@media (max-width:860px){
+  .card-head{padding:14px 14px 10px}
+  .facts > div{grid-template-columns:110px minmax(0,1fr)}
+  .bizday-figs dd{font-size:15px}
+  .scroll .table{min-width:640px}
+  .scroll .table th,.scroll .table td{white-space:nowrap}
+  /* Collapsed table borders are painted under sticky cells, so the sticky column draws its own with shadows. */
+  .scroll .table td:first-child{position:sticky;left:0;z-index:1;background:var(--surface);box-shadow:inset -1px 0 0 var(--line),inset 0 -1px 0 var(--line)}
+  .scroll .table th:first-child{position:sticky;left:0;z-index:1;box-shadow:inset -1px 0 0 var(--line)}
+  .scroll .table tfoot td:first-child{background:var(--surface-2)}
+  .scroll .table tbody tr.sel td:first-child{background:var(--accent-soft)}
+}
+.stack{display:grid;gap:16px;align-content:start}
+/* Grid items default to min-width:auto, so a wide table would widen the page on phones instead of scrolling. */
+.shell > .main,.main > section > *,.stack,.stack > *{min-width:0}

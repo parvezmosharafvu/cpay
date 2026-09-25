@@ -1,9 +1,9 @@
 import http from 'node:http';
-import { createHash, timingSafeEqual } from 'node:crypto';
 import { createRequire } from 'node:module';
 import pg from 'pg';
 import * as ledger from './ledger.mjs';
 import { createWithdrawals, UserError } from './withdraw.mjs';
+import { bearerAuth, createWallet, createAdminWalletRoute } from './wallet.mjs';
 
 const breez = createRequire(import.meta.url)('@breeztech/breez-sdk-spark');
 
@@ -141,10 +141,10 @@ async function health() {
   }];
 }
 
-const expectedAuth = createHash('sha256').update(`Bearer ${SECRET}`).digest();
-function authorised(req) {
-  return timingSafeEqual(createHash('sha256').update(req.headers.authorization ?? '').digest(), expectedAuth);
-}
+const checkBearer = bearerAuth(SECRET);
+const authorised = (req) => checkBearer(req.headers.authorization);
+const wallet = createWallet({ breez: sdk, db, btcUsdRate, withdrawals, log: logJson });
+const adminWalletRoute = createAdminWalletRoute({ wallet, withdrawals });
 
 async function readJson(req) {
   let body = '';
@@ -185,6 +185,8 @@ const server = http.createServer(async (req, res) => {
       [status, body] = await health();
     } else if (req.url.startsWith('/withdraw/')) {
       [status, body] = (await withdrawRoute(req)) ?? [404, { error: 'not found' }];
+    } else if (req.url.startsWith('/admin/wallet/')) {
+      [status, body] = await adminWalletRoute(req.method, req.url, req.method === 'POST' ? await readJson(req) : null);
     }
   } catch (e) {
     if (e instanceof UserError) {

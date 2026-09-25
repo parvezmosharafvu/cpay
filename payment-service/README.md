@@ -65,6 +65,41 @@ to settle before mainnet.
   - Cross-chain sends are mainnet only: on other networks the SDK rejects
     `crossChainConfig` and lists no routes, so the list is empty.
 
+- The platform wallet for the admin Wallet tab (`wallet.mjs`), called only
+  by the `admin-actions` edge function at `/admin-wallet` after
+  `verifyAdminCaller` has checked the JWT belongs to an admin. Every
+  `POST /admin/wallet/<action>` carries `adminId`, and the service answers
+  403 unless that profile's role is `admin`, so the secret alone cannot
+  move money.
+  - `info`: `balanceSats` from `getInfo`, USD at the `listFiatRates` rate,
+    what the platform owes creators (every available balance plus
+    withdrawals not yet paid, `owedToCreatorsUsd`) and `spendableSat`, the
+    balance minus that.
+  - `payments {offset, limit}`: `listPayments`, newest first, up to 50 a
+    page. Amounts are strings (the SDK returns bigints).
+  - `receive {amountSat, memo}`: a bolt11 from `receivePayment`, one hour.
+    A payment into it matches no `payments` row, so
+    `settle_breez_payment()` answers `unknown` and no creator is credited.
+  - `addresses`: the Spark address (`receivePayment` with `sparkAddress`)
+    and the Lightning address from `getLightningAddress`, if one is
+    registered.
+  - `send-prepare {destination, amountSat?}` then `send-confirm
+    {prepareId}`: `parse` picks the path. A bolt11 or Spark address goes
+    through `prepareSendPayment`/`sendPayment`; a Lightning address or LNURL
+    through `prepareLnurlPay`/`lnurlPay`. Prepare shows the Breez fee and
+    holds for 10 minutes.
+  - `stable-routes`, `stable-quote {routeId, address, amountUsd}`,
+    `stable-confirm {quoteId}`: the route catalog, `validateAddress` and
+    `prepareCrossChain` from `withdraw.mjs`, without the creator ledger.
+  - `fiat`: `listFiatCurrencies` joined with `listFiatRates`, USD first. A
+    rate of 0 (regtest lists BGN and VES at 0) shows as no rate.
+  - Every send is refused if amount plus fee is more than `spendableSat`,
+    checked at prepare and again at confirm. Confirm writes
+    `platform_wallet.send` to `audit_log` before the send and
+    `platform_wallet.send.result` after, with the prepare id as the
+    subject and the Breez idempotency key. It never writes `withdrawals`
+    or `payments`, and the withdrawal reconciler ignores these sends.
+
 All routes need `Authorization: Bearer $PAYMENT_SERVICE_SECRET`.
 
 ## Run
@@ -92,7 +127,10 @@ migration applied. `ledger.test.mjs` works inside a transaction that is
 rolled back. `withdraw.test.mjs` commits (confirm and crash recovery need
 several connections), uses fresh users and deletes them at the end; it
 drives `withdraw.mjs` with a fake Breez SDK, since regtest has no
-cross-chain routes.
+cross-chain routes. `wallet.test.mjs` does the same for `wallet.mjs`: 403
+for every action unless `adminId` is an admin, the secret compared exactly,
+admin sends audited twice and leaving creator balances and `withdrawals`
+alone, and sends above the spendable balance refused.
 
 ## Lightning addresses (designed, not built)
 

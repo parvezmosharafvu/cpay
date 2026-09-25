@@ -79,6 +79,12 @@ test('an unpaid invoice past its expiry becomes expired and credits nothing', as
   assert.equal(await earned(), '9.70000000');
 });
 
+test('a payment that arrives after expiry still settles, because the sats are in the wallet', async () => {
+  assert.equal(await ledger.settlePayment(db, receive('breez-7', 8339, 'ef'.repeat(32))), 'settled');
+  assert.equal(await statusOf('ef'.repeat(32)), 'settled');
+  assert.equal(await earned(), '16.49000000');
+});
+
 test('sends and non-lightning receives are ignored', async () => {
   assert.equal(await ledger.settlePayment(db, { ...receive('breez-5', 11913), paymentType: 'send' }), 'ignored');
   assert.equal(await ledger.settlePayment(db, { ...receive('breez-6', 11913), details: { type: 'deposit', txId: 'x', vout: 0 } }), 'no_hash');

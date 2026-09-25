@@ -108,6 +108,8 @@ type Json = Record<string, unknown>;
 const str = (v: unknown) => (v === undefined || v === null ? null : String(v));
 const PROVIDER_WORDS = /breez|spark|sdk|orchestra|boltz|internal error/i;
 const GENERIC_ERROR = "Instant withdrawals are temporarily unavailable. Try again later.";
+// Same text as self_withdraw_off_message() in the database (0101).
+const SELF_WITHDRAW_OFF = "Your reseller handles withdrawals for your account. Ask them to withdraw for you.";
 
 // Service error messages are written for users, but anything that names the
 // processor or looks like a raw library error is replaced.
@@ -170,6 +172,18 @@ Deno.serve(async (req) => {
     return json({ error: "Invalid JSON body" }, 400, cors);
   }
   const action = String(body.action ?? "request");
+
+  // A freelancer whose reseller has self-withdraw off may not start any
+  // withdrawal here (the database and the payment service refuse too).
+  // Their reseller withdraws for them from the reseller desk.
+  const { data: settings, error: settingsErr } = await callerClient.rpc("my_withdraw_settings");
+  if (settingsErr || !settings) {
+    console.error("my_withdraw_settings failed:", settingsErr);
+    return json({ error: "Withdrawals are temporarily unavailable. Try again later." }, 503, cors);
+  }
+  if ((settings as Json).self_withdraw_allowed !== true) {
+    return json({ error: SELF_WITHDRAW_OFF }, 403, cors);
+  }
 
   if (action === "routes" || action === "quote" || action === "confirm") {
     if (!PAYMENT_SERVICE_URL || !PAYMENT_SERVICE_SECRET) {

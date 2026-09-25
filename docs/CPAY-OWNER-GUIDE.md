@@ -44,7 +44,7 @@
 1. Open the **new CPAY Supabase project**.
 2. Take a backup/snapshot if the project already has data.
 3. Run the files in `supabase/migrations/` in numeric order.
-4. The new project currently ends at migration `0091`.
+4. The new project currently ends at migration `0101`.
 5. Confirm the following objects exist:
 
 ```sql
@@ -142,7 +142,7 @@ idempotency and an emergency stop are verified in staging.
 
 ## What happens next
 
-1. Apply migrations `0067` through `0091` to the new CPAY Supabase project.
+1. Apply migrations `0067` through `0101` to the new CPAY Supabase project.
 2. Deploy the new Edge Functions and configure secrets in Supabase.
 3. Push the local CPAY changes to the new GitHub repository.
 4. Run the onboarding, link, invoice and QR test checklist.

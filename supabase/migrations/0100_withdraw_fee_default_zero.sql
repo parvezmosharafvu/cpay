@@ -16,7 +16,7 @@
 -- the admin panel (Accounts → fee) or admin_update_creator_fee(), which
 -- also writes the audit log.
 --
--- Numbered 0100 because 0099 is taken on the email-confirm-toggle branch.
+-- 0101 turns the per-account fee into an optional override (NULL = inherit).
 -- Safe to re-run.
 -- ============================================================
 

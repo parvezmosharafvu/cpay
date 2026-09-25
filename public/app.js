@@ -202,8 +202,11 @@ function shortAddress(a){ return a && a.length > 16 ? `${a.slice(0, 8)}...${a.sl
 // this page cannot know it. submitManual() sends a manual request and
 // returns true when it went through. instantAllowed() says whether this page
 // may send a stablecoin withdrawal for the selected account. onDone() runs
-// after any withdrawal so the page can refresh balances.
-function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, onDone = () => {} } = {}){
+// after any withdrawal so the page can refresh balances. blocked, when set,
+// is a note to show instead: the form stays visible but nothing can be sent
+// (a freelancer whose reseller handles withdrawals). The server refuses
+// those requests too.
+function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, onDone = () => {}, blocked = null } = {}){
   let routes = { routes: [], error: null, loading: true };
   let quote = null;
   let busy = false;
@@ -243,6 +246,15 @@ function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, o
     $('sumFeeLabel').textContent = Number.isFinite(pct) ? `Platform fee (${pct}%)` : 'Platform fee';
     const btn = $('wBtn');
 
+    if (blocked) {
+      $('wHint').textContent = '';
+      $('sumFeeRow').hidden = true;
+      $('sumNet').textContent = '-'; $('sumTo').textContent = '-'; $('sumGet').textContent = '-';
+      $('sumNote').textContent = blocked;
+      btn.textContent = 'Withdraw';
+      btn.disabled = true;
+      return;
+    }
     if (!instant) {
       const q = withdrawQuote(amount, pct);
       $('sumFee').textContent = q ? money(q.fee) : (Number.isFinite(pct) ? '$0.00' : 'Set on their account');
@@ -330,7 +342,7 @@ function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, o
   };
 
   $('wBtn').onclick = async () => {
-    if (busy) return;
+    if (busy || blocked) return;
     const m = method();
     if (!m.instant) {
       busy = true; render();
@@ -347,6 +359,14 @@ function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, o
     $(id).addEventListener('change', changed);
   });
 
+  if (blocked) {
+    const box = document.querySelector('.withdraw');
+    if (box) box.classList.add('blocked');
+    ['wMethod', 'wNet', 'wAmt', 'wDest'].forEach((id) => { $(id).disabled = true; });
+    $('wNet').innerHTML = '<option value="">-</option>';
+    render();
+    return () => render();
+  }
   fillNetworks();
   render();
   loadWithdrawRoutes().then((r) => { routes = { ...r, loading: false }; fillNetworks(); render(); });

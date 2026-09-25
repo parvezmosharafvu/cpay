@@ -87,15 +87,20 @@ jobs:
           # just applied to, so it leaves nothing behind.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/cloudai_regression.sql
 
-      - name: Dashboard data layer and business day (0096-0098)
+      - name: Dashboard data layer and business day (0096 onward)
         env:
           PGPASSWORD: postgres
         run: |
-          # 0096-0098 must survive a second apply, then the RPCs are checked
-          # with seeded payments either side of the 17:00 Dhaka cutoff, the
-          # 10-link ceiling, who-sees-whom, the daily withdrawal limit and
-          # the profile card. BEGIN/ROLLBACK, like above.
-          for f in supabase/migrations/009[6-8]_*.sql; do
+          # 0096 and every later migration must survive a second apply, then
+          # the RPCs are checked with seeded payments either side of the
+          # 17:00 Dhaka cutoff, the 10-link ceiling, who-sees-whom, the daily
+          # withdrawal limit and the profile card. BEGIN/ROLLBACK, like above.
+          # Re-applying through the newest file (not only 0096-0098) leaves
+          # the latest function bodies in place for the payment service
+          # tests below; 0101 replaces withdrawal functions 0097 defines.
+          for f in supabase/migrations/*.sql; do
+            n=$(basename "$f" | cut -c1-4)
+            [ $((10#$n)) -ge 96 ] || continue
             psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -f "$f"
           done
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/dashboards_test.sql

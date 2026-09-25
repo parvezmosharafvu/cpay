@@ -195,7 +195,7 @@ Sequence matters — several steps fail silently if done out of order.
 
 1. **Supabase project created**, extensions enabled (§3.1) — *before*
    migrations, or cron scheduling is skipped
-2. **Migrations run** in order, `0001 → 0091`
+2. **Migrations run** in order, `0001 → 0101`
 3. **Vault secrets** set (§2.2) — the scheduling migrations read them
 4. **Edge Function secrets** set (§2.1)
 5. **All 9 functions deployed:**

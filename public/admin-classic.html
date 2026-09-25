@@ -331,7 +331,7 @@
 
                                   <div class="detail-section-title">Withdrawal fee for this Freelancer</div>
                                 <div class="w-row">
-                                  <input type="number" step="0.1" class="w-input" id="detailFeeInput" placeholder="0">
+                                  <input type="number" step="0.1" class="w-input" id="detailFeeInput" placeholder="Inherit">
                                     <button class="btn-primary" style="flex:0 0 auto;" onclick="saveDetailFee()">Save fee %</button>
                                   </div>
                                   <div class="detail-section-title">Payment link limit for this Freelancer</div>
@@ -588,13 +588,13 @@
                                               </div>
                                               <div class="panel">
                                                 <div class="panel-head">
-                                                    <div class="panel-title">Default fee for new Freelancers</div>
+                                                    <div class="panel-title">Default withdrawal fee</div>
                                                 </div>
                                                 <div class="w-row" style="margin-bottom:12px;">
                                                   <input type="number" step="0.1" class="w-input" id="defaultFeeInput" placeholder="0">
                                                   </div>
                                                   <button class="btn-primary" style="max-width:200px;" onclick="saveDefaultFee()">Save default fee</button>
-                                                  <div class="hint" style="font-size:11px; color:var(--faint); margin-top:8px;">Applies to accounts created from now on. Existing Freelancers keep their current fee — edit those individually from People.</div>
+                                                  <div class="hint" style="font-size:11px; color:var(--faint); margin-top:8px;">Applies to every account with no fee of its own and no reseller team fee. Per-reseller team fees are in the admin desk (Fees → Reseller withdrawals).</div>
                                                 </div>
                                                 <div class="panel">
                                                   <div class="panel-head">
@@ -1418,7 +1418,8 @@ async function openCustomerDetail(creatorId){
   }
   document.getElementById('detailVerificationSelect').value = profileRow?.verification_status || 'unverified';
   document.getElementById('detailVerificationNote').value = profileRow?.verification_note || '';
-  document.getElementById('detailFeeInput').value = profileRow?.withdrawal_fee_percent ?? 0;
+  // Empty = no override: the account inherits its reseller's team fee, then the global default.
+  document.getElementById('detailFeeInput').value = profileRow?.withdrawal_fee_percent ?? '';
   document.getElementById('detailCostInput').value = profileRow?.cost_percent ?? 0;
   const amtMode = profileRow?.show_buyer_amount_override === true ? 'buyer'
                : profileRow?.show_buyer_amount_override === false ? 'fee'
@@ -1633,11 +1634,13 @@ async function saveDetailAmountDisplay(){
 }
 
 async function saveDetailFee(){
-  const fee = parseFloat(document.getElementById('detailFeeInput').value);
+  const raw = document.getElementById('detailFeeInput').value.trim();
+  // Empty clears the override (NULL): the reseller team fee, then the global default, applies.
+  const fee = raw === '' ? null : parseFloat(raw);
   // No policy ceiling — the admin decides this number. 100 is the
   // arithmetic limit: request_withdrawal() pays out amount*(1-fee/100),
   // so beyond 100% the payout would go negative.
-  if (isNaN(fee) || fee < 0 || fee > 100){ showToast('Enter a fee between 0-100', 'err'); return; }
+  if (fee !== null && (isNaN(fee) || fee < 0 || fee > 100)){ showToast('Enter a fee between 0-100, or leave empty to inherit', 'err'); return; }
   const { error } = await window.supabaseClient.rpc('admin_update_creator_fee', { p_creator_id: currentDetailCreatorId, p_fee_percent: fee });
   showToast(error ? 'Failed: ' + error.message : 'Fee updated', error ? 'err' : 'ok');
   if (!error) await loadPeople();
@@ -2345,7 +2348,7 @@ async function saveDefaultLinkLimit(){
   showToast(error ? 'Failed: ' + error.message : 'Default link limit saved', error ? 'err' : 'ok');
 }
 
-async function saveDefaultFee(){ const percent = parseFloat(document.getElementById('defaultFeeInput').value); if (isNaN(percent) || percent < 0 || percent > 100){ showToast('Enter a fee between 0-100', 'err'); return; } const { error } = await window.supabaseClient.from('app_settings').upsert({ key: 'default_withdrawal_fee_percent', value: { percent }, updated_at: new Date().toISOString() }); showToast(error ? 'Failed' : 'Default fee saved', error ? 'err' : 'ok'); }
+async function saveDefaultFee(){ const percent = parseFloat(document.getElementById('defaultFeeInput').value); if (isNaN(percent) || percent < 0 || percent > 100){ showToast('Enter a fee between 0-100', 'err'); return; } const { error } = await window.supabaseClient.rpc('admin_set_default_withdrawal_fee', { p_percent: percent }); showToast(error ? 'Failed: ' + error.message : 'Default fee saved', error ? 'err' : 'ok'); }
 async function saveExchangeRates(){ const buy_rate = parseFloat(document.getElementById('buyRate').value); const sell_rate = parseFloat(document.getElementById('sellRate').value); const { error } = await window.supabaseClient.from('app_settings').upsert({ key: 'exchange_rates', value: { buy_rate, sell_rate }, updated_at: new Date().toISOString() }); showToast(error ? 'Failed' : 'Rates saved', error ? 'err' : 'ok'); }
 async function saveProfitMargin(){ 
   const percent = parseFloat(document.getElementById('profitMarginInput').value); 

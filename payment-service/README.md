@@ -38,8 +38,10 @@ to settle before mainnet.
   - `POST /withdraw/quote {userId, routeId, address, amountUsd}` checks the
     amount (at least $5, whole cents, within the available balance and the
     route's limits) and that `sdk.parse` reads the address as the route's
-    family. It takes the profile's `withdrawal_fee_percent` as the platform
-    fee (0% unless an admin set one; 0100), converts the rest to sats at the
+    family. It refuses (403) a freelancer whose reseller has self-withdraw
+    off (`self_withdraw_allowed()`, 0101) and takes `resolve_withdrawal_fee()`
+    as the platform fee (account override, else reseller team fee, else the
+    global default, 0% since 0100), converts the rest to sats at the
     Breez BTC/USD rate (rounded down), and asks `prepareSendPayment` for a
     cross-chain quote with fees included. The answer shows the amount,
     platform fee, `networkFeeUsd` (the swap plus network fee, exact: what is
@@ -127,8 +129,8 @@ node --env-file=.env server.mjs
 Edge function secrets: `PAYMENT_SERVICE_URL` (where this listens) and
 `PAYMENT_SERVICE_SECRET` (same value as here). `DATABASE_URL` must be a
 role that can execute `settle_breez_payment`,
-`reserve_stablecoin_withdrawal` and `finalize_stablecoin_withdrawal` and
-update `payments`; the
+`reserve_stablecoin_withdrawal`, `finalize_stablecoin_withdrawal`,
+`resolve_withdrawal_fee` and `self_withdraw_allowed` and update `payments`; the
 Supabase `postgres` connection string works.
 
 Wallet state lives in `BREEZ_DATA_DIR`, so the host needs a persistent

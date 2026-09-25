@@ -92,10 +92,19 @@ async function renderPays() {
 }
 
 async function renderCash() {
-  const { data: bal } = await sb.rpc('get_my_balance');
+  const [{ data: bal }, { data: ws }] = await Promise.all([sb.rpc('get_my_balance'), sb.rpc('my_withdraw_settings')]);
   const b = Array.isArray(bal) ? bal[0] : bal || {};
-  document.getElementById('cash').innerHTML = withdrawForm(`<p class="muted">Available balance <strong id="wAvail">${money(b.available)}</strong></p>`);
-  bindWithdraw(() => Number(me.withdrawal_fee_percent ?? 0), {
+  // Fee: own override, else the reseller's team fee, else the global
+  // default, resolved by the server. When the reseller handles withdrawals
+  // the form stays visible with the balance, but nothing can be sent.
+  const fee = Number(ws?.fee_percent ?? 0);
+  const blocked = ws && ws.self_withdraw_allowed === false
+    ? 'Your reseller handles withdrawals for your account. Ask them to withdraw for you.'
+    : null;
+  document.getElementById('cash').innerHTML = withdrawForm(`<p class="muted">Available balance <strong id="wAvail">${money(b.available)}</strong></p>`
+    + (blocked ? `<div class="notice" id="wBlocked"><strong>Withdrawals are handled by your reseller</strong><div class="muted">${escapeHtml(blocked)}</div></div>` : ''));
+  bindWithdraw(() => fee, {
+    blocked,
     submitManual: async () => {
       const { data, error } = await sb.rpc('request_withdrawal', {
         p_amount: Number(document.getElementById('wAmt').value),

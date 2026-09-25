@@ -40,7 +40,7 @@ public/                          → static site root
   config.example.js              → copy to config.js, fill in your keys
 
 supabase/
-  migrations/                    → run in numeric order, 0001 → 0100
+  migrations/                    → run in numeric order, 0001 → 0101
   functions/
     create-invoice/              → validates and prices a payment, has the payment service invoice it
     admin-actions/               → admin mark-settled + withdrawal actions
@@ -191,6 +191,12 @@ else since 0097 (`request_withdrawal`, `system_queue_withdrawal`,
 
 0099 grants `service_role` INSERT on `audit_log` (and its id sequence), so
 the `auth-settings` function can record sign-up email confirmation changes.
+
+0101 adds `reseller_settings`: each reseller's "let my freelancers withdraw
+by themselves" switch (off by default, and off for every existing reseller)
+and an optional team withdrawal fee. The withdrawal fee resolves as the
+account's own override, else the reseller team fee, else the global default
+(`resolve_withdrawal_fee()`); see docs/ARCHITECTURE.md.
 
 `public/daily-desk.js` renders these RPCs on the freelancer Overview, the
 reseller Overview and Team accounts, and the admin Daily earnings tab.

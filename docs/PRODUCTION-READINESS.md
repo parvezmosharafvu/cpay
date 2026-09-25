@@ -8,7 +8,7 @@ change to the previous production project.
 - [ ] `python3 ci/check_frontend.py` passes.
 - [ ] `npm run build` passes.
 - [ ] A backup or snapshot exists for the new CPAY Supabase project.
-- [ ] Migrations `0001` through `0100` apply in order on staging.
+- [ ] Migrations `0001` through `0101` apply in order on staging.
 - [ ] Migration history and the live schema agree.
 - [ ] RLS and security-definer search-path checks pass.
 - [ ] The owner has recorded the rollback or restore plan.
@@ -49,9 +49,16 @@ change to the previous production project.
   deliberately failed or refunded send leaves the balance restored once.
 - [ ] Single and daily withdrawal limits are set for accounts that may use
   instant withdrawals, since nothing waits for an admin.
-- [ ] Withdrawal platform fee: new accounts get 0% (0100). Accounts created
-  before 0100 keep the fee they had; set each to the intended value in the
-  admin panel.
+- [ ] Withdrawal platform fee: the global default is 0% (0100) and new
+  accounts inherit it (0101). An account whose fee equalled the global
+  default when 0101 ran now inherits; any other value stays as that
+  account's override. Check the Withdraw fee column in the admin Accounts
+  tab and clear or set overrides as intended.
+- [ ] Reseller self-withdraw: every reseller starts with it off (0101), so
+  their freelancers cannot withdraw by themselves until the reseller or an
+  admin turns it on. Tell resellers before launch, and keep
+  `feature_reseller_team_withdraw` on, or only an admin can withdraw for
+  those freelancers.
 
 ## Cloudflare and public site
 

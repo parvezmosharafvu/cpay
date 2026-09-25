@@ -14,7 +14,7 @@ browser ──► public/ (static, Cloudflare Workers assets)
    │           ▼
    │        Edge functions (Deno): create-invoice, user-withdraw, admin-actions,
    │           │                    health, daily-report, ledger-backup, og-image,
-   │           │                    reseller-digest
+   │           │                    reseller-digest, auth-settings
    │           ▼  Bearer PAYMENT_SERVICE_SECRET
    └──────► payment-service/ (Node 22, one long-running process)
                holds the one platform wallet (Breez SDK Spark)
@@ -30,8 +30,10 @@ browser ──► public/ (static, Cloudflare Workers assets)
   only build step bundles `src/home-analytics.js`.
 - **Edge functions** (`supabase/functions/`): the only server code the
   browser calls. `create-invoice` is public (no JWT; rate-limited per link
-  owner). `user-withdraw` and `admin-actions` need a JWT; `admin-actions`
-  re-checks the admin role in code (`verifyAdminCaller`). Cron-called
+  owner). `user-withdraw`, `admin-actions` and `auth-settings` need a JWT;
+  `admin-actions` re-checks the admin role in code (`verifyAdminCaller`),
+  and `auth-settings` (the admin sign-up email confirmation switch, which
+  calls the Supabase Auth admin API and writes the audit log) does too. Cron-called
   functions need `x-cron-secret`.
 - **payment-service** (`payment-service/`): the only process that holds the
   wallet mnemonic and talks to the processor. It cannot run in Deno edge
@@ -50,7 +52,8 @@ browser ──► public/ (static, Cloudflare Workers assets)
 | Balance | computed | `get_balance_for(user)`: settled earnings minus fees and commission, plus commission earned as reseller, minus withdrawals not `rejected`/`failed`. `get_my_balance()` is the signed-in wrapper |
 | Withdrawal | `withdrawals` | `amount_requested`, `fee_percent`, `amount_after_fee`, `method` (`stablecoin` or manual `bkash`/`nagad`/`binance`/`lightning`/`bank`), `status` (`pending`/`approved`/`processing`/`paid`/`rejected`, and `sending`/`failed` for stablecoin), `destination` |
 | Stablecoin withdrawal extras | `withdrawals` | `quote_id` (unique), `coin`, `chain`, `amount_sat`, `quoted_fee` (network fee, USD), `amount_out` (coins delivered), `quote_expires_at`, `payout_ref` (processor payment id, unique) |
-| Withdrawal fee | `profiles.withdrawal_fee_percent` | per account; new accounts copy `app_settings.default_withdrawal_fee_percent`, which is **0** since 0100 |
+| Withdrawal fee | `profiles.withdrawal_fee_percent`, `reseller_settings.team_withdrawal_fee_percent`, `app_settings.default_withdrawal_fee_percent` | resolved by `resolve_withdrawal_fee(user)`: account override (NULL = inherit), else the reseller team fee (freelancers only), else the global default (**0** since 0100), else 0 |
+| Reseller settings | `reseller_settings` | `reseller_id`, `allow_freelancer_self_withdraw` (default **false**), `team_withdrawal_fee_percent` (NULL = global). RLS: read own or admin; writes only through the RPCs below |
 | Event log | `webhook_events` | `delivery_id` unique: one row per received payment event (`breez:<payment id>`) |
 
 ## Ledger idempotency
@@ -123,11 +126,50 @@ see `payment-service/README.md`.
    (balance returned). A swap that failed without a refund stays `sending`
    for a person; `health` flags it.
 
-**Fees.** On an instant withdrawal the user pays only the network fee from
-the quote. The platform fee code path stays (per-account
-`withdrawal_fee_percent`, shown as a separate line only when above 0) but
-defaults to 0% (0100). Manual withdrawals use the same platform fee and
-have no network fee.
+**Fees.** On an instant withdrawal the user pays the network fee from the
+quote, plus the platform fee when it is above 0 (shown as its own line only
+then). The platform fee resolves in one place, `withdrawal_fee_resolution()`
+/ `resolve_withdrawal_fee()` (0101):
+
+1. the account's own `profiles.withdrawal_fee_percent`, if set (an explicit
+   0 counts as set);
+2. else, for a freelancer on a reseller's team, that reseller's
+   `reseller_settings.team_withdrawal_fee_percent`, if set;
+3. else `app_settings.default_withdrawal_fee_percent` (0% since 0100);
+4. else 0.
+
+`request_withdrawal`, `system_queue_withdrawal`,
+`reseller_request_withdrawal_for`, `reserve_stablecoin_withdrawal` and the
+payment service quote all use it, and reserve refuses a quote whose fee no
+longer matches ("Withdrawal fee changed"). Admins set the global default
+(`admin_set_default_withdrawal_fee`), a reseller's team fee
+(`admin_set_reseller_withdrawal_fee`, NULL clears) and an account override
+(`admin_update_creator_fee`, NULL clears). Resellers see their team fee on
+Team accounts; `my_withdraw_settings()` gives each user their resolved fee.
+Manual withdrawals use the same platform fee and have no network fee.
+
+**Who may withdraw.** A freelancer on a reseller's team (`referred_by`, or
+`moderator_assignments`) may withdraw from their own dashboard only while
+that reseller's `allow_freelancer_self_withdraw` is on. It is off by default
+and was set off for every existing reseller in 0101. While it is off the
+freelancer still sees their balance; the withdraw form is disabled with a
+note. `self_withdraw_allowed(user)` decides: always true for freelancers
+with no reseller, resellers and admins. It is enforced in
+`request_withdrawal` and `reserve_stablecoin_withdrawal` (clean refusal, no
+ledger row), `system_queue_withdrawal` (queues nothing), a BEFORE INSERT
+trigger on `withdrawals` (a signed-in user inserting a row for themselves),
+the payment service quote, and `user-withdraw` before any action. The
+reseller flips it on Team accounts (`reseller_set_self_withdraw`); an admin
+can set it for any reseller in the admin desk, Fees & filters → Reseller
+withdrawals (`admin_set_reseller_self_withdraw`). Both are audited.
+
+The reseller's team cash-out, `reseller_request_withdrawal_for` (manual,
+admin-reviewed, from a team member's balance), is not affected by the
+switch: it is how the reseller withdraws for the team while self-withdraw
+is off. It is still gated globally by the `feature_reseller_team_withdraw`
+admin switch. With both off, only an admin can file a withdrawal for those
+freelancers. The per-account `can_team_withdraw` feature key in
+`profile_feature_flags` is not enforced anywhere.
 
 ## What users see
 

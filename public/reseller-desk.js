@@ -1,6 +1,7 @@
 const sb = window.supabaseClient;
 const exp = { theme: 'keypad', invoice: 'default', wallet: 'all_wallets' };
 let me = null;
+let ws = null; // my_withdraw_settings(): own fee, team switch and team fee
 
 function show(tab) {
   document.querySelectorAll('main > section').forEach((s) => { s.hidden = s.id !== tab; });
@@ -14,6 +15,7 @@ async function boot() {
   if (me.role === 'admin') { location.href = 'admin.html'; return; }
   if (me.role !== 'moderator') { location.href = 'dashboard.html'; return; }
   document.getElementById('hello').textContent = me.display_name || 'Reseller';
+  ws = (await sb.rpc('my_withdraw_settings')).data || null;
   await Promise.all([renderHome(), renderTeam(), renderLinks(), renderCash(), renderNotice(), renderChat(), renderProfile()]);
 }
 
@@ -70,6 +72,7 @@ async function renderTeam() {
     <td class="num">${money(r.commission)}</td>
   </tr>`).join('');
   document.getElementById('team').innerHTML = `<div class="stack" id="teamDaily"><div class="card"><p class="muted">Loading team days…</p></div></div>
+  ${selfWithdrawCard()}
   <div class="card">
     <h3>Team link cost</h3>
     <p class="muted">Link cost is added to what the payer pays. It is separate from the platform fee and your commission. You can lock one rate on every freelancer on your team.</p>
@@ -90,6 +93,7 @@ async function renderTeam() {
     <tbody>${commRows || '<tr><td colspan="5" class="empty">No commission yet</td></tr>'}</tbody></table>
   </div>`;
   Daily.mountTeam(document.getElementById('teamDaily'));
+  bindSelfWithdraw();
   document.querySelectorAll('[data-cash]').forEach((btn) => {
     btn.onclick = () => prepareWithdraw(btn.dataset.cash, btn.dataset.name, btn.dataset.avail);
   });
@@ -114,6 +118,43 @@ async function renderTeam() {
     const { error: e } = await sb.rpc('reseller_lock_team_cost', { p_percent: pct, p_lock: false });
     if (e) return toast(e.message);
     toast('Rates unlocked. Commission still applies on affiliate settles.', true);
+  };
+}
+
+// Whether freelancers on this team may withdraw from their own dashboard.
+// Off by default. When off, the reseller withdraws for them from the Team
+// accounts list (Withdraw), which the server allows either way.
+function selfWithdrawCard() {
+  const r = ws?.reseller || {};
+  const on = !!r.allow_freelancer_self_withdraw;
+  const teamFee = r.team_withdrawal_fee_percent;
+  const feeText = teamFee != null
+    ? `Team withdrawal fee: ${Number(teamFee)}%, set by the admin.`
+    : `Team withdrawal fee: the platform default (${Number(ws?.global_fee_percent ?? 0)}%).`;
+  const teamOff = ws && ws.team_withdraw_enabled === false;
+  return `<div class="card" id="selfWithdrawCard">
+    <h3>Freelancer withdrawals</h3>
+    <label class="switch"><input type="checkbox" id="selfWithdraw" ${on ? 'checked' : ''}> <span>Let my freelancers withdraw by themselves</span></label>
+    <p class="muted" id="selfWithdrawNote" style="margin:12px 0 0">${on
+      ? 'On. Freelancers on your team can withdraw from their own dashboard.'
+      : 'Off. Freelancers on your team see their balance but cannot withdraw. You withdraw for them from the list below.'}</p>
+    <p class="faint" style="margin:8px 0 0">${escapeHtml(feeText)} An account's own fee, if the admin set one, comes first.</p>
+    ${teamOff ? '<p class="err" style="margin:8px 0 0">Team withdrawals are turned off by the admin, so while this is off only the admin can withdraw for your freelancers.</p>' : ''}
+  </div>`;
+}
+
+function bindSelfWithdraw() {
+  const box = document.getElementById('selfWithdraw');
+  if (!box) return;
+  box.onchange = async () => {
+    box.disabled = true;
+    const { data, error } = await sb.rpc('reseller_set_self_withdraw', { p_allowed: box.checked });
+    box.disabled = false;
+    if (error) { box.checked = !box.checked; return toast(error.message); }
+    ws = { ...(ws || {}), reseller: { ...(ws?.reseller || {}), allow_freelancer_self_withdraw: !!data } };
+    document.getElementById('selfWithdrawCard').outerHTML = selfWithdrawCard();
+    bindSelfWithdraw();
+    toast(data ? 'Your freelancers can withdraw by themselves' : 'You now handle withdrawals for your freelancers', true);
   };
 }
 
@@ -159,8 +200,9 @@ async function renderCash() {
   document.getElementById('cash').innerHTML = withdrawForm(`<p class="muted" id="wWho">From your own balance. To withdraw for a teammate, use Withdraw on the Team accounts page.</p>
     <input type="hidden" id="wUser" value="${me.id}">`);
   const own = () => document.getElementById('wUser').value === me.id;
-  // A teammate's fee rate is not visible to the reseller; the server applies it on submit.
-  refreshWithdraw = bindWithdraw(() => (own() ? Number(me.withdrawal_fee_percent ?? 0) : NaN), {
+  // The reseller's own fee is resolved by the server (own override, else the
+  // global default). A teammate's fee is applied by the server on submit.
+  refreshWithdraw = bindWithdraw(() => (own() ? Number(ws?.fee_percent ?? 0) : NaN), {
     // Instant withdrawals pay out the signed-in account only; a teammate
     // sends their own from their dashboard.
     instantAllowed: own,

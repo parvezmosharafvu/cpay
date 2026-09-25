@@ -20,8 +20,7 @@ bundle: `npm install && npm run build`.
 
 ## Database
 
-Migrations run in numeric order, `0001` → `0100` (0099 lives on the
-email-confirm-toggle branch). For a throwaway local database the way CI
+Migrations run in numeric order, `0001` → `0101`. For a throwaway local database the way CI
 does it (Postgres 15):
 
 ```bash

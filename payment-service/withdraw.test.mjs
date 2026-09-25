@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
-import { createWithdrawals, splitFee, outcomeOf, fromBaseUnits, routeId, failedBeforeSend, networkFeeUsd, LEAF_RETRY_MS } from './withdraw.mjs';
+import { createWithdrawals, splitFee, outcomeOf, fromBaseUnits, routeId, failedBeforeSend, networkFeeUsd, LEAF_RETRY_MS, SELF_WITHDRAW_OFF } from './withdraw.mjs';
 
 // Runs against a database with every migration applied. Unlike
 // ledger.test.mjs this commits, because confirm and crash recovery need
@@ -596,8 +596,10 @@ test('a new account gets a 0% withdrawal fee, and its quote has no platform fee'
   const id = randomUUID();
   users.push(id);
   await db.query(`insert into auth.users(id, email) values ($1, $2)`, [id, `new-${id}@test.invalid`]);
-  const { rows: [p] } = await db.query('select withdrawal_fee_percent::text as fee from profiles where id = $1', [id]);
-  assert.equal(Number(p.fee), 0);
+  // No fee of its own (NULL = inherit, 0101); it resolves to the 0% global default.
+  const { rows: [p] } = await db.query('select withdrawal_fee_percent::text as fee, resolve_withdrawal_fee(id)::text as resolved from profiles where id = $1', [id]);
+  assert.equal(p.fee, null);
+  assert.equal(Number(p.resolved), 0);
   await db.query(`update profiles set account_status = 'active' where id = $1`, [id]);
   await db.query(
     `insert into payments(user_id, amount_requested, amount_settled, status, settled_at, expires_at)
@@ -623,4 +625,369 @@ test('a quote the SDK refuses reaches the user as a generic message, with the de
     (e) => e.status === 422 && !/breez|sdk|orchestra/i.test(e.message) && /could not be quoted/.test(e.message),
   );
   assert.ok(w.log.some((l) => l.error === 'prepare failed' && /Orchestra quote failed/.test(l.detail)));
+});
+
+// ---------------------------------------------------------------------------
+// 0101: per-reseller self-withdraw switch and the withdrawal fee hierarchy.
+// ---------------------------------------------------------------------------
+
+async function makeReseller() {
+  const id = await makeUser({ earned: 10, fee: null });
+  await db.query(`update profiles set role = 'moderator' where id = $1`, [id]);
+  return id;
+}
+async function makeAdmin() {
+  const id = await makeUser({ earned: 10, fee: null });
+  await db.query(`update profiles set role = 'admin' where id = $1`, [id]);
+  return id;
+}
+async function makeFreelancer(reseller, { earned = 100, fee = null } = {}) {
+  const id = await makeUser({ earned, fee });
+  if (reseller) await db.query('update profiles set referred_by = $2 where id = $1', [id, reseller]);
+  return id;
+}
+
+// Runs fn as uid inside a transaction that is always rolled back.
+// browser: also switch to the `authenticated` role, so table grants and RLS
+// apply the way they do for a signed-in browser.
+async function asUser(uid, fn, { browser = false } = {}) {
+  const c = await db.connect();
+  try {
+    await c.query('begin');
+    await c.query(`create or replace function auth.uid() returns uuid language sql stable as $$ select '${uid}'::uuid $$`);
+    if (browser) {
+      await c.query('grant usage on schema auth to authenticated');
+      await c.query('set local role authenticated');
+    }
+    return await fn(c);
+  } finally {
+    await c.query('rollback').catch(() => {});
+    c.release();
+  }
+}
+// Error text from a query that must fail, run in its own savepoint so the
+// surrounding transaction stays usable.
+async function refusal(c, sql, args = []) {
+  await c.query('savepoint r');
+  try {
+    await c.query(sql, args);
+  } catch (e) {
+    await c.query('rollback to savepoint r');
+    return e.message;
+  }
+  await c.query('release savepoint r');
+  return null;
+}
+async function fee(userId) {
+  const { rows: [r] } = await db.query('select fee_percent::text as pct, source from withdrawal_fee_resolution($1)', [userId]);
+  return { pct: Number(r.pct), source: r.source };
+}
+const ledgerOf = async (u) => ({ balance: await balance(u), rows: (await rows(u)).length });
+
+test('self-withdraw is off by default: the column defaults to false and a reseller with no row counts as off', async () => {
+  const { rows: [col] } = await db.query(`
+    select column_default, is_nullable from information_schema.columns
+     where table_schema = 'public' and table_name = 'reseller_settings' and column_name = 'allow_freelancer_self_withdraw'`);
+  assert.equal(col.column_default, 'false');
+  assert.equal(col.is_nullable, 'NO');
+  const reseller = await makeReseller();
+  const freelancer = await makeFreelancer(reseller);
+  assert.equal((await db.query('select count(*)::int as n from reseller_settings where reseller_id = $1', [reseller])).rows[0].n, 0);
+  assert.equal((await db.query('select self_withdraw_allowed($1) as ok', [freelancer])).rows[0].ok, false);
+  await db.query('insert into reseller_settings(reseller_id) values ($1)', [reseller]);
+  assert.equal((await db.query('select allow_freelancer_self_withdraw as v from reseller_settings where reseller_id = $1', [reseller])).rows[0].v, false);
+  assert.equal((await db.query('select self_withdraw_allowed($1) as ok', [freelancer])).rows[0].ok, false);
+  // The freelancer's own view of it.
+  const view = await asUser(freelancer, async (c) => (await c.query('select my_withdraw_settings() as s')).rows[0].s, { browser: true });
+  assert.equal(view.self_withdraw_allowed, false);
+  assert.equal(view.has_reseller, true);
+  assert.equal(view.reseller, null);
+});
+
+test('freelancers with no reseller, resellers and admins can always withdraw from their own account', async () => {
+  const solo = await makeFreelancer(null);
+  const reseller = await makeReseller();
+  const admin = await makeAdmin();
+  const { rows } = await db.query('select self_withdraw_allowed($1) as a, self_withdraw_allowed($2) as b, self_withdraw_allowed($3) as c', [solo, reseller, admin]);
+  assert.deepEqual(rows[0], { a: true, b: true, c: true });
+  const view = await asUser(solo, async (c) => (await c.query('select my_withdraw_settings() as s')).rows[0].s, { browser: true });
+  assert.equal(view.self_withdraw_allowed, true);
+  assert.equal(view.has_reseller, false);
+  const q = await service(fakeBreez()).quote({ userId: solo, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '10' });
+  assert.ok(q.quoteId);
+});
+
+test('switch off: every self-service path refuses with a clean message and the ledger does not move', async () => {
+  const reseller = await makeReseller();
+  const freelancer = await makeFreelancer(reseller, { earned: 100 });
+  await db.query(`update profiles set auto_withdraw_enabled = true, default_withdrawal_method = 'bkash', wallet_bkash = '01711000000' where id = $1`, [freelancer]);
+  const before = await ledgerOf(freelancer);
+  const clean = (m) => m === SELF_WITHDRAW_OFF && !/breez|spark|sdk|orchestra/i.test(m);
+
+  // Payment service quote: refused before the SDK is asked anything.
+  const breez = fakeBreez();
+  await assert.rejects(
+    service(breez).quote({ userId: freelancer, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '20' }),
+    (e) => e.status === 403 && clean(e.message),
+  );
+  assert.equal(breez.calls.prepare, 0);
+
+  // Reserve (what confirm calls), as the service role would.
+  const sql = 'select id from reserve_stablecoin_withdrawal($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)';
+  await assert.rejects(
+    db.query(sql, [freelancer, randomUUID(), '10.00', '0', '10.00', 'USDT', 'tron', TRON, '0.5', '9.5', 10_000, new Date(Date.now() + 60_000).toISOString()]),
+    (e) => clean(e.message),
+  );
+
+  // Auto-withdraw queues nothing.
+  assert.equal((await db.query('select system_queue_withdrawal($1) as id', [freelancer])).rows[0].id, null);
+
+  await asUser(freelancer, async (c) => {
+    // The manual request RPC the dashboard and user-withdraw call.
+    assert.ok(clean(await refusal(c, `select request_withdrawal(10, 'bkash', '01711000000')`)));
+    // A direct insert from the browser: no INSERT grant/policy for the client.
+    await c.query('set local role authenticated');
+    assert.match(await refusal(c, `insert into withdrawals(user_id, amount_requested, fee_percent, amount_after_fee, method, destination, status)
+                                   values ($1, 10, 0, 10, 'bkash', '01711000000', 'pending')`, [freelancer]),
+      /permission denied|row-level security/);
+  });
+  // Even a signed-in insert that got past the grants hits the table trigger.
+  await asUser(freelancer, async (c) => {
+    assert.ok(clean(await refusal(c, `insert into withdrawals(user_id, amount_requested, fee_percent, amount_after_fee, method, destination, status)
+                                      values ($1, 10, 0, 10, 'bkash', '01711000000', 'pending')`, [freelancer])));
+  });
+
+  assert.deepEqual(await ledgerOf(freelancer), before);
+});
+
+test('switch on: the freelancer quotes, confirms and requests by themselves', async () => {
+  const reseller = await makeReseller();
+  const freelancer = await makeFreelancer(reseller, { earned: 100 });
+  // Turned on through the reseller's own RPC (rolled back), then committed
+  // directly for the service calls below, which use other connections.
+  await asUser(reseller, async (c) => {
+    assert.equal((await c.query('select reseller_set_self_withdraw(true) as v')).rows[0].v, true);
+    assert.equal((await c.query('select self_withdraw_allowed($1) as ok', [freelancer])).rows[0].ok, true);
+  });
+  await db.query('insert into reseller_settings(reseller_id, allow_freelancer_self_withdraw) values ($1, true)', [reseller]);
+
+  const breez = fakeBreez();
+  const w = service(breez);
+  const q = await w.quote({ userId: freelancer, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '20' });
+  const out = await w.confirm({ userId: freelancer, quoteId: q.quoteId });
+  assert.equal(out.status, 'sending');
+  assert.equal(breez.calls.send, 1);
+  await asUser(freelancer, async (c) => {
+    const { rows: [r] } = await c.query(`select status, method from request_withdrawal(10, 'bkash', '01711000000')`);
+    assert.deepEqual(r, { status: 'pending', method: 'bkash' });
+  });
+  assert.equal(Number((await balance(freelancer)).queued), 20);
+
+  // Flipped off between quote and confirm: refused at reserve, nothing sent.
+  const q2 = await w.quote({ userId: freelancer, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '10' });
+  await db.query('update reseller_settings set allow_freelancer_self_withdraw = false where reseller_id = $1', [reseller]);
+  await assert.rejects(w.confirm({ userId: freelancer, quoteId: q2.quoteId }), (e) => e.status === 403 && e.message === SELF_WITHDRAW_OFF);
+  assert.equal(breez.calls.send, 1);
+  assert.equal(Number((await balance(freelancer)).queued), 20);
+});
+
+test('the reseller still withdraws for a team member while self-withdraw is off, and so does an admin', async () => {
+  const reseller = await makeReseller();
+  const admin = await makeAdmin();
+  const freelancer = await makeFreelancer(reseller, { earned: 100 });
+  assert.equal((await db.query('select self_withdraw_allowed($1) as ok', [freelancer])).rows[0].ok, false);
+  await asUser(reseller, async (c) => {
+    const { rows: [r] } = await c.query(`select user_id, status, admin_note, fee_percent::text from reseller_request_withdrawal_for($1, 25, 'bkash', '01711000000')`, [freelancer]);
+    assert.equal(r.user_id, freelancer);
+    assert.equal(r.status, 'pending');
+    assert.equal(r.admin_note, 'Submitted by reseller');
+    const b = (await c.query('select available::text from get_balance_for($1)', [freelancer])).rows[0];
+    assert.equal(Number(b.available), 75);
+  });
+  await asUser(admin, async (c) => {
+    const { rows: [r] } = await c.query(`select user_id, status from reseller_request_withdrawal_for($1, 10, 'bank', 'Acct 123')`, [freelancer]);
+    assert.deepEqual(r, { user_id: freelancer, status: 'pending' });
+  });
+  // Another reseller cannot.
+  const other = await makeReseller();
+  await asUser(other, async (c) => {
+    assert.match(await refusal(c, `select reseller_request_withdrawal_for($1, 10, 'bkash', '01711000000')`, [freelancer]), /not on your team/);
+  });
+});
+
+test('who can change the switch: the reseller for their own team and an admin for any reseller, nobody else', async () => {
+  const reseller = await makeReseller();
+  const otherReseller = await makeReseller();
+  const admin = await makeAdmin();
+  const freelancer = await makeFreelancer(reseller);
+  await db.query('insert into reseller_settings(reseller_id) values ($1), ($2)', [reseller, otherReseller]);
+  const flag = async (c, id) => (await c.query('select allow_freelancer_self_withdraw as v from reseller_settings where reseller_id = $1', [id])).rows[0]?.v;
+
+  // Admin, through the same RPC the admin desk uses; audited.
+  await asUser(admin, async (c) => {
+    assert.equal((await c.query('select admin_set_reseller_self_withdraw($1, true) as v', [reseller])).rows[0].v, true);
+    assert.equal(await flag(c, reseller), true);
+    const { rows: [a] } = await c.query(`select actor_id, new_value from audit_log where action = 'reseller.self_withdraw_changed' and subject_id = $1 order by id desc limit 1`, [reseller]);
+    assert.equal(a.actor_id, admin);
+    assert.deepEqual(a.new_value, { allow_freelancer_self_withdraw: true });
+    assert.match(await refusal(c, 'select admin_set_reseller_self_withdraw($1, true)', [freelancer]), /Reseller not found/);
+  });
+  // The reseller, for their own team only.
+  await asUser(reseller, async (c) => {
+    await c.query('select reseller_set_self_withdraw(true)');
+    assert.equal(await flag(c, reseller), true);
+    assert.match(await refusal(c, 'select admin_set_reseller_self_withdraw($1, true)', [otherReseller]), /Not authorized/);
+    assert.equal(await flag(c, otherReseller), false);
+  });
+  // The freelancer: neither RPC, and no direct write.
+  await asUser(freelancer, async (c) => {
+    assert.match(await refusal(c, 'select reseller_set_self_withdraw(true)'), /Not authorized/);
+    assert.match(await refusal(c, 'select admin_set_reseller_self_withdraw($1, true)', [reseller]), /Not authorized/);
+  });
+  for (const who of [freelancer, otherReseller]) {
+    await asUser(who, async (c) => {
+      // As migrated: the browser role has no write grant on the table.
+      assert.match(await refusal(c, 'update reseller_settings set allow_freelancer_self_withdraw = true where reseller_id = $1', [reseller]), /permission denied/);
+      assert.match(await refusal(c, 'insert into reseller_settings(reseller_id, allow_freelancer_self_withdraw) values ($1, true)', [who]), /permission denied/);
+      // And if a grant ever came back, RLS still allows no write at all.
+      await c.query('reset role');
+      await c.query('grant insert, update on reseller_settings to authenticated');
+      await c.query('set local role authenticated');
+      const upd = await c.query('update reseller_settings set allow_freelancer_self_withdraw = true where reseller_id = $1', [reseller]);
+      assert.equal(upd.rowCount, 0);
+      assert.match(await refusal(c, 'insert into reseller_settings(reseller_id, allow_freelancer_self_withdraw) values ($1, true)', [who]), /row-level security/);
+      // Reading: a reseller sees only their own row; a freelancer sees none.
+      const seen = (await c.query('select reseller_id from reseller_settings')).rows.map((r) => r.reseller_id);
+      assert.deepEqual(seen, who === otherReseller ? [otherReseller] : []);
+    }, { browser: true });
+  }
+  assert.equal((await db.query('select allow_freelancer_self_withdraw as v from reseller_settings where reseller_id = $1', [reseller])).rows[0].v, false);
+});
+
+test('fee hierarchy: global default, then the reseller team fee, then the account override', async () => {
+  const admin = await makeAdmin();
+  const reseller = await makeReseller();
+  const freelancer = await makeFreelancer(reseller, { earned: 100 });
+  const solo = await makeFreelancer(null, { earned: 100 });
+  await db.query('insert into reseller_settings(reseller_id, allow_freelancer_self_withdraw) values ($1, true)', [reseller]);
+  const w = service(fakeBreez());
+  const quoteFee = async (u) => {
+    const q = await w.quote({ userId: u, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '20' });
+    return { pct: Number(q.feePercent), platform: q.platformFeeUsd, send: q.sendUsd };
+  };
+
+  // Level 3, the global default (0% since 0100): no platform fee at all.
+  assert.deepEqual(await fee(freelancer), { pct: 0, source: 'global' });
+  assert.deepEqual(await quoteFee(freelancer), { pct: 0, platform: '0.00', send: '20.00' });
+
+  // A non-zero global default, set by an admin. Committed briefly for the
+  // quote; restored in finally.
+  const { rows: [g] } = await db.query(`select value from app_settings where key = 'default_withdrawal_fee_percent'`);
+  try {
+    await asUser(admin, async (c) => {
+      await c.query('select admin_set_default_withdrawal_fee(2)');
+      assert.equal(Number((await c.query('select resolve_withdrawal_fee($1) as f', [freelancer])).rows[0].f), 2);
+    });
+    await db.query(`update app_settings set value = '{"percent": 2}' where key = 'default_withdrawal_fee_percent'`);
+    assert.deepEqual(await fee(freelancer), { pct: 2, source: 'global' });
+    assert.deepEqual(await fee(solo), { pct: 2, source: 'global' });
+    assert.deepEqual(await quoteFee(solo), { pct: 2, platform: '0.40', send: '19.60' });
+
+    // Level 2, the reseller team fee, set by an admin. Freelancers on the
+    // team only: the reseller's own account and a solo freelancer keep the
+    // global default.
+    await asUser(admin, async (c) => {
+      assert.equal(Number((await c.query('select admin_set_reseller_withdrawal_fee($1, 1.5) as f', [reseller])).rows[0].f), 1.5);
+    });
+    await db.query('update reseller_settings set team_withdrawal_fee_percent = 1.5 where reseller_id = $1', [reseller]);
+    assert.deepEqual(await fee(freelancer), { pct: 1.5, source: 'reseller' });
+    assert.deepEqual(await fee(reseller), { pct: 2, source: 'global' });
+    assert.deepEqual(await fee(solo), { pct: 2, source: 'global' });
+    assert.deepEqual(await quoteFee(freelancer), { pct: 1.5, platform: '0.30', send: '19.70' });
+    // The reseller can see their team fee; the freelancer sees only the result.
+    const rv = await asUser(reseller, async (c) => (await c.query('select my_withdraw_settings() as s')).rows[0].s, { browser: true });
+    assert.equal(Number(rv.reseller.team_withdrawal_fee_percent), 1.5);
+    assert.equal(Number(rv.global_fee_percent), 2);
+    const fv = await asUser(freelancer, async (c) => (await c.query('select my_withdraw_settings() as s')).rows[0].s, { browser: true });
+    assert.equal(Number(fv.fee_percent), 1.5);
+    assert.equal(fv.fee_source, 'reseller');
+
+    // Level 1, the account's own override, beats both, including an explicit 0.
+    await asUser(admin, async (c) => { await c.query('select admin_update_creator_fee($1, 0.5)', [freelancer]); });
+    await db.query('update profiles set withdrawal_fee_percent = 0.5 where id = $1', [freelancer]);
+    assert.deepEqual(await fee(freelancer), { pct: 0.5, source: 'account' });
+    assert.deepEqual(await quoteFee(freelancer), { pct: 0.5, platform: '0.10', send: '19.90' });
+    await db.query('update profiles set withdrawal_fee_percent = 0 where id = $1', [freelancer]);
+    assert.deepEqual(await fee(freelancer), { pct: 0, source: 'account' });
+
+    // Clearing the override (NULL) falls back to the team fee; clearing the
+    // team fee falls back to the global default.
+    await asUser(admin, async (c) => {
+      await c.query('select admin_update_creator_fee($1, null)', [freelancer]);
+      assert.equal((await c.query('select withdrawal_fee_percent from profiles where id = $1', [freelancer])).rows[0].withdrawal_fee_percent, null);
+      await c.query('select admin_set_reseller_withdrawal_fee($1, null)', [reseller]);
+      assert.equal(Number((await c.query('select resolve_withdrawal_fee($1) as f', [freelancer])).rows[0].f), 2);
+    });
+    await db.query('update profiles set withdrawal_fee_percent = null where id = $1', [freelancer]);
+    assert.deepEqual(await fee(freelancer), { pct: 1.5, source: 'reseller' });
+
+    // Every SQL path stores the resolved fee: manual request, reseller
+    // team cash-out and auto-queue.
+    await asUser(freelancer, async (c) => {
+      assert.equal((await c.query(`select fee_percent::text, amount_after_fee::text from request_withdrawal(10, 'bkash', '01711000000')`)).rows[0].fee_percent, '1.50');
+    });
+    await asUser(reseller, async (c) => {
+      const r = (await c.query(`select fee_percent::text, amount_after_fee::text from reseller_request_withdrawal_for($1, 10, 'bkash', '01711000000')`, [freelancer])).rows[0];
+      assert.equal(r.fee_percent, '1.50');
+      assert.equal(Number(r.amount_after_fee), 9.85);
+    });
+    await asUser(admin, async (c) => {
+      await c.query(`update profiles set auto_withdraw_enabled = true, default_withdrawal_method = 'bkash', wallet_bkash = '01711000000' where id = $1`, [solo]);
+      const id = (await c.query('select system_queue_withdrawal($1) as id', [solo])).rows[0].id;
+      assert.equal((await c.query('select fee_percent::text from withdrawals where id = $1', [id])).rows[0].fee_percent, '2.00');
+    });
+
+    // A team fee change between quote and confirm is refused, nothing sent.
+    const breez = fakeBreez();
+    const w2 = service(breez);
+    const q = await w2.quote({ userId: freelancer, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '20' });
+    await db.query('update reseller_settings set team_withdrawal_fee_percent = 3 where reseller_id = $1', [reseller]);
+    await assert.rejects(w2.confirm({ userId: freelancer, quoteId: q.quoteId }), /Withdrawal fee changed/);
+    assert.equal(breez.calls.send, 0);
+  } finally {
+    await db.query(`update app_settings set value = $1 where key = 'default_withdrawal_fee_percent'`, [g.value]);
+  }
+});
+
+test('only an admin sets fees; a freelancer cannot change their own fee and a reseller cannot set a team fee', async () => {
+  const reseller = await makeReseller();
+  const freelancer = await makeFreelancer(reseller);
+  for (const who of [reseller, freelancer]) {
+    await asUser(who, async (c) => {
+      assert.match(await refusal(c, 'select admin_set_reseller_withdrawal_fee($1, 0)', [reseller]), /Not authorized/);
+      assert.match(await refusal(c, 'select admin_set_default_withdrawal_fee(0)'), /Not authorized/);
+      assert.match(await refusal(c, 'select admin_update_creator_fee($1, 0)', [freelancer]), /Not authorized/);
+      assert.match(await refusal(c, 'select admin_list_reseller_settings()'), /Not authorized/);
+      assert.match(await refusal(c, 'select admin_withdraw_fee_overview()'), /Not authorized/);
+    });
+  }
+  // The profile guard stops a direct write to the override.
+  await asUser(freelancer, async (c) => {
+    assert.ok(await refusal(c, 'update profiles set withdrawal_fee_percent = 0 where id = $1', [freelancer]));
+  });
+});
+
+test('the browser roles cannot call the fee and switch resolvers for other accounts', async () => {
+  const { rows: r } = await db.query(`
+    select p.proname, has_function_privilege('authenticated', p.oid, 'execute') as auth, has_function_privilege('anon', p.oid, 'execute') as anon,
+           has_function_privilege('service_role', p.oid, 'execute') as service
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname in ('resolve_withdrawal_fee', 'withdrawal_fee_resolution', 'self_withdraw_allowed', 'reseller_of')
+     order by 1`);
+  assert.deepEqual(r.map((x) => [x.proname, x.auth, x.anon, x.service]), [
+    ['reseller_of', false, false, true],
+    ['resolve_withdrawal_fee', false, false, true],
+    ['self_withdraw_allowed', false, false, true],
+    ['withdrawal_fee_resolution', false, false, true],
+  ]);
 });

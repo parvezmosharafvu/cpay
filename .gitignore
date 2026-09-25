@@ -16,3 +16,5 @@ ledger-backups/
 .vscode/settings.json
 
 supabase/.temp/
+
+__pycache__/

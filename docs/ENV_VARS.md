@@ -9,8 +9,15 @@ platform's dashboard.
 injected automatically into every function. The rest you add yourself under
 Dashboard → Edge Functions → Secrets (they are project-wide, not per-function).
 
-Payment provider secrets: none yet. Breez SDK Spark replaces the removed
-provider (TODO(breez)).
+Used by `create-invoice` and `health`:
+
+- [ ] `PAYMENT_SERVICE_URL` — base URL of the payment service
+      (`payment-service/`), e.g. `https://pay.internal.example`.
+- [ ] `PAYMENT_SERVICE_SECRET` — long random string, the same value the
+      payment service has. Sent as `Authorization: Bearer`.
+
+The payment service's own settings (wallet mnemonic, database URL) are in
+`payment-service/.env.example`. The mnemonic never goes into Supabase.
 
 Used by `daily-report` and `ledger-backup`:
 

@@ -25,7 +25,8 @@ change to the previous production project.
 
 ## Payment provider and events
 
-- [ ] CPAY has its own payment provider wallet and credentials (TODO(breez)).
+- [ ] CPAY has its own mainnet Breez wallet (mnemonic stored offline) and
+  API key, and the custody decision is made.
 - [ ] Invoice creation, settlement, expiry and duplicate event delivery
   passed in staging.
 - [ ] Public payment and QR invoice controls pass keyboard/screen-reader

@@ -130,11 +130,11 @@ do not edit `node_modules` or commit generated secrets.
 
 ## Payments come after onboarding
 
-The payment provider is being rebuilt on Breez SDK Spark (TODO(breez)).
-Until it lands, `create-invoice` answers 503 and withdrawals are paid by
-hand and marked paid in the admin panel. When it lands, test invoice
-creation, settlement, expiry and duplicate event delivery in staging
-before any withdrawal testing. On-chain withdrawals remain disabled
+Payments run on Breez SDK Spark through `payment-service/`. Receiving
+is proven on the Breez regtest network; withdrawals are still paid by
+hand and marked paid in the admin panel. Test invoice creation,
+settlement, expiry and duplicate event delivery in staging with small
+mainnet amounts before any withdrawal testing. On-chain withdrawals remain disabled
 until address validation, provider behavior, fees, confirmations, retry,
 idempotency and an emergency stop are verified in staging.
 

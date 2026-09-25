@@ -8,8 +8,9 @@ Nagad, or Binance with an admin-reviewed payout flow.
 
 - **Frontend:** Vanilla HTML/CSS/JS + Supabase JS v2 (no build step)
 - **Backend:** Supabase — Postgres, Row Level Security, Edge Functions
-- **Payments:** being rebuilt on Breez SDK Spark (TODO(breez)); invoice
-  creation answers 503 until then
+- **Payments:** Breez SDK Spark, through `payment-service/` (a small
+  Node 22 process holding the cpay wallet). Lightning receive works on the
+  Breez regtest network; withdrawals are still paid by hand
 - **Edge routing:** Cloudflare Worker — renders correct link-preview
   metadata for WhatsApp/Telegram/Facebook when a payment link is shared
 
@@ -35,16 +36,18 @@ public/                          → static site root
   config.example.js              → copy to config.js, fill in your keys
 
 supabase/
-  migrations/                    → run in numeric order, 0001 → 0091
+  migrations/                    → run in numeric order, 0001 → 0094
   functions/
-    create-invoice/              → validates and prices an invoice for a slug (provider call stubbed)
+    create-invoice/              → validates and prices a payment, has the payment service invoice it
     admin-actions/               → admin mark-settled + withdrawal actions
     user-withdraw/               → creator-initiated withdrawal
     daily-report/                → nightly rollup into daily_stats
     ledger-backup/               → nightly ledger snapshot to a private repo
     og-image/                    → generated link-preview images
-    reconcile/                   → daily provider vs ledger comparison (stubbed)
     health/                      → system health checks + alerting
+
+payment-service/                 → Node 22 process holding the cpay Breez wallet:
+                                   invoices, payment events, catch-up, /health
 
 ci/
   bootstrap.sql                  → Supabase-shaped scaffolding for CI only.
@@ -125,9 +128,8 @@ All five run through `pg_cron` + `pg_net`, reading their secrets from Vault.
 
 | Job | When (UTC) | What it does |
 |---|---|---|
-| `cpay-health` | every 15 min | Payment provider reachable, webhooks arriving, cron alive, withdrawals not stuck. Alerts on failure. |
+| `cpay-health` | every 15 min | Payment service reachable and synced, cron alive, withdrawals not stuck. Alerts on failure. |
 | `prune-webhook-events` | 03:20 | 90-day retention on `webhook_events` |
-| `cpay-reconcile` | 04:10 | Provider vs ledger comparison; skipped until the provider exists |
 | `ledger-backup-trigger` | 11:05 | Full ledger snapshot committed to the ledger repo |
 | `daily-report-trigger` | 18:10 | Writes the `daily_stats` archive |
 
@@ -166,10 +168,6 @@ warning and carry on — nothing breaks, but nobody is told.
 # Is everything alive? (?alert=0 keeps it out of the alert channel)
 curl -H "x-cron-secret: $CRON_SECRET" \
   "$SUPABASE_URL/functions/v1/health?alert=0"
-
-# Does the provider agree with the ledger for the last week? (stubbed)
-curl -H "x-cron-secret: $CRON_SECRET" \
-  "$SUPABASE_URL/functions/v1/reconcile?days=7"
 
 # Force a ledger snapshot and verify it is complete
 curl -H "x-cron-secret: $CRON_SECRET" \

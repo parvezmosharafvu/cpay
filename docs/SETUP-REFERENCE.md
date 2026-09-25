@@ -22,9 +22,9 @@ searched when something specific breaks later.
 
 ## 1. Payment provider
 
-Not configured yet. The previous provider was removed in migration
-0093; Breez SDK Spark replaces it (TODO(breez)). Until then
-create-invoice answers 503 and withdrawals are paid by hand.
+Breez SDK Spark, run by the payment service in `payment-service/` (see
+its README). It needs `PAYMENT_SERVICE_URL` and `PAYMENT_SERVICE_SECRET`
+as Edge Function secrets (§2.1). Withdrawals are still paid by hand.
 
 ---
 
@@ -46,6 +46,8 @@ Dashboard → Edge Functions → Secrets
 | `ALERT_TELEGRAM_BOT_TOKEN` | optional | From @BotFather |
 | `ALERT_TELEGRAM_CHAT_ID` | optional | Negative number for a group |
 | `ALERT_ON_SETTLED` | optional | `false` silences per-payment alerts |
+| `PAYMENT_SERVICE_URL` | yes | Base URL of the payment service |
+| `PAYMENT_SERVICE_SECRET` | yes | Shared bearer secret, same value as the service |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are
 injected automatically — do not set them by hand.
@@ -93,9 +95,8 @@ scheduling ones afterwards.
 
 | Job | Schedule (UTC) | What it does |
 |---|---|---|
-| `cpay-health` | `*/15 * * * *` | 5 checks; alerts and returns 503 when unhealthy |
+| `cpay-health` | `*/15 * * * *` | 4 checks; alerts and returns 503 when unhealthy |
 | `prune-webhook-events` | `20 3 * * *` | 90-day retention on the dedup table |
-| `cpay-reconcile` | `10 4 * * *` | Provider vs ledger comparison; skipped until the provider exists |
 | `ledger-backup-trigger` | `5 11 * * *` | Commits a redacted snapshot to GitHub |
 | `daily-report-trigger` | `10 18 * * *` | Writes the 5pm–5pm rollup into `daily_stats` |
 
@@ -203,7 +204,6 @@ Sequence matters — several steps fail silently if done out of order.
    supabase functions deploy daily-report   --no-verify-jwt
    supabase functions deploy ledger-backup  --no-verify-jwt
    supabase functions deploy og-image       --no-verify-jwt
-   supabase functions deploy reconcile      --no-verify-jwt
    supabase functions deploy health         --no-verify-jwt
    ```
 6. **Payment provider** configured (§1)

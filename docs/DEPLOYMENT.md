@@ -16,7 +16,6 @@
       supabase functions deploy daily-report    --no-verify-jwt
       supabase functions deploy ledger-backup   --no-verify-jwt
       supabase functions deploy og-image        --no-verify-jwt
-      supabase functions deploy reconcile       --no-verify-jwt
       supabase functions deploy health          --no-verify-jwt
 
       Why the flags differ:
@@ -45,8 +44,11 @@
 
 ## 2. Payment provider
 
-- [ ] Not available yet: Breez SDK Spark replaces the removed provider
-      (TODO(breez)). Until then invoices cannot be created.
+- [ ] Run the payment service (`payment-service/README.md`) on a host with
+      a persistent disk, and set `PAYMENT_SERVICE_URL` and
+      `PAYMENT_SERVICE_SECRET` as Edge Function secrets.
+- [ ] Mainnet needs a Breez API key, and the custody question (cpay holds
+      creators' money in its wallet) settled first.
 
 ## 3. Frontend hosting (Cloudflare Pages direct upload or GitHub Pages)
 

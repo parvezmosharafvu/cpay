@@ -49,9 +49,11 @@ All of the above belong in Supabase Edge Function secrets. See `docs/ENV_VARS.md
   every one of them before rendering. If you add a new field to that panel,
   escape it.
 - **Payment events must stay idempotent.** `payments.invoice_ref` is
-  UNIQUE and `webhook_events.delivery_id` is kept for the next provider's
-  event receiver (TODO(breez)), so retries and concurrent duplicate
-  deliveries can be acknowledged without reprocessing.
+  UNIQUE and every received Breez payment goes through
+  `settle_breez_payment()` (0094), which logs it to
+  `webhook_events.delivery_id` first and settles only a row that is not
+  settled yet. Replays and the payment service's catch-up credit nothing
+  twice.
   Amounts additionally cannot be negative (or zero when requested) at the
   database level — CHECK constraints, not just application code.
 - **Browser origins are restricted on the money endpoints.** `user-withdraw`

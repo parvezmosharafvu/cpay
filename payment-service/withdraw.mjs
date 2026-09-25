@@ -156,6 +156,41 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     return parsed.address;
   }
 
+  // The Breez side of a stablecoin send, with no ledger in it: re-list the
+  // routes for the real address so the route and its limits are the ones the
+  // provider will accept, check the platform wallet covers the sats, and
+  // prepare. Creator withdrawals and admin wallet sends both quote through here.
+  async function prepareCrossChain({ route, address, amountSat, lowBalanceMessage, failPrefix }) {
+    const pairs = await breez.getCrossChainRoutes({ type: 'send', addressDetails: { address, addressFamily: route.family } });
+    const pair = pairs.find((p) => routeId(p) === route.id);
+    if (!pair) throw new UserError(422, 'That coin and network is not available for this address right now');
+    const { balanceSats } = await breez.getInfo({ ensureSynced: false });
+    if (Number(balanceSats) < amountSat) {
+      log({ event: 'quote', error: 'platform wallet balance too low', balanceSats: Number(balanceSats), amountSat });
+      throw new UserError(503, lowBalanceMessage);
+    }
+    let prepared;
+    try {
+      prepared = await breez.prepareSendPayment({
+        paymentRequest: { type: 'crossChain', address, route: pair, maxSlippageBps: MAX_SLIPPAGE_BPS },
+        amount: BigInt(amountSat),
+        feePolicy: 'feesIncluded',
+      });
+    } catch (e) {
+      throw new UserError(422, `${failPrefix}: ${e?.message ?? e}`);
+    }
+    const m = prepared.paymentMethod;
+    if (m?.type !== 'crossChainAddress') throw new Error(`unexpected quote type ${m?.type}`);
+    const receiveMinBase = (BigInt(m.estimatedOut) * BigInt(10000 - MAX_SLIPPAGE_BPS)) / 10000n;
+    return {
+      pair, prepared,
+      expiresAtMs: Date.parse(m.expiresAt),
+      receive: fromBaseUnits(m.estimatedOut, pair.decimals),
+      receiveMin: fromBaseUnits(receiveMinBase, pair.decimals),
+      providerFee: { amount: fromBaseUnits(m.feeAmount, pair.decimals), asset: pair.asset },
+    };
+  }
+
   async function quote({ userId, routeId: id, address, amountUsd }) {
     const amountCents = parseAmountCents(amountUsd);
     if (amountCents === null) throw new UserError(400, 'Enter an amount in dollars and cents');
@@ -176,36 +211,14 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
       throw new UserError(422, `The maximum for ${route.asset} on ${route.chain} is $${route.maxUsd.toFixed(2)}`);
     }
 
-    // Re-list for the real address so the route and its limits are the ones
-    // the provider will accept for it.
-    const pairs = await breez.getCrossChainRoutes({ type: 'send', addressDetails: { address: dest, addressFamily: route.family } });
-    const pair = pairs.find((p) => routeId(p) === id);
-    if (!pair) throw new UserError(422, 'That coin and network is not available for this address right now');
-
     const rate = await btcUsdRate();
     const amountSat = Math.floor((sendCents * 1e6) / rate);
-    const { balanceSats } = await breez.getInfo({ ensureSynced: false });
-    if (Number(balanceSats) < amountSat) {
-      log({ event: 'quote', error: 'platform wallet balance too low', balanceSats: Number(balanceSats), amountSat });
-      throw new UserError(503, 'Instant withdrawals are temporarily unavailable. Try again later.');
-    }
-    let prepared;
-    try {
-      prepared = await breez.prepareSendPayment({
-        paymentRequest: { type: 'crossChain', address: dest, route: pair, maxSlippageBps: MAX_SLIPPAGE_BPS },
-        amount: BigInt(amountSat),
-        feePolicy: 'feesIncluded',
-      });
-    } catch (e) {
-      throw new UserError(422, `Breez could not quote this withdrawal: ${e?.message ?? e}`);
-    }
-    const m = prepared.paymentMethod;
-    if (m?.type !== 'crossChainAddress') throw new Error(`unexpected quote type ${m?.type}`);
-
-    const receive = fromBaseUnits(m.estimatedOut, pair.decimals);
-    const receiveMinBase = (BigInt(m.estimatedOut) * BigInt(10000 - MAX_SLIPPAGE_BPS)) / 10000n;
+    const { pair, prepared, expiresAtMs, receive, receiveMin, providerFee } = await prepareCrossChain({
+      route, address: dest, amountSat,
+      lowBalanceMessage: 'Instant withdrawals are temporarily unavailable. Try again later.',
+      failPrefix: 'Breez could not quote this withdrawal',
+    });
     const breezFeeUsd = (sendCents / 100 - Number(receive)).toFixed(6);
-    const expiresAtMs = Date.parse(m.expiresAt);
     const quoteId = randomUUID();
     const view = {
       quoteId,
@@ -219,9 +232,9 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
       amountSat,
       btcUsdRate: rate,
       breezFeeUsd,
-      providerFee: { amount: fromBaseUnits(m.feeAmount, pair.decimals), asset: pair.asset },
+      providerFee,
       receive,
-      receiveMin: fromBaseUnits(receiveMinBase, pair.decimals),
+      receiveMin,
       asset: pair.asset,
       maxSlippageBps: MAX_SLIPPAGE_BPS,
     };
@@ -368,7 +381,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
   }
 
   return {
-    listRoutes, quote, confirm, reconcile, onPayment,
+    listRoutes, quote, confirm, reconcile, onPayment, validateAddress, prepareCrossChain, findPayment,
     routeCacheInfo: () => ({ at: routeCache.at ? new Date(routeCache.at).toISOString() : null, count: routeCache.routes.length, error: routeCache.error }),
   };
 }

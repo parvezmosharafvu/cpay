@@ -40,10 +40,10 @@ order by key;
 -- The RLS policies themselves, as this database actually has them —
 -- not as the migration files say they should be
 -- ============================================================
-select polname, cmd, permissive, qual, with_check
+select policyname, cmd, permissive, qual, with_check
 from pg_policies
 where tablename = 'app_settings'
-order by polname;
+order by policyname;
 
 -- Expect:
 --   "settings admin write"   cmd=ALL    qual=is_admin()

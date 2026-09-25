@@ -87,8 +87,7 @@ headers: { "Content-Type": "application/json", ...cors },
 const VALID_METHODS = ["bkash", "nagad", "binance", "lightning", "bank"];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Calls the payment service, which holds the Breez wallet. Its error bodies
-// ({error, quote?}) are written for the user and passed through unchanged.
+// Calls the payment service, which holds the platform wallet.
 async function paymentService(path: string, init: { method: string; body?: unknown }, timeoutMs: number) {
   const res = await fetch(`${PAYMENT_SERVICE_URL}${path}`, {
     method: init.method,
@@ -98,6 +97,52 @@ async function paymentService(path: string, init: { method: string; body?: unkno
   });
   const payload = await res.json().catch(() => ({}));
   return { status: res.status, payload };
+}
+
+// What the browser may see. Freelancers and resellers get an allowlisted
+// copy of each payment-service answer: no processor name, payment ids, sats,
+// rates, provider or admin notes, and the swap plus network fee travels as
+// networkFeeUsd. A field the service adds later stays server-side until it
+// is added here.
+type Json = Record<string, unknown>;
+const str = (v: unknown) => (v === undefined || v === null ? null : String(v));
+const PROVIDER_WORDS = /breez|spark|sdk|orchestra|boltz|internal error/i;
+const GENERIC_ERROR = "Instant withdrawals are temporarily unavailable. Try again later.";
+
+// Service error messages are written for users, but anything that names the
+// processor or looks like a raw library error is replaced.
+function publicError(payload: Json | null | undefined, fallback = GENERIC_ERROR): string {
+  const msg = typeof payload?.error === "string" ? payload.error : "";
+  if (!msg || msg.length > 200 || PROVIDER_WORDS.test(msg)) return fallback;
+  return msg;
+}
+
+function publicRoute(r: Json) {
+  return {
+    id: str(r.id), asset: str(r.asset), chain: str(r.chain), family: str(r.family),
+    minUsd: r.minUsd ?? null, maxUsd: r.maxUsd ?? null,
+  };
+}
+
+function publicQuote(q: Json) {
+  const route = (q.route ?? {}) as Json;
+  return {
+    quoteId: str(q.quoteId), expiresAt: str(q.expiresAt),
+    route: { id: str(route.id), asset: str(route.asset), chain: str(route.chain), family: str(route.family) },
+    address: str(q.address), asset: str(q.asset),
+    amountUsd: str(q.amountUsd), feePercent: str(q.feePercent), platformFeeUsd: str(q.platformFeeUsd),
+    sendUsd: str(q.sendUsd), networkFeeUsd: str(q.networkFeeUsd),
+    receive: str(q.receive), receiveMin: str(q.receiveMin), maxSlippageBps: q.maxSlippageBps ?? null,
+  };
+}
+
+function publicWithdrawal(w: Json) {
+  return {
+    withdrawalId: str(w.withdrawalId), status: str(w.status),
+    amountUsd: str(w.amountUsd), feePercent: str(w.feePercent), sendUsd: str(w.sendUsd),
+    asset: str(w.asset), chain: str(w.chain), address: str(w.address), amountOut: str(w.amountOut),
+    requestedAt: str(w.requestedAt), processedAt: str(w.processedAt),
+  };
 }
 
 type Body = {
@@ -134,7 +179,8 @@ Deno.serve(async (req) => {
     try {
       if (action === "routes") {
         const { status, payload } = await paymentService("/withdraw/routes", { method: "GET" }, 15000);
-        return json(status === 200 ? { routes: payload.routes ?? [] } : { error: "Could not load networks" }, status === 200 ? 200 : 502, cors);
+        const routes = Array.isArray(payload.routes) ? payload.routes.map(publicRoute) : [];
+        return json(status === 200 ? { routes } : { error: "Could not load networks" }, status === 200 ? 200 : 502, cors);
       }
       if (action === "quote") {
         const amount = String(body.amount ?? "").trim();
@@ -153,14 +199,18 @@ Deno.serve(async (req) => {
           method: "POST",
           body: { userId: user.id, routeId: String(body.routeId ?? ""), address: String(body.address ?? "").trim(), amountUsd: amount },
         }, 30000);
-        return json(payload, status, cors);
+        if (status !== 200) return json({ error: publicError(payload, "Could not get a quote. Try again.") }, status, cors);
+        return json(publicQuote(payload), 200, cors);
       }
       const quoteId = String(body.quoteId ?? "");
       if (!UUID.test(quoteId)) return json({ error: "Get a quote first" }, 400, cors);
       const { status, payload } = await paymentService("/withdraw/confirm", {
         method: "POST", body: { userId: user.id, quoteId },
       }, 45000);
-      return json(payload, status, cors);
+      if (status === 200) return json(publicWithdrawal(payload), 200, cors);
+      // An expired quote comes back with a fresh one to show.
+      const fresh = payload?.quote ? { quote: publicQuote(payload.quote as Json) } : {};
+      return json({ error: publicError(payload, "The withdrawal did not go through. Try again."), ...fresh }, status, cors);
     } catch (e) {
       console.error(`payment service ${action} failed:`, e);
       // A confirm that timed out may still have reserved and sent. The row

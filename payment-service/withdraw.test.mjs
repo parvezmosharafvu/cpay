@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
-import { createWithdrawals, splitFee, outcomeOf, fromBaseUnits, routeId, failedBeforeSend, LEAF_RETRY_MS } from './withdraw.mjs';
+import { createWithdrawals, splitFee, outcomeOf, fromBaseUnits, routeId, failedBeforeSend, networkFeeUsd, LEAF_RETRY_MS } from './withdraw.mjs';
 
 // Runs against a database with every migration applied. Unlike
 // ledger.test.mjs this commits, because confirm and crash recovery need
@@ -177,7 +177,7 @@ test('the route catalog lists BTC-funded stablecoin routes from every family and
   assert.equal(breez.calls.routes, 3);
 });
 
-test('quote shows the platform fee, the Breez fee and what arrives', async () => {
+test('quote shows the platform fee, the network fee and what arrives', async () => {
   const user = await makeUser({ earned: 200 });
   const w = service(fakeBreez());
   const q = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '120' });
@@ -187,7 +187,7 @@ test('quote shows the platform fee, the Breez fee and what arrives', async () =>
   assert.equal(q.sendUsd, '116.40');
   assert.equal(q.amountSat, 116_400);
   assert.equal(q.receive, '115.88');
-  assert.equal(q.breezFeeUsd, '0.520000');
+  assert.equal(q.networkFeeUsd, '0.52');
   assert.deepEqual(q.providerFee, { amount: '0.52', asset: 'USDT' });
   assert.equal(q.receiveMin, '114.7212');
   assert.ok(Date.parse(q.expiresAt) > Date.now());
@@ -233,7 +233,7 @@ test('confirm reserves, sends with the withdrawal id as idempotency key, and del
   assert.equal(await w.onPayment({ id: r.withdrawalId, paymentType: 'send' }), 'paid');
   const [paid] = await rows(user);
   assert.equal(paid.status, 'paid');
-  assert.equal(paid.breez_payment_id, r.withdrawalId);
+  assert.equal(paid.payout_ref, r.withdrawalId);
   assert.equal(paid.amount_out, '115.90123400');
   assert.deepEqual(await balance(user), { queued: '120.00000000', withdrawn: '116.40000000', available: '80.00000000' });
 });
@@ -361,7 +361,7 @@ test('crash before any transfer: the orphan is refunded once, only after its quo
   await later.reconcile({ synced: true });
   const [row] = await rows(user);
   assert.equal(row.status, 'failed');
-  assert.match(row.admin_note, /No Breez payment found/);
+  assert.match(row.admin_note, /No payment found/);
   assert.equal((await balance(user)).available, '100.00000000');
   await later.reconcile({ synced: true });
   assert.equal((await balance(user)).available, '100.00000000');
@@ -495,7 +495,7 @@ test('BSC USDT has 18 decimals: quote, stored estimate and delivered amount are 
   assert.equal(q.receive, '5.38');
   assert.equal(q.receiveMin, '5.3262');
   assert.deepEqual(q.providerFee, { amount: '0.52', asset: 'USDT' });
-  assert.equal(q.breezFeeUsd, '0.520000');
+  assert.equal(q.networkFeeUsd, '0.52');
   const r = await w.confirm({ userId: user, quoteId: q.quoteId });
   assert.equal((await rows(user))[0].amount_out, '5.38000000');
   breez.deliver(r.withdrawalId, 'completed', 5_379_123_456_789_012_345n, 18);
@@ -582,4 +582,45 @@ test('outcomeOf maps Breez payment states', () => {
   assert.equal(routeId({ provider: 'orchestra', chain: 'tron', asset: 'USDT' }), 'orchestra:tron:usdt');
   assert.equal(failedBeforeSend(new Error(LEAF_ERROR)), true);
   assert.equal(failedBeforeSend(new Error('Network error: connection reset')), false);
+});
+
+test('networkFeeUsd is sendUsd minus what arrives, exact at the coin decimals', () => {
+  assert.equal(networkFeeUsd(11_640, '115880000', 6), '0.52');
+  assert.equal(networkFeeUsd(590, '5380000000000000000', 18), '0.52');
+  assert.equal(networkFeeUsd(1_000, '9876543', 6), '0.123457');
+  // A quote that delivers more than it was sent never shows a negative fee.
+  assert.equal(networkFeeUsd(1_000, '10000001', 6), '0');
+});
+
+test('a new account gets a 0% withdrawal fee, and its quote has no platform fee', async () => {
+  const id = randomUUID();
+  users.push(id);
+  await db.query(`insert into auth.users(id, email) values ($1, $2)`, [id, `new-${id}@test.invalid`]);
+  const { rows: [p] } = await db.query('select withdrawal_fee_percent::text as fee from profiles where id = $1', [id]);
+  assert.equal(Number(p.fee), 0);
+  await db.query(`update profiles set account_status = 'active' where id = $1`, [id]);
+  await db.query(
+    `insert into payments(user_id, amount_requested, amount_settled, status, settled_at, expires_at)
+     values ($1, 50, 50, 'settled', now(), now() + interval '1 hour')`, [id],
+  );
+  const q = await service(fakeBreez()).quote({ userId: id, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '20' });
+  assert.equal(Number(q.feePercent), 0);
+  assert.equal(q.platformFeeUsd, '0.00');
+  assert.equal(q.sendUsd, '20.00');
+  assert.equal(q.networkFeeUsd, '0.52');
+  assert.equal(q.receive, '19.48');
+  const { rows: [s] } = await db.query(`select value->>'percent' as pct from app_settings where key = 'default_withdrawal_fee_percent'`);
+  assert.equal(Number(s.pct), 0);
+});
+
+test('a quote the SDK refuses reaches the user as a generic message, with the detail only in the log', async () => {
+  const user = await makeUser({ earned: 50, fee: 0 });
+  const breez = fakeBreez();
+  breez.prepareSendPayment = async () => { throw new Error('Breez SDK: Orchestra quote failed: upstream 500'); };
+  const w = service(breez);
+  await assert.rejects(
+    w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '20' }),
+    (e) => e.status === 422 && !/breez|sdk|orchestra/i.test(e.message) && /could not be quoted/.test(e.message),
+  );
+  assert.ok(w.log.some((l) => l.error === 'prepare failed' && /Orchestra quote failed/.test(l.detail)));
 });

@@ -130,7 +130,7 @@ end $$;
 -- Duplicate of the index behind the UNIQUE constraint above.
 drop index if exists idx_payments_btcpay;
 comment on column payments.invoice_ref is
-  'Payment processor reference, unique. BTCPay invoice id on rows created before 0093; the Lightning payment hash (hex) on Breez rows. The UNIQUE constraint is what stops a retried event from recording a payment twice.';
+  'Payment processor reference, unique. The previous provider''s invoice id on rows created before 0093; the Lightning payment hash (hex) on newer rows. The UNIQUE constraint is what stops a retried event from recording a payment twice.';
 
 
 -- ---------- 5. Release gates: provider-neutral category ----------
@@ -759,3 +759,40 @@ begin
 end;
 $function$
 ;
+
+
+-- ---------- 9. Database comments that still named the old provider ----------
+-- Column comments and function bodies live in the database, not only in the
+-- migration files, so these are restated without it. Behaviour unchanged.
+comment on column payments.buyer_amount is
+  'What the payer typed on the payment page, before markup. amount_requested / amount_settled stay the actual charge including markup, which the balance and the invoice are based on.';
+
+-- Body identical to 0057; only the comment changes.
+create or replace function guard_withdrawal_updates()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    return new;  -- service role / definer functions
+  end if;
+  if new.user_id          is distinct from old.user_id
+  or new.amount_requested is distinct from old.amount_requested
+  or new.fee_percent      is distinct from old.fee_percent
+  or new.amount_after_fee is distinct from old.amount_after_fee
+  or new.destination      is distinct from old.destination
+  then
+    raise exception 'Withdrawal amounts and destination cannot be edited';
+  end if;
+  -- Once a payout is in flight (processing) or done (paid), nothing
+  -- reachable from a browser session may move the status away from that.
+  -- Only the service role, used by the functions that own this
+  -- transition, bypasses the trigger via the auth.uid() is null check.
+  if old.status in ('paid', 'processing') and new.status is distinct from old.status then
+    raise exception 'A paid or processing withdrawal cannot be reopened';
+  end if;
+  return new;
+end;
+$$;

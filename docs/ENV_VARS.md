@@ -9,7 +9,7 @@ platform's dashboard.
 injected automatically into every function. The rest you add yourself under
 Dashboard → Edge Functions → Secrets (they are project-wide, not per-function).
 
-Used by `create-invoice` and `health`:
+Used by `create-invoice`, `user-withdraw`, `admin-actions` and `health`:
 
 - [ ] `PAYMENT_SERVICE_URL` — base URL of the payment service
       (`payment-service/`), e.g. `https://pay.internal.example`.

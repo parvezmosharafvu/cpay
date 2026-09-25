@@ -75,6 +75,11 @@ All of the above belong in Supabase Edge Function secrets. See `docs/ENV_VARS.md
   live on creators' own domains) and is defended by its per-link rate
   limit instead. `public/_headers` adds CSP and `frame-ancestors 'none'`
   (anti-clickjacking) to every page.
+- **Users never see the payment processor.** `user-withdraw` returns an
+  allowlisted copy of each payment-service answer (no processor names,
+  payment ids, sats, rates or admin notes) and replaces raw SDK error text
+  with a generic message; `ci/check_frontend.py` fails if the processor's
+  name appears in any non-admin page. See `docs/ARCHITECTURE.md`.
 
 ## After cloning or forking
 

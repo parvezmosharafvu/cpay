@@ -141,8 +141,8 @@ let merchantName = '';
 
 // Two ways out of this page on a phone:
 //   * Open Cash App: Cash App's universal link with the invoice in it,
-//     https://cash.app/launch/lightning/<bolt11>, the link Breez's own
-//     buyBitcoin returns (sdk-doc-spark.breez.technology/guide/buy_bitcoin.html).
+//     https://cash.app/launch/lightning/<bolt11> (the payment processor's
+//     documented Cash App link; see docs/ARCHITECTURE.md).
 //     It opens Cash App on the payment when the app is installed and the
 //     Cash App website when it is not, so no scheme or store fallback.
 //   * Tapping the QR: the standard `lightning:` URI, for whichever wallet
@@ -398,7 +398,7 @@ function updateTimerPill(t){
 }
 
 // Realtime, not polling — instant confirmation, no repeated HTTP calls, and
-// the browser never touches the signature-protected webhook endpoint.
+// the browser never talks to the payment service.
 function subscribeToPaymentUpdates(paymentId, amount){
   realtimeChannel = supabaseClient
     .channel('payment-' + paymentId)

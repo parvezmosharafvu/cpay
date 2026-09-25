@@ -1,5 +1,5 @@
 -- ============================================================
--- 0095: instant stablecoin withdrawals through the Breez payment service
+-- 0095: instant stablecoin withdrawals through the payment service (Breez SDK Spark)
 -- ============================================================
 -- A freelancer or reseller withdraws USDT/USDC to their own address on any
 -- chain Breez routes to. The payment service quotes the send, then on
@@ -12,6 +12,9 @@
 -- Rows already queued as usdt_bep20 keep their method and are still
 -- processed by an admin.
 --
+-- A missing withdrawal_fee_percent counts as 0% here (0100 makes 0% the
+-- default for new accounts).
+--
 -- Safe to re-run: columns and indexes use IF NOT EXISTS, constraints are
 -- dropped and re-added NOT VALID, functions are CREATE OR REPLACE.
 -- ============================================================
@@ -23,18 +26,18 @@ alter table public.withdrawals add column if not exists amount_sat bigint;
 alter table public.withdrawals add column if not exists quoted_fee numeric(18,8);
 alter table public.withdrawals add column if not exists amount_out numeric(30,8);
 alter table public.withdrawals add column if not exists quote_expires_at timestamptz;
-alter table public.withdrawals add column if not exists breez_payment_id text;
+alter table public.withdrawals add column if not exists payout_ref text;
 
 comment on column public.withdrawals.quote_id is 'Payment service quote this stablecoin withdrawal was confirmed from. Unique, so a repeated confirm returns the same row.';
 comment on column public.withdrawals.coin is 'Stablecoin delivered, e.g. USDT or USDC (method = stablecoin).';
-comment on column public.withdrawals.chain is 'Destination chain as Breez names it, e.g. tron, bsc, ethereum, arbitrum, solana.';
+comment on column public.withdrawals.chain is 'Destination chain as the payment service names it, e.g. tron, bsc, ethereum, arbitrum, solana.';
 comment on column public.withdrawals.amount_sat is 'Sats the platform wallet sent for amount_after_fee at the quoted BTC/USD rate.';
-comment on column public.withdrawals.quoted_fee is 'Breez swap and network fee in USD from the quote. Paid by the user out of amount_after_fee.';
+comment on column public.withdrawals.quoted_fee is 'Network fee (swap plus network) in USD from the quote. Paid by the user out of amount_after_fee.';
 comment on column public.withdrawals.amount_out is 'Coin units the destination receives: the quoted estimate, replaced by the delivered amount once known.';
-comment on column public.withdrawals.breez_payment_id is 'Breez payment id of the send. Equals the withdrawal id, which is the idempotency key.';
+comment on column public.withdrawals.payout_ref is 'Payment processor id of the send. Equals the withdrawal id, which is the idempotency key. Named neutrally because freelancer and reseller pages receive withdrawals rows.';
 
 create unique index if not exists withdrawals_quote_id_key on public.withdrawals(quote_id) where quote_id is not null;
-create unique index if not exists withdrawals_breez_payment_id_key on public.withdrawals(breez_payment_id) where breez_payment_id is not null;
+create unique index if not exists withdrawals_payout_ref_key on public.withdrawals(payout_ref) where payout_ref is not null;
 create index if not exists withdrawals_sending_idx on public.withdrawals(requested_at) where status = 'sending';
 
 alter table public.withdrawals drop constraint if exists withdrawals_status_check;
@@ -102,7 +105,7 @@ begin
   if v_limit.single_withdrawal_limit is not null and p_amount > v_limit.single_withdrawal_limit then raise exception 'This amount exceeds your single-withdrawal limit of $%', v_limit.single_withdrawal_limit; end if;
   select coalesce(sum(amount_requested),0) into v_used from withdrawals where user_id=v_uid and status in ('pending','approved','processing','sending','paid') and requested_at >= ((now() at time zone 'Asia/Dhaka')::date::text || ' 00:00:00')::timestamp at time zone 'Asia/Dhaka';
   if v_limit.daily_withdrawal_limit is not null and v_used+p_amount > v_limit.daily_withdrawal_limit then raise exception 'This request exceeds your daily withdrawal limit of $%', v_limit.daily_withdrawal_limit; end if;
-  select coalesce(withdrawal_fee_percent,3.0) into v_fee from profiles where id=v_uid;
+  select coalesce(withdrawal_fee_percent,0) into v_fee from profiles where id=v_uid;
   select b.available into v_available from get_balance_for(v_uid) b;
   if p_amount > v_available then raise exception 'Insufficient balance. Available: $%', round(v_available,2); end if;
   v_after:=round(p_amount*(1-v_fee/100),2);
@@ -133,7 +136,7 @@ begin
   v_amount:=least(v_available,coalesce(v_limit.single_withdrawal_limit,v_available));
   if v_limit.daily_withdrawal_limit is not null then v_amount:=least(v_amount,greatest(v_limit.daily_withdrawal_limit-v_used,0)); end if;
   if v_amount < 5 then return null; end if;
-  insert into withdrawals(user_id,amount_requested,fee_percent,amount_after_fee,method,destination,status,admin_note) values(p_user_id,v_amount,coalesce(v_profile.withdrawal_fee_percent,3.0),round(v_amount*(1-coalesce(v_profile.withdrawal_fee_percent,3.0)/100),2),v_method,trim(v_destination),'pending','Auto-queued on settlement') returning id into v_id;
+  insert into withdrawals(user_id,amount_requested,fee_percent,amount_after_fee,method,destination,status,admin_note) values(p_user_id,v_amount,coalesce(v_profile.withdrawal_fee_percent,0),round(v_amount*(1-coalesce(v_profile.withdrawal_fee_percent,0)/100),2),v_method,trim(v_destination),'pending','Auto-queued on settlement') returning id into v_id;
   return v_id;
 end; $$;
 
@@ -175,7 +178,7 @@ begin
   if v_avail is null or v_avail < p_amount then
     raise exception 'Insufficient balance. Available: $%', coalesce(v_avail,0);
   end if;
-  select coalesce(withdrawal_fee_percent, 3.0) into v_fee from profiles where id = p_user_id;
+  select coalesce(withdrawal_fee_percent, 0) into v_fee from profiles where id = p_user_id;
   v_after := round(p_amount * (1 - v_fee / 100.0), 2);
   insert into withdrawals(user_id, amount_requested, fee_percent, amount_after_fee, method, destination, status, admin_note)
   values (p_user_id, p_amount, v_fee, v_after, p_method, trim(p_destination), 'pending',
@@ -227,7 +230,7 @@ begin
   if p_amount_sat is null or p_amount_sat <= 0 then raise exception 'Quoted sats must be positive'; end if;
   if p_destination is null or length(trim(p_destination))=0 then raise exception 'Destination address is required'; end if;
   if length(trim(p_destination)) > 200 then raise exception 'Destination is too long'; end if;
-  if p_fee_percent is distinct from coalesce(v_profile.withdrawal_fee_percent,3.0)
+  if p_fee_percent is distinct from coalesce(v_profile.withdrawal_fee_percent,0)
      or p_amount_after_fee is distinct from round(p_amount*(1-p_fee_percent/100),2) then
     raise exception 'Withdrawal fee changed. Review the new quote.';
   end if;
@@ -253,7 +256,7 @@ end; $$;
 create or replace function public.finalize_stablecoin_withdrawal(
   p_id uuid,
   p_outcome text,
-  p_breez_payment_id text default null,
+  p_payout_ref text default null,
   p_amount_out numeric default null,
   p_note text default null
 ) returns text
@@ -263,7 +266,7 @@ begin
   if p_outcome not in ('paid','failed') then raise exception 'Outcome must be paid or failed'; end if;
   update withdrawals
      set status = p_outcome,
-         breez_payment_id = coalesce(p_breez_payment_id, breez_payment_id),
+         payout_ref = coalesce(p_payout_ref, payout_ref),
          amount_out = coalesce(p_amount_out, amount_out),
          admin_note = coalesce(p_note, admin_note),
          processed_at = now()

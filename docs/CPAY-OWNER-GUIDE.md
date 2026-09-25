@@ -130,8 +130,10 @@ do not edit `node_modules` or commit generated secrets.
 
 ## Payments come after onboarding
 
-Payments run on Breez SDK Spark through `payment-service/`. Receiving
-is proven on the Breez regtest network; withdrawals are still paid by
+Payments run on Breez SDK Spark through `payment-service/` (see
+`docs/ARCHITECTURE.md`). Receiving is proven on the Breez regtest network.
+Instant USDT/USDC withdrawals go out through the payment service (mainnet
+only); bKash, Nagad, Binance Pay, Lightning and bank withdrawals are paid by
 hand and marked paid in the admin panel. Test invoice creation,
 settlement, expiry and duplicate event delivery in staging with small
 mainnet amounts before any withdrawal testing. On-chain withdrawals remain disabled

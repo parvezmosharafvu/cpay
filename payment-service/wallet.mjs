@@ -5,7 +5,7 @@
 // it leaves and again when Breez answers.
 
 import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
-import { UserError, parseAmountCents, retryLeafErrors, wait, LEAF_RETRY_MS } from './withdraw.mjs';
+import { UserError, parseAmountCents, networkFeeUsd, retryLeafErrors, wait, LEAF_RETRY_MS } from './withdraw.mjs';
 
 export const PREPARE_TTL_MS = 10 * 60 * 1000;
 export const MAX_PAGE = 50;
@@ -199,14 +199,14 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     const q = await withdrawals.prepareCrossChain({
       route, address: dest, amountSat,
       lowBalanceMessage: 'The platform wallet does not hold enough sats for this send',
-      failPrefix: 'Breez could not quote this send',
+      failMessage: 'Breez could not quote this send', showDetail: true,
     });
     const view = {
       kind: 'stablecoin', destination: dest,
       route: { id: route.id, asset: q.pair.asset, chain: q.pair.chain, family: route.family, provider: q.pair.provider },
       amountUsd: (amountCents / 100).toFixed(2), amountSat, feeSat: 0, totalSat: amountSat, btcUsdRate: rate,
       providerFee: q.providerFee, receive: q.receive, receiveMin: q.receiveMin, asset: q.pair.asset,
-      breezFeeUsd: (amountCents / 100 - Number(q.receive)).toFixed(6),
+      networkFeeUsd: networkFeeUsd(amountCents, q.estimatedOutBase, q.pair.decimals),
       expiresAt: new Date(q.expiresAtMs).toISOString(),
     };
     const prepareId = remember({ adminId, kind: 'stablecoin', lnurl: false, res: q.prepared, view, expiresAtMs: q.expiresAtMs - QUOTE_MARGIN_MS });

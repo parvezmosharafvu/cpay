@@ -41,7 +41,7 @@ begin
 end $$;
 
 comment on column payments.amount_sat is
-  'Sats the Lightning invoice asks for (Breez rows). Null on BTCPay-era rows.';
+  'Sats the Lightning invoice asks for (Breez rows). Null on rows created before 0094.';
 comment on column payments.btc_usd_rate is
   'BTC/USD rate the invoice was priced at: amount_sat = ceil(amount_requested / rate * 1e8).';
 

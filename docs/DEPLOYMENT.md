@@ -3,7 +3,7 @@
 ## 1. Supabase
 
 - [ ] Create a new Supabase project
-- [ ] Run migrations in order from `supabase/migrations/`, **0001 → 0091**,
+- [ ] Run migrations in order from `supabase/migrations/`, **0001 → 0100**,
       one file at a time in the SQL Editor. 0018 is required — without it the
       database has a privilege-escalation hole and two conflicting balance
       definitions.

@@ -11,8 +11,8 @@ ledger-backups/
 *.sql.local
 
 # Editor-local settings can carry personal API tokens (Sourcery, Copilot,
-# etc). .vscode/settings.json has already had one committed once — see
-# AUDIT.md. extensions.json has no secrets and is fine to share.
+# etc). .vscode/settings.json has already had one committed once (see git
+# history). extensions.json has no secrets and is fine to share.
 .vscode/settings.json
 
 supabase/.temp/

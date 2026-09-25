@@ -105,9 +105,10 @@ read-only snapshot of payment domains, pending and processing
 withdrawals, profile states, emergency flags and receiving QR records. It
 is a configuration check, not a payment provider network probe.
 
-Invoice, payment event, duplicate delivery and payout tests wait for the
-payment provider (TODO(breez)). Use `docs/PRODUCTION-READINESS.md` before any production
-money movement.
+Invoice, payment event, duplicate delivery and payout tests run against
+the payment service on regtest (receive) and small mainnet amounts
+(stablecoin withdrawals, which are mainnet only). Use
+`docs/PRODUCTION-READINESS.md` before any production money movement.
 
 ## Keeping the two in step
 

@@ -26,7 +26,7 @@ begin
   if v_limit.single_withdrawal_limit is not null and p_amount > v_limit.single_withdrawal_limit then raise exception 'This amount exceeds your single-withdrawal limit of $%', v_limit.single_withdrawal_limit; end if;
   select coalesce(sum(amount_requested),0) into v_used from withdrawals where user_id=v_uid and status in ('pending','approved','processing','sending','paid') and requested_at >= business_day_start(current_business_day());
   if v_limit.daily_withdrawal_limit is not null and v_used+p_amount > v_limit.daily_withdrawal_limit then raise exception 'This request exceeds your daily withdrawal limit of $%', v_limit.daily_withdrawal_limit; end if;
-  select coalesce(withdrawal_fee_percent,3.0) into v_fee from profiles where id=v_uid;
+  select coalesce(withdrawal_fee_percent,0) into v_fee from profiles where id=v_uid;
   select b.available into v_available from get_balance_for(v_uid) b;
   if p_amount > v_available then raise exception 'Insufficient balance. Available: $%', round(v_available,2); end if;
   v_after:=round(p_amount*(1-v_fee/100),2);
@@ -55,7 +55,7 @@ begin
   v_amount:=least(v_available,coalesce(v_limit.single_withdrawal_limit,v_available));
   if v_limit.daily_withdrawal_limit is not null then v_amount:=least(v_amount,greatest(v_limit.daily_withdrawal_limit-v_used,0)); end if;
   if v_amount < 5 then return null; end if;
-  insert into withdrawals(user_id,amount_requested,fee_percent,amount_after_fee,method,destination,status,admin_note) values(p_user_id,v_amount,coalesce(v_profile.withdrawal_fee_percent,3.0),round(v_amount*(1-coalesce(v_profile.withdrawal_fee_percent,3.0)/100),2),v_method,trim(v_destination),'pending','Auto-queued on settlement') returning id into v_id;
+  insert into withdrawals(user_id,amount_requested,fee_percent,amount_after_fee,method,destination,status,admin_note) values(p_user_id,v_amount,coalesce(v_profile.withdrawal_fee_percent,0),round(v_amount*(1-coalesce(v_profile.withdrawal_fee_percent,0)/100),2),v_method,trim(v_destination),'pending','Auto-queued on settlement') returning id into v_id;
   return v_id;
 end; $$;
 
@@ -97,7 +97,7 @@ begin
   if p_amount_sat is null or p_amount_sat <= 0 then raise exception 'Quoted sats must be positive'; end if;
   if p_destination is null or length(trim(p_destination))=0 then raise exception 'Destination address is required'; end if;
   if length(trim(p_destination)) > 200 then raise exception 'Destination is too long'; end if;
-  if p_fee_percent is distinct from coalesce(v_profile.withdrawal_fee_percent,3.0)
+  if p_fee_percent is distinct from coalesce(v_profile.withdrawal_fee_percent,0)
      or p_amount_after_fee is distinct from round(p_amount*(1-p_fee_percent/100),2) then
     raise exception 'Withdrawal fee changed. Review the new quote.';
   end if;

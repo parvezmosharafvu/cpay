@@ -332,7 +332,7 @@ test('the stablecoin send quotes through the withdraw route logic and never writ
   assert.equal(q.receive, '19.7');
   assert.equal(q.receiveMin, '19.503');
   assert.deepEqual(q.providerFee, { amount: '0.3', asset: 'USDC' });
-  assert.equal(q.breezFeeUsd, '0.300000');
+  assert.equal(q.networkFeeUsd, '0.3');
   const prep = breez.calls.filter((c) => c[0] === 'prepareSendPayment').at(-1)[1];
   assert.equal(prep.paymentRequest.type, 'crossChain');
   assert.equal(prep.paymentRequest.maxSlippageBps, 100);

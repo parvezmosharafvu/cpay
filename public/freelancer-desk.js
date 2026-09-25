@@ -95,7 +95,7 @@ async function renderCash() {
   const { data: bal } = await sb.rpc('get_my_balance');
   const b = Array.isArray(bal) ? bal[0] : bal || {};
   document.getElementById('cash').innerHTML = withdrawForm(`<p class="muted">Available balance <strong id="wAvail">${money(b.available)}</strong></p>`);
-  bindWithdraw(() => Number(me.withdrawal_fee_percent ?? 3), {
+  bindWithdraw(() => Number(me.withdrawal_fee_percent ?? 0), {
     submitManual: async () => {
       const { data, error } = await sb.rpc('request_withdrawal', {
         p_amount: Number(document.getElementById('wAmt').value),

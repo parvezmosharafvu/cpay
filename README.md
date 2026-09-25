@@ -40,7 +40,7 @@ public/                          → static site root
   config.example.js              → copy to config.js, fill in your keys
 
 supabase/
-  migrations/                    → run in numeric order, 0001 → 0094
+  migrations/                    → run in numeric order, 0001 → 0100
   functions/
     create-invoice/              → validates and prices a payment, has the payment service invoice it
     admin-actions/               → admin mark-settled + withdrawal actions
@@ -63,6 +63,10 @@ worker/
   wrangler.jsonc
 
 docs/
+  ARCHITECTURE.md                → how the pieces fit, data shape, idempotency,
+                                   receive and withdraw flows, fees
+  RUNBOOKS.md                    → restart, leaf-error retry, reconcile, backups
+  LOCAL-DEV.md                   → run locally, env var names, run the CI
   DEPLOYMENT.md                  → full setup checklist
   CPAY-OWNER-GUIDE.md            → new-project owner and staging guide
   ENV_VARS.md                    → what secrets go where

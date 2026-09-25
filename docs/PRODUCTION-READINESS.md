@@ -8,7 +8,7 @@ change to the previous production project.
 - [ ] `python3 ci/check_frontend.py` passes.
 - [ ] `npm run build` passes.
 - [ ] A backup or snapshot exists for the new CPAY Supabase project.
-- [ ] Migrations `0001` through `0080` apply in order on staging.
+- [ ] Migrations `0001` through `0100` apply in order on staging.
 - [ ] Migration history and the live schema agree.
 - [ ] RLS and security-definer search-path checks pass.
 - [ ] The owner has recorded the rollback or restore plan.
@@ -49,6 +49,9 @@ change to the previous production project.
   deliberately failed or refunded send leaves the balance restored once.
 - [ ] Single and daily withdrawal limits are set for accounts that may use
   instant withdrawals, since nothing waits for an admin.
+- [ ] Withdrawal platform fee: new accounts get 0% (0100). Accounts created
+  before 0100 keep the fee they had; set each to the intended value in the
+  admin panel.
 
 ## Cloudflare and public site
 
@@ -58,7 +61,7 @@ change to the previous production project.
 - [ ] Separate site and payment favicons render on the intended domains.
 - [ ] Headers, HTTPS, custom domains, OG preview routing and CORS were
   checked.
-- [ ] No old CPAY URL, Supabase project reference, store ID or secret is
+- [ ] No old CPAY URL, Supabase project reference, wallet mnemonic or secret is
   present in the CPAY deployment.
 
 ## Operational sign-off

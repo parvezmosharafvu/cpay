@@ -231,7 +231,7 @@ async function getQuote() {
     walletState.quote = q;
     $w('wqRoute').textContent = `${q.asset} · ${chainLabel(q.route.chain)}`;
     $w('wqSend').textContent = `${money(q.amountUsd)} · ${sats(q.amountSat)}`;
-    $w('wqFee').textContent = money(q.breezFeeUsd);
+    $w('wqFee').textContent = money(q.networkFeeUsd);
     $w('wqProv').textContent = `${q.providerFee.amount} ${q.providerFee.asset}`;
     $w('wqMin').textContent = `${q.receiveMin} ${q.asset}`;
     $w('wqGet').textContent = `${q.receive} ${q.asset}`;

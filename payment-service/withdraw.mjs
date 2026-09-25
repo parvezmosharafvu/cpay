@@ -66,6 +66,18 @@ export function splitFee(amountCents, feePercent) {
   return { sendCents, feeCents: amountCents - sendCents };
 }
 
+// sendUsd minus the coins the destination gets, exact to the coin's base
+// unit. 1 USDT/USDC is taken as $1, as everywhere else here. This is the one
+// fee a user pays on an instant withdrawal (swap plus network), shown to
+// them as the network fee.
+export function networkFeeUsd(sendCents, estimatedOutBase, decimals) {
+  const sendBase = decimals >= 2
+    ? BigInt(sendCents) * 10n ** BigInt(decimals - 2)
+    : BigInt(sendCents) / 10n ** BigInt(2 - decimals);
+  const fee = sendBase - BigInt(estimatedOutBase);
+  return fromBaseUnits(fee < 0n ? 0n : fee, decimals);
+}
+
 export function parseAmountCents(amount) {
   const s = String(amount ?? '').trim();
   if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
@@ -78,7 +90,7 @@ const cents = (c) => (c / 100).toFixed(2);
 // cross-chain leg failed without a refund: the row stays 'sending' for a
 // human, because the sats have left the wallet.
 export function outcomeOf(payment) {
-  if (payment.status === 'failed') return { status: 'failed', note: 'Breez send failed; balance returned' };
+  if (payment.status === 'failed') return { status: 'failed', note: 'Send failed; balance returned' };
   if (payment.status !== 'completed') return { status: 'sending' };
   const conv = payment.conversionDetails?.status;
   if (conv === 'completed') return { status: 'paid', delivered: deliveredAmount(payment) };
@@ -166,7 +178,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
 
   async function profileFor(userId) {
     const { rows } = await db.query(
-      `select p.account_status, coalesce(p.withdrawal_fee_percent, 3.0)::text as fee_percent, b.available::text as available
+      `select p.account_status, coalesce(p.withdrawal_fee_percent, 0)::text as fee_percent, b.available::text as available
          from profiles p cross join lateral get_balance_for(p.id) b where p.id = $1`,
       [userId],
     );
@@ -187,7 +199,10 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
   // routes for the real address so the route and its limits are the ones the
   // provider will accept, check the platform wallet covers the sats, and
   // prepare. Creator withdrawals and admin wallet sends both quote through here.
-  async function prepareCrossChain({ route, address, amountSat, lowBalanceMessage, failPrefix }) {
+  // A prepare error is logged; the caller gets failMessage, plus the SDK's own
+  // text only when showDetail is set (the admin wallet). Creator-facing
+  // messages never carry SDK text.
+  async function prepareCrossChain({ route, address, amountSat, lowBalanceMessage, failMessage, showDetail = false }) {
     const pairs = await breez.getCrossChainRoutes({ type: 'send', addressDetails: { address, addressFamily: route.family } });
     const pair = pairs.find((p) => routeId(p) === route.id);
     if (!pair) throw new UserError(422, 'That coin and network is not available for this address right now');
@@ -204,7 +219,9 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
         feePolicy: 'feesIncluded',
       });
     } catch (e) {
-      throw new UserError(422, `${failPrefix}: ${e?.message ?? e}`);
+      const detail = String(e?.message ?? e);
+      log({ event: 'quote', error: 'prepare failed', route: route.id, detail });
+      throw new UserError(422, showDetail ? `${failMessage}: ${detail}` : failMessage);
     }
     const m = prepared.paymentMethod;
     if (m?.type !== 'crossChainAddress') throw new Error(`unexpected quote type ${m?.type}`);
@@ -213,6 +230,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
       pair, prepared,
       expiresAtMs: Date.parse(m.expiresAt),
       receive: fromBaseUnits(m.estimatedOut, pair.decimals),
+      estimatedOutBase: m.estimatedOut,
       receiveMin: fromBaseUnits(receiveMinBase, pair.decimals),
       providerFee: { amount: fromBaseUnits(m.feeAmount, pair.decimals), asset: pair.asset },
     };
@@ -240,12 +258,12 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
 
     const rate = await btcUsdRate();
     const amountSat = Math.floor((sendCents * 1e6) / rate);
-    const { pair, prepared, expiresAtMs, receive, receiveMin, providerFee } = await prepareCrossChain({
+    const { pair, prepared, expiresAtMs, receive, receiveMin, providerFee, estimatedOutBase } = await prepareCrossChain({
       route, address: dest, amountSat,
       lowBalanceMessage: 'Instant withdrawals are temporarily unavailable. Try again later.',
-      failPrefix: 'Breez could not quote this withdrawal',
+      failMessage: 'This withdrawal could not be quoted right now. Try another amount or network.',
     });
-    const breezFeeUsd = (sendCents / 100 - Number(receive)).toFixed(6);
+    const fee = networkFeeUsd(sendCents, estimatedOutBase, pair.decimals);
     const quoteId = randomUUID();
     const view = {
       quoteId,
@@ -258,7 +276,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
       sendUsd: cents(sendCents),
       amountSat,
       btcUsdRate: rate,
-      breezFeeUsd,
+      networkFeeUsd: fee,
       providerFee,
       receive,
       receiveMin,
@@ -281,7 +299,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
       const { rows } = await db.query(
         `select * from reserve_stablecoin_withdrawal($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [q.userId, v.quoteId, v.amountUsd, v.feePercent, v.sendUsd, v.asset, v.route.chain, v.address,
-          v.breezFeeUsd, v.receive, v.amountSat, v.expiresAt],
+          v.networkFeeUsd, v.receive, v.amountSat, v.expiresAt],
       );
       return rows[0];
     } catch (e) {
@@ -309,7 +327,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     const o = outcomeOf(payment);
     if (o.status === 'paid') return finalize(row.id, 'paid', { paymentId: payment.id, amountOut: o.delivered });
     if (o.status === 'failed') return finalize(row.id, 'failed', { paymentId: payment.id, note: o.note });
-    if (o.status === 'stuck') log({ event: 'withdrawal-stuck', withdrawalId: row.id, breezPaymentId: payment.id });
+    if (o.status === 'stuck') log({ event: 'withdrawal-stuck', withdrawalId: row.id, paymentId: payment.id });
     return 'sending';
   }
 
@@ -380,11 +398,11 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     const outcomes = {};
     for (const row of rows) {
       let result;
-      const payment = await findPayment(row.breez_payment_id ?? row.id);
+      const payment = await findPayment(row.payout_ref ?? row.id);
       if (payment) {
         result = await apply(row, payment);
       } else if (synced && now() > new Date(row.quote_expires_at).getTime() + ORPHAN_GRACE_MS && !sendingIds.has(row.id)) {
-        result = await finalize(row.id, 'failed', { note: 'No Breez payment found after the quote expired; balance returned' });
+        result = await finalize(row.id, 'failed', { note: 'No payment found after the quote expired; balance returned' });
       } else {
         result = 'sending';
       }
@@ -396,7 +414,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
   async function onPayment(payment) {
     if (payment?.paymentType !== 'send') return null;
     const { rows } = await db.query(
-      `select * from withdrawals where status = 'sending' and method = 'stablecoin' and (id::text = $1 or breez_payment_id = $1)`,
+      `select * from withdrawals where status = 'sending' and method = 'stablecoin' and (id::text = $1 or payout_ref = $1)`,
       [payment.id],
     );
     if (!rows[0]) return null;
@@ -408,7 +426,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     return {
       withdrawalId: row.id, status: row.status, amountUsd: String(row.amount_requested), feePercent: String(row.fee_percent),
       sendUsd: String(row.amount_after_fee), asset: row.coin, chain: row.chain, address: row.destination,
-      amountOut: row.amount_out != null ? String(row.amount_out) : null, breezPaymentId: row.breez_payment_id,
+      amountOut: row.amount_out != null ? String(row.amount_out) : null, payoutRef: row.payout_ref,
       note: row.admin_note, requestedAt: row.requested_at, processedAt: row.processed_at,
     };
   }

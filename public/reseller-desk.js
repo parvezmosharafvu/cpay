@@ -160,7 +160,7 @@ async function renderCash() {
     <input type="hidden" id="wUser" value="${me.id}">`);
   const own = () => document.getElementById('wUser').value === me.id;
   // A teammate's fee rate is not visible to the reseller; the server applies it on submit.
-  refreshWithdraw = bindWithdraw(() => (own() ? Number(me.withdrawal_fee_percent ?? 3) : NaN), {
+  refreshWithdraw = bindWithdraw(() => (own() ? Number(me.withdrawal_fee_percent ?? 0) : NaN), {
     // Instant withdrawals pay out the signed-in account only; a teammate
     // sends their own from their dashboard.
     instantAllowed: own,
@@ -173,7 +173,7 @@ async function renderCash() {
       });
       if (error) { toast(error.message); return false; }
       const row = Array.isArray(data) ? data[0] : data;
-      toast(row?.amount_after_fee != null ? `Sent for admin review. Receives ${money(row.amount_after_fee)} after the fee.` : 'Sent for admin review', true);
+      toast(row?.amount_after_fee != null ? `Sent for admin review. Receives ${money(row.amount_after_fee)}.` : 'Sent for admin review', true);
       return true;
     },
     onDone: () => { renderHome(); renderTeam(); },

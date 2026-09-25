@@ -5,8 +5,8 @@ wallet. Breez's SDK cannot run inside Supabase edge functions (it fails to
 connect under Deno, and it needs a process that stays up to receive
 events), so this is the only part of cpay that talks to Breez.
 
-Custody: this wallet receives every creator's payments, the same model
-cpay had with its BTCPay store. Whoever holds `BREEZ_MNEMONIC` holds all
+Custody: this wallet receives every creator's payments and holds them
+until they are withdrawn. Whoever holds `BREEZ_MNEMONIC` holds all
 unwithdrawn creator money. Whether cpay may hold it is a legal question
 to settle before mainnet.
 
@@ -39,11 +39,16 @@ to settle before mainnet.
     amount (at least $5, whole cents, within the available balance and the
     route's limits) and that `sdk.parse` reads the address as the route's
     family. It takes the profile's `withdrawal_fee_percent` as the platform
-    fee, converts the rest to sats at the Breez BTC/USD rate (rounded
-    down), and asks `prepareSendPayment` for a cross-chain quote with fees
-    included. The answer shows the amount, platform fee, Breez fee, what
-    arrives (and the minimum after 1% slippage) and when the quote expires.
-    Quotes live in memory, so a restart makes open quotes expire.
+    fee (0% unless an admin set one; 0100), converts the rest to sats at the
+    Breez BTC/USD rate (rounded down), and asks `prepareSendPayment` for a
+    cross-chain quote with fees included. The answer shows the amount,
+    platform fee, `networkFeeUsd` (the swap plus network fee, exact: what is
+    sent minus what arrives), what arrives (and the minimum after 1%
+    slippage) and when the quote expires. A prepare error is logged and the
+    user gets a generic message, never the SDK's text. Quotes live in
+    memory, so a restart makes open quotes expire. `user-withdraw` passes
+    creators an allowlisted copy of these answers (no processor names,
+    ids, sats or rates; see `docs/ARCHITECTURE.md`).
   - `POST /withdraw/confirm {userId, quoteId}` re-quotes and answers 409
     with the new quote if this one expired. Otherwise
     `reserve_stablecoin_withdrawal()` takes the balance and inserts a

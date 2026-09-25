@@ -111,7 +111,7 @@ const WITHDRAW_METHODS = {
   lightning: { label: 'Lightning', placeholder: 'you@wallet.com', note: 'Sent after an admin approves the request.' },
   bank: { label: 'Bank transfer', placeholder: 'Bank, account name and number', note: 'Sent after an admin approves the request.' },
 };
-// Names for the chains Breez routes to today. A chain Breez adds later
+// Names for the chains instant withdrawals reach today. A chain added later
 // still shows, under its own name.
 const CHAIN_LABELS = {
   tron: 'Tron (TRC-20)', bsc: 'BNB Smart Chain (BEP-20)', ethereum: 'Ethereum (ERC-20)', arbitrum: 'Arbitrum One',
@@ -136,6 +136,16 @@ function withdrawQuote(amount, feePercent){
   if (!(amount > 0) || !Number.isFinite(feePercent)) return null;
   const receive = Math.round(amount * (100 - feePercent) + 1e-6) / 100;
   return { fee: Math.round((amount - receive) * 100) / 100, receive };
+}
+
+// An exact decimal string as dollars: at least two decimals, and every
+// further digit the amount has (network fees are exact to the coin's unit).
+function usdExact(v){
+  const s = String(v ?? '0');
+  if (!/^-?\d+(\.\d+)?$/.test(s)) return money(v);
+  const [whole, frac = ''] = s.replace(/^-/, '').split('.');
+  const digits = (frac + '00').slice(0, Math.max(2, frac.replace(/0+$/, '').length));
+  return `$${whole}.${digits}`;
 }
 
 // Edge function call that keeps the JSON body of an error response, which
@@ -166,8 +176,8 @@ function withdrawForm(whoHtml){
       <dl>
         <div><dt>Method</dt><dd id="sumMethod">-</dd></div>
         <div><dt>Amount</dt><dd id="sumAmount">$0.00</dd></div>
-        <div><dt id="sumFeeLabel">Fee</dt><dd id="sumFee">$0.00</dd></div>
-        <div id="sumBreezRow" hidden><dt>Breez swap + network fee</dt><dd id="sumBreez">-</dd></div>
+        <div id="sumFeeRow" hidden><dt id="sumFeeLabel">Platform fee</dt><dd id="sumFee">$0.00</dd></div>
+        <div id="sumNetRow" hidden><dt>Network fee</dt><dd id="sumNet">-</dd></div>
         <div id="sumToRow" hidden><dt>To</dt><dd id="sumTo">-</dd></div>
         <div class="total"><dt>You receive</dt><dd id="sumGet">$0.00</dd></div>
       </dl>
@@ -215,18 +225,21 @@ function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, o
     const m = method();
     const instant = !!m.instant;
     $('wNetField').hidden = !instant;
-    $('sumBreezRow').hidden = !instant;
+    $('sumNetRow').hidden = !instant;
     $('sumToRow').hidden = !instant;
     const r = instant ? route() : null;
     $('wDestLabel').textContent = instant ? 'Destination address' : 'Destination';
     $('wDest').placeholder = instant ? (r ? `${ADDRESS_PLACEHOLDER[r.family] || 'Address'} for ${r.asset} on ${chainLabel(r.chain)}` : 'Address') : m.placeholder;
     $('wHint').textContent = instant
-      ? 'Minimum $5. Sent as soon as you confirm. You pay the Breez swap and network fee shown in the review.'
+      ? 'Minimum $5. Sent as soon as you confirm. The network fee and the exact amount you receive are shown before you confirm.'
       : 'Minimum $5. The amount is held from the balance while an admin reviews the request.';
     $('sumMethod').textContent = instant ? (r ? `${r.asset} · ${chainLabel(r.chain)}` : m.label) : m.label;
     const amount = Number($('wAmt').value);
     const pct = feePercent();
     $('sumAmount').textContent = money(amount > 0 ? amount : 0);
+    // A 0% platform fee is not shown at all. An unknown one (a teammate's
+    // account) is shown as set on their account.
+    $('sumFeeRow').hidden = Number.isFinite(pct) && pct === 0;
     $('sumFeeLabel').textContent = Number.isFinite(pct) ? `Platform fee (${pct}%)` : 'Platform fee';
     const btn = $('wBtn');
 
@@ -241,7 +254,7 @@ function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, o
     }
 
     if (!instantAllowed()) {
-      $('sumFee').textContent = '-'; $('sumBreez').textContent = '-'; $('sumTo').textContent = '-'; $('sumGet').textContent = '-';
+      $('sumFee').textContent = '-'; $('sumNet').textContent = '-'; $('sumTo').textContent = '-'; $('sumGet').textContent = '-';
       $('sumNote').textContent = 'Instant stablecoin withdrawals are sent from the account\'s own dashboard.';
       btn.textContent = 'Get quote';
       btn.disabled = true;
@@ -250,26 +263,28 @@ function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, o
     if (!quote) {
       const q = withdrawQuote(amount, pct);
       $('sumFee').textContent = q ? money(q.fee) : '$0.00';
-      $('sumBreez').textContent = 'Shown in the quote';
+      $('sumNet').textContent = 'Shown in the quote';
       $('sumTo').textContent = shortAddress($('wDest').value.trim()) || '-';
       $('sumGet').textContent = '-';
       $('sumNote').textContent = routes.error
         ? routes.error
-        : (routes.loading ? 'Loading the networks Breez can send to...' : (routes.routes.length ? m.note : 'Breez has no stablecoin networks available right now.'));
+        : (routes.loading ? 'Loading networks...' : (routes.routes.length ? m.note : 'No stablecoin networks are available right now.'));
       btn.textContent = busy ? 'Getting quote...' : 'Get quote';
       btn.disabled = busy || !r;
       return;
     }
     const left = expiresIn();
     $('sumAmount').textContent = money(quote.amountUsd);
-    $('sumFeeLabel').textContent = `Platform fee (${Number(quote.feePercent)}%)`;
+    const quotePct = Number(quote.feePercent);
+    $('sumFeeRow').hidden = !(quotePct > 0);
+    $('sumFeeLabel').textContent = `Platform fee (${quotePct}%)`;
     $('sumFee').textContent = `-${money(quote.platformFeeUsd)}`;
-    $('sumBreez').textContent = `-${money(quote.breezFeeUsd)}`;
+    $('sumNet').textContent = `-${usdExact(quote.networkFeeUsd)}`;
     $('sumTo').textContent = shortAddress(quote.address);
     $('sumTo').title = quote.address;
     $('sumGet').textContent = `${quote.receive} ${quote.asset}`;
     $('sumNote').textContent = left > 0
-      ? `Breez quote: ${Number(quote.amountSat).toLocaleString()} sats for ${money(quote.sendUsd)}. Delivery can vary by up to ${quote.maxSlippageBps / 100}% (at least ${quote.receiveMin} ${quote.asset}). Expires in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}.`
+      ? `Quote valid for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}. If the rate moves while it is sent, you still receive at least ${quote.receiveMin} ${quote.asset}.`
       : 'This quote expired. Get a new one to see the current fee.';
     btn.textContent = busy ? 'Sending...' : (left > 0 ? `Confirm and send ${quote.receive} ${quote.asset}` : 'Get new quote');
     btn.disabled = busy;

@@ -5,11 +5,9 @@
 # telling it they exist.
 #
 # The verify_jwt values below are NOT optional. The default is true, and
-# three of these functions are called by clients that cannot present a
-# Supabase JWT:
+# these functions are called by clients that cannot present a Supabase
+# JWT:
 #
-#   btcpay-webhook  — BTCPay authenticates with an HMAC signature instead.
-#                     Its two admin routes verify an admin JWT in code.
 #   create-invoice  — paying customers have no account. Abuse is capped by
 #                     a per-link rate limit inside the function.
 #   daily-report,
@@ -17,8 +15,9 @@
 #   reseller-digest — called by pg_cron with an x-cron-secret header.
 #                     All fail closed if CRON_SECRET is unset.
 #
-# user-withdraw is always called by a signed-in creator, so it keeps JWT
-# verification ON.
+# user-withdraw is always called by a signed-in creator, and admin-actions
+# by a signed-in admin (the admin role is checked again in code), so both
+# keep JWT verification ON.
 #
 # If you ever let the integration deploy functions WITHOUT this file, all
 # five get verify_jwt = true and every payment on the site starts failing
@@ -26,8 +25,8 @@
 
 project_id = "riumaeihemgznvgattoc"
 
-[functions.btcpay-webhook]
-verify_jwt = false
+[functions.admin-actions]
+verify_jwt = true
 
 [functions.create-invoice]
 verify_jwt = false

@@ -2447,7 +2447,7 @@ async function markPayment(paymentId, status, btnEl){
   if (status === 'settled'){
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     try {
-      const res = await fetch(`${window.SUPABASE_URL}/functions/v1/btcpay-webhook/admin-mark-settled`, {
+      const res = await fetch(`${window.SUPABASE_URL}/functions/v1/admin-actions/admin-mark-settled`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({ paymentId }),
       });
@@ -2516,7 +2516,7 @@ async function handleAction(withdrawalId, action, btnEl){
   btnEl.disabled = true; btnEl.textContent = 'Working…';
   const { data: { session } } = await window.supabaseClient.auth.getSession();
   try {
-    const res = await fetch(`${window.SUPABASE_URL}/functions/v1/btcpay-webhook/process-withdrawal`, {
+    const res = await fetch(`${window.SUPABASE_URL}/functions/v1/admin-actions/process-withdrawal`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
       body: JSON.stringify({ withdrawalId, action }),
     });

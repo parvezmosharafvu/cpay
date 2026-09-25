@@ -16,6 +16,8 @@ async function boot() {
   if (!me) return;
   if (me.role !== 'admin') { location.href = roleHome(me.role); return; }
   await Promise.all([renderHome(), renderPeople(), renderApps(), renderFees(), renderFlags(), renderAlerts(), renderPayouts(), renderChat()]);
+  // Needs the people list renderPeople() loads, for the filters.
+  await Daily.mountAdmin(document.getElementById('daily'), people);
 }
 
 async function renderHome() {
@@ -33,27 +35,39 @@ async function renderHome() {
 }
 
 async function renderPeople() {
-  const { data, error } = await sb.rpc('admin_list_business_profiles');
+  const [{ data, error }, { data: usage }] = await Promise.all([sb.rpc('admin_list_business_profiles'), sb.rpc('admin_link_usage')]);
+  const links = Object.fromEntries((usage || []).map((u) => [u.user_id, u]));
   if (error) { document.getElementById('people').innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
   people = data || [];
   const rows = people.map((p) => `<tr>
     <td>${escapeHtml(p.display_name || '')}<div class="faint">${escapeHtml(p.email)}</div></td>
     <td>${p.role === 'moderator' ? 'Reseller' : p.role === 'creator' ? 'Freelancer' : p.role}</td>
     <td>${badge(p.account_status)}</td>
+    <td class="num nowrap">${links[p.id] ? `${links[p.id].links_used} / ${links[p.id].link_limit}` : '-'}</td>
     <td>${escapeHtml(p.reseller_name || '-')}</td>
     <td class="num">${Number(p.platform_fee_percent || 0).toFixed(2)}%</td>
     <td>${escapeHtml(p.hide_small_payments_mode)}</td>
     <td class="num">${money(p.available)}</td>
     <td style="white-space:nowrap">
+      ${links[p.id] ? `<button class="btn ghost sm" data-limit="${p.id}" data-cur="${links[p.id].link_limit}">Link limit</button>` : ''}
       <button class="btn ghost sm" data-fee="${p.id}">Platform fee</button>
       ${p.role === 'moderator' ? `<button class="btn ghost sm" data-comm="${p.id}">Commission</button>` : ''}
       <button class="btn ghost sm" data-hide="${p.id}">Hide &lt;$10</button>
     </td>
   </tr>`).join('');
   document.getElementById('people').innerHTML = `<div class="card flush">
-    <table class="table"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th>Reseller</th><th class="num">Platform fee</th><th>Small payments</th><th class="num">Available</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="8" class="empty">No accounts</td></tr>'}</tbody></table>
+    <table class="table"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th class="num">Links</th><th>Reseller</th><th class="num">Platform fee</th><th>Small payments</th><th class="num">Available</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="9" class="empty">No accounts</td></tr>'}</tbody></table>
   </div>`;
+  document.querySelectorAll('[data-limit]').forEach((btn) => {
+    btn.onclick = async () => {
+      const raw = prompt('Active payment links this account may have (0 to 10). A name with several spellings counts as one link.', btn.dataset.cur);
+      if (raw == null) return;
+      const { error: e } = await sb.rpc('admin_set_link_limit', { p_creator_id: btn.dataset.limit, p_limit: Number(raw) });
+      if (e) return toast(e.message);
+      toast('Link limit saved', true); renderPeople();
+    };
+  });
   document.querySelectorAll('[data-fee]').forEach((btn) => {
     btn.onclick = async () => {
       const raw = prompt('Platform fee % on this book\'s settled earnings');

@@ -3,6 +3,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { createRequire } from 'node:module';
 import pg from 'pg';
 import * as ledger from './ledger.mjs';
+import { createWithdrawals, UserError } from './withdraw.mjs';
 
 const breez = createRequire(import.meta.url)('@breeztech/breez-sdk-spark');
 
@@ -24,6 +25,9 @@ db.on('error', (e) => console.error('idle database client error:', e.message));
 const config = breez.defaultConfig(NETWORK);
 if (process.env.BREEZ_API_KEY) config.apiKey = process.env.BREEZ_API_KEY;
 if (NETWORK === 'mainnet' && !config.apiKey) throw new Error('BREEZ_API_KEY is required on mainnet');
+// Stablecoin withdrawals need the cross-chain providers. The SDK only
+// accepts this config on mainnet.
+if (NETWORK === 'mainnet') config.crossChainConfig = {};
 
 const sdk = await breez.connect({
   config,
@@ -40,10 +44,19 @@ async function settle(payment, source) {
   return outcome;
 }
 
+const logJson = (entry) => console.log(JSON.stringify(entry));
+const withdrawals = createWithdrawals({ breez: sdk, db, btcUsdRate, log: logJson });
+
+const PAYMENT_EVENTS = new Set(['paymentSucceeded', 'paymentFailed', 'paymentPending', 'paymentMetadataUpdated']);
 await sdk.addEventListener({
   onEvent: (event) => {
     if (event.type === 'synced') lastSyncedAt = Date.now();
-    if (event.type === 'paymentSucceeded') {
+    if (!PAYMENT_EVENTS.has(event.type)) return;
+    if (event.payment.paymentType === 'send') {
+      withdrawals.onPayment(event.payment)
+        .then((outcome) => outcome && logJson({ event: 'withdrawal', source: event.type, breezPaymentId: event.payment.id, outcome }))
+        .catch((e) => console.error('withdrawal update failed:', e));
+    } else if (event.type === 'paymentSucceeded') {
       settle(event.payment, 'event').catch((e) => console.error('settle failed:', e));
     }
   },
@@ -66,7 +79,14 @@ async function catchUp() {
     }
   }
   const expired = await ledger.expireUnpaid(db);
-  lastCatchUp = { at: new Date().toISOString(), since, outcomes, expired };
+  // An unanswered send is only refunded right after a completed sync, so a
+  // transfer made before a crash is always seen first.
+  const synced = await sdk.getInfo({ ensureSynced: true }).then(() => true, (e) => {
+    console.error('sync before withdrawal reconcile failed:', e.message);
+    return false;
+  });
+  const withdrawalOutcomes = await withdrawals.reconcile({ synced });
+  lastCatchUp = { at: new Date().toISOString(), since, outcomes, expired, withdrawals: withdrawalOutcomes };
   console.log(JSON.stringify({ event: 'catch-up', ...lastCatchUp }));
 }
 
@@ -117,6 +137,7 @@ async function health() {
   return [ok ? 200 : 503, {
     ok, network: NETWORK, db: dbOk, synced, balanceSats,
     lastSyncedAt: lastSyncedAt ? new Date(lastSyncedAt).toISOString() : null, lastCatchUp,
+    withdrawRoutes: withdrawals.routeCacheInfo(),
   }];
 }
 
@@ -136,6 +157,22 @@ async function readJson(req) {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+async function withdrawRoute(req) {
+  if (req.method === 'GET' && req.url === '/withdraw/routes') {
+    return [200, { routes: await withdrawals.listRoutes(), cache: withdrawals.routeCacheInfo() }];
+  }
+  if (req.method !== 'POST') return null;
+  if (req.url !== '/withdraw/quote' && req.url !== '/withdraw/confirm') return null;
+  const body = await readJson(req);
+  if (!UUID.test(String(body.userId))) return [400, { error: 'userId must be a uuid' }];
+  if (req.url === '/withdraw/quote') {
+    const { userId, routeId, address, amountUsd } = body;
+    return [200, await withdrawals.quote({ userId, routeId: String(routeId ?? ''), address, amountUsd })];
+  }
+  if (!UUID.test(String(body.quoteId))) return [400, { error: 'quoteId must be a uuid' }];
+  return [200, await withdrawals.confirm({ userId: body.userId, quoteId: body.quoteId })];
+}
+
 const server = http.createServer(async (req, res) => {
   let status = 404, body = { error: 'not found' };
   try {
@@ -146,10 +183,16 @@ const server = http.createServer(async (req, res) => {
       [status, body] = UUID.test(String(paymentId)) ? await createInvoice(paymentId) : [400, { error: 'paymentId must be a uuid' }];
     } else if (req.method === 'GET' && req.url === '/health') {
       [status, body] = await health();
+    } else if (req.url.startsWith('/withdraw/')) {
+      [status, body] = (await withdrawRoute(req)) ?? [404, { error: 'not found' }];
     }
   } catch (e) {
-    console.error(`${req.method} ${req.url} failed:`, e);
-    [status, body] = [500, { error: 'internal error' }];
+    if (e instanceof UserError) {
+      [status, body] = [e.status, { error: e.message, ...e.extra }];
+    } else {
+      console.error(`${req.method} ${req.url} failed:`, e);
+      [status, body] = [500, { error: 'internal error' }];
+    }
   }
   res.writeHead(status, { 'content-type': 'application/json' });
   res.end(JSON.stringify(body));

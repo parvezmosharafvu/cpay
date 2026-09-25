@@ -29,7 +29,43 @@ to settle before mainnet.
   synced in the last 10 minutes, 503 otherwise. The `health` edge function
   calls it.
 
-Both routes need `Authorization: Bearer $PAYMENT_SERVICE_SECRET`.
+- Instant stablecoin withdrawals (migration 0095), called only by the
+  `user-withdraw` edge function after it has checked the user's JWT:
+  - `GET /withdraw/routes` lists the coin and network pairs Breez can send
+    to right now, from `getCrossChainRoutes` for each address family (EVM,
+    Solana, Tron), keeping only routes funded with BTC. Cached 10 minutes,
+    so a route Breez adds shows up without a deploy.
+  - `POST /withdraw/quote {userId, routeId, address, amountUsd}` checks the
+    amount (at least $5, whole cents, within the available balance and the
+    route's limits) and that `sdk.parse` reads the address as the route's
+    family. It takes the profile's `withdrawal_fee_percent` as the platform
+    fee, converts the rest to sats at the Breez BTC/USD rate (rounded
+    down), and asks `prepareSendPayment` for a cross-chain quote with fees
+    included. The answer shows the amount, platform fee, Breez fee, what
+    arrives (and the minimum after 1% slippage) and when the quote expires.
+    Quotes live in memory, so a restart makes open quotes expire.
+  - `POST /withdraw/confirm {userId, quoteId}` re-quotes and answers 409
+    with the new quote if this one expired. Otherwise
+    `reserve_stablecoin_withdrawal()` takes the balance and inserts a
+    `sending` row in one transaction, then `sendPayment` runs with the row
+    id as the idempotency key. It answers once the send returns or after
+    25 seconds, whichever is first.
+  - `finalize_stablecoin_withdrawal()` marks the row `paid` when Breez
+    reports the cross-chain delivery complete, or `failed` (which returns
+    the balance) when the Spark transfer failed, the swap was refunded, or
+    the SDK refused before any transfer. It only moves `sending` rows, so a
+    refund happens once. A swap that failed without a refund stays
+    `sending` and is logged as `withdrawal-stuck` for a person to resolve;
+    the `health` edge function flags `sending` rows older than 15 minutes.
+  - Payment events for sends, and every catch-up pass, look up each
+    `sending` row with `getPayment(<withdrawal id>)`. A row with no payment
+    is refunded only after a completed sync and once its quote expired 10
+    minutes ago; the SDK refuses to start an expired quote, so no transfer
+    can appear after that. This is what makes a crash mid-send safe.
+  - Cross-chain sends are mainnet only: on other networks the SDK rejects
+    `crossChainConfig` and lists no routes, so the list is empty.
+
+All routes need `Authorization: Bearer $PAYMENT_SERVICE_SECRET`.
 
 ## Run
 
@@ -41,7 +77,9 @@ node --env-file=.env server.mjs
 
 Edge function secrets: `PAYMENT_SERVICE_URL` (where this listens) and
 `PAYMENT_SERVICE_SECRET` (same value as here). `DATABASE_URL` must be a
-role that can execute `settle_breez_payment` and update `payments`; the
+role that can execute `settle_breez_payment`,
+`reserve_stablecoin_withdrawal` and `finalize_stablecoin_withdrawal` and
+update `payments`; the
 Supabase `postgres` connection string works.
 
 Wallet state lives in `BREEZ_DATA_DIR`, so the host needs a persistent
@@ -49,8 +87,12 @@ disk. The seed alone restores the wallet if that directory is lost.
 
 ## Test
 
-`DATABASE_URL=... node --test` runs `ledger.test.mjs` against a database
-with every migration applied, inside a transaction that is rolled back.
+`DATABASE_URL=... node --test` runs against a database with every
+migration applied. `ledger.test.mjs` works inside a transaction that is
+rolled back. `withdraw.test.mjs` commits (confirm and crash recovery need
+several connections), uses fresh users and deletes them at the end; it
+drives `withdraw.mjs` with a fake Breez SDK, since regtest has no
+cross-chain routes.
 
 ## Lightning addresses (designed, not built)
 

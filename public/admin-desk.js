@@ -2,9 +2,12 @@ const sb = window.supabaseClient;
 let me = null;
 let people = [];
 
+let walletShown = false;
 function show(tab) {
   document.querySelectorAll('main > section').forEach((s) => { s.hidden = s.id !== tab; });
   document.querySelectorAll('.navi[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  // The wallet talks to the payment service, so it loads on first open only.
+  if (tab === 'wallet' && me?.role === 'admin' && !walletShown) { walletShown = true; renderWallet(); }
 }
 document.querySelectorAll('.navi[data-tab]').forEach((b) => { b.onclick = () => show(b.dataset.tab); });
 

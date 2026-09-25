@@ -20,6 +20,7 @@
     <button class="navi" data-tab="flags">Feature switches</button>
     <button class="navi" data-tab="alerts">Reseller alerts</button>
     <button class="navi" data-tab="payouts">Payouts</button>
+    <button class="navi" data-tab="wallet">Wallet</button>
     <button class="navi" data-tab="chat">Inbox</button>
     <a class="navi" href="admin-classic.html">Ops panel</a>
     <button class="navi" id="logoutBtn">Log out</button>
@@ -33,6 +34,7 @@
     <section id="flags" hidden></section>
     <section id="alerts" hidden></section>
     <section id="payouts" hidden></section>
+    <section id="wallet" hidden></section>
     <section id="chat" hidden></section>
   </main>
 </div>
@@ -40,6 +42,8 @@
 <div id="opsGateSummary" hidden></div>
 <div id="opsGateList" hidden></div>
 <!-- Staging sign-off ledger admin_ops_release_gates admin_set_ops_release_gate -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="admin-wallet.js"></script>
 <script src="admin-desk.js"></script>
 </body>
 </html>

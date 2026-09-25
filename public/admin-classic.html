@@ -546,6 +546,26 @@
                                         </div>
                                         <!-- SETTINGS TAB -->
                                         <div id="tab-settings" style="display:none;">
+                                          <div class="panel" id="emailConfirmPanel">
+                                            <div class="panel-head">
+                                              <div>
+                                                <div class="panel-title">Sign-up email confirmation</div>
+                                                <div class="panel-sub">Supabase Auth's "Confirm email" setting, read live from Supabase.</div>
+                                              </div>
+                                              <span class="badge" id="emailConfirmBadge">Checking…</span>
+                                            </div>
+                                            <div class="toggle-row">
+                                              <div>
+                                                <div class="toggle-label" id="emailConfirmLabel">Require new sign-ups to confirm their email</div>
+                                                <div class="toggle-sub">On: Supabase emails a confirmation link and the account cannot log in until it is clicked. Off: no confirmation email is sent, and new accounts log in with just their email and password.</div>
+                                              </div>
+                                              <label class="switch">
+                                                <input type="checkbox" id="emailConfirmToggle" disabled aria-labelledby="emailConfirmLabel" onchange="toggleEmailConfirmation(this)">
+                                                <span class="slider"></span>
+                                              </label>
+                                            </div>
+                                            <div class="hint" id="emailConfirmStatus" role="status" aria-live="polite" style="font-size:12px; color:var(--faint); margin-top:4px;">Loading the current setting…</div>
+                                          </div>
                                           <div class="panel">
                                             <div class="panel-head">
                                               <div class="panel-title">Platform notice</div>
@@ -2408,6 +2428,89 @@ async function saveAutoApproval(role, enabled){
   showToast(`${role === 'reseller' ? 'Reseller' : 'Freelancer'} auto-approval ${enabled ? 'enabled' : 'disabled'}`, 'ok');
 }
 
+/* ============ Sign-up email confirmation ============
+   Not an app_settings row: this is Supabase Auth's own "Confirm email"
+   option. The auth-settings edge function checks the caller is an admin
+   and reads or changes it through the Supabase Management API; the
+   access token that needs stays in that function's secrets. */
+let emailConfirmState = null; // true = confirmation required, null = unknown
+
+function renderEmailConfirmation(required, message, isError){
+  const toggle = document.getElementById('emailConfirmToggle');
+  const badgeEl = document.getElementById('emailConfirmBadge');
+  const status = document.getElementById('emailConfirmStatus');
+  emailConfirmState = (required === true || required === false) ? required : null;
+  toggle.checked = required === true;
+  toggle.disabled = emailConfirmState === null;
+  if (emailConfirmState === null){
+    badgeEl.className = 'badge off'; badgeEl.textContent = 'Unavailable';
+  } else if (required){
+    badgeEl.className = 'badge active'; badgeEl.textContent = 'On · email required';
+  } else {
+    badgeEl.className = 'badge pending'; badgeEl.textContent = 'Off · no email';
+  }
+  status.textContent = message || '';
+  status.style.color = isError ? 'var(--danger)' : 'var(--faint)';
+}
+
+async function authSettingsCall(method, body){
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session) throw new Error('Your session has ended. Log in again.');
+  let res;
+  try {
+    res = await fetch(`${window.SUPABASE_URL}/functions/v1/auth-settings`, {
+      method,
+      headers: { 'Authorization': `Bearer ${session.access_token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (e){
+    throw new Error('Could not reach the auth-settings function. Is it deployed?');
+  }
+  const result = await res.json().catch(() => ({}));
+  if (!res.ok){
+    if (res.status === 404 && !result.error) throw new Error('The auth-settings function is not deployed yet.');
+    throw new Error(result.error || `auth-settings answered HTTP ${res.status}`);
+  }
+  return result;
+}
+
+async function loadEmailConfirmation(){
+  const status = document.getElementById('emailConfirmStatus');
+  if (!status) return;
+  document.getElementById('emailConfirmToggle').disabled = true;
+  status.style.color = 'var(--faint)'; status.textContent = 'Loading the current setting…';
+  try {
+    const r = await authSettingsCall('GET');
+    renderEmailConfirmation(r.email_confirmation_required, r.email_confirmation_required
+      ? 'New sign-ups get a confirmation email and must click it before they can log in.'
+      : 'New sign-ups get no confirmation email and can log in straight away with email and password.');
+  } catch (e){
+    renderEmailConfirmation(null, e.message, true);
+  }
+}
+
+async function toggleEmailConfirmation(el){
+  const wanted = el.checked;
+  const previous = emailConfirmState;
+  const question = wanted
+    ? 'Turn ON email confirmation?\n\nNew sign-ups will get a confirmation email from Supabase and cannot log in until they click the link. Existing accounts are not affected.'
+    : 'Turn OFF email confirmation?\n\nNew sign-ups will get NO confirmation email and can log in right away with just email and password, including with an address they do not own. Existing accounts are not affected.';
+  if (!confirm(question)){ el.checked = previous === true; return; }
+  el.disabled = true;
+  document.getElementById('emailConfirmStatus').textContent = 'Saving…';
+  try {
+    const r = await authSettingsCall('POST', { email_confirmation_required: wanted });
+    renderEmailConfirmation(r.email_confirmation_required, r.email_confirmation_required
+      ? 'Saved. New sign-ups must confirm their email.'
+      : 'Saved. New sign-ups can log in without confirming their email.');
+    if (r.audited === false) showToast('Changed, but the audit log entry could not be written', 'err');
+    else showToast(wanted ? 'Email confirmation turned on' : 'Email confirmation turned off', 'ok');
+  } catch (e){
+    renderEmailConfirmation(previous, 'Not changed: ' + e.message, true);
+    showToast('Failed: ' + e.message, 'err');
+  }
+}
+
 function switchTab(tab, btn){
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active');
   ['applications','transactions','pending','customers','links','messages','earnings','domains','health','system','audit','settings'].forEach(t => { document.getElementById('tab-' + t).style.display = (t === tab) ? 'block' : 'none'; });
@@ -2419,7 +2522,7 @@ function switchTab(tab, btn){
   if (tab === 'health') { loadOpsSnapshot(); loadOpsGates(); }
   if (tab === 'system') loadSystemSnapshot();
   if (tab === 'audit') loadAuditLog();
-  if (tab === 'settings') loadStaff();
+  if (tab === 'settings') { loadStaff(); loadEmailConfirmation(); }
   if (tab === 'customers') closeCustomerDetail();
 }
 

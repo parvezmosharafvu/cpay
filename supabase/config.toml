@@ -16,8 +16,8 @@
 #                     All fail closed if CRON_SECRET is unset.
 #
 # user-withdraw is always called by a signed-in creator, and admin-actions
-# by a signed-in admin (the admin role is checked again in code), so both
-# keep JWT verification ON.
+# and auth-settings by a signed-in admin (the admin role is checked again in
+# code), so all three keep JWT verification ON.
 #
 # If you ever let the integration deploy functions WITHOUT this file, all
 # five get verify_jwt = true and every payment on the site starts failing
@@ -32,6 +32,12 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.user-withdraw]
+verify_jwt = true
+
+# Admin-only switch for sign-up email confirmation. Holds the Supabase
+# personal access token (CPAY_SUPABASE_ACCESS_TOKEN secret), so it must
+# never be reachable without a signed-in admin.
+[functions.auth-settings]
 verify_jwt = true
 
 [functions.daily-report]

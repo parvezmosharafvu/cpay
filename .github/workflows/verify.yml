@@ -133,6 +133,13 @@ jobs:
             deno check "${d}index.ts" || fail=1
           done
           exit $fail
+      - name: auth-settings against a mock Management API
+        # Local mock servers only: no call to api.supabase.com, no real token.
+        # Covers the admin check (a non-admin is refused before any
+        # Management API call), the mailer_autoconfirm mapping, the audit
+        # row, and that neither the token nor the auth config's secrets
+        # ever reach a response.
+        run: deno test --allow-net=127.0.0.1 --allow-env supabase/functions/auth-settings/
 
   frontend:
     name: Pages parse and reference real things

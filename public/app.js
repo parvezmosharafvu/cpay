@@ -2,7 +2,7 @@ function $(id){ return document.getElementById(id); }
 function escapeHtml(s){
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-function money(n){ return '$' + Number(n || 0).toFixed(2); }
+function money(n){ return '$' + Number(n ?? 0).toFixed(2); }
 function when(ts){ return ts ? new Date(ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : ''; }
 // A link with no design of its own uses the site's default design.
 function layoutLabel(theme){
@@ -206,7 +206,7 @@ function shortAddress(a){ return a && a.length > 16 ? `${a.slice(0, 8)}...${a.sl
 // is a note to show instead: the form stays visible but nothing can be sent
 // (a freelancer whose reseller handles withdrawals). The server refuses
 // those requests too.
-function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, onDone = () => {}, blocked = null } = {}){
+function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, teamPayout = () => false, onDone = () => {}, blocked = null } = {}){
   let routes = { routes: [], error: null, loading: true };
   let quote = null;
   let busy = false;
@@ -227,6 +227,7 @@ function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, o
   const render = () => {
     const m = method();
     const instant = !!m.instant;
+    $('wDest').disabled = !instant && teamPayout();
     $('wNetField').hidden = !instant;
     $('sumNetRow').hidden = !instant;
     $('sumToRow').hidden = !instant;
@@ -256,10 +257,16 @@ function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, o
       return;
     }
     if (!instant) {
+      const team = teamPayout();
+      $('wDest').disabled = team;
+      if (team) $('wDest').value = '';
       const q = withdrawQuote(amount, pct);
       $('sumFee').textContent = q ? money(q.fee) : (Number.isFinite(pct) ? '$0.00' : 'Set on their account');
       $('sumGet').textContent = q ? money(q.receive) : (Number.isFinite(pct) ? '$0.00' : 'Shown after submit');
-      $('sumNote').textContent = m.note;
+      $('wHint').textContent = team
+        ? 'Minimum $5. Paid to the freelancer\'s saved wallet for this method. A destination you type is not used.'
+        : 'Minimum $5. The amount is held from the balance while an admin reviews the request.';
+      $('sumNote').textContent = team ? 'Their saved wallet, then an admin reviews the request.' : m.note;
       btn.textContent = 'Submit for approval';
       btn.disabled = busy;
       return;

@@ -147,8 +147,9 @@ export async function retryLeafErrors({ breez, key, attempt, existing, deadlineM
 }
 
 // confirmWaitMs: how long confirm waits for the send before answering with
-// the row still 'sending'. The send carries on either way.
-export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(), sleep = wait, log = () => {}, confirmWaitMs = 25_000 }) {
+// the row still 'sending'. The send carries on either way, registered with
+// track() so a shutdown waits for it.
+export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(), sleep = wait, log = () => {}, confirmWaitMs = 25_000, track = (p) => p }) {
   let routeCache = { at: 0, routes: [], error: null };
   const quotes = new Map();
   const inflight = new Map();
@@ -384,10 +385,10 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
         quotes.delete(quoteId);
         if (row.status !== 'sending') return row;
         sendingIds.add(row.id);
-        const sending = send(row, q.prepared).catch((e) => {
+        const sending = track(send(row, q.prepared).catch((e) => {
           log({ event: 'send-crash', withdrawalId: row.id, error: String(e?.message ?? e) });
           return 'sending';
-        }).finally(() => sendingIds.delete(row.id));
+        }).finally(() => sendingIds.delete(row.id)));
         await Promise.race([sending, wait(confirmWaitMs)]);
         return currentRow(row.id);
       })().then(

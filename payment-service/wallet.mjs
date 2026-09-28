@@ -55,7 +55,7 @@ export async function owedToCreatorsUsd(db) {
   return Number(rows[0].owed);
 }
 
-export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => Date.now(), sleep = wait, log = () => {} }) {
+export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => Date.now(), sleep = wait, log = () => {}, track = (p) => p }) {
   const prepared = new Map();
   const inflight = new Map();
 
@@ -173,7 +173,7 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
       }
     } catch (e) {
       if (e instanceof UserError) throw e;
-      throw new UserError(422, `Breez could not prepare this send: ${e?.message ?? e}`);
+      throw new UserError(422, `Could not prepare this send: ${e?.message ?? e}`);
     }
     const s = await guard(sat + feeSat);
     const expiresAtMs = now() + PREPARE_TTL_MS;
@@ -199,7 +199,7 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     const q = await withdrawals.prepareCrossChain({
       route, address: dest, amountSat,
       lowBalanceMessage: 'The platform wallet does not hold enough sats for this send',
-      failMessage: 'Breez could not quote this send', showDetail: true,
+      failMessage: 'Could not quote this send', showDetail: true,
     });
     const view = {
       kind: 'stablecoin', destination: dest,
@@ -242,7 +242,7 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
       const error = String(e?.message ?? e).slice(0, 300);
       await audit(p.adminId, 'platform_wallet.send.result', p.prepareId, { status: 'error', error, ...record }).catch(() => {});
       log({ event: 'admin-send-error', prepareId: p.prepareId, error });
-      throw new UserError(502, `Breez did not complete the send: ${error}`);
+      throw new UserError(502, `The send did not complete: ${error}`);
     }
     await audit(p.adminId, 'platform_wallet.send.result', p.prepareId, { status: payment.status, breezPaymentId: payment.id, ...record })
       .catch((e) => log({ event: 'admin-send-audit-failed', prepareId: p.prepareId, error: String(e?.message ?? e) }));
@@ -259,7 +259,7 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
       throw new UserError(409, 'The fee quote expired. Prepare the send again.');
     }
     prepared.delete(prepareId);
-    const job = run(p).finally(() => setTimeout(() => inflight.delete(prepareId), 60_000).unref?.());
+    const job = track(run(p)).finally(() => setTimeout(() => inflight.delete(prepareId), 60_000).unref?.());
     inflight.set(prepareId, job);
     return job;
   }

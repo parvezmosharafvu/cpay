@@ -121,8 +121,8 @@ async function renderApps() {
     <td>${escapeHtml(a.requested_role)}</td>
     <td>${badge(a.status)}</td>
     <td class="num">
-      <button class="btn primary sm" data-approve="${a.user_id}">Approve</button>
-      <button class="btn danger sm" data-reject="${a.user_id}">Reject</button>
+      <button class="btn primary sm" data-approve="${a.id}">Approve</button>
+      <button class="btn danger sm" data-reject="${a.id}">Reject</button>
     </td>
   </tr>`).join('');
   document.getElementById('apps').innerHTML = `<div class="card flush"><table class="table"><thead><tr><th>Applicant</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">No applications waiting</td></tr>'}</tbody></table></div>`;
@@ -130,7 +130,7 @@ async function renderApps() {
   document.querySelectorAll('[data-reject]').forEach((b) => b.onclick = () => review(b.dataset.reject, 'rejected'));
 }
 async function review(id, status) {
-  const { error } = await sb.rpc('admin_review_account_application', { p_user_id: id, p_status: status });
+  const { error } = await sb.rpc('admin_review_account_application', { p_application_id: id, p_decision: status });
   if (error) return toast(error.message);
   toast('Updated', true); renderApps(); renderPeople();
 }

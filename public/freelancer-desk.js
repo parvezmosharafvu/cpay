@@ -77,11 +77,21 @@ async function makeLink() {
         p_link_id: link.id, p_theme: exp.theme, p_wallet_mode: exp.wallet, p_invoice_theme: exp.invoice,
       });
     }
-    const cost = Number(document.getElementById('linkCost').value);
-    if (Number.isFinite(cost)) await sb.rpc('set_my_cost_percent', { p_percent: cost }).catch(() => {});
+    const costError = await applyLinkCost(link?.id);
+    if (costError) return toast(costError);
   }
   toast('Link ready', true);
   await renderLinks();
+}
+
+async function applyLinkCost(linkId) {
+  if (!linkId || me.cost_locked) return null;
+  const raw = document.getElementById('linkCost').value;
+  if (raw === '') return null;
+  const cost = Number(raw);
+  if (!Number.isFinite(cost)) return 'Enter a valid link cost';
+  const { error } = await sb.rpc('set_link_cost_percent', { p_link_id: linkId, p_percent: cost });
+  return error ? error.message : null;
 }
 
 async function renderPays() {

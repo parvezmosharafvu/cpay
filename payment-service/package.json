@@ -5,7 +5,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test"
+    "test": "node --test --test-concurrency=1"
   },
   "dependencies": {
     "@breeztech/breez-sdk-spark": "0.26.0",

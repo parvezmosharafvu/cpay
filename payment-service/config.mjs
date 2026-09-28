@@ -53,3 +53,14 @@ export function loadConfig(env = process.env) {
     catchUpMs: catchUpSecs * 1000, shutdownTimeoutMs: shutdownSecs * 1000,
   });
 }
+
+// Replaces every secret value in a log line. The database password is
+// included because a connection error can quote the URL.
+export function redactor(config) {
+  let dbPassword = '';
+  try { dbPassword = decodeURIComponent(new URL(config.databaseUrl).password); } catch {}
+  const secrets = [config.secret, config.apiKey, config.mnemonic, dbPassword, config.databaseUrl]
+    .filter((s) => s && s.length >= 6)
+    .sort((a, b) => b.length - a.length);
+  return (line) => secrets.reduce((out, s) => out.split(s).join('[redacted]'), line);
+}

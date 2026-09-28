@@ -109,17 +109,18 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Payment service settles each payment once
+      - name: Payment service against the migrated database
         working-directory: payment-service
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
         run: |
-          # settle_breez_payment against the database the migrations just
-          # built: a replayed event, a second payment for a settled hash,
-          # an unknown hash, an underpayment and an expired invoice must
-          # credit nothing. Rolled back at the end.
+          # Ledger (each payment credited once), withdrawals (one send per
+          # quote, refunds once), the 0103 balance guard under concurrency,
+          # config, and the whole service over HTTP with a fake SDK,
+          # including graceful shutdown. Files run one at a time: a service
+          # start reconciles every 'sending' withdrawal in the database.
           npm ci --no-audit --no-fund
-          node --test
+          npm test
 
   functions:
     name: Edge functions type-check

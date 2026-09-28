@@ -22,7 +22,10 @@ export function pair(chain, asset, { provider = 'orchestra', minUsdCents = 100, 
 // stale-reservation leaf error instead.
 export function fakeBreez({ mode = 'ok', feeBase = 520_000n, leafFailures = 0, quoteTtlMs = 60_000 } = {}) {
   const payments = new Map();
-  const calls = { routes: 0, send: 0, prepare: 0, sync: 0 };
+  const calls = { routes: 0, send: 0, prepare: 0, sync: 0, disconnect: 0 };
+  // Received payments listPayments returns, and the order of notable calls.
+  const received = [];
+  const order = [];
   const byFamily = {
     tron: [pair('tron', 'USDT')],
     // BSC USDT (BEP-20) has 18 decimals.
@@ -31,7 +34,7 @@ export function fakeBreez({ mode = 'ok', feeBase = 520_000n, leafFailures = 0, q
   };
   let release;
   const fake = {
-    payments, calls, mode, leafFailures,
+    payments, calls, mode, leafFailures, received, order, onEvent: null,
     releaseHang: () => release?.(),
     async getCrossChainRoutes({ addressDetails }) { calls.routes++; return byFamily[addressDetails.addressFamily] ?? []; },
     async parse(input) {
@@ -40,6 +43,10 @@ export function fakeBreez({ mode = 'ok', feeBase = 520_000n, leafFailures = 0, q
       throw new Error('unrecognized input');
     },
     async getInfo() { return { balanceSats: 50_000_000 }; },
+    async addEventListener({ onEvent }) { fake.onEvent = onEvent; return 'listener'; },
+    async disconnect() { calls.disconnect++; order.push('disconnect'); },
+    async listFiatRates() { return { rates: [{ coin: 'USD', value: RATE }] }; },
+    async listPayments({ offset = 0, limit = 100 } = {}) { return { payments: received.slice(offset, offset + limit) }; },
     async syncWallet() { calls.sync++; return {}; },
     async prepareSendPayment({ paymentRequest, amount, feePolicy }) {
       calls.prepare++;
@@ -61,7 +68,7 @@ export function fakeBreez({ mode = 'ok', feeBase = 520_000n, leafFailures = 0, q
     async sendPayment({ prepareResponse, idempotencyKey }) {
       calls.send++;
       const store = (status = 'completed', conv = 'pending') => {
-        const p = { id: idempotencyKey, paymentType: 'send', status, amount: prepareResponse.amount, conversionDetails: { status: conv } };
+        const p = { id: idempotencyKey, paymentType: 'send', status, amount: prepareResponse.amount, timestamp: Math.floor(Date.now() / 1000), conversionDetails: { status: conv } };
         if (!payments.has(idempotencyKey)) payments.set(idempotencyKey, p);
         return payments.get(idempotencyKey);
       };
@@ -74,7 +81,9 @@ export function fakeBreez({ mode = 'ok', feeBase = 520_000n, leafFailures = 0, q
       if (fake.mode === 'network-after-transfer') { store(); throw new Error('Network error: connection reset'); }
       if (fake.mode === 'network-no-transfer') throw new Error('Network error: connection reset');
       if (fake.mode === 'spark-failed') return { payment: store('failed', undefined) };
-      if (fake.mode === 'hang') return new Promise((resolve) => { release = () => resolve({ payment: store() }); });
+      if (fake.mode === 'hang') {
+        return new Promise((resolve) => { release = () => { order.push('send-done'); resolve({ payment: store() }); }; });
+      }
       throw new Error(`unknown mode ${fake.mode}`);
     },
     async getPayment({ paymentId }) {

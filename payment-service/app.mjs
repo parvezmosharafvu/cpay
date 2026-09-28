@@ -14,7 +14,9 @@ const PAYMENT_EVENTS = new Set(['paymentSucceeded', 'paymentFailed', 'paymentPen
 // AutoOptimizationEvent types that end a leaf optimization run.
 const OPTIMIZATION_DONE = new Set(['completed', 'cancelled', 'failed', 'skipped']);
 
-export const logJson = (entry) => console.log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
+// One JSON line per entry. redact() strips secret values from the line, so
+// an error message that happens to quote one never reaches the log.
+export const logJson = (entry, redact = (line) => line) => console.log(redact(JSON.stringify({ at: new Date().toISOString(), ...entry })));
 const errorText = (e) => String(e?.message ?? e).slice(0, 300);
 
 function timeout(promise, ms) {

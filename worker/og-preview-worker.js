@@ -28,6 +28,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Serving from the origin removes that dependency entirely and follows
 // whichever domain the link was actually shared on.
 const OG_PATH = "/assets/og";
+const OG_ASSET_VERSION = "3";
 // Real pages and static files that must never be treated as a payment slug.
 // Keep this in sync with the RESERVED list in 404.html and dashboard.html.
 const RESERVED = new Set([
@@ -75,19 +76,19 @@ return Array.isArray(rows) ? rows[0] : rows;
 * request on every single crawl.
 */
 async function resolveOgImage(origin, slug, ogImage) {
-const candidate = `${origin}${OG_PATH}/${encodeURIComponent(slug)}.png`;
-const fallback = `${origin}${OG_PATH}/og-default.png`;
+const candidate = `${origin}${OG_PATH}/${encodeURIComponent(slug)}.png?v=${OG_ASSET_VERSION}`;
+const fallback = `${origin}${OG_PATH}/og-default.png?v=${OG_ASSET_VERSION}`;
 
 // 1. An explicit image on the link wins. The database constrains
 //    payment_links.og_image to a bare filename, so it cannot escape
 //    /assets/og/.
 if (ogImage) {
-return `${origin}${OG_PATH}/${encodeURIComponent(ogImage)}`;
+return `${origin}${OG_PATH}/${encodeURIComponent(ogImage)}?v=${OG_ASSET_VERSION}`;
 }
 // Cache key is versioned (v2). The old key still holds "0" for every slug
 // from while GitHub raw was 404-ing, and those entries would keep forcing
 // the fallback for up to an hour after this fix ships.
-const cacheKey = new Request(`https://og-check.internal/v2/${encodeURIComponent(origin)}/${slug}`);
+const cacheKey = new Request(`https://og-check.internal/v3/${encodeURIComponent(origin)}/${slug}`);
 const cache = caches.default;
 try {
 const cached = await cache.match(cacheKey);
@@ -141,7 +142,7 @@ redirect: "follow",
 
 if (!res.ok || !(res.headers.get("Content-Type") || "").startsWith("image/")) {
 // Never cache a failure — a crawler would hold on to the broken result.
-return fetch(`${url.origin}${OG_PATH}/og-default.png`);
+return fetch(`${url.origin}${OG_PATH}/og-default.png?v=${OG_ASSET_VERSION}`);
 }
 
 const out = new Response(res.body, res);
@@ -238,7 +239,7 @@ const siteName = escapeHtml(new URL(origin).hostname);
 const title = "Get paid from Cash App";
 const description =
 "Share your payment link and they pay from their Cash balance. Secure checkout, paid in seconds \u2014 no crypto to buy, no signup needed to pay.";
-const image = `${origin}${OG_PATH}/og-home.png`;
+const image = `${origin}${OG_PATH}/og-home.png?v=${OG_ASSET_VERSION}`;
 
 return `<!DOCTYPE html>
 <html lang="en">

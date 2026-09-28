@@ -796,17 +796,19 @@ test('the reseller still withdraws for a team member while self-withdraw is off,
   const admin = await makeAdmin();
   const freelancer = await makeFreelancer(reseller, { earned: 100 });
   assert.equal((await db.query('select self_withdraw_allowed($1) as ok', [freelancer])).rows[0].ok, false);
+  await db.query(`update profiles set wallet_bkash = '01711000000' where id = $1`, [freelancer]);
   await asUser(reseller, async (c) => {
-    const { rows: [r] } = await c.query(`select user_id, status, admin_note, fee_percent::text from reseller_request_withdrawal_for($1, 25, 'bkash', '01711000000')`, [freelancer]);
+    const { rows: [r] } = await c.query(`select user_id, status, admin_note, fee_percent::text, destination from reseller_request_withdrawal_for($1, 25, 'bkash', 'typed-not-used')`, [freelancer]);
     assert.equal(r.user_id, freelancer);
     assert.equal(r.status, 'pending');
     assert.equal(r.admin_note, 'Submitted by reseller');
+    assert.equal(r.destination, '01711000000');
     const b = (await c.query('select available::text from get_balance_for($1)', [freelancer])).rows[0];
     assert.equal(Number(b.available), 75);
   });
-  await asUser(admin, async (c) => {
-    const { rows: [r] } = await c.query(`select user_id, status from reseller_request_withdrawal_for($1, 10, 'bank', 'Acct 123')`, [freelancer]);
-    assert.deepEqual(r, { user_id: freelancer, status: 'pending' });
+    await asUser(admin, async (c) => {
+    const { rows: [r] } = await c.query(`select user_id, status, destination from reseller_request_withdrawal_for($1, 10, 'bank', 'Acct 123')`, [freelancer]);
+    assert.deepEqual(r, { user_id: freelancer, status: 'pending', destination: 'Acct 123' });
   });
   // Another reseller cannot.
   const other = await makeReseller();
@@ -936,10 +938,12 @@ test('fee hierarchy: global default, then the reseller team fee, then the accoun
     await asUser(freelancer, async (c) => {
       assert.equal((await c.query(`select fee_percent::text, amount_after_fee::text from request_withdrawal(10, 'bkash', '01711000000')`)).rows[0].fee_percent, '1.50');
     });
+    await db.query(`update profiles set wallet_bkash = '01711000000' where id = $1`, [freelancer]);
     await asUser(reseller, async (c) => {
-      const r = (await c.query(`select fee_percent::text, amount_after_fee::text from reseller_request_withdrawal_for($1, 10, 'bkash', '01711000000')`, [freelancer])).rows[0];
+      const r = (await c.query(`select fee_percent::text, amount_after_fee::text, destination from reseller_request_withdrawal_for($1, 10, 'bkash', 'typed-not-used')`, [freelancer])).rows[0];
       assert.equal(r.fee_percent, '1.50');
       assert.equal(Number(r.amount_after_fee), 9.85);
+      assert.equal(r.destination, '01711000000');
     });
     await asUser(admin, async (c) => {
       await c.query(`update profiles set auto_withdraw_enabled = true, default_withdrawal_method = 'bkash', wallet_bkash = '01711000000' where id = $1`, [solo]);

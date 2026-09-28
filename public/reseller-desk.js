@@ -58,10 +58,8 @@ async function renderTeam() {
     <td>${escapeHtml(m.email)}</td>
     <td>${m.affiliate ? 'Sign-up link' : 'Assigned'}</td>
     <td class="num">${money(m.available)}</td>
-    <td class="num">
-      <button class="btn ghost sm" data-cash="${m.id}" data-name="${escapeHtml(m.display_name || m.email)}" data-avail="${Number(m.available || 0)}">Withdraw</button>
-      <button class="btn ghost sm" data-cost="${m.id}">Lock cost</button>
-    </td>
+    <td class="num">${m.affiliate ? `<button class="btn ghost sm" data-cash="${m.id}" data-name="${escapeHtml(m.display_name || m.email)}" data-avail="${Number(m.available ?? 0)}">Withdraw</button>
+      <button class="btn ghost sm" data-cost="${m.id}">Lock cost</button>` : '<span class="faint">View only</span>'}</td>
   </tr>`).join('');
 
   const commRows = (rowsComm || []).map((r) => `<tr>
@@ -75,10 +73,10 @@ async function renderTeam() {
   ${selfWithdrawCard()}
   <div class="card">
     <h3>Team link cost</h3>
-    <p class="muted">Link cost is added to what the payer pays. It is separate from the platform fee and your commission. You can lock one rate on every freelancer on your team.</p>
+    <p class="muted">Link cost is added to what the payer pays. It is separate from the platform fee and your commission. Lock or unlock applies only to freelancers who signed up with your link. Unlock does not change the rate they already have.</p>
     <div class="field short"><label for="teamCost">Link cost %</label><input id="teamCost" type="number" min="0" step="0.1" value="${Number(me.team_cost_percent || me.cost_percent || 0)}"></div>
     <div class="row">
-      <button class="btn primary" id="lockAll">Lock on all my freelancers</button>
+      <button class="btn primary" id="lockAll">Lock on sign-up freelancers</button>
       <button class="btn ghost" id="unlockAll">Unlock their rates</button>
     </div>
   </div>
@@ -117,7 +115,7 @@ async function renderTeam() {
     const pct = Number(document.getElementById('teamCost').value);
     const { error: e } = await sb.rpc('reseller_lock_team_cost', { p_percent: pct, p_lock: false });
     if (e) return toast(e.message);
-    toast('Rates unlocked. Commission still applies on affiliate settles.', true);
+    toast('Rates unlocked. Their cost percentages were left as they were.', true);
   };
 }
 
@@ -158,10 +156,21 @@ function bindSelfWithdraw() {
   };
 }
 
+let pendingCash = null;
+
 function prepareWithdraw(userId, name, available) {
+  pendingCash = { userId, name, available };
   show('cash');
-  document.getElementById('wUser').value = userId;
-  document.getElementById('wWho').innerHTML = `Withdrawing for <strong>${escapeHtml(name)}</strong> · available ${money(available)}`;
+  applyPendingCash();
+}
+
+function applyPendingCash() {
+  if (!pendingCash) return;
+  const user = document.getElementById('wUser');
+  const who = document.getElementById('wWho');
+  if (!user || !who) return;
+  user.value = pendingCash.userId;
+  who.innerHTML = `Withdrawing for <strong>${escapeHtml(pendingCash.name)}</strong> · available ${money(pendingCash.available)}`;
   refreshWithdraw();
 }
 
@@ -185,10 +194,18 @@ async function renderLinks() {
     const row = Array.isArray(data) ? data[0] : data;
     if (row?.slug) {
       const { data: link } = await sb.from('payment_links').select('id').eq('slug', row.slug).maybeSingle();
-      if (link?.id) await sb.rpc('set_payment_link_experience', { p_link_id: link.id, p_theme: exp.theme, p_wallet_mode: exp.wallet, p_invoice_theme: exp.invoice });
+      if (link?.id) {
+        const { error: expErr } = await sb.rpc('set_payment_link_experience', { p_link_id: link.id, p_theme: exp.theme, p_wallet_mode: exp.wallet, p_invoice_theme: exp.invoice });
+        if (expErr) return toast(expErr.message);
+        const raw = document.getElementById('linkCost').value;
+        if (raw !== '') {
+          const cost = Number(raw);
+          if (!Number.isFinite(cost)) return toast('Enter a valid link cost');
+          const { error: costErr } = await sb.rpc('set_link_cost_percent', { p_link_id: link.id, p_percent: cost });
+          if (costErr) return toast(costErr.message);
+        }
+      }
     }
-    const cost = Number(document.getElementById('linkCost').value);
-    if (Number.isFinite(cost)) await sb.rpc('set_my_cost_percent', { p_percent: cost }).catch(() => {});
     toast('Link ready', true);
     renderLinks();
   };
@@ -206,6 +223,7 @@ async function renderCash() {
     // Instant withdrawals pay out the signed-in account only; a teammate
     // sends their own from their dashboard.
     instantAllowed: own,
+    teamPayout: () => document.getElementById('wUser')?.value !== me.id,
     submitManual: async () => {
       const { data, error } = await sb.rpc('reseller_request_withdrawal_for', {
         p_user_id: document.getElementById('wUser').value,
@@ -220,6 +238,7 @@ async function renderCash() {
     },
     onDone: () => { renderHome(); renderTeam(); },
   });
+  applyPendingCash();
 }
 
 async function renderNotice() {

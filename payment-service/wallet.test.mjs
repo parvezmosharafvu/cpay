@@ -18,7 +18,7 @@ const SPARK = 'sparkrt1fakeaddress';
 
 after(async () => {
   if (users.length) {
-    await db.query(`delete from audit_log where actor_id = any($1::uuid[])`, [users]);
+    await db.query(`delete from audit_log where actor_id = any($1::uuid[]) and set_config('cpay.audit_maintenance', 'on', true) = 'on'`, [users]);
     await db.query('delete from auth.users where id = any($1::uuid[])', [users]);
   }
   await db.end();

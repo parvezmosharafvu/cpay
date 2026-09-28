@@ -264,26 +264,42 @@ async function renderFlags() {
 
 async function renderAlerts() {
   const resellers = people.filter((p) => p.role === 'moderator');
-  const opts = resellers.map((p) => `<option value="${p.id}">${escapeHtml(p.display_name || p.email)}</option>`).join('');
+  const { data: channels, error } = await sb.from('reseller_alert_channels').select('reseller_id, telegram_chat_id, enabled');
+  if (error) { document.getElementById('alerts').innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
+  const byId = new Map((channels || []).map((c) => [c.reseller_id, c]));
+  const name = (p) => escapeHtml(p.display_name || p.email);
+  const opts = resellers.map((p) => `<option value="${p.id}">${name(p)}</option>`).join('');
+  const rows = resellers.map((p) => {
+    const c = byId.get(p.id);
+    return `<tr><td>${name(p)}</td><td class="mono">${c?.telegram_chat_id ? escapeHtml(c.telegram_chat_id) : '<span class="faint">Not set</span>'}</td><td>${c?.telegram_chat_id ? (c.enabled ? 'On' : 'Paused') : '-'}</td></tr>`;
+  }).join('');
   document.getElementById('alerts').innerHTML = `<div class="card narrow">
-    <h3>Daily reseller digest</h3>
-    <p class="muted">Sent at 5:00 PM Dhaka time with the settled total and earnings per link, including link cost.</p>
+    <h3>Reseller Telegram groups</h3>
+    <p class="muted">Each reseller's group gets a message for every settled payment on their team's links, and a daily close at 5:00 PM Dhaka time with each link's payments, share, fee and net. Add the cpay bot to the group first. Resellers can set their own group in their desk.</p>
     <div class="field"><label for="alWho">Reseller</label><select id="alWho">${opts}</select></div>
-    <div class="field"><label for="alDisc">Discord webhook</label><input id="alDisc"></div>
-    <div class="field"><label for="alTok">Telegram bot token</label><input id="alTok"></div>
-    <div class="field"><label for="alChat">Telegram chat ID</label><input id="alChat"></div>
-    <button class="btn primary" id="alSave">Save channel</button>
-  </div>`;
+    <div class="field"><label for="alChat">Group chat ID</label><input id="alChat" placeholder="-1001234567890"></div>
+    <div class="field"><label><input type="checkbox" id="alOn" checked> Send messages to this group</label></div>
+    <button class="btn primary" id="alSave">Save group</button>
+  </div>
+  <div class="card flush"><table class="table"><thead><tr><th>Reseller</th><th>Group chat ID</th><th>Messages</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="3" class="empty">No resellers</td></tr>'}</tbody></table></div>`;
+  const who = document.getElementById('alWho');
+  const fill = () => {
+    const c = byId.get(who.value);
+    document.getElementById('alChat').value = c?.telegram_chat_id || '';
+    document.getElementById('alOn').checked = c ? c.enabled : true;
+  };
+  who.onchange = fill;
+  fill();
   document.getElementById('alSave').onclick = async () => {
-    const { error } = await sb.rpc('admin_set_reseller_alerts', {
-      p_reseller_id: document.getElementById('alWho').value,
-      p_discord_webhook: document.getElementById('alDisc').value,
-      p_telegram_bot_token: document.getElementById('alTok').value,
-      p_telegram_chat_id: document.getElementById('alChat').value,
-      p_enabled: true,
+    const { error: saveErr } = await sb.rpc('set_reseller_telegram', {
+      p_reseller_id: who.value,
+      p_chat_id: document.getElementById('alChat').value,
+      p_enabled: document.getElementById('alOn').checked,
     });
-    if (error) return toast(error.message);
-    toast('Alert channel saved', true);
+    if (saveErr) return toast(saveErr.message);
+    toast('Telegram group saved', true);
+    renderAlerts();
   };
 }
 

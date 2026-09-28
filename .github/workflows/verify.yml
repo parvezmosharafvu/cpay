@@ -105,7 +105,7 @@ jobs:
           done
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/dashboards_test.sql
 
-      - name: Telegram messages (0102)
+      - name: Telegram messages (0106)
         env:
           PGPASSWORD: postgres
         run: |
@@ -125,7 +125,7 @@ jobs:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
         run: |
           # Ledger (each payment credited once), withdrawals (one send per
-          # quote, refunds once), the 0103 balance guard under concurrency,
+          # quote, refunds once), the 0105 balance guard under concurrency,
           # config, and the whole service over HTTP with a fake SDK,
           # including graceful shutdown. Files run one at a time: a service
           # start reconciles every 'sending' withdrawal in the database.

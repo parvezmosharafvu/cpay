@@ -1,4 +1,4 @@
-// telegram-notify: sends what migration 0102 queued in telegram_outbox.
+// telegram-notify: sends what migration 0106 queued in telegram_outbox.
 // Called by pg_cron (cpay-telegram-send, every minute when a row is due)
 // with the x-cron-secret header.
 //

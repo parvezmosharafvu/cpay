@@ -214,7 +214,7 @@ ALERT_ON_SETTLED             false = no settled-payment copies to the admin grou
 
 `health`, `daily-report` and `ledger-backup` use these for ops alerts.
 
-Reseller Telegram groups (migration 0102): each reseller saves their group's
+Reseller Telegram groups (migration 0106): each reseller saves their group's
 chat ID in their desk (Profile → Telegram group), or the admin does under
 Telegram groups. When a payment settles, the database queues one message per
 group in `telegram_outbox` (one row per payment and group, so a payment is

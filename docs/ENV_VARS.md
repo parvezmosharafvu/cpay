@@ -26,7 +26,7 @@ Used by `daily-report`, `ledger-backup`, `health` and `telegram-notify`:
       `cpay_cron_secret`, which is where pg_cron reads it.
 
 Used by `telegram-notify` (settled-payment messages and the 17:00 Dhaka daily
-close, both queued by migration 0102 in `telegram_outbox`), and by `health`,
+close, both queued by migration 0106 in `telegram_outbox`), and by `health`,
 `daily-report` and `ledger-backup` for ops alerts:
 
 - [ ] `ALERT_TELEGRAM_BOT_TOKEN` — the cpay bot's token from @BotFather. One

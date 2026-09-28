@@ -1,5 +1,5 @@
 // Telegram message text (HTML parse mode) for the two telegram_outbox
-// kinds in migration 0102. Pure functions: the payload in, the text out.
+// kinds in migration 0106. Pure functions: the payload in, the text out.
 // Every name that comes from a user goes through escapeHtml.
 
 export const MAX_MESSAGE = 4096;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 
-// Migration 0103: the database refuses any withdrawal that would take a
+// Migration 0105: the database refuses any withdrawal that would take a
 // balance below zero, whichever path writes it. Runs against a database
 // with every migration applied; each test uses a fresh user.
 const url = process.env.DATABASE_URL;

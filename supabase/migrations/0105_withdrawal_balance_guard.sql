@@ -1,5 +1,5 @@
 -- ============================================================
--- 0103: a withdrawal can never take a balance below zero
+-- 0105: a withdrawal can never take a balance below zero
 -- ============================================================
 -- Every withdrawal path (request_withdrawal, reserve_stablecoin_withdrawal,
 -- reseller_request_withdrawal_for, system_queue_withdrawal) checks the

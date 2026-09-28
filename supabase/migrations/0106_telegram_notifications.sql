@@ -1,5 +1,5 @@
 -- ============================================================
--- 0102: Telegram messages for resellers, replacing the old digest
+-- 0106: Telegram messages for resellers, replacing the old digest
 -- ============================================================
 -- Two messages go to each reseller's Telegram group, from one cpay bot
 -- (edge secret ALERT_TELEGRAM_BOT_TOKEN, the name the ops alerts already

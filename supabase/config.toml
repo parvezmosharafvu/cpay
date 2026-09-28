@@ -57,7 +57,7 @@ verify_jwt = false
 [functions.og-image]
 verify_jwt = false
 
-# Sends the Telegram messages migration 0102 queues (settled payments and
+# Sends the Telegram messages migration 0106 queues (settled payments and
 # the 17:00 Dhaka daily close). Called by pg_cron with x-cron-secret, like
 # daily-report; it refuses every request without it.
 [functions.telegram-notify]

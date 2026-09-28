@@ -163,7 +163,7 @@ withdrawal in the database, so files must not overlap).
 `service.test.mjs` starts the real service over HTTP with a fake SDK: auth,
 input checks, `/health`, log redaction, and graceful shutdown with a send,
 an admin send and leaf optimization in flight. `balance-guard.test.mjs`
-checks migration 0103: no withdrawal row may take a balance below zero,
+checks migration 0105: no withdrawal row may take a balance below zero,
 including two at once. `config.test.mjs` covers every variable. `ledger.test.mjs` works inside a transaction that is
 rolled back. `withdraw.test.mjs` commits (confirm and crash recovery need
 several connections), uses fresh users and deletes them at the end; it

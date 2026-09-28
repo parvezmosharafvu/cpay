@@ -1,4 +1,4 @@
--- Telegram messages (0102) against a freshly migrated database: where each
+-- Telegram messages (0106) against a freshly migrated database: where each
 -- reseller's group is set, one settled-payment message per payment and
 -- recipient, the 17:00 Dhaka daily close with its numbers, re-runs that
 -- add nothing, and the sender's claim/finish rules. BEGIN/ROLLBACK; any

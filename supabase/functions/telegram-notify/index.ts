@@ -1,4 +1,4 @@
-// Sends queued Telegram messages (migration 0102). See handler.ts.
+// Sends queued Telegram messages (migration 0106). See handler.ts.
 //
 // Secrets (Dashboard > Edge Functions > Secrets):
 //   CRON_SECRET               the x-cron-secret pg_cron sends

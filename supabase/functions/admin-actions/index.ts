@@ -141,7 +141,7 @@ Deno.serve(async (req) => {
             const { data: payment } = await supabaseAdmin
                 .from("payments").select("user_id").eq("id", paymentId).single();
             // The Telegram message is queued by the database on the move to
-            // settled (0102), the same as for a received payment.
+            // settled (0106), the same as for a received payment.
             if (payment) await maybeQueueAutoWithdrawal(payment.user_id);
             return json({ status: "settled" }, 200, cors);
         } catch (e) {

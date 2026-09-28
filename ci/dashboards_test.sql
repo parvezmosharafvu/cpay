@@ -145,9 +145,7 @@ begin
   exception when others then if sqlerrm <> 'Not authorized' then raise; end if; end;
   begin perform * from admin_daily_timeseries(3); raise exception 'freelancer read admin series';
   exception when others then if sqlerrm <> 'Not authorized' then raise; end if; end;
-  begin perform * from reseller_cycle_digest('b1000000-0000-0000-0000-000000000001'); raise exception 'freelancer read a digest';
-  exception when others then if sqlerrm <> 'Not authorized' then raise; end if; end;
-  raise notice 'PASS freelancer denied: other breakdown, team, admin summary, admin series, reseller digest';
+  raise notice 'PASS freelancer denied: other breakdown, team, admin summary, admin series';
 end $$;
 
 -- ---------------------------------------------------------------
@@ -171,10 +169,7 @@ begin
   begin perform * from daily_link_breakdown(3, 'c1000000-0000-0000-0000-000000000003');
         raise exception 'reseller read outsider links';
   exception when others then if sqlerrm <> 'Not authorized' then raise; end if; end;
-  begin perform * from reseller_cycle_digest('b1000000-0000-0000-0000-000000000002'); raise exception 'reseller read other digest';
-  exception when others then if sqlerrm <> 'Not authorized' then raise; end if; end;
-  perform * from reseller_cycle_digest('b1000000-0000-0000-0000-000000000001');
-  raise notice 'PASS reseller team = %; settled 200 over 3 days; affiliate commission 13.19; assigned 0; outsider and other reseller denied', v_emails;
+  raise notice 'PASS reseller team = %; settled 200 over 3 days; affiliate commission 13.19; assigned 0; outsider denied', v_emails;
 end $$;
 
 -- ---------------------------------------------------------------

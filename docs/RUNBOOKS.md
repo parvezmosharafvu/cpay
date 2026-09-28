@@ -16,9 +16,11 @@ cron is alive, no manual withdrawal is pending over 24 h, and no stablecoin
 withdrawal is `sending` over 30 min. Failures go to `ALERT_WEBHOOK_URL`
 and/or Telegram.
 
-The service's own view: `GET /health` with the bearer secret returns
-`network`, `db`, `synced`, `balanceSats`, `lastSyncedAt`, the last catch-up
-result and the withdraw route cache.
+The service's own view: `GET /health` needs no secret and returns only
+`ok`, `sdkConnected`, `db`, `synced`, `lastSyncedAt` and `shuttingDown`,
+with 200 when all is well and 503 otherwise. The wallet balance comes from the admin
+wallet `info` action (`POST /admin/wallet/info`) and the withdraw route cache
+from `GET /withdraw/routes`, both behind the bearer secret.
 
 ## Restart the payment service
 

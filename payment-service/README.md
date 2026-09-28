@@ -25,9 +25,19 @@ to settle before mainnet.
   each to the same function, so payments received while the service was
   down or an event was missed still settle. The same pass marks unpaid
   invoices past `expires_at` as `expired`.
-- `GET /health` returns 200 when the database answers and the wallet has
-  synced in the last 10 minutes, 503 otherwise. The `health` edge function
-  calls it.
+- `GET /health` needs no secret, so a host's health check can call it. It
+  returns 200 when the database answers, the SDK answers, the wallet has
+  synced in the last 10 minutes and the service is not shutting down, 503
+  otherwise. The body is only `ok`, `sdkConnected`, `db`, `synced`,
+  `lastSyncedAt` and `shuttingDown`: no balance, id or setting. The `health`
+  edge function calls it.
+- On SIGTERM or SIGINT the service stops taking requests (new ones get 503
+  and the listener closes), waits up to `SHUTDOWN_TIMEOUT_SECS` for work in
+  flight (requests, creator withdrawal sends, admin sends, settles, leaf
+  optimization), then disconnects the SDK and closes the database pool. It
+  exits 0 if everything finished and 1 if the timeout cut something off. A
+  send cut off that way stays `sending` and the next start reconciles it
+  against the wallet; it is never sent twice.
 
 - Instant stablecoin withdrawals (migration 0095), called only by the
   `user-withdraw` edge function after it has checked the user's JWT:
@@ -116,7 +126,10 @@ to settle before mainnet.
     subject and the Breez idempotency key. It never writes `withdrawals`
     or `payments`, and the withdrawal reconciler ignores these sends.
 
-All routes need `Authorization: Bearer $PAYMENT_SERVICE_SECRET`.
+Every route except `/health` needs `Authorization: Bearer
+$PAYMENT_SERVICE_SECRET`, compared in constant time. Log lines are JSON, one
+per line, and pass through a redactor that removes the secret, API key,
+wallet words and database URL.
 
 ## Run
 
@@ -125,6 +138,12 @@ cp .env.example .env   # fill in; .env and .data/ are gitignored
 npm ci
 node --env-file=.env server.mjs
 ```
+
+Every setting is in `docs/ENV_VARS.md` (Payment service). Put the wallet
+words in a file only the service user can read and set
+`BREEZ_MNEMONIC_FILE` to it. `Dockerfile` builds a non-root image with
+`/data` as the wallet volume; `docs/payment-service-deploy.md` covers Fly.io,
+Railway and a VPS with systemd.
 
 Edge function secrets: `PAYMENT_SERVICE_URL` (where this listens) and
 `PAYMENT_SERVICE_SECRET` (same value as here). `DATABASE_URL` must be a
@@ -138,8 +157,14 @@ disk. The seed alone restores the wallet if that directory is lost.
 
 ## Test
 
-`DATABASE_URL=... node --test` runs against a database with every
-migration applied. `ledger.test.mjs` works inside a transaction that is
+`DATABASE_URL=... npm test` runs against a database with every migration
+applied, one file at a time (a service start reconciles every `sending`
+withdrawal in the database, so files must not overlap).
+`service.test.mjs` starts the real service over HTTP with a fake SDK: auth,
+input checks, `/health`, log redaction, and graceful shutdown with a send,
+an admin send and leaf optimization in flight. `balance-guard.test.mjs`
+checks migration 0103: no withdrawal row may take a balance below zero,
+including two at once. `config.test.mjs` covers every variable. `ledger.test.mjs` works inside a transaction that is
 rolled back. `withdraw.test.mjs` commits (confirm and crash recovery need
 several connections), uses fresh users and deletes them at the end; it
 drives `withdraw.mjs` with a fake Breez SDK, since regtest has no

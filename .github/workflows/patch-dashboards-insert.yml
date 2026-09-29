@@ -1,0 +1,30 @@
+name: patch-dashboards-insert
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fill stablecoin fixture columns
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('ci/dashboards_test.sql')
+          t = p.read_text()
+          old = """insert into withdrawals (user_id, amount_requested, fee_percent, amount_after_fee, method, destination, status, requested_at)\nvalues ('c1000000-0000-0000-0000-000000000003', 30, 3, 29.1, 'stablecoin', 'T1111111111111111111111111111111111', 'rejected', (select t from t_clock) - interval '1 minute');"""
+          new = """insert into withdrawals (user_id, amount_requested, fee_percent, amount_after_fee, method, destination, status, requested_at, coin, chain)\nvalues ('c1000000-0000-0000-0000-000000000003', 30, 3, 29.1, 'stablecoin', 'T1111111111111111111111111111111111', 'rejected', (select t from t_clock) - interval '1 minute', 'USDT', 'tron');"""
+          if old not in t:
+              raise SystemExit('insert pattern missing')
+          p.write_text(t.replace(old, new))
+          print('patched')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ci/dashboards_test.sql
+          git diff --cached --stat
+          git commit -m "CI fixture: stablecoin withdraw row includes coin and chain"
+          git push

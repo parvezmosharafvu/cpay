@@ -287,8 +287,8 @@ values ('c1000000-0000-0000-0000-000000000003', 40)
 on conflict (user_id) do update set daily_withdrawal_limit = 40;
 insert into usdt_wallets (user_id, network, address)
 values ('c1000000-0000-0000-0000-000000000003', 'tron', 'T1111111111111111111111111111111111');
-insert into withdrawals (user_id, amount_requested, fee_percent, amount_after_fee, method, destination, status, requested_at)
-values ('c1000000-0000-0000-0000-000000000003', 30, 3, 29.1, 'stablecoin', 'T1111111111111111111111111111111111', 'rejected', (select t from t_clock) - interval '1 minute');
+insert into withdrawals (user_id, amount_requested, fee_percent, amount_after_fee, method, destination, status, requested_at, coin, chain)
+values ('c1000000-0000-0000-0000-000000000003', 30, 3, 29.1, 'stablecoin', 'T1111111111111111111111111111111111', 'rejected', (select t from t_clock) - interval '1 minute', 'USDT', 'tron');
 update withdrawals set status = 'paid' where user_id = 'c1000000-0000-0000-0000-000000000003';
 set test.uid = 'a1000000-0000-0000-0000-000000000001';
 do $$

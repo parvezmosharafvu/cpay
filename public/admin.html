@@ -28,6 +28,9 @@
     <button class="navi" data-tab="links">Links</button>
     <button class="navi" data-tab="wallet">Wallet</button>
     <button class="navi" data-tab="settings">Settings</button>
+    <button class="navi" data-tab="health">Health</button>
+    <button class="navi" data-tab="system">System</button>
+    <button class="navi" data-tab="audit">Audit</button>
     <button class="navi" data-tab="chat">Inbox</button>
     <button class="navi" id="logoutBtn">Log out</button>
   </aside>
@@ -45,6 +48,9 @@
       <div id="flags"></div>
       <div id="alerts"></div>
     </section>
+    <section id="health" hidden></section>
+    <section id="system" hidden></section>
+    <section id="audit" hidden></section>
     <section id="chat" hidden></section>
     <section id="apps" hidden></section>
   </main>
@@ -54,9 +60,10 @@
 <div id="opsGateList" hidden></div>
 <!-- Staging sign-off ledger admin_ops_release_gates admin_set_ops_release_gate -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="admin-wallet.js?v=7"></script>
-<script src="admin-wallet-route.js?v=7"></script>
-<script src="admin-desk.js?v=7"></script>
-<script src="admin-unify.js?v=7"></script>
+<script src="admin-wallet.js?v=8"></script>
+<script src="admin-wallet-route.js?v=8"></script>
+<script src="admin-desk.js?v=8"></script>
+<script src="admin-unify.js?v=8"></script>
+<script src="admin-ops-rest.js?v=8"></script>
 </body>
 </html>

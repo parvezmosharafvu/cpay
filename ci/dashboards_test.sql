@@ -285,21 +285,22 @@ do $$ begin perform pg_temp.pay(6, 'd1000000-0000-0000-0000-000000000003', 500, 
 insert into profile_limits (user_id, daily_withdrawal_limit)
 values ('c1000000-0000-0000-0000-000000000003', 40)
 on conflict (user_id) do update set daily_withdrawal_limit = 40;
-insert into withdrawals (user_id, amount_requested, fee_percent, amount_after_fee, method, destination, status, requested_at)
-values ('c1000000-0000-0000-0000-000000000003', 30, 3, 29.1, 'bkash', '01700000000', 'rejected', (select t from t_clock) - interval '1 minute');
--- rejected rows never count; this one only exists to become a paid 16:59 row
+insert into usdt_wallets (user_id, network, address)
+values ('c1000000-0000-0000-0000-000000000003', 'tron', 'T1111111111111111111111111111111111');
+insert into withdrawals (user_id, amount_requested, fee_percent, amount_after_fee, method, destination, status, requested_at, coin, chain)
+values ('c1000000-0000-0000-0000-000000000003', 30, 3, 29.1, 'stablecoin', 'T1111111111111111111111111111111111', 'rejected', (select t from t_clock) - interval '1 minute', 'USDT', 'tron');
 update withdrawals set status = 'paid' where user_id = 'c1000000-0000-0000-0000-000000000003';
-set test.uid = 'c1000000-0000-0000-0000-000000000003';
+set test.uid = 'a1000000-0000-0000-0000-000000000001';
 do $$
 declare v_id uuid; v_msg text;
 begin
-  select id into v_id from request_withdrawal(35, 'bkash', '01700000000');
+  select id into v_id from reseller_request_withdrawal_for('c1000000-0000-0000-0000-000000000003', 35, 'tron', '');
   update withdrawals set requested_at = (select t from t_clock) + interval '1 minute' where id = v_id;
   begin
-    perform request_withdrawal(10, 'bkash', '01700000000');
+    perform reseller_request_withdrawal_for('c1000000-0000-0000-0000-000000000003', 10, 'tron', '');
     raise exception '17:01 withdrawal did not count toward the daily limit';
   exception when others then v_msg := sqlerrm;
-    if v_msg not like 'This request exceeds your daily withdrawal limit%' then raise; end if;
+    if v_msg not like 'This request exceeds the daily withdrawal limit%' then raise; end if;
   end;
   raise notice 'PASS withdraw limit 40: $30 paid at 16:59 did not count ($35 accepted); $35 at 17:01 did ($10 refused with "%")', v_msg;
 end $$;

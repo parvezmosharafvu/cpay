@@ -6,6 +6,12 @@
 <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
+<style>
+.msg-bubble{padding:9px 12px;border-radius:10px;max-width:85%;background:var(--surface-2);border:1px solid var(--line)}
+.msg-bubble.admin{background:var(--accent-soft);border-color:var(--accent-ring);margin-left:auto}
+.msg-bubble.creator{margin-right:auto}
+#threadList{min-height:180px}
+</style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script>
 <script src="daily-desk.js"></script>
@@ -17,14 +23,12 @@
     <button class="navi active" data-tab="home">Overview</button>
     <button class="navi" data-tab="daily">Daily earnings</button>
     <button class="navi" data-tab="people">Accounts</button>
-    <button class="navi" data-tab="apps">Applications</button>
-    <button class="navi" data-tab="fees">Fees & filters</button>
-    <button class="navi" data-tab="flags">Feature switches</button>
-    <button class="navi" data-tab="alerts">Telegram groups</button>
+    <button class="navi" data-tab="payments">Payments</button>
     <button class="navi" data-tab="payouts">Payouts</button>
+    <button class="navi" data-tab="links">Links</button>
     <button class="navi" data-tab="wallet">Wallet</button>
+    <button class="navi" data-tab="settings">Settings</button>
     <button class="navi" data-tab="chat">Inbox</button>
-    <a class="navi" href="admin-classic.html">Ops panel</a>
     <button class="navi" id="logoutBtn">Log out</button>
   </aside>
   <main class="main">
@@ -32,13 +36,17 @@
     <section id="home"></section>
     <section id="daily" hidden></section>
     <section id="people" hidden></section>
-    <section id="apps" hidden></section>
-    <section id="fees" hidden></section>
-    <section id="flags" hidden></section>
-    <section id="alerts" hidden></section>
+    <section id="payments" hidden></section>
     <section id="payouts" hidden></section>
+    <section id="links" hidden></section>
     <section id="wallet" hidden></section>
+    <section id="settings" hidden>
+      <div id="fees"></div>
+      <div id="flags"></div>
+      <div id="alerts"></div>
+    </section>
     <section id="chat" hidden></section>
+    <section id="apps" hidden></section>
   </main>
 </div>
 
@@ -46,7 +54,9 @@
 <div id="opsGateList" hidden></div>
 <!-- Staging sign-off ledger admin_ops_release_gates admin_set_ops_release_gate -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="admin-wallet.js"></script>
-<script src="admin-desk.js"></script>
+<script src="admin-wallet.js?v=7"></script>
+<script src="admin-wallet-route.js?v=7"></script>
+<script src="admin-desk.js?v=7"></script>
+<script src="admin-unify.js?v=7"></script>
 </body>
 </html>

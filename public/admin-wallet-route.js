@@ -1,16 +1,8 @@
-// Path must end with /admin-wallet. Root /admin-actions returns Not found.
+// invoke sends Authorization + apikey. Raw fetch without apikey was 401 Unauthorized.
 async function walletCall(action, body = {}) {
-  const { data: sess } = await window.supabaseClient.auth.getSession();
-  const token = sess?.session?.access_token;
-  if (!token) throw new Error('Sign in again');
-  const res = await fetch(`${window.SUPABASE_URL}/functions/v1/admin-actions/admin-wallet`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ action, ...body }),
-  });
-  const payload = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(payload.error || 'The wallet did not answer');
-  return payload;
+  const res = await callFunction('admin-actions', { action, ...body });
+  if (!res.ok) throw new Error(res.message || 'The wallet did not answer');
+  return res.data;
 }
 
 function walletShell() {

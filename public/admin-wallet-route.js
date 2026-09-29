@@ -1,9 +1,9 @@
-// Same transport Ops used. functions.invoke was returning a browser fetch error.
+// Path must end with /admin-wallet. Root /admin-actions returns Not found.
 async function walletCall(action, body = {}) {
   const { data: sess } = await window.supabaseClient.auth.getSession();
   const token = sess?.session?.access_token;
   if (!token) throw new Error('Sign in again');
-  const res = await fetch(`${window.SUPABASE_URL}/functions/v1/admin-actions`, {
+  const res = await fetch(`${window.SUPABASE_URL}/functions/v1/admin-actions/admin-wallet`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ action, ...body }),

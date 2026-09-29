@@ -1,11 +1,19 @@
 // Ops tabs that were missing after the merge.
 function kvCard(title, obj) {
-  const rows = Object.entries(obj || {}).map(([k, v]) => {
+  const src = { ...(obj || {}) };
+  delete src.auto_withdraw_enabled;
+  const rows = Object.entries(src).map(([k, v]) => {
     const val = v && typeof v === 'object' ? JSON.stringify(v) : String(v ?? '-');
     return `<tr><td>${escapeHtml(k)}</td><td class="mono">${escapeHtml(val)}</td></tr>`;
   }).join('');
   return `<div class="card flush"><h3 style="padding:16px 20px 0">${escapeHtml(title)}</h3>
     <table class="table"><tbody>${rows || '<tr><td class="empty">No data</td></tr>'}</tbody></table></div>`;
+}
+
+function hideLightningSwitch() {
+  document.querySelectorAll('#flags .faint.mono').forEach((el) => {
+    if (el.textContent.trim() === 'auto_withdraw_enabled') el.closest('tr')?.remove();
+  });
 }
 
 async function renderHealth() {
@@ -69,6 +77,9 @@ window.show = function (tab) {
   if (tab === 'health') renderHealth();
   if (tab === 'system') renderSystem();
   if (tab === 'audit') renderAudit();
+  if (tab === 'settings') hideLightningSwitch();
 };
 
-setTimeout(() => { renderHealth(); renderSystem(); renderAudit(); }, 1200);
+setTimeout(() => {
+  renderHealth(); renderSystem(); renderAudit(); hideLightningSwitch();
+}, 1200);

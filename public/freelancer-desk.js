@@ -2,6 +2,18 @@ const sb = window.supabaseClient;
 const exp = { theme: 'keypad', invoice: 'default', wallet: 'all_wallets' };
 let me = null, resellerId = null;
 
+const USDT_NETWORKS = [
+  ['tron', 'Tron (TRC-20)'],
+  ['bsc', 'BNB Smart Chain (BEP-20)'],
+  ['ethereum', 'Ethereum (ERC-20)'],
+  ['polygon', 'Polygon'],
+  ['arbitrum', 'Arbitrum One'],
+  ['base', 'Base'],
+  ['optimism', 'Optimism'],
+  ['avalanche', 'Avalanche'],
+  ['solana', 'Solana'],
+];
+
 function show(tab) {
   document.querySelectorAll('main > section').forEach((s) => { s.hidden = s.id !== tab; });
   document.querySelectorAll('.navi[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
@@ -102,16 +114,22 @@ async function renderPays() {
 }
 
 async function renderCash() {
-  const [{ data: bal }, { data: ws }] = await Promise.all([sb.rpc('get_my_balance'), sb.rpc('my_withdraw_settings')]);
+  const [{ data: bal }, { data: ws }, { data: book }] = await Promise.all([
+    sb.rpc('get_my_balance'),
+    sb.rpc('my_withdraw_settings'),
+    sb.rpc('my_payout_book'),
+  ]);
   const b = Array.isArray(bal) ? bal[0] : bal || {};
-  // Fee: own override, else the reseller's team fee, else the global
-  // default, resolved by the server. When the reseller handles withdrawals
-  // the form stays visible with the balance, but nothing can be sent.
   const fee = Number(ws?.fee_percent ?? 0);
   const blocked = ws && ws.self_withdraw_allowed === false
     ? 'Your reseller handles withdrawals for your account. Ask them to withdraw for you.'
     : null;
+  const wallets = book?.wallets || [];
+  const savedNote = wallets.length
+    ? `<p class="hint">Saved USDT wallets: ${wallets.map((w) => escapeHtml(w.network)).join(', ')}. Open Profile to add more networks.</p>`
+    : `<p class="hint">Save a USDT address in Profile first. Lightning payouts are off.</p>`;
   document.getElementById('cash').innerHTML = withdrawForm(`<p class="muted">Available balance <strong id="wAvail">${money(b.available)}</strong></p>`
+    + savedNote
     + (blocked ? `<div class="notice" id="wBlocked"><strong>Withdrawals are handled by your reseller</strong><div class="muted">${escapeHtml(blocked)}</div></div>` : ''));
   bindWithdraw(() => fee, {
     blocked,
@@ -133,6 +151,9 @@ async function renderCash() {
       document.getElementById('wAvail').textContent = money(nb.available);
     },
   });
+  const dest = document.getElementById('wDest');
+  const preferred = wallets.find((w) => w.network === book?.preferred_usdt_network) || wallets[0];
+  if (dest && preferred && !dest.value) dest.value = preferred.address;
 }
 
 async function renderTeam() {
@@ -173,12 +194,40 @@ async function renderChat() {
 }
 
 async function renderProfile() {
-  document.getElementById('profile').innerHTML = `<div class="card narrow">
-    <h3>Public profile</h3>
-    <div class="field"><label for="pName">Display name</label><input id="pName" value="${escapeHtml(me.display_name || '')}"></div>
-    <div class="field"><label for="pBio">Bio</label><textarea id="pBio">${escapeHtml(me.bio || '')}</textarea></div>
-    <div class="field"><label for="pSlug">Store address</label><input id="pSlug" value="${escapeHtml(me.public_slug || '')}"></div>
-    <div class="row"><button class="btn primary" id="saveProf">Save profile</button><a class="btn ghost" href="store.html">Open public store</a></div>
+  const { data: book } = await sb.rpc('my_payout_book');
+  const wallets = book?.wallets || [];
+  const netOpts = USDT_NETWORKS.map(([id, label]) => `<option value="${id}">${label}</option>`).join('');
+  const prefOpts = `<option value="">None yet</option>` + USDT_NETWORKS.map(([id, label]) =>
+    `<option value="${id}" ${book?.preferred_usdt_network === id ? 'selected' : ''}>${label}</option>`).join('');
+  const rows = wallets.map((w) => {
+    const label = (USDT_NETWORKS.find(([id]) => id === w.network) || [w.network, w.network])[1];
+    return `<tr><td>${escapeHtml(label)}</td><td><code>${escapeHtml(w.address)}</code></td>
+      <td><button class="btn ghost" data-del-net="${escapeHtml(w.network)}">Remove</button></td></tr>`;
+  }).join('');
+  document.getElementById('profile').innerHTML = `<div class="grid split">
+    <div class="card">
+      <h3>Public profile</h3>
+      <div class="field"><label for="pName">Display name</label><input id="pName" value="${escapeHtml(me.display_name || '')}"></div>
+      <div class="field"><label for="pBio">Bio</label><textarea id="pBio">${escapeHtml(me.bio || '')}</textarea></div>
+      <div class="field"><label for="pSlug">Store address</label><input id="pSlug" value="${escapeHtml(me.public_slug || '')}"></div>
+      <div class="row"><button class="btn primary" id="saveProf">Save profile</button><a class="btn ghost" href="store.html">Open public store</a></div>
+    </div>
+    <div class="card">
+      <h3>USDT payout</h3>
+      <p class="hint">One address per network. Withdraw sends USDT there. Lightning payouts are off.</p>
+      <div class="field"><label for="usdtNet">Network</label><select id="usdtNet">${netOpts}</select></div>
+      <div class="field"><label for="usdtAddr">Wallet address</label><input id="usdtAddr" placeholder="Address for that network" autocomplete="off" spellcheck="false"></div>
+      <button class="btn primary" id="saveUsdt">Save address</button>
+      <div class="card flush" style="margin-top:16px">
+        <table class="table"><thead><tr><th>Network</th><th>Address</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="3" class="empty">No USDT address saved</td></tr>'}</tbody></table>
+      </div>
+      <div class="field"><label for="prefNet">Preferred network</label><select id="prefNet">${prefOpts}</select></div>
+      <div class="field"><label for="thresh">Auto-withdraw threshold (USD)</label>
+        <input id="thresh" type="number" min="5" step="1" placeholder="Leave empty to only withdraw by hand" value="${book?.withdraw_threshold ?? ''}"></div>
+      <label class="row"><input type="checkbox" id="autoOn" ${book?.auto_withdraw_enabled ? 'checked' : ''}> Queue a payout when the balance reaches the threshold</label>
+      <button class="btn" id="savePrefs">Save payout settings</button>
+    </div>
   </div>`;
   document.getElementById('saveProf').onclick = async () => {
     const { error } = await sb.rpc('update_my_public_profile', {
@@ -188,6 +237,32 @@ async function renderProfile() {
     });
     if (error) return toast(error.message);
     toast('Saved', true);
+  };
+  document.getElementById('saveUsdt').onclick = async () => {
+    const { error } = await sb.rpc('set_my_usdt_wallet', {
+      p_network: document.getElementById('usdtNet').value,
+      p_address: document.getElementById('usdtAddr').value.trim(),
+    });
+    if (error) return toast(error.message);
+    toast('USDT address saved', true);
+    renderProfile();
+  };
+  document.querySelectorAll('[data-del-net]').forEach((btn) => {
+    btn.onclick = async () => {
+      const { error } = await sb.rpc('delete_my_usdt_wallet', { p_network: btn.dataset.delNet });
+      if (error) return toast(error.message);
+      renderProfile();
+    };
+  });
+  document.getElementById('savePrefs').onclick = async () => {
+    const raw = document.getElementById('thresh').value.trim();
+    const { error } = await sb.rpc('set_my_payout_prefs', {
+      p_threshold: raw === '' ? null : Number(raw),
+      p_network: document.getElementById('prefNet').value || null,
+      p_auto_enabled: document.getElementById('autoOn').checked,
+    });
+    if (error) return toast(error.message);
+    toast('Payout settings saved', true);
   };
 }
 

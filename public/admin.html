@@ -17,13 +17,11 @@
     <button class="navi active" data-tab="home">Overview</button>
     <button class="navi" data-tab="daily">Daily earnings</button>
     <button class="navi" data-tab="people">Accounts</button>
-    <button class="navi" data-tab="fees">Fees & filters</button>
-    <button class="navi" data-tab="flags">Feature switches</button>
-    <button class="navi" data-tab="alerts">Telegram groups</button>
+    <button class="navi" data-tab="payments">Payments</button>
     <button class="navi" data-tab="payouts">Payouts</button>
     <button class="navi" data-tab="wallet">Wallet</button>
+    <button class="navi" data-tab="settings">Settings</button>
     <button class="navi" data-tab="chat">Inbox</button>
-    <a class="navi" href="admin-classic.html">Ops panel</a>
     <button class="navi" id="logoutBtn">Log out</button>
   </aside>
   <main class="main">
@@ -31,13 +29,16 @@
     <section id="home"></section>
     <section id="daily" hidden></section>
     <section id="people" hidden></section>
-    <section id="apps" hidden></section>
-    <section id="fees" hidden></section>
-    <section id="flags" hidden></section>
-    <section id="alerts" hidden></section>
+    <section id="payments" hidden></section>
     <section id="payouts" hidden></section>
     <section id="wallet" hidden></section>
+    <section id="settings" hidden>
+      <div id="fees"></div>
+      <div id="flags"></div>
+      <div id="alerts"></div>
+    </section>
     <section id="chat" hidden></section>
+    <section id="apps" hidden></section>
   </main>
 </div>
 

@@ -1,8 +1,16 @@
-// Wallet calls go to admin-actions with action in the JSON body.
+// Same transport Ops used. functions.invoke was returning a browser fetch error.
 async function walletCall(action, body = {}) {
-  const res = await callFunction('admin-actions', { action, ...body });
-  if (!res.ok) throw new Error(res.message || 'The wallet did not answer');
-  return res.data;
+  const { data: sess } = await window.supabaseClient.auth.getSession();
+  const token = sess?.session?.access_token;
+  if (!token) throw new Error('Sign in again');
+  const res = await fetch(`${window.SUPABASE_URL}/functions/v1/admin-actions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ action, ...body }),
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload.error || 'The wallet did not answer');
+  return payload;
 }
 
 function walletShell() {

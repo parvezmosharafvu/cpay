@@ -109,10 +109,108 @@ function attachAppsToAccounts() {
   peopleEl.prepend(box);
 }
 
+let selectedCreatorId = '';
+
+async function renderChat() {
+  const el = document.getElementById('chat');
+  if (!el) return;
+  el.innerHTML = `<div class="card">
+      <h3>Select freelancer</h3>
+      <div class="field"><label for="creatorSelect">Account</label>
+        <select id="creatorSelect"><option value="">— Choose a creator —</option></select></div>
+      <p class="faint">Red dot = unread from that freelancer. Same list as the old Messages tab.</p>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h3>Conversation</h3>
+        <button class="btn danger sm" id="clearThreadBtn" type="button">Clear history</button>
+      </div>
+      <div class="thread" id="threadList"><p class="muted">Select a freelancer above</p></div>
+      <div class="compose">
+        <input class="input" id="adminMsgInput" placeholder="Type a message to this freelancer…">
+        <button class="btn primary" id="adminMsgSend" type="button">Send</button>
+      </div>
+    </div>`;
+  document.getElementById('creatorSelect').onchange = loadThread;
+  document.getElementById('adminMsgSend').onclick = sendAdminMessage;
+  document.getElementById('adminMsgInput').onkeydown = (e) => { if (e.key === 'Enter') sendAdminMessage(); };
+  document.getElementById('clearThreadBtn').onclick = clearThread;
+  await loadCreatorList();
+}
+
+async function loadCreatorList() {
+  const sel = document.getElementById('creatorSelect');
+  if (!sel) return;
+  const { data, error } = await sb.rpc('admin_list_creators');
+  if (error) { sel.innerHTML = `<option value="">${escapeHtml(error.message)}</option>`; return; }
+  const list = (data || []).slice().sort((a, b) => (b.unread_count || 0) - (a.unread_count || 0));
+  const prev = sel.value || selectedCreatorId;
+  sel.innerHTML = '<option value="">— Choose a creator —</option>' + list.map((c) => {
+    const unread = Number(c.unread_count || 0);
+    const label = `${unread ? '🔴 ' : ''}${c.display_name || c.email}${unread ? ` (${unread} new)` : ''}`;
+    return `<option value="${escapeHtml(c.id)}">${escapeHtml(label)}</option>`;
+  }).join('');
+  if (prev) sel.value = prev;
+  const inboxBtn = document.querySelector('.navi[data-tab="chat"]');
+  if (inboxBtn) {
+    const total = list.reduce((s, c) => s + Number(c.unread_count || 0), 0);
+    inboxBtn.textContent = total ? `Inbox (${total})` : 'Inbox';
+  }
+}
+
+async function loadThread() {
+  selectedCreatorId = document.getElementById('creatorSelect')?.value || '';
+  const list = document.getElementById('threadList');
+  if (!list) return;
+  if (!selectedCreatorId) { list.innerHTML = '<p class="muted">Select a freelancer above</p>'; return; }
+  const { data: newestFirst, error } = await sb.from('support_messages').select('*').eq('user_id', selectedCreatorId).order('created_at', { ascending: false }).limit(300);
+  if (error) { list.innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
+  const rows = (newestFirst || []).slice().reverse();
+  if (!rows.length) { list.innerHTML = '<p class="muted">No messages yet</p>'; return; }
+  list.innerHTML = rows.map((m) => {
+    const who = m.sender === 'admin' ? 'You (admin)' : 'Freelancer';
+    const deleted = m.deleted_by_creator ? ' · deleted by user' : '';
+    const edited = m.edited_at ? ' · edited' : '';
+    const side = m.sender === 'admin' ? 'admin' : 'creator';
+    return `<div class="msg-bubble ${side}"><div class="faint">${escapeHtml(who)}</div>${escapeHtml(m.message)}<div class="faint">${escapeHtml(when(m.created_at))}${edited}${deleted}</div></div>`;
+  }).join('');
+  list.scrollTop = list.scrollHeight;
+  const unread = rows.filter((m) => m.sender !== 'admin' && m.read_by_admin === false);
+  if (unread.length) {
+    await sb.from('support_messages').update({ read_by_admin: true }).in('id', unread.map((m) => m.id));
+    loadCreatorList();
+  }
+}
+
+async function sendAdminMessage() {
+  const text = document.getElementById('adminMsgInput')?.value.trim();
+  if (!text || !selectedCreatorId) return toast('Select a freelancer first');
+  const { error } = await sb.from('support_messages').insert({ user_id: selectedCreatorId, sender: 'admin', message: text });
+  if (error) return toast(error.message);
+  document.getElementById('adminMsgInput').value = '';
+  await loadThread();
+}
+
+async function clearThread() {
+  if (!selectedCreatorId) return toast('Select a freelancer first');
+  if (!confirm('Clear this entire conversation?')) return;
+  const { error } = await sb.rpc('clear_message_thread', { p_user_id: selectedCreatorId });
+  if (error) return toast(error.message);
+  toast('Conversation cleared', true);
+  await loadThread();
+}
+
+const _show = typeof show === 'function' ? show : null;
+window.show = function (tab) {
+  if (_show) _show(tab);
+  if (tab === 'chat') { loadCreatorList(); if (selectedCreatorId) loadThread(); }
+};
+
 setTimeout(() => {
   renderPayouts();
   renderPayments();
   renderLinks();
   renderDomains();
   attachAppsToAccounts();
+  renderChat();
 }, 800);

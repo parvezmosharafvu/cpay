@@ -161,7 +161,7 @@ not midnight to midnight, and a cycle is named after the date it *started*.
 `business_day(ts)` (migration 0096) is the one definition: day D runs from
 `business_day_start(D)` (D 17:00 Dhaka) to `business_day_end(D)`.
 `admin_daily_settled()`, `staff_daily_settled()`, `my_daily_settled()`,
-`daily_totals_for_cycle()`, `reseller_cycle_digest()` and the dashboard RPCs
+`daily_totals_for_cycle()`, `enqueue_daily_close()` and the dashboard RPCs
 below all call it. The `daily-report` cron computes the same date in TypeScript
 and then asks `daily_totals_for_cycle()` for the numbers.
 
@@ -207,11 +207,21 @@ Set either or both, in Supabase → Edge Functions → Secrets:
 
 ```
 ALERT_WEBHOOK_URL            Discord or Slack incoming webhook
-ALERT_TELEGRAM_BOT_TOKEN     Telegram bot token
-ALERT_TELEGRAM_CHAT_ID       Telegram chat to post into
+ALERT_TELEGRAM_BOT_TOKEN     Telegram bot token (also sends reseller group messages)
+ALERT_TELEGRAM_CHAT_ID       Admin Telegram group
+ALERT_ON_SETTLED             false = no settled-payment copies to the admin group
 ```
 
-`health` uses these. With neither set they log a
+`health`, `daily-report` and `ledger-backup` use these for ops alerts.
+
+Reseller Telegram groups (migration 0106): each reseller saves their group's
+chat ID in their desk (Profile → Telegram group), or the admin does under
+Telegram groups. When a payment settles, the database queues one message per
+group in `telegram_outbox` (one row per payment and group, so a payment is
+never announced twice). At 17:00 Dhaka the `cpay-daily-close` cron queues each
+reseller's daily close: per link the payment count, total, share of the day,
+fee and net, then gross, fees and net totals. The `cpay-telegram-send` cron
+calls `telegram-notify` every minute while anything is waiting. With neither set they log a
 warning and carry on — nothing breaks, but nobody is told.
 
 ## Checking things by hand

@@ -53,13 +53,13 @@ deno check supabase/functions/<name>/index.ts
 | Where | Name | Used by |
 |---|---|---|
 | Edge function secrets | `PAYMENT_SERVICE_URL`, `PAYMENT_SERVICE_SECRET` | create-invoice, user-withdraw, admin-actions, health |
-| | `CRON_SECRET` | health, daily-report, ledger-backup, reseller-digest (cron callers) |
-| | `ALERT_WEBHOOK_URL`, `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID`, `ALERT_ON_SETTLED` | alerts |
+| | `CRON_SECRET` | health, daily-report, ledger-backup, telegram-notify (cron callers) |
+| | `ALERT_WEBHOOK_URL`, `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID`, `ALERT_ON_SETTLED` | alerts, reseller Telegram groups |
 | | `ALLOWED_ORIGINS` (optional) | CORS on user-withdraw, admin-actions (on top of `site_domains`) |
 | | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` | ledger-backup |
 | | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | injected by Supabase |
 | Vault | `cpay_cron_secret`, `cpay_functions_url` | pg_cron jobs |
-| payment-service `.env` | `BREEZ_NETWORK`, `BREEZ_MNEMONIC`, `BREEZ_API_KEY` (mainnet), `BREEZ_DATA_DIR`, `DATABASE_URL`, `PAYMENT_SERVICE_SECRET`, `PORT`, `CATCH_UP_INTERVAL_SECS` | the service |
+| payment-service `.env` | `BREEZ_NETWORK`, `BREEZ_MNEMONIC_FILE` or `BREEZ_MNEMONIC`, `BREEZ_API_KEY` (mainnet), `BREEZ_DATA_DIR`, `DATABASE_URL`, `PAYMENT_SERVICE_SECRET`, `PORT`, `CATCH_UP_INTERVAL_SECS`, `SHUTDOWN_TIMEOUT_SECS` | the service |
 | `public/config.js` | Supabase URL, anon key | browser (public) |
 
 Details and rotation: `docs/ENV_VARS.md`, `payment-service/.env.example`.
@@ -70,8 +70,8 @@ Details and rotation: `docs/ENV_VARS.md`, `payment-service/.env.example`.
 
 | Job | Checks |
 |---|---|
-| Migrations | unique migration numbers; `ci/bootstrap.sql` then every migration applies to an empty Postgres 15; `ci/cloudai_regression.sql`; 0096-0098 re-apply and `ci/dashboards_test.sql`; `node --test` in `payment-service/` against that database |
-| Edge functions | `deno check` on every `supabase/functions/*/index.ts` |
+| Migrations | unique migration numbers; `ci/bootstrap.sql` then every migration applies to an empty Postgres 15; `ci/cloudai_regression.sql`; 0096 onward re-apply and `ci/dashboards_test.sql`; `ci/telegram_test.sql`; `npm test` in `payment-service/` against that database |
+| Edge functions | `deno check` on every `supabase/functions/*/index.ts`; `deno test` for auth-settings and telegram-notify against local mock servers |
 | Frontend | `npm install`, `npm run build`, `python3 ci/check_frontend.py` (inline JS parses, element ids and handlers exist, every `rpc()` matches its SQL signature, payment-page accessibility, release gates, direct-upload guard, processor name absent from non-admin pages) |
 | Hygiene (advisory) | reports tracked ledger snapshots |
 
@@ -82,10 +82,12 @@ The same locally, from the repo root, with a scratch Postgres 15 on
 psql -v ON_ERROR_STOP=1 -f ci/bootstrap.sql
 for f in supabase/migrations/*.sql; do psql -v ON_ERROR_STOP=1 -q -f "$f" || break; done
 psql -v ON_ERROR_STOP=1 -f ci/cloudai_regression.sql
-for f in supabase/migrations/009[6-8]_*.sql; do psql -v ON_ERROR_STOP=1 -q -f "$f"; done
+for f in supabase/migrations/*.sql; do [ $((10#$(basename "$f" | cut -c1-4))) -ge 96 ] && psql -v ON_ERROR_STOP=1 -q -f "$f"; done
 psql -v ON_ERROR_STOP=1 -f ci/dashboards_test.sql
-(cd payment-service && npm ci && DATABASE_URL=postgres://postgres@localhost:$PGPORT/postgres node --test)
+psql -v ON_ERROR_STOP=1 -f ci/telegram_test.sql
+(cd payment-service && npm ci && DATABASE_URL=postgres://postgres@localhost:$PGPORT/postgres npm test)
 for d in supabase/functions/*/; do deno check "${d}index.ts"; done
+deno test --allow-net=127.0.0.1 --allow-env supabase/functions/auth-settings/ supabase/functions/telegram-notify/
 npm install && npm run build && python3 ci/check_frontend.py
 ```
 

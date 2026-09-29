@@ -86,73 +86,6 @@ function json(body: unknown, status = 200, cors: Record<string, string> = {}) {
     });
 }
 
-/**
-* ✅ Payment-settled notification. Uses the same channels as sendAlert but
-* without the 🚨 alarm prefix — this is good news, not an incident. On by
-* default when any alert channel is configured; set ALERT_ON_SETTLED=false
-* to silence it (e.g. if volume gets noisy) without touching failure alerts.
-*/
-/**
-* Whether this settlement amount should stay out of the settled-payment
-* alert, per the same hide_small_payments toggle and threshold the rest
-* of the app already respects.
-*
-* Best-effort and fails OPEN (never suppress) on any error. The
-* suppression is a privacy/noise concern; settlement itself is a money
-* concern — a broken check here must never have any chance of blocking
-* or delaying the payment flow it sits next to, so a failure here can
-* only ever result in an alert that fires, same as before this existed.
-*/
-async function shouldSuppressAlert(amount: number): Promise<boolean> {
-    try {
-        const { data, error } = await supabaseAdmin.rpc("should_suppress_payment_alert", {
-            p_amount: amount,
-        });
-        if (error) {
-            console.error("should_suppress_payment_alert check failed, sending alert anyway:", error.message);
-            return false;
-        }
-        return data === true;
-    } catch (e) {
-        console.error("should_suppress_payment_alert check threw, sending alert anyway:", e);
-        return false;
-    }
-}
-
-function sendSettledAlert(text: string) {
-    if ((Deno.env.get("ALERT_ON_SETTLED") ?? "true").toLowerCase() === "false") return;
-    const webhook = Deno.env.get("ALERT_WEBHOOK_URL");
-    if (webhook) {
-        fetch(webhook, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: text }),
-        }).catch((e) => console.error("Discord/Slack settled-alert failed:", e));
-    }
-    const tgToken = Deno.env.get("ALERT_TELEGRAM_BOT_TOKEN");
-    const tgChat = Deno.env.get("ALERT_TELEGRAM_CHAT_ID");
-    if (tgToken && tgChat) {
-        fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chat_id: tgChat, text }),
-        }).catch((e) => console.error("Telegram settled-alert failed:", e));
-    }
-}
-
-/** Look up the link slug for a nicer notification. Best-effort. */
-async function linkSlugFor(paymentLinkId: string | null): Promise<string> {
-    if (!paymentLinkId) return "unknown-link";
-    try {
-        const { data } = await supabaseAdmin
-            .from("payment_links").select("slug").eq("id", paymentLinkId).single();
-        return data?.slug ?? "unknown-link";
-    } catch {
-        return "unknown-link";
-    }
-}
-
-
 // Admin Wallet actions and the body fields each one passes on.
 const WALLET_ACTIONS: Record<string, string[]> = {
     "info": [],
@@ -206,15 +139,10 @@ Deno.serve(async (req) => {
             });
             if (error) return json({ error: error.message }, 400, cors);
             const { data: payment } = await supabaseAdmin
-                .from("payments").select("user_id, payment_link_id, amount_requested, amount_settled").eq("id", paymentId).single();
-            if (payment) {
-                const settledAmt = payment.amount_settled ?? payment.amount_requested;
-                if (!(await shouldSuppressAlert(Number(settledAmt)))) {
-                    const slug = await linkSlugFor(payment.payment_link_id ?? null);
-                    sendSettledAlert(`✅ Payment settled (manual): $${Number(settledAmt).toFixed(2)} via /${slug}`);
-                }
-                await maybeQueueAutoWithdrawal(payment.user_id);
-            }
+                .from("payments").select("user_id").eq("id", paymentId).single();
+            // The Telegram message is queued by the database on the move to
+            // settled (0106), the same as for a received payment.
+            if (payment) await maybeQueueAutoWithdrawal(payment.user_id);
             return json({ status: "settled" }, 200, cors);
         } catch (e) {
             console.error("admin-mark-settled failed:", e);

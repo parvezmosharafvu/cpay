@@ -80,7 +80,7 @@ def check_rpc_signatures() -> None:
         for m in re.finditer(r"create or replace function (?:public\.)?(\w+)\s*\(([^)]*)\)", sql, re.S)
     }
 
-    for path in sorted(glob.glob("public/*.html")):
+    for path in sorted(glob.glob("public/*.html") + glob.glob("public/*.js")):
         with open(path, encoding="utf-8") as fh:
             src = fh.read()
         ok = True

@@ -16,13 +16,30 @@ Used by `create-invoice`, `user-withdraw`, `admin-actions` and `health`:
 - [ ] `PAYMENT_SERVICE_SECRET` — long random string, the same value the
       payment service has. Sent as `Authorization: Bearer`.
 
-The payment service's own settings (wallet mnemonic, database URL) are in
-`payment-service/.env.example`. The mnemonic never goes into Supabase.
+The payment service's own settings are listed below under
+[Payment service](#payment-service). The mnemonic never goes into Supabase.
 
-Used by `daily-report` and `ledger-backup`:
+Used by `daily-report`, `ledger-backup`, `health` and `telegram-notify`:
 
-- [ ] `CRON_SECRET` — any long random string. Both functions refuse all
-      requests if it is unset.
+- [ ] `CRON_SECRET` — any long random string. These functions refuse all
+      requests if it is unset. The same value is stored in Vault as
+      `cpay_cron_secret`, which is where pg_cron reads it.
+
+Used by `telegram-notify` (settled-payment messages and the 17:00 Dhaka daily
+close, both queued by migration 0106 in `telegram_outbox`), and by `health`,
+`daily-report` and `ledger-backup` for ops alerts:
+
+- [ ] `ALERT_TELEGRAM_BOT_TOKEN` — the cpay bot's token from @BotFather. One
+      bot serves every group: each reseller adds it to their own group and
+      saves the group chat ID in their desk (Profile → Telegram group), or
+      the admin does it under Telegram groups. Unset = `telegram-notify`
+      answers 503 and leaves every message queued.
+- [ ] `ALERT_TELEGRAM_CHAT_ID` *(optional)* — the admin group (a negative
+      number such as `-1001234567890`). It gets ops alerts and, unless
+      `ALERT_ON_SETTLED=false`, a copy of every settled-payment message.
+      Unset = admin copies are skipped.
+- [ ] `ALERT_ON_SETTLED` *(optional)* — `false` stops the admin group's copy
+      of settled-payment messages. Reseller groups are not affected.
 
 New in this update:
 
@@ -77,6 +94,30 @@ Used by `ledger-backup` only:
 - [ ] `GITHUB_OWNER`
 - [ ] `GITHUB_REPO` — must be private. This function commits a full ledger
       snapshot into it.
+
+## Payment service
+
+Set on the host that runs `payment-service/` (see
+[`payment-service-deploy.md`](payment-service-deploy.md)). `config.mjs` reads
+these and nothing else; it refuses to start and names every bad variable
+(never its value) if one is wrong. `.env.example` has the same list.
+
+| Variable | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `BREEZ_NETWORK` | yes | | `mainnet` or `regtest` |
+| `BREEZ_MNEMONIC_FILE` | one of these two | | Path to a file holding the platform wallet's 12 or 24 words. Preferred: mount it read-only, mode 600, owned by the service user |
+| `BREEZ_MNEMONIC` | one of these two | | The words inline. Setting both is an error |
+| `BREEZ_API_KEY` | mainnet only | | Wallet SDK API key. Regtest needs none |
+| `BREEZ_DATA_DIR` | yes | `/data` in the Docker image | Wallet cache. Must be on a persistent disk |
+| `DATABASE_URL` | yes | | Postgres URL of the Supabase database, a role that can run the settle and withdrawal functions |
+| `PAYMENT_SERVICE_SECRET` | yes | | At least 32 characters. Same value as the edge function secret of that name |
+| `PORT` | no | `8080` | HTTP port |
+| `CATCH_UP_INTERVAL_SECS` | no | `300` | How often the service re-reads recent wallet payments in case an event was missed (30 to 3600) |
+| `SHUTDOWN_TIMEOUT_SECS` | no | `90` | On SIGTERM or SIGINT, how long to wait for sends in flight before disconnecting anyway (1 to 600). Give the host's stop timeout at least this plus 10 seconds |
+
+The service never logs these values: every log line passes through a redactor
+that replaces the secret, the API key, the words, and the database URL and
+password.
 
 ## public/config.js (client-side, public by design)
 

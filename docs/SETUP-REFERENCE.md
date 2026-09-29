@@ -43,9 +43,9 @@ Dashboard → Edge Functions → Secrets
 | `GITHUB_TOKEN` | for backups | Repo-scoped PAT |
 | `GITHUB_OWNER` / `GITHUB_REPO` | for backups | Where ledger snapshots go |
 | `ALERT_WEBHOOK_URL` | optional | Discord/Slack incoming webhook |
-| `ALERT_TELEGRAM_BOT_TOKEN` | optional | From @BotFather |
-| `ALERT_TELEGRAM_CHAT_ID` | optional | Negative number for a group |
-| `ALERT_ON_SETTLED` | optional | `false` silences per-payment alerts |
+| `ALERT_TELEGRAM_BOT_TOKEN` | for Telegram | From @BotFather. Sends ops alerts, reseller group messages and daily closes |
+| `ALERT_TELEGRAM_CHAT_ID` | optional | Admin group, a negative number |
+| `ALERT_ON_SETTLED` | optional | `false` stops settled-payment copies to the admin group |
 | `PAYMENT_SERVICE_URL` | yes | Base URL of the payment service |
 | `PAYMENT_SERVICE_SECRET` | yes | Shared bearer secret, same value as the service |
 | `CPAY_SUPABASE_ACCESS_TOKEN` | for the email-confirmation switch | Supabase personal access token (`SUPABASE_ACCESS_TOKEN` in CLI terms; the `SUPABASE_` prefix is reserved for secrets). **Account-level and powerful** — edge-function secret only, never anywhere else. See `docs/ENV_VARS.md` |

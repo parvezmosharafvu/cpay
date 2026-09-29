@@ -95,8 +95,8 @@ Deno.serve(async (req) => {
         name: "payment_provider",
         ok: res.ok && body.ok === true,
         detail: res.ok
-          ? `${body.network}, last synced ${body.lastSyncedAt}, balance ${body.balanceSats} sats`
-          : `payment service answered ${res.status}: db=${body.db} synced=${body.synced}`,
+          ? `last synced ${body.lastSyncedAt}`
+          : `payment service answered ${res.status}: db=${body.db} sdk=${body.sdkConnected} synced=${body.synced} shuttingDown=${body.shuttingDown}`,
       });
     } catch (e) {
       checks.push({ name: "payment_provider", ok: false, detail: `payment service unreachable: ${e}` });

@@ -12,7 +12,7 @@
 #                     a per-link rate limit inside the function.
 #   daily-report,
 #   ledger-backup,
-#   reseller-digest — called by pg_cron with an x-cron-secret header.
+#   telegram-notify — called by pg_cron with an x-cron-secret header.
 #                     All fail closed if CRON_SECRET is unset.
 #
 # user-withdraw is always called by a signed-in creator, and admin-actions
@@ -57,8 +57,8 @@ verify_jwt = false
 [functions.og-image]
 verify_jwt = false
 
-# Per-reseller Telegram/Discord settled digest at 5pm Asia/Dhaka.
-# Same cron-secret pattern as daily-report. Cost % in the message is
-# payer markup on the link — it is not the admin platform fee.
-[functions.reseller-digest]
+# Sends the Telegram messages migration 0106 queues (settled payments and
+# the 17:00 Dhaka daily close). Called by pg_cron with x-cron-secret, like
+# daily-report; it refuses every request without it.
+[functions.telegram-notify]
 verify_jwt = false

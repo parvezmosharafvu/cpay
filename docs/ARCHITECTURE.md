@@ -14,7 +14,7 @@ browser ──► public/ (static, Cloudflare Workers assets)
    │           ▼
    │        Edge functions (Deno): create-invoice, user-withdraw, admin-actions,
    │           │                    health, daily-report, ledger-backup, og-image,
-   │           │                    reseller-digest, auth-settings
+   │           │                    telegram-notify, auth-settings
    │           ▼  Bearer PAYMENT_SERVICE_SECRET
    └──────► payment-service/ (Node 22, one long-running process)
                holds the one platform wallet (Breez SDK Spark)

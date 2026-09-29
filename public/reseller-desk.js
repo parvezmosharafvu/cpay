@@ -301,7 +301,15 @@ async function renderChat() {
 }
 
 async function renderProfile() {
+  const { data: tg } = await sb.from('reseller_alert_channels').select('telegram_chat_id, enabled').eq('reseller_id', me.id).maybeSingle();
   document.getElementById('profile').innerHTML = `<div class="card narrow">
+    <h3>Telegram group</h3>
+    <p class="muted">Your group gets a message for every settled payment on your team's links, and a daily close at 5:00 PM Dhaka time with each link's payments, share, fee and net. Add the cpay bot to the group, then paste the group's chat ID here.</p>
+    <div class="field"><label for="tgChat">Group chat ID</label><input id="tgChat" placeholder="-1001234567890" value="${escapeHtml(tg?.telegram_chat_id || '')}"></div>
+    <div class="field"><label><input type="checkbox" id="tgOn" ${tg && !tg.enabled ? '' : 'checked'}> Send messages to this group</label></div>
+    <button class="btn primary" id="saveTg">Save group</button>
+  </div>
+  <div class="card narrow">
     <h3>Public profile</h3>
     <div class="field"><label for="pName">Display name</label><input id="pName" value="${escapeHtml(me.display_name || '')}"></div>
     <div class="field"><label for="pBio">Bio</label><textarea id="pBio">${escapeHtml(me.bio || '')}</textarea></div>
@@ -316,6 +324,15 @@ async function renderProfile() {
     });
     if (error) return toast(error.message);
     toast('Saved', true);
+  };
+  document.getElementById('saveTg').onclick = async () => {
+    const { error } = await sb.rpc('set_reseller_telegram', {
+      p_reseller_id: me.id,
+      p_chat_id: document.getElementById('tgChat').value,
+      p_enabled: document.getElementById('tgOn').checked,
+    });
+    if (error) return toast(error.message);
+    toast('Telegram group saved', true);
   };
 }
 

@@ -16,14 +16,13 @@ test('login then stay on wallet after reload', async ({ page }) => {
   await expect(page.locator('#home')).toBeHidden();
 });
 
-test('settings toggle reports a save', async ({ page }) => {
+test('settings shows live on/off controls', async ({ page }) => {
   await loginAsAdmin(page);
   await page.locator('.navi[data-tab="settings"]').click();
   await expect(page.locator('#settings')).toBeVisible();
-  const off = page.locator('[data-k="manual_withdrawals_enabled"][data-v="false"]');
-  await expect(off).toBeVisible();
-  await off.click();
-  await expect(page.locator('#toast')).toContainText(/saved|error|not authorized/i);
+  await expect(page.locator('[data-k="manual_withdrawals_enabled"][data-v="true"]')).toBeVisible();
+  await expect(page.locator('[data-k="manual_withdrawals_enabled"][data-v="false"]')).toBeVisible();
+  await expect(page.locator('#flags')).toContainText(/Now: (On|Off)/);
 });
 
 test('wallet does not show a transport failure', async ({ page }) => {

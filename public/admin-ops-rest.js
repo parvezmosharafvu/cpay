@@ -1,4 +1,4 @@
-// Ops tabs plus settings binds and hash tab restore.
+// Ops tabs plus settings binds and localStorage tab restore.
 const OPS_LABEL = {
   emergency_payments_stop: 'Stop new customer payments',
   emergency_withdrawals_stop: 'Stop withdrawals',
@@ -87,24 +87,21 @@ async function renderAudit() {
   const rows = (data || []).map((r) => `<tr><td>${escapeHtml(when(r.occurred_at))}</td><td>${escapeHtml(r.actor_email || '')}</td><td>${escapeHtml(r.action || '')}</td><td>${escapeHtml(r.subject_type || '')}</td><td class="mono">${escapeHtml(String(r.subject_id || '').slice(0, 8))}</td><td>${escapeHtml(r.note || '')}</td></tr>`).join('');
   el.innerHTML = `<div class="card flush"><table class="table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Type</th><th>Id</th><th>Note</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="empty">No audit rows</td></tr>'}</tbody></table></div>`;
 }
+function rememberedTab() {
+  try { return localStorage.getItem('cpay-admin-tab'); } catch (e) { return null; }
+}
 const __show = window.show;
 window.show = function (tab) {
-  if (!tab) tab = (location.hash || '#home').replace('#', '') || 'home';
+  if (!tab) tab = rememberedTab() || 'home';
   if (typeof __show === 'function') __show(tab);
-  try { if (location.hash.replace('#', '') !== tab) history.replaceState(null, '', '#' + tab); } catch (e) {}
+  try { localStorage.setItem('cpay-admin-tab', tab); } catch (e) {}
   if (tab === 'health') renderHealth();
   if (tab === 'system') renderSystem();
   if (tab === 'audit') renderAudit();
   if (tab === 'settings') renderFlagsLive();
 };
-window.addEventListener('hashchange', () => {
-  const t = (location.hash || '#home').replace('#', '') || 'home';
-  if (typeof __show === 'function') __show(t);
-});
 setTimeout(() => {
   renderHealth(); renderSystem(); renderAudit(); renderFlagsLive();
-  const t = (location.hash || '').replace('#', '');
-  if (t && typeof show === 'function') show(t);
 }, 800);
 document.getElementById('settings')?.addEventListener('click', async (e) => {
   const btn = e.target.closest('button');

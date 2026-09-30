@@ -1,6 +1,11 @@
-// invoke sends Authorization + apikey. Raw fetch without apikey was 401 Unauthorized.
+// Try the function root first (current deploy), then the nested path
+// (older admin-actions that only matches /admin-wallet).
 async function walletCall(action, body = {}) {
-  const res = await callFunction('admin-actions', { action, ...body });
+  const payload = { action, ...body };
+  let res = await callFunction('admin-actions', payload);
+  if (!res.ok && /not found/i.test(String(res.message || ''))) {
+    res = await callFunction('admin-actions/admin-wallet', payload);
+  }
   if (!res.ok) throw new Error(res.message || 'The wallet did not answer');
   return res.data;
 }

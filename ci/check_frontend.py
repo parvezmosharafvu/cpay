@@ -31,7 +31,6 @@ def check_js_syntax() -> None:
             blocks = re.findall(r"<script>(.*?)</script>", fh.read(), re.S)
         if not blocks:
             continue
-        # Joined with a separator so one file is one node invocation.
         with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
             fh.write("\n;\n".join(blocks))
             tmp = fh.name
@@ -102,18 +101,6 @@ def check_rpc_signatures() -> None:
 
 
 def check_reserved_slug_lists() -> None:
-    """The reserved-slug list lives in four places and has already drifted.
-
-    validate_link_slug() in the migrations is authoritative — it is the
-    only copy that can actually refuse an insert. The other three exist
-    so the UI and the Worker agree with it, and the failure mode when
-    they disagree is silent: a name the database would reject still
-    looks available while typing it, or the Worker serves a real app
-    page as if it were someone's payment link.
-
-    At the time this was written the DB and 404.html carried 18 entries,
-    the Worker 11 and dashboard.html 10.
-    """
     sql = "\n".join(
         open(f, encoding="utf-8").read()
         for f in sorted(glob.glob("supabase/migrations/*.sql"))
@@ -124,8 +111,6 @@ def check_reserved_slug_lists() -> None:
     if not bodies:
         failures.append("validate_link_slug() not found in migrations")
         return
-    # The function's only quoted literals are the reserved names and its
-    # regex, which contains no single-quoted words of this shape.
     canonical = set(re.findall(r"'([a-z0-9-]+)'", bodies[-1]))
 
     sources = {
@@ -142,7 +127,7 @@ def check_reserved_slug_lists() -> None:
         if not m:
             failures.append(f"{rel}: no RESERVED list found")
             continue
-        found = set(re.findall(r"""['"]([a-z0-9-]+)['"]""", m.group(1)))
+        found = set(re.findall(r"['\"]([a-z0-9-]+)['\"]", m.group(1)))
         missing = sorted(canonical - found)
         if missing:
             failures.append(
@@ -154,13 +139,6 @@ def check_reserved_slug_lists() -> None:
 
 
 def check_payment_accessibility_and_qr() -> None:
-    """Catch regressions in the two public payment surfaces.
-
-    This is intentionally a static gate: the actual invoice and Supabase
-    staging flow still needs a browser/payment test. It prevents a future
-    markup cleanup from removing the keyboard/screen-reader contract or the
-    on-chain address ownership boundary.
-    """
     pages = {
         "public/404.html": [
             'id="amountDisplay"',
@@ -219,16 +197,28 @@ def check_payment_accessibility_and_qr() -> None:
 
 
 def check_admin_release_gates() -> None:
-    """Keep the staging sign-off ledger connected to guarded RPCs."""
+    """Keep the staging sign-off ledger connected to guarded RPCs.
+
+    RPC names may live in admin.html or public/admin-ops-gates.js so a
+    markup rewrite does not fail the job. Each missing needle is printed
+    on stdout so the Actions log shows the reason next to the ok lines.
+    """
     migration = "supabase/migrations/0080_ops_release_gates.sql"
     page = "public/admin.html"
+    wire = "public/admin-ops-gates.js"
     try:
         with open(migration, encoding="utf-8") as fh:
             sql = fh.read()
         with open(page, encoding="utf-8") as fh:
             admin = fh.read()
+        extra = ""
+        if os.path.exists(wire):
+            with open(wire, encoding="utf-8") as fh:
+                extra = fh.read()
     except OSError as exc:
-        failures.append(f"release-gates: {exc}")
+        msg = f"release-gates: {exc}"
+        print(f"FAIL {msg}")
+        failures.append(msg)
         return
     sql_needles = [
         "create table if not exists ops_release_gates",
@@ -246,16 +236,19 @@ def check_admin_release_gates() -> None:
         "admin_set_ops_release_gate",
         "Staging sign-off ledger",
     ]
-    missing = [needle for needle in sql_needles if needle not in sql]
-    missing += [needle for needle in page_needles if needle not in admin]
+    missing = [f"{migration}: {n}" for n in sql_needles if n not in sql]
+    blob = admin + "\n" + extra
+    missing += [f"{page}|{wire}: {n}" for n in page_needles if n not in blob]
     if missing:
-        failures.append(f"release-gates: missing {missing}")
+        print("FAIL admin release gates — missing needles:")
+        for needle in missing:
+            print(f"     {needle}")
+        failures.append("release-gates: missing " + "; ".join(missing))
     else:
         print("ok   admin release gates (server-backed and audited)")
 
 
 def check_direct_upload_contract() -> None:
-    """Keep the direct-upload command and safety boundary intact."""
     try:
         with open("package.json", encoding="utf-8") as fh:
             package = fh.read()
@@ -281,12 +274,6 @@ def check_direct_upload_contract() -> None:
 
 
 def check_provider_name_hidden() -> None:
-    """Freelancer, reseller and customer pages never name the processor.
-
-    Everything under public/ except the admin pages (admin*.html,
-    admin-*.js) is served to freelancers, resellers or payers: markup,
-    comments, meta tags, scripts and the built bundle alike.
-    """
     files = [
         p for p in sorted(glob.glob("public/**/*", recursive=True))
         if os.path.isfile(p)
@@ -315,6 +302,8 @@ check_direct_upload_contract()
 check_provider_name_hidden()
 
 if failures:
-    print("\n".join(f"FAIL {f}" for f in failures), file=sys.stderr)
+    text = "\n".join(f"FAIL {f}" for f in failures)
+    print(text)
+    print(text, file=sys.stderr)
     sys.exit(1)
 print("\nAll frontend checks passed.")

@@ -1,11 +1,59 @@
-// Ops tabs that were missing after the merge.
+// Ops tabs: Health, System, Audit — readable labels, no Lightning leftover.
+const OPS_LABEL = {
+  emergency_payments_stop: 'Stop new customer payments',
+  emergency_withdrawals_stop: 'Stop withdrawals',
+  manual_withdrawals_enabled: 'Manual withdrawals',
+  auto_withdraw_enabled: 'Instant Lightning (off)',
+  pending_count: 'Waiting',
+  pending_amount: 'Waiting amount',
+  processing_count: 'Processing',
+  last_webhook_at: 'Last webhook',
+  last_daily_stat_at: 'Last daily close',
+  last_settled_at: 'Last settled payment',
+  oldest_pending_payment_at: 'Oldest unpaid invoice',
+  oldest_pending_withdrawal_at: 'Oldest waiting payout',
+  active_onchain_addresses: 'Saved on-chain addresses',
+  active: 'Active',
+  pending: 'Pending',
+  suspended: 'Suspended',
+  payment_ready: 'Payment-ready',
+  size_bytes: 'Database bytes',
+  size_pretty: 'Database size',
+  settled_24h: 'Settled last 24h',
+  payments_24h: 'Payments last 24h',
+  withdrawals_24h: 'Withdrawals last 24h',
+  new_profiles_24h: 'New accounts last 24h',
+  new_payments: 'New invoices',
+  pending_payments: 'Unpaid invoices',
+  pending_withdrawals: 'Waiting payouts',
+  pending_applications: 'Waiting applications',
+  processing_withdrawals: 'Payouts in flight',
+  domains: 'Domains',
+  profiles: 'Accounts',
+  active_links: 'Active links',
+  payment_links: 'Payment links',
+  active_profiles: 'Active accounts',
+};
+
+function opsLabel(k) {
+  return OPS_LABEL[k] || k.replace(/_/g, ' ');
+}
+
+function opsValue(v) {
+  if (v === true) return 'On';
+  if (v === false) return 'Off';
+  if (v == null || v === '') return '—';
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v) && typeof when === 'function') return when(v);
+  if (v && typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+
 function kvCard(title, obj) {
   const src = { ...(obj || {}) };
   delete src.auto_withdraw_enabled;
-  const rows = Object.entries(src).map(([k, v]) => {
-    const val = v && typeof v === 'object' ? JSON.stringify(v) : String(v ?? '-');
-    return `<tr><td>${escapeHtml(k)}</td><td class="mono">${escapeHtml(val)}</td></tr>`;
-  }).join('');
+  const rows = Object.entries(src).map(([k, v]) =>
+    `<tr><td>${escapeHtml(opsLabel(k))}</td><td class="mono">${escapeHtml(opsValue(v))}</td></tr>`
+  ).join('');
   return `<div class="card flush"><h3 style="padding:16px 20px 0">${escapeHtml(title)}</h3>
     <table class="table"><tbody>${rows || '<tr><td class="empty">No data</td></tr>'}</tbody></table></div>`;
 }
@@ -22,12 +70,12 @@ async function renderHealth() {
   const { data, error } = await sb.rpc('admin_ops_snapshot');
   if (error) { el.innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
   const s = data || {};
-  el.innerHTML = `<div class="card"><h3>Operations preflight</h3><p class="faint">Same signals as the old Health tab.</p></div>
-    ${kvCard('Flags', s.flags)}
-    ${kvCard('Withdrawals', s.withdrawals)}
+  el.innerHTML = `<div class="card"><h3>Health</h3><p class="faint">Can payments and payouts run right now?</p></div>
+    ${kvCard('Switches', s.flags)}
+    ${kvCard('Payouts', s.withdrawals)}
     ${kvCard('Pipeline', s.pipeline)}
     ${kvCard('Receiving', s.receiving)}
-    ${kvCard('Profiles', s.profiles)}
+    ${kvCard('Accounts', s.profiles)}
     ${kvCard('Domains', s.domains)}`;
 }
 
@@ -43,10 +91,10 @@ async function renderSystem() {
   ).join('');
   el.innerHTML = `<div class="card"><h3>System</h3><p class="faint">Database, traffic and queues. Read only.</p></div>
     ${kvCard('Database', s.database)}
-    ${kvCard('Traffic', s.traffic)}
+    ${kvCard('Last 24 hours', s.traffic)}
     ${kvCard('Queues', s.queues)}
     ${kvCard('Platform', s.platform)}
-    ${kvCard('Latency', s.latency)}
+    ${kvCard('Timing', s.latency)}
     <div class="card flush"><h3 style="padding:16px 20px 0">Alerts</h3>
       <table class="table"><thead><tr><th>Level</th><th>Title</th><th>Detail</th></tr></thead>
       <tbody>${alertRows || '<tr><td colspan="3" class="empty">No alerts</td></tr>'}</tbody></table></div>`;

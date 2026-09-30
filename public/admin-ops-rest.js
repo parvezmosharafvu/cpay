@@ -58,9 +58,51 @@ function kvCard(title, obj) {
     <table class="table"><tbody>${rows || '<tr><td class="empty">No data</td></tr>'}</tbody></table></div>`;
 }
 
-function hideLightningSwitch() {
-  document.querySelectorAll('#flags .faint.mono').forEach((el) => {
-    if (el.textContent.trim() === 'auto_withdraw_enabled') el.closest('tr')?.remove();
+function flagOn(value) {
+  if (value === true || value === 'true') return true;
+  if (value && typeof value === 'object' && 'value' in value) return flagOn(value.value);
+  return false;
+}
+
+const FLAG_ROWS = [
+  ['emergency_payments_stop', 'Emergency: stop new customer payments'],
+  ['emergency_withdrawals_stop', 'Emergency: stop withdrawals'],
+  ['manual_withdrawals_enabled', 'Manual withdrawals enabled'],
+  ['feature_affiliate_enabled', 'Reseller affiliate attach'],
+  ['feature_reseller_team_withdraw', 'Reseller can cash out team books'],
+  ['feature_reseller_notices', 'Reseller notices'],
+  ['hide_small_payments_enabled', 'Global hide-small-payments'],
+];
+
+async function renderFlagsLive() {
+  const el = document.getElementById('flags');
+  if (!el) return;
+  const keys = FLAG_ROWS.map((r) => r[0]);
+  const { data, error } = await sb.from('app_settings').select('key, value').in('key', keys);
+  const map = {};
+  for (const row of data || []) map[row.key] = flagOn(row.value);
+  el.innerHTML = `<div class="card flush"><table class="table"><tbody>${FLAG_ROWS.map(([k, label]) => {
+    const on = map[k] === true;
+    return `<tr>
+      <td>${escapeHtml(label)}<div class="faint">Now: ${on ? 'On' : 'Off'}</div></td>
+      <td class="num" style="white-space:nowrap">
+        <button class="btn ${on ? 'primary' : 'ghost'} sm" data-k="${k}" data-v="true">On</button>
+        <button class="btn ${on ? 'ghost' : 'primary'} sm" data-k="${k}" data-v="false">Off</button>
+      </td>
+    </tr>`;
+  }).join('')}</tbody></table></div>${error ? `<p class="err">${escapeHtml(error.message)}</p>` : ''}`;
+  el.querySelectorAll('[data-k]').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      const { error: e } = await sb.rpc('admin_set_feature_toggle', {
+        p_key: b.dataset.k,
+        p_enabled: b.dataset.v === 'true',
+      });
+      if (e) { toast(e.message); b.disabled = false; return; }
+      toast('Toggle saved', true);
+      renderFlagsLive();
+      if (typeof renderHealth === 'function') renderHealth();
+    };
   });
 }
 
@@ -125,9 +167,9 @@ window.show = function (tab) {
   if (tab === 'health') renderHealth();
   if (tab === 'system') renderSystem();
   if (tab === 'audit') renderAudit();
-  if (tab === 'settings') hideLightningSwitch();
+  if (tab === 'settings') renderFlagsLive();
 };
 
 setTimeout(() => {
-  renderHealth(); renderSystem(); renderAudit(); hideLightningSwitch();
+  renderHealth(); renderSystem(); renderAudit(); renderFlagsLive();
 }, 1200);

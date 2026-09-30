@@ -2,18 +2,22 @@
 
 Admin login, tab restore, Settings controls, Wallet transport errors.
 
-Login lives in `tests/fixtures/admin.ts` as the `adminPage` fixture.
-Specs import `test` from that file, not from `@playwright/test`.
+Playwright is **not** in root `package.json`. Cloudflare Workers runs `npm ci`
+from that lockfile; putting `@playwright/test` there broke both `cpay` and
+`cpay-og-preview` deploys.
+
+Install it only when you run the tests.
 
 ## Local
 
 ```bash
 npm install
-npm run test:e2e:install
+npm install --no-save @playwright/test@1.55.0
+npx playwright install chromium
 export CPAY_BASE_URL=https://pay-cashapp.buzz
 export CPAY_ADMIN_EMAIL='you@example.com'
 export CPAY_ADMIN_PASSWORD='...'
-npm run test:e2e
+npx playwright test
 ```
 
 Do not put the password in the repo. Use a staging admin if you have one.
@@ -24,6 +28,6 @@ Workflow `.github/workflows/e2e.yml` is manual + nightly. Add repository secrets
 
 - `CPAY_ADMIN_EMAIL`
 - `CPAY_ADMIN_PASSWORD`
-- optional `CPAY_BASE_URL` (defaults to https://pay-cashapp.buzz)
+- optional `CPAY_BASE_URL`
 
-Without those secrets the fixture skips the tests.
+Without those secrets the `adminPage` fixture skips the tests.

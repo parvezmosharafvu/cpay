@@ -16,6 +16,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
+      - run: npm install --no-save --no-audit --no-fund @playwright/test@1.55.0
       - run: npx playwright install --with-deps chromium
       - name: Run smoke tests
         env:
@@ -24,7 +25,7 @@ jobs:
           CPAY_ADMIN_PASSWORD: ${{ secrets.CPAY_ADMIN_PASSWORD }}
         run: |
           export CPAY_BASE_URL="${CPAY_BASE_URL:-https://pay-cashapp.buzz}"
-          npm run test:e2e
+          npx playwright test
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

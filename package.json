@@ -3,15 +3,12 @@
   "private": true,
   "scripts": {
     "build": "esbuild src/home-analytics.js --bundle --minify --format=iife --outfile=public/assets/home-analytics.js",
-    "prepare:upload": "node scripts/prepare-direct-upload.mjs",
-    "test:e2e": "playwright test",
-    "test:e2e:install": "playwright install chromium"
+    "prepare:upload": "node scripts/prepare-direct-upload.mjs"
   },
   "dependencies": {
     "@amplitude/unified": "^1"
   },
   "devDependencies": {
-    "@playwright/test": "1.55.0",
     "esbuild": "0.25.9"
   }
 }

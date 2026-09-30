@@ -1,13 +1,35 @@
-// Try the function root first (current deploy), then the nested path
-// (older admin-actions that only matches /admin-wallet).
+async function walletFetch(path, payload) {
+  const { data: sess } = await window.supabaseClient.auth.getSession();
+  const token = sess?.session?.access_token;
+  if (!token) throw new Error('Sign in again');
+  const res = await fetch(`${window.SUPABASE_URL}/functions/v1/${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      apikey: window.SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || data.message || `Wallet HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
 async function walletCall(action, body = {}) {
   const payload = { action, ...body };
-  let res = await callFunction('admin-actions', payload);
-  if (!res.ok && /not found/i.test(String(res.message || ''))) {
-    res = await callFunction('admin-actions/admin-wallet', payload);
+  try {
+    return await walletFetch('admin-actions', payload);
+  } catch (e) {
+    if (e.status === 404 || /not found/i.test(String(e.message || ''))) {
+      return await walletFetch('admin-actions/admin-wallet', payload);
+    }
+    throw e;
   }
-  if (!res.ok) throw new Error(res.message || 'The wallet did not answer');
-  return res.data;
 }
 
 function walletShell() {

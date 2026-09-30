@@ -56,15 +56,24 @@
     <section id="apps" hidden></section>
   </main>
 </div>
-
+<script>
+(function () {
+  var t = null;
+  try { t = localStorage.getItem('cpay-admin-tab'); } catch (e) {}
+  if (!t && location.hash) t = location.hash.replace('#', '');
+  if (!t) return;
+  document.querySelectorAll('main > section').forEach(function (s) { s.hidden = s.id !== t; });
+  document.querySelectorAll('.navi[data-tab]').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === t); });
+})();
+</script>
 <div id="opsGateSummary" hidden></div>
 <div id="opsGateList" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="admin-wallet.js?v=13"></script>
-<script src="admin-wallet-route.js?v=13"></script>
-<script src="admin-desk.js?v=13"></script>
-<script src="admin-unify.js?v=13"></script>
-<script src="admin-ops-rest.js?v=13"></script>
-<script src="admin-home-live.js?v=13"></script>
+<script src="admin-wallet.js?v=14"></script>
+<script src="admin-wallet-route.js?v=14"></script>
+<script src="admin-desk.js?v=14"></script>
+<script src="admin-unify.js?v=14"></script>
+<script src="admin-ops-rest.js?v=14"></script>
+<script src="admin-home-live.js?v=14"></script>
 </body>
 </html>

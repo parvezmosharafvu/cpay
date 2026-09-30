@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New password · CPAY</title>
+<link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="cpay.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script>
+</head>
+<body class="auth">
+  <main class="auth-card">
+    <a class="brand" href="/login.html">CPAY</a>
+    <div class="card">
+      <h1>Set a new password</h1>
+      <p class="sub">Use the link from your email, then choose a new password.</p>
+      <div class="field"><label for="password">New password</label><input id="password" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="password2">Confirm</label><input id="password2" type="password" autocomplete="new-password"></div>
+      <button class="btn primary block lg" id="saveBtn" type="button">Save password</button>
+      <p class="err" id="errorMsg" style="display:none;margin-top:12px"></p>
+    </div>
+    <p class="foot"><a href="login.html">Back to log in</a></p>
+  </main>
+<script>
+function showErr(t){ const e=document.getElementById('errorMsg'); e.textContent=t; e.style.display='block'; }
+window.addEventListener('DOMContentLoaded', async () => {
+  if (window.applyDomainTheme) await applyDomainTheme();
+  const { data:{ session } } = await window.supabaseClient.auth.getSession();
+  if (!session) showErr('Open the link from the email on this phone. If it expired, request a new one from log in.');
+});
+document.getElementById('saveBtn').onclick = async () => {
+  const a = document.getElementById('password').value;
+  const b = document.getElementById('password2').value;
+  if (!a || a.length < 8){ showErr('Use at least 8 characters.'); return; }
+  if (a !== b){ showErr('The two passwords do not match.'); return; }
+  const btn = document.getElementById('saveBtn'); btn.disabled = true;
+  const { error } = await window.supabaseClient.auth.updateUser({ password: a });
+  if (error){ showErr(error.message); btn.disabled = false; return; }
+  location.href = 'login.html';
+};
+</script>
+</body>
+</html>

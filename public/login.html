@@ -18,17 +18,23 @@
       <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email"></div>
       <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password"></div>
       <button class="btn primary block lg" id="submitBtn" type="button">Log in</button>
+      <p class="foot" style="margin-top:12px"><button class="btn ghost block" id="forgotBtn" type="button">Forgot password?</button></p>
       <p class="err" id="errorMsg" style="display:none;margin-top:12px"></p>
+      <p class="faint" id="okMsg" style="display:none;margin-top:12px"></p>
     </div>
     <p class="foot">No account? <a href="register.html">Create one</a></p>
   </main>
 <script>
+const errEl = () => document.getElementById('errorMsg');
+const okEl = () => document.getElementById('okMsg');
+function showErr(t){ const e=errEl(); e.textContent=t; e.style.display='block'; okEl().style.display='none'; }
+function showOk(t){ const o=okEl(); o.textContent=t; o.style.display='block'; errEl().style.display='none'; }
 async function go(id){
   const { data } = await window.supabaseClient.from('profiles').select('role,account_status').eq('id', id).single();
   if (data?.account_status && data.account_status !== 'active'){
     await window.supabaseClient.auth.signOut();
     const labels = {pending:'Waiting for admin approval.', rejected:'Application was not approved.', suspended:'Account suspended.'};
-    const el = document.getElementById('errorMsg'); el.textContent = labels[data.account_status] || 'Account is not active.'; el.style.display='block';
+    showErr(labels[data.account_status] || 'Account is not active.');
     return;
   }
   location.href = roleHome(data?.role);
@@ -36,12 +42,23 @@ async function go(id){
 document.getElementById('submitBtn').onclick = async () => {
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
-  const err = document.getElementById('errorMsg'); err.style.display='none';
-  if (!email || !password){ err.textContent='Enter email and password.'; err.style.display='block'; return; }
+  errEl().style.display='none'; okEl().style.display='none';
+  if (!email || !password){ showErr('Enter email and password.'); return; }
   const btn = document.getElementById('submitBtn'); btn.disabled = true;
   const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
-  if (error){ err.textContent = error.message; err.style.display='block'; btn.disabled=false; return; }
+  if (error){ showErr(error.message); btn.disabled=false; return; }
   await go(data.user.id);
+};
+document.getElementById('forgotBtn').onclick = async () => {
+  const email = document.getElementById('email').value.trim();
+  if (!email){ showErr('Enter your email first, then tap Forgot password.'); return; }
+  const btn = document.getElementById('forgotBtn'); btn.disabled = true;
+  const { error } = await window.supabaseClient.auth.resetPasswordForEmail(email, {
+    redirectTo: `${location.origin}/reset.html`,
+  });
+  btn.disabled = false;
+  if (error){ showErr(error.message); return; }
+  showOk('Check your email for a reset link. It opens this site so you can set a new password.');
 };
 document.getElementById('password').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('submitBtn').click(); });
 window.addEventListener('DOMContentLoaded', async () => {
@@ -50,4 +67,5 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (session) await go(session.user.id);
 });
 </script>
-</body></html>
+</body>
+</html>

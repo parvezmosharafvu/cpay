@@ -1,0 +1,33 @@
+name: Admin smoke (Playwright)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 18 * * *'
+
+jobs:
+  e2e:
+    name: Admin smoke against live site
+    runs-on: ubuntu-latest
+    if: ${{ vars.CPAY_E2E == 'on' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Run smoke tests
+        env:
+          CPAY_BASE_URL: ${{ secrets.CPAY_BASE_URL }}
+          CPAY_ADMIN_EMAIL: ${{ secrets.CPAY_ADMIN_EMAIL }}
+          CPAY_ADMIN_PASSWORD: ${{ secrets.CPAY_ADMIN_PASSWORD }}
+        run: |
+          export CPAY_BASE_URL="${CPAY_BASE_URL:-https://pay-cashapp.buzz}"
+          npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-output
+          path: test-results
+          if-no-files-found: ignore

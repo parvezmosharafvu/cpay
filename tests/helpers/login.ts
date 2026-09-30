@@ -1,3 +1,4 @@
+/** @deprecated Use tests/fixtures/admin.ts (`adminPage`) instead. */
 import { expect, type Page } from '@playwright/test';
 
 export function credentials() {

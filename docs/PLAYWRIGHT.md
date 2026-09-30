@@ -1,6 +1,9 @@
 # Playwright smoke tests
 
-Admin login, tab restore, Settings save, Wallet transport errors.
+Admin login, tab restore, Settings controls, Wallet transport errors.
+
+Login lives in `tests/fixtures/admin.ts` as the `adminPage` fixture.
+Specs import `test` from that file, not from `@playwright/test`.
 
 ## Local
 
@@ -23,4 +26,4 @@ Workflow `.github/workflows/e2e.yml` is manual + nightly. Add repository secrets
 - `CPAY_ADMIN_PASSWORD`
 - optional `CPAY_BASE_URL` (defaults to https://pay-cashapp.buzz)
 
-Without those secrets the tests skip.
+Without those secrets the fixture skips the tests.

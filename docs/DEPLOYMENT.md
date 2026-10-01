@@ -3,10 +3,9 @@
 ## 1. Supabase
 
 - [ ] Create a new Supabase project
-- [ ] Run migrations in order from `supabase/migrations/`, **0001 → 0101**,
-      one file at a time in the SQL Editor. 0018 is required — without it the
-      database has a privilege-escalation hole and two conflicting balance
-      definitions.
+- [ ] Run migrations in order from `supabase/migrations/`, one file at a time
+      in the SQL Editor. 0018 is required — without it the database has a
+      privilege-escalation hole and two conflicting balance definitions.
 - [ ] Run the verification queries at the bottom of this file
 - [ ] Deploy the Edge Functions:
 
@@ -52,8 +51,9 @@
 - [ ] Run the payment service (`payment-service/README.md`) on a host with
       a persistent disk, and set `PAYMENT_SERVICE_URL` and
       `PAYMENT_SERVICE_SECRET` as Edge Function secrets.
-- [ ] Mainnet needs a Breez API key, and the custody question (cpay holds
-      creators' money in its wallet) settled first.
+- [ ] Mainnet needs a Breez API key. cpay holds creators' money in that one
+      wallet. Payout is USDT to a saved address (quote, then confirm).
+      bKash, Nagad, Binance Pay, bank and Lightning payouts are not offered.
 
 ## 3. Frontend hosting (Cloudflare Pages direct upload or GitHub Pages)
 
@@ -79,21 +79,20 @@
       (Worker → Settings → Triggers → Add route). The worker passes through
       anything that is not a crawler hitting a single-segment slug.
 - [ ] SSL/TLS mode = Full (strict)
-- [ ] Register each domain in the admin panel's Domains tab so themes and
-      root-domain routing work
+- [ ] Register each domain in the admin panel's Domains tab for routing and
+      CORS. A domain does not pick a checkout theme. Themes are chosen on the
+      payment link and the invoice page.
 
 ## 5. End-to-end test
 
 - [ ] Register a test account, log in, create a payment link
-- [ ] Pay a generated invoice with a small test Lightning payment (needs the payment provider)
+- [ ] Pay a generated invoice with a small Lightning payment
 - [ ] Confirm the invoice page flips to "settled" live, with no refresh
 - [ ] Confirm the creator dashboard's "available" figure matches
       `select * from get_balance_for('<user-id>')`
-- [ ] Submit a withdrawal request as the test user
-- [ ] In the admin panel: approve/reject a pending request, and mark a
-      bKash/Nagad request paid manually
-- [ ] Double-click "Mark Paid" on a pending withdrawal — the second click
-      must return "Already processed"
+- [ ] Save a USDT address and request a quote. Confirm only a small amount.
+      Do not test bKash, Nagad, Binance Pay or a bank payout — those paths
+      are not part of the product.
 - [ ] Paste a payment link into WhatsApp and confirm the link preview renders
 
 ## 5b. This update's new pieces (migration 0033 + headers + alerts)
@@ -101,17 +100,13 @@
 After deploying the current code:
 
 - [ ] Run migration **0033** (`0033_webhook_idempotency_and_integrity.sql`) in
-      the SQL editor. Verify:
+      the SQL editor if it is not already applied. Verify:
       `select count(*) from webhook_events;` → must succeed (table exists)
-- [ ] Set the two new Edge Function secrets (see `docs/ENV_VARS.md`):
-      `ALLOWED_ORIGINS` = your site domain(s), and `ALERT_WEBHOOK_URL` = a
-      Discord/Slack webhook for payment-failure alerts
+- [ ] Set the Edge Function secrets (see `docs/ENV_VARS.md`):
+      `ALERT_WEBHOOK_URL` = a Discord/Slack webhook for payment-failure alerts
 - [ ] `wrangler deploy` — this publishes `public/_headers` automatically.
       Verify: `curl -sI https://<your-domain> | grep -i frame-ancestors`
       → expect `frame-ancestors 'none'`
-- [ ] Optional: schedule webhook-event pruning in the SQL editor:
-      `select cron.schedule('prune-webhook-events', '30 11 * * *',
-        $$select public.prune_webhook_events()$$);`
 
 ## 6. Security regressions to re-check after any migration
 
@@ -127,7 +122,7 @@ update profiles set withdrawal_fee_percent = 0 where id = auth.uid();
 -- must fail: minting a withdrawal without a balance check
 insert into withdrawals (user_id, amount_requested, fee_percent,
   amount_after_fee, method, destination, status)
-values (auth.uid(), 999999, 0, 999999, 'bkash', 'x', 'approved');
+values (auth.uid(), 999999, 0, 999999, 'stablecoin', 'x', 'approved');
 
 -- must fail: editing an admin's message in your own thread
 update support_messages set message = 'x'

@@ -5,7 +5,7 @@
 
 ## Current boundary
 
-- GitHub: `parvez-mosharaf/cpay`
+- GitHub: `parvezmosharafvu/cpay`
 - Supabase: the new `cpay` project only
 - Cloudflare: the separate `cpay` Workers & Pages project
 - Old production: unchanged and out of scope
@@ -23,15 +23,11 @@
 - Backward-compatible role mapping:
   - database `creator` → user-facing **Freelancer**
   - database `moderator` → user-facing **Reseller**
-- A receiving-only Bitcoin address book with multiple QR codes
-- Five payment-link layouts, including the new Focus and Receipt designs
+- Checkout themes for the payment page and the invoice page only. A domain does not pick a theme.
 - Payer-facing final-price disclosure for link markup
-- Safe on-chain foundation: address validation and QR storage only; no payout
-  signing or on-chain withdrawal is enabled by this phase
 - Admin 360° profile workspace snapshot with payment, withdrawal, domain and audit timeline
-- Withdrawal incident freeze now blocks both manual requests and settlement auto-queues
 - Admin emergency stops for new customer payments and new withdrawals, enforced server-side
-- Per-profile permission matrix with server-side feature flags for links, withdrawals, Lightning and on-chain QR
+- Per-profile permission matrix with server-side feature flags
 - Verification state, verification notes and guarded bulk account actions for admins
 - Advanced per-profile invoice and withdrawal limits with Dhaka-day payout thresholds
 - Audited profile emergency suspension that hides public payments and stops auto-withdrawals
@@ -44,21 +40,7 @@
 1. Open the **new CPAY Supabase project**.
 2. Take a backup/snapshot if the project already has data.
 3. Run the files in `supabase/migrations/` in numeric order.
-4. The new project currently ends at migration `0101`.
-5. Confirm the following objects exist:
-
-```sql
-select to_regclass('public.account_applications');
-select to_regclass('public.onchain_addresses');
-select proname
-from pg_proc
-where proname in (
-  'admin_review_account_application',
-  'onchain_address_create',
-  'onchain_address_update',
-  'admin_get_profile_workspace'
-);
-```
+4. Confirm the objects you need exist before treating the project as ready.
 
 Do not run these migrations against the previous production project.
 
@@ -99,18 +81,11 @@ Use a separate test email, not a real customer:
 4. Log in again and create a payment link.
 5. Register a second test account as **Reseller**.
 6. Approve it and verify the user-facing label is Reseller.
-7. In Cash out → On-chain receiving addresses, add one testnet address.
-8. Add a second address with a different label and verify that both QR codes
-   render and can be copied.
-9. Confirm a pending account cannot create links or request withdrawals.
-
-Use Bitcoin testnet addresses for UI testing. Do not enter a production payout
-address until the network and withdrawal design have been reviewed.
+7. Confirm a pending account cannot create links or request withdrawals.
 
 ## Deploy the frontend
 
-The Cloudflare project should point to the new `parvez-mosharaf/cpay` repository,
-not the old repository:
+The Cloudflare project should point to `parvezmosharafvu/cpay`:
 
 - Build command: `npm run build`
 - Deploy command: `npx wrangler deploy`
@@ -123,30 +98,26 @@ python3 ci/check_frontend.py
 npm run build
 ```
 
-The local sandbox may not have the optional Amplitude package installed. If
-`npm run build` fails with a missing `@amplitude/unified` package, install
-dependencies in the Cloudflare build environment or run `npm install` locally;
-do not edit `node_modules` or commit generated secrets.
-
-## Payments come after onboarding
+## Payments
 
 Payments run on Breez SDK Spark through `payment-service/` (see
-`docs/ARCHITECTURE.md`). Receiving is proven on the Breez regtest network.
-Instant USDT/USDC withdrawals go out through the payment service (mainnet
-only); bKash, Nagad, Binance Pay, Lightning and bank withdrawals are paid by
-hand and marked paid in the admin panel. Test invoice creation,
-settlement, expiry and duplicate event delivery in staging with small
-mainnet amounts before any withdrawal testing. On-chain withdrawals remain disabled
-until address validation, provider behavior, fees, confirmations, retry,
-idempotency and an emergency stop are verified in staging.
+`docs/ARCHITECTURE.md` and `docs/SIMPLE-MODEL.md`).
+
+- Receive: Lightning invoice. Cash App or any Lightning wallet. Proven on mainnet
+  (a settled `cpay payment` credits the platform wallet and the ledger).
+- Payout: USDT to a saved address, quote then confirm. USDC only if that route
+  is offered. Sats stay in the wallet until confirm (no Stable Balance).
+- Not offered: bKash, Nagad, Binance Pay, bank, or a Lightning payout.
+  Do not mark those paid by hand; they are not a product path.
+
+Test invoice creation, settlement and a small USDT quote in staging before
+larger payouts. Do not run the same seed on two hosts.
 
 ## What happens next
 
-1. Apply migrations `0067` through `0101` to the new CPAY Supabase project.
-2. Deploy the new Edge Functions and configure secrets in Supabase.
-3. Push the local CPAY changes to the new GitHub repository.
-4. Run the onboarding, link, invoice and QR test checklist.
-5. Review the admin profile workspace, permission matrix, domain assignment, audit timeline and payment themes.
-6. Complete payment staging and withdrawal hardening once the payment provider exists.
-7. Review Admin → Health and `docs/PRODUCTION-READINESS.md`.
-8. Only after staging passes, consider production money movement.
+1. Apply migrations to the new CPAY Supabase project.
+2. Deploy the Edge Functions and configure secrets in Supabase.
+3. Push to the GitHub repository and deploy Cloudflare.
+4. Run the onboarding, link and invoice checklist.
+5. Review Admin → Health and `docs/PRODUCTION-READINESS.md`.
+6. Only after a small mainnet receive and USDT send succeed, move real creator balances.

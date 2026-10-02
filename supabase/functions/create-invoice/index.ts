@@ -189,10 +189,14 @@ if (!bolt11) {
   return json({ error: "Could not create invoice" }, 502);
 }
 
+const lightningUri = `lightning:${bolt11}`;
+const cashAppUrl = `https://cash.app/launch/lightning/${encodeURIComponent(bolt11)}`;
 return json({
   paymentId: payment.id,
   payCode: bolt11,
-  payUrl: `lightning:${bolt11}`,
+  payUrl: lightningUri,
+  lightningUri,
+  cashAppUrl,
   amountRequested: chargedAmount,
   expiresAt,
 });

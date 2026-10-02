@@ -8,43 +8,33 @@
     <link rel="icon" type="image/svg+xml" href="/favicon-payment.svg">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="cpay.css">
-
-    <!-- These three are this page's contract with the rest of the system.
-         Drop any one and the page fails silently:
-           supabase-js — the client used for get_link_preview
-           config.js   — defines window.SUPABASE_URL and window.supabaseClient
-           theme.js    — defines applyDomainTheme(), awaited on load -->
+    <style>
+      [hidden]{display:none !important}
+      .checkout .key,.checkout .pay-btn,.checkout .quick-chip,.checkout .classic-chip,.checkout .quick-btn,.checkout .classic-toggle{min-height:44px;min-width:44px}
+      .checkout :focus-visible{outline:2px solid var(--brand,#635bff);outline-offset:2px}
+    </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
     <script src="theme.js"></script>
-
   </head>
   <body class="checkout">
-
     <header class="checkout-head">
       <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
       <span class="secure"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Secure payment</span>
     </header>
 
-    <!-- LOADING -->
-    <div class="checkout-card state-panel" id="loadingState">
-      <div class="spinner"></div>
+    <div class="checkout-card state-panel" id="loadingState" role="status" aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
       <div class="state-sub">Loading payment page…</div>
     </div>
 
-    <!-- NOT FOUND -->
-    <div class="checkout-card state-panel" id="notFoundCard" style="display:none;">
-      <div class="state-mark">404</div>
+    <div class="checkout-card state-panel" id="notFoundCard" hidden aria-hidden="true">
+      <div class="state-mark" aria-hidden="true">404</div>
       <div class="state-title">Payment link not found</div>
       <div class="state-sub">This payment link doesn't exist, or its owner has turned it off.</div>
     </div>
 
-    <!-- PAYMENT PAGE -->
-    <main class="checkout-card" id="paymentCard" style="display:none; flex-direction:column;">
-
-      <!-- Who is being paid, stated plainly before any amount is typed.
-           The payer arrived from a shared link and may have no idea who
-           is on the other end. -->
+    <main class="checkout-card" id="paymentCard" hidden aria-hidden="true" style="flex-direction:column;">
       <div class="merchant" aria-label="Merchant">
         <div class="merchant-avatar" id="merchantAvatar">$</div>
         <div>
@@ -52,12 +42,10 @@
           <div class="merchant-name" id="merchantName">&nbsp;</div>
         </div>
       </div>
-
       <div class="amount-display" role="status" aria-live="polite" aria-atomic="true">
         <div class="amount-text" id="amountDisplay">$0</div>
         <div class="charge-summary" id="chargeSummary" aria-live="polite"></div>
       </div>
-
       <div class="keypad" id="keypad">
         <button class="key" data-key="1" aria-label="1 dollar">1</button>
         <button class="key" data-key="2" aria-label="2 dollars">2</button>
@@ -71,16 +59,13 @@
         <button class="key" data-key="." aria-label="Decimal point">.</button>
         <button class="key" data-key="0" aria-label="0 dollars">0</button>
         <button class="key key-backspace" data-key="back" aria-label="Backspace">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path>
             <line x1="18" y1="9" x2="12" y2="15"></line>
             <line x1="12" y1="9" x2="18" y2="15"></line>
           </svg>
         </button>
       </div>
-
-      <!-- CLASSIC layout: an amount field and preset chips instead of the
-           keypad. Same handlers, same amountStr. -->
       <div class="classic-body" id="classicBody">
         <label class="classic-label" for="classicInput">Amount</label>
         <div class="classic-inputwrap">
@@ -93,26 +78,23 @@
           <button class="classic-chip" data-amount="20" aria-label="Set amount to 20 dollars">$20</button>
           <button class="classic-chip" data-amount="50" aria-label="Set amount to 50 dollars">$50</button>
         </div>
-        <div class="classic-chips classic-more" id="classicMore" style="display:none;">
+        <div class="classic-chips classic-more" id="classicMore" hidden>
           <button class="classic-chip" data-amount="100" aria-label="Set amount to 100 dollars">$100</button>
           <button class="classic-chip" data-amount="200" aria-label="Set amount to 200 dollars">$200</button>
           <button class="classic-chip" data-amount="500" aria-label="Set amount to 500 dollars">$500</button>
         </div>
         <button class="classic-toggle" id="classicToggle" aria-expanded="false" aria-controls="classicMore">Show more amounts</button>
       </div>
-
       <div class="action-section">
         <div class="quick-amounts" id="quickAmounts">
           <button class="quick-chip" data-amount="10" aria-label="Set amount to 10 dollars">$10</button>
-          <button class="quick-chip" data-amount="25" aria-label="Set amount to 25 dollars">$25</button>
+          <button class="quick-chip" data-amount="20" aria-label="Set amount to 20 dollars">$20</button>
           <button class="quick-chip" data-amount="50" aria-label="Set amount to 50 dollars">$50</button>
           <button class="quick-chip" data-amount="100" aria-label="Set amount to 100 dollars">$100</button>
           <button class="quick-chip" data-amount="200" aria-label="Set amount to 200 dollars">$200</button>
         </div>
         <button class="quick-btn" id="quickToggle" aria-expanded="false" aria-controls="quickAmounts">Quick amounts</button>
-
         <div class="status-msg" id="statusMsg" role="status" aria-live="polite"></div>
-
         <div id="walletHint">Pay with Cash App or any Lightning wallet</div>
         <button class="pay-btn" id="payBtn" type="button">
           <div class="btn-spinner" aria-hidden="true"></div>
@@ -120,69 +102,53 @@
         </button>
       </div>
     </main>
-
     <p class="checkout-foot">Payments are sent over the Bitcoin Lightning Network.</p>
-
     <script>
-// Kept in sync with validate_link_slug() in the database and the RESERVED
-// set in worker/og-preview-worker.js. Matched case-insensitively, because
-// /Admin has to be refused as firmly as /admin.
 const RESERVED = ['index','login','register','dashboard','admin','404','config','theme',
   'assets','favicon','invoice-cpay-v2','api','u','static','public',
   'well-known','robots','sitemap','moderator','reseller','store','classic'];
-
-// NOT lowercased. /taylor-james, /TaylorJames and /taylorjames are three
-// separate links that can carry three different rates, so the slug has
-// to reach the server exactly as it was typed.
 const slug = window.location.pathname.replace(/^\/|\/$/g, '');
-
 const MIN_AMOUNT = 1;
 const MAX_AMOUNT = 5000;
-
-// Held as a string, not a number, so a trailing "." or "50." survives
-// while the customer is still typing.
 let amountStr = '';
 let linkCostPercent = 0;
-
 function el(id){ return document.getElementById(id); }
-
+function setPanel(id, on){
+  const node = el(id);
+  node.hidden = !on;
+  node.setAttribute('aria-hidden', on ? 'false' : 'true');
+}
 function showNotFound(){
-  el('loadingState').style.display = 'none';
-  el('paymentCard').style.display = 'none';
-  el('notFoundCard').style.display = 'flex';
+  setPanel('loadingState', false);
+  setPanel('paymentCard', false);
+  setPanel('notFoundCard', true);
+  document.title = 'Payment link not found — CPAY';
 }
-
 function showPaymentCard(){
-  el('loadingState').style.display = 'none';
-  el('notFoundCard').style.display = 'none';
-  el('paymentCard').style.display = 'flex';
+  setPanel('loadingState', false);
+  setPanel('notFoundCard', false);
+  setPanel('paymentCard', true);
+  const field = document.documentElement.getAttribute('data-entry') === 'field';
+  el('keypad').setAttribute('aria-hidden', field ? 'true' : 'false');
+  el('classicBody').setAttribute('aria-hidden', field ? 'false' : 'true');
+  el('quickAmounts').setAttribute('aria-hidden', field ? 'true' : 'false');
+  el('quickToggle').setAttribute('aria-hidden', field ? 'true' : 'false');
 }
-
 function currentAmount(){
   const n = parseFloat(amountStr);
   return Number.isFinite(n) ? n : 0;
 }
-
 function renderAmount(){
   const shown = '$' + (amountStr === '' ? '0' : amountStr);
   const display = el('amountDisplay');
   display.textContent = shown;
   display.classList.toggle('long', shown.length > 8);
-
-  // The classic layout types into a field instead of the keypad, but both
-  // read and write the same amountStr — so switching layout never changes
-  // what gets sent, only how it is entered.
   const ci = el('classicInput');
   if (ci && document.activeElement !== ci) ci.value = amountStr;
-  document.querySelectorAll('.classic-chip').forEach(c => {
+  document.querySelectorAll('.classic-chip,.quick-chip').forEach(c => {
     c.classList.toggle('selected', amountStr !== '' && parseFloat(c.dataset.amount) === currentAmount());
   });
-
   const amt = currentAmount();
-  document.querySelectorAll('.quick-chip').forEach(c => {
-    c.classList.toggle('selected', amountStr !== '' && parseFloat(c.dataset.amount) === amt);
-  });
-
   const summary = el('chargeSummary');
   if (summary) {
     if (amt > 0) {
@@ -197,82 +163,54 @@ function renderAmount(){
     }
   }
 }
-
 function pressKey(k){
   clearStatus();
-
-  if (k === 'back'){
-    amountStr = amountStr.slice(0, -1);
-    renderAmount();
-    return;
-  }
-
+  if (k === 'back'){ amountStr = amountStr.slice(0, -1); renderAmount(); return; }
   if (k === '.'){
     if (amountStr.includes('.')) return;
     amountStr = (amountStr === '' ? '0' : amountStr) + '.';
     renderAmount();
     return;
   }
-
-  // Every rule the server enforces is applied here as well, so the display
-  // can never show an amount create-invoice would turn around and reject.
   const parts = amountStr.split('.');
-  if (parts.length === 2 && parts[1].length >= 2) return;  // cents only
-  if (amountStr === '0') amountStr = '';                    // no leading zero
-
+  if (parts.length === 2 && parts[1].length >= 2) return;
+  if (amountStr === '0') amountStr = '';
   const next = amountStr + k;
   if (parseFloat(next) > MAX_AMOUNT) return;
   if (next.replace('.', '').length > 8) return;
-
   amountStr = next;
   renderAmount();
 }
-
 function setStatus(text, kind){
   const s = el('statusMsg');
   s.textContent = text;
   s.className = 'status-msg ' + (kind || '');
   s.style.display = 'block';
 }
-
 function clearStatus(){
   const s = el('statusMsg');
   s.style.display = 'none';
   s.textContent = '';
 }
-
 function setPaying(isPaying, label){
   const btn = el('payBtn');
   btn.disabled = isPaying;
   btn.classList.toggle('loading', isPaying);
   el('payBtnText').textContent = label;
 }
-
 window.addEventListener('DOMContentLoaded', async () => {
-  // Resolves the domain's default design. A link's own design below
-  // overrides it.
   await applyDomainTheme();
-
   if (!slug || RESERVED.includes(slug.toLowerCase()) || slug.includes('.') || slug.includes('/')){
     showNotFound();
     return;
   }
-
   try {
     const { data, error } = await window.supabaseClient.rpc('get_link_preview', { p_slug: slug });
     const row = Array.isArray(data) ? data[0] : data;
-    if (error || !row || row.is_active === false){
-      showNotFound();
-      return;
-    }
-
+    if (error || !row || row.is_active === false){ showNotFound(); return; }
     const name = row.display_name || slug;
     linkCostPercent = Number(row.cost_percent || 0);
-    // A link-specific design overrides its domain default; NULL keeps the
-    // domain layout inherited for existing links.
     applyLinkTheme(row.theme);
-    // The invoice page follows the link's design unless the link picked a
-    // separate invoice design. It travels in the URL so a refresh keeps it.
     window.CPAY_INVOICE_DESIGN = invoiceDesignFor(row.invoice_theme, window.CPAY_LAYOUT);
     window.CPAY_WALLET_MODE = row.wallet_mode || 'all_wallets';
     document.documentElement.setAttribute('data-wallet', window.CPAY_WALLET_MODE);
@@ -282,12 +220,9 @@ window.addEventListener('DOMContentLoaded', async () => {
         ? 'Pay with Cash App'
         : 'Pay with Cash App or any Lightning wallet';
     }
-    // textContent, never innerHTML: display_name is free text a creator
-    // chose, and this page is served to the public.
     el('merchantName').textContent = name;
     el('merchantAvatar').textContent = ([...name][0] || '$');
     document.title = 'Pay ' + name + ' — CPAY';
-
     showPaymentCard();
     renderAmount();
   } catch (e){
@@ -295,17 +230,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     showNotFound();
     return;
   }
-
   el('keypad').addEventListener('click', (e) => {
     const btn = e.target.closest('.key');
     if (btn) pressKey(btn.dataset.key);
   });
-
   el('quickToggle').addEventListener('click', () => {
     const open = el('quickAmounts').classList.toggle('visible');
     el('quickToggle').setAttribute('aria-expanded', String(open));
   });
-
   el('quickAmounts').addEventListener('click', (e) => {
     const chip = e.target.closest('.quick-chip');
     if (!chip) return;
@@ -313,14 +245,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     clearStatus();
     renderAmount();
   });
-
   el('payBtn').addEventListener('click', startPayment);
-
-  // Classic layout inputs. Present in every layout's DOM but only visible
-  // in one, so wiring them unconditionally is safe.
   el('classicInput').addEventListener('input', (e) => {
-    // Same rules as the keypad, applied to typed text: digits, one dot,
-    // two decimals, capped at MAX_AMOUNT.
     let v = e.target.value.replace(/[^0-9.]/g, '');
     const parts = v.split('.');
     if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('');
@@ -331,27 +257,24 @@ window.addEventListener('DOMContentLoaded', async () => {
     clearStatus();
     renderAmount();
   });
-
   el('classicChips').addEventListener('click', pickChip);
   el('classicMore').addEventListener('click', pickChip);
   el('classicToggle').addEventListener('click', () => {
     const more = el('classicMore');
-    const open = more.style.display !== 'none';
-    more.style.display = open ? 'none' : 'flex';
+    const open = !more.hidden;
+    more.hidden = open;
     el('classicToggle').setAttribute('aria-expanded', String(!open));
     el('classicToggle').textContent = open ? 'Show more amounts' : 'Show fewer amounts';
   });
-
-  // Physical keyboards, for anyone paying from a desktop.
   document.addEventListener('keydown', (e) => {
-    if (el('paymentCard').style.display === 'none') return;
+    if (el('paymentCard').hidden) return;
+    if (document.activeElement === el('classicInput')) return;
     if (e.key >= '0' && e.key <= '9') pressKey(e.key);
     else if (e.key === '.') pressKey('.');
     else if (e.key === 'Backspace') pressKey('back');
     else if (e.key === 'Enter') startPayment();
   });
 });
-
 function pickChip(e){
   const chip = e.target.closest('.classic-chip');
   if (!chip) return;
@@ -359,28 +282,17 @@ function pickChip(e){
   clearStatus();
   renderAmount();
 }
-
 async function startPayment(){
-  // Keyboard Enter can fire while the first request is still in flight.
-  // The button state is the single client-side idempotency guard.
   if (el('payBtn').disabled) return;
   const amount = currentAmount();
   clearStatus();
-
   if (!amount || amount < MIN_AMOUNT || amount > MAX_AMOUNT){
     setStatus('Enter an amount between $' + MIN_AMOUNT + ' and $' + MAX_AMOUNT.toLocaleString() + '.', 'err');
     return;
   }
-
   setPaying(true, 'Creating invoice…');
   setStatus('Setting up your Lightning invoice — this takes a few seconds.', 'loading');
-
   try {
-    // Same-origin first, so the Cloudflare Worker can attach the city and
-    // country it already resolved — a direct call to supabase.co carries
-    // no geo at all, which is why every payment showed "Unknown location".
-    // Falls straight back to Supabase if the worker is not attached to
-    // this domain: a missing location must never block a payment.
     const body = JSON.stringify({ slug, amount });
     let res;
     try {
@@ -398,17 +310,11 @@ async function startPayment(){
       });
     }
     const result = await res.json();
-
     if (!res.ok){
       setStatus(result.error || 'Something went wrong. Please try again.', 'err');
       setPaying(false, 'Continue to payment');
       return;
     }
-
-    // sessionStorage is only a cache so the invoice page can paint the QR
-    // before its own round trip finishes. The id in the URL is what really
-    // identifies the invoice, so the link survives a refresh, a closed tab,
-    // or being opened on another device.
     sessionStorage.setItem('invoiceSession', JSON.stringify({
       paymentId: result.paymentId,
       payCode: result.payCode,

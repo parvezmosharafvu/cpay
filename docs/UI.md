@@ -12,13 +12,15 @@ The site is static HTML. Payment links are unmatched paths, served as
 - Keys, pay buttons, and auth controls are at least 44px, with a visible
   focus ring (`public/a11y.css`).
 - Login, register, and reset errors use `role="alert"`.
+- The invoice page allows pinch-zoom. `user-scalable=no` is removed.
+  Unpaid and paid steps stay hidden from assistive tech until shown.
 
 ## Supabase Preview
 
 Preview failed because remote version `20261001050736` was not in
 `supabase/migrations/`. That file is now in the repo. The other remote
 USDT versions (`20260929102056`, `20260929103557`, `20260929142917`) were
-already present. Re-run the check.
+already present.
 
 ## Left as they are
 

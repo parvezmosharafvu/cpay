@@ -138,8 +138,16 @@ async function review(id, status) {
 const FEE_SOURCE = { account: 'own', reseller: 'reseller', global: 'global', none: 'global' };
 
 async function renderFees() {
-  const { data: settings } = await sb.from('app_settings').select('key, value').eq('key', 'default_withdrawal_fee_percent');
-  const globalWfee = Number(settings?.[0]?.value?.percent ?? 0);
+  const { data: settings } = await sb.from('app_settings').select('key, value').in('key', [
+    'default_withdrawal_fee_percent','default_platform_fee_percent','default_reseller_commission_percent','hide_small_payments_threshold','hide_small_payments_enabled'
+  ]);
+  const byKey = Object.fromEntries((settings || []).map((r) => [r.key, r.value]));
+  const pct = (v) => Number((v && typeof v === 'object' ? v.percent : v) ?? 0);
+  const globalWfee = pct(byKey.default_withdrawal_fee_percent);
+  const platformFee = pct(byKey.default_platform_fee_percent);
+  const commission = pct(byKey.default_reseller_commission_percent);
+  const hideAmt = Number(byKey.hide_small_payments_threshold ?? 10);
+  const hideOnNow = byKey.hide_small_payments_enabled === true || byKey.hide_small_payments_enabled === 'true';
   document.getElementById('fees').innerHTML = `<div class="card narrow">
     <h3>Withdrawal fee</h3>
     <p class="muted">The platform fee on a withdrawal. Each account uses its own fee if one is set, else its reseller's team fee, else this default. 0 means no platform fee; users then see only the network fee.</p>
@@ -150,19 +158,20 @@ async function renderFees() {
   <div class="card narrow">
     <h3>Defaults</h3>
     <p class="muted">Platform fee is CPAY's cut of settled payments. Link cost is added to what the payer pays. Reseller commission is the reseller's cut of the net after the platform fee.</p>
-    <div class="field short"><label for="defFee">Platform fee %</label><input id="defFee" type="number" min="0" max="90" step="0.1" value="3"></div>
+    <div class="field short"><label for="defFee">Platform fee %</label><input id="defFee" type="number" min="0" max="90" step="0.1" value="${platformFee}"></div>
     <button class="btn primary" id="saveDefFee">Save platform fee</button>
     <hr>
-    <div class="field short"><label for="defComm">Reseller commission %</label><input id="defComm" type="number" min="0" max="50" step="0.1" value="8"></div>
+    <div class="field short"><label for="defComm">Reseller commission %</label><input id="defComm" type="number" min="0" max="50" step="0.1" value="${commission}"></div>
     <p class="hint">Applies to freelancers who joined through a reseller's link.</p>
     <button class="btn primary" id="saveDefComm">Save commission</button>
   </div>
   <div class="card narrow">
     <h3>Hide small payments</h3>
-    <div class="field short"><label for="hideAmt">Hide settled payments under $</label><input id="hideAmt" type="number" min="0" value="10"></div>
+    <div class="field short"><label for="hideAmt">Hide settled payments under $</label><input id="hideAmt" type="number" min="0" value="${hideAmt}"></div>
     <div class="row">
-      <button class="btn primary" id="hideOn">Turn on for everyone</button>
-      <button class="btn ghost" id="hideOff">Turn off for everyone</button>
+      <button class="btn ${hideOnNow ? 'primary' : 'ghost'}" id="hideOn" ${hideOnNow ? 'disabled' : ''}>Turn on for everyone</button>
+      <button class="btn ${hideOnNow ? 'ghost' : 'primary'}" id="hideOff" ${hideOnNow ? '' : 'disabled'}>Turn off for everyone</button>
+      <span class="faint">Now: ${hideOnNow ? 'On' : 'Off'}</span>
     </div>
     <p class="faint" style="margin:12px 0 0">Each account can still override this with inherit, on or off.</p>
   </div>`;
@@ -231,7 +240,7 @@ async function renderResellerWithdraw() {
 async function setHide(on) {
   const { error } = await sb.rpc('admin_set_hide_small_payments', { p_enabled: on, p_threshold: Number(document.getElementById('hideAmt').value) || 10 });
   if (error) return toast(error.message);
-  toast(on ? 'Global filter on' : 'Global filter off', true);
+  toast(on ? 'Global filter on' : 'Global filter off', true); renderFees();
 }
 
 async function renderFlags() {

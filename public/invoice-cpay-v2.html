@@ -107,7 +107,7 @@
 <p class="checkout-foot">Payments are sent over the Bitcoin Lightning Network.</p>
 
 <!-- HOW TO PAY -->
-<div id="howToPayModal">
+<div id="howToPayModal" hidden aria-hidden="true">
   <div class="modal-inner" role="dialog" aria-modal="true" aria-labelledby="howToPayTitle">
     <div class="modal-head">
       <h2 id="howToPayTitle">How to pay with Cash App</h2>
@@ -127,7 +127,7 @@
   </div>
 </div>
 
-<div id="toast" class="float-toast"></div>
+<div id="toast" class="float-toast" role="status" aria-live="polite"></div>
 
 <script>
 // Uses window.supabaseClient set up in config.js (same pattern as every other page)
@@ -366,8 +366,25 @@ async function openWallet(){
   window.location.href = currentPayUrl || ('lightning:' + currentPayCode);
 }
 
-function openModal(){ el('howToPayModal').classList.add('open'); }
-function closeModal(){ el('howToPayModal').classList.remove('open'); }
+function openModal(){
+  const m = el('howToPayModal');
+  m.hidden = false;
+  m.setAttribute('aria-hidden', 'false');
+  m.classList.add('open');
+  const close = el('modalCloseBtn');
+  if (close) close.focus();
+}
+function closeModal(){
+  const m = el('howToPayModal');
+  m.classList.remove('open');
+  m.hidden = true;
+  m.setAttribute('aria-hidden', 'true');
+  const help = el('helpBtn');
+  if (help) help.focus();
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && el('howToPayModal') && !el('howToPayModal').hidden) closeModal();
+});
 
 /* ---------- timer ---------- */
 function startTimer(expiresAt){

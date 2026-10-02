@@ -1,0 +1,15 @@
+[hidden]{display:none !important}
+.checkout .key,.checkout .pay-btn,.checkout .quick-chip,.checkout .classic-chip,
+.checkout .pill-btn,.checkout .icon-btn,.auth .btn,.auth input,.auth select{
+  min-height:44px;
+}
+.checkout .icon-btn{min-width:44px}
+:focus-visible{outline:2px solid var(--brand,#635bff);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    scroll-behavior:auto !important;
+    animation-duration:0.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:0.01ms !important;
+  }
+}

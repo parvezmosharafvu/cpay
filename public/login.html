@@ -6,6 +6,10 @@
 <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
+<style>
+  .auth :focus-visible{outline:2px solid var(--brand,#635bff);outline-offset:2px}
+  .auth .btn,.auth input{min-height:44px}
+</style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script>
 </head>
@@ -19,8 +23,8 @@
       <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password"></div>
       <button class="btn primary block lg" id="submitBtn" type="button">Log in</button>
       <p class="foot" style="margin-top:12px"><button class="btn ghost block" id="forgotBtn" type="button">Forgot password?</button></p>
-      <p class="err" id="errorMsg" style="display:none;margin-top:12px"></p>
-      <p class="faint" id="okMsg" style="display:none;margin-top:12px"></p>
+      <p class="err" id="errorMsg" role="alert" style="display:none;margin-top:12px"></p>
+      <p class="faint" id="okMsg" role="status" style="display:none;margin-top:12px"></p>
     </div>
     <p class="foot">No account? <a href="register.html">Create one</a></p>
   </main>

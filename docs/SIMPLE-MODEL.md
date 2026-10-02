@@ -21,3 +21,14 @@ Not offered: bKash, Nagad, Binance Pay, bank, or a Lightning payout.
 
 Themes exist only for the payment-link page and the invoice page.
 A domain does not pick a theme.
+
+## Checkout page
+
+`public/404.html` is the payment page (unmatched paths are slugs). It is not
+a folder of separate pages.
+
+- Loading is the only visible state until the link resolves. Not-found is
+  hidden and not announced until the lookup fails.
+- Quick amounts are one set: $10, $20, $50, $100, $200, and $500 on the
+  field layout. Keypad layout uses $10–$200. Both are not exposed at once.
+- Keys and the pay button are at least 44px, with a visible focus ring.

@@ -137,7 +137,7 @@ export function createApp({ sdk, db, secret, log = logJson, confirmWaitMs, now =
     const row = await ledger.invoiceRow(db, paymentId);
     if (!row) return [404, { error: 'payment not found' }];
     if (row.lightning_invoice) {
-      return [200, { bolt11: row.lightning_invoice, paymentHash: row.invoice_ref, amountSat: Number(row.amount_sat) }];
+      return [200, { ...invoiceLinks(row.lightning_invoice), paymentHash: row.invoice_ref, amountSat: Number(row.amount_sat) }];
     }
     if (row.status !== 'new') return [409, { error: `payment is ${row.status}` }];
     const expirySecs = Math.floor((new Date(row.expires_at).getTime() - now()) / 1000);
@@ -155,13 +155,22 @@ export function createApp({ sdk, db, secret, log = logJson, confirmWaitMs, now =
     if (!attached) {
       const again = await ledger.invoiceRow(db, paymentId);
       if (!again?.lightning_invoice) return [409, { error: 'payment is no longer open' }];
-      return [200, { bolt11: again.lightning_invoice, paymentHash: again.invoice_ref, amountSat: Number(again.amount_sat) }];
+      return [200, { ...invoiceLinks(again.lightning_invoice), paymentHash: again.invoice_ref, amountSat: Number(again.amount_sat) }];
     }
-    return [200, { bolt11: paymentRequest, paymentHash: parsed.paymentHash, amountSat }];
+    return [200, { ...invoiceLinks(paymentRequest), paymentHash: parsed.paymentHash, amountSat }];
   }
 
   // Unauthenticated, for the host's health check: booleans and one
   // timestamp, no balances, ids or configuration.
+  function invoiceLinks(bolt11) {
+    const raw = String(bolt11 || '').replace(/^lightning:/i, '');
+    return {
+      bolt11: raw,
+      lightningUri: `lightning:${raw}`,
+      cashAppUrl: `https://cash.app/launch/lightning/${encodeURIComponent(raw)}`,
+    };
+  }
+
   async function health() {
     const [dbOk, sdkConnected] = await Promise.all([
       timeout(db.query('select 1'), HEALTH_PROBE_MS).then(() => true, () => false),

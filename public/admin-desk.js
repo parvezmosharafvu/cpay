@@ -248,7 +248,7 @@ async function renderFlags() {
     ['emergency_payments_stop', 'Emergency: stop new customer payments'],
     ['emergency_withdrawals_stop', 'Emergency: stop withdrawals'],
     ['manual_withdrawals_enabled', 'Manual withdrawals enabled'],
-    ['auto_withdraw_enabled', 'Instant Lightning payouts master switch'],
+    ['auto_withdraw_enabled', 'Auto-queue USDT payouts when a threshold is set'],
     ['feature_affiliate_enabled', 'Reseller affiliate attach'],
     ['feature_reseller_team_withdraw', 'Reseller can cash out team books'],
     ['feature_reseller_notices', 'Reseller notices'],

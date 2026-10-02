@@ -319,6 +319,7 @@ async function startPayment(){
       paymentId: result.paymentId,
       payCode: result.payCode,
       payUrl: result.payUrl,
+      cashAppUrl: result.cashAppUrl || '',
       returnUrl: window.location.pathname,
     }));
     window.location.href = '/invoice-cpay-v2.html?id=' + encodeURIComponent(result.paymentId) + '&wallet=' + encodeURIComponent(window.CPAY_WALLET_MODE || 'all_wallets') + '&theme=' + encodeURIComponent(window.CPAY_INVOICE_DESIGN || window.CPAY_LAYOUT);

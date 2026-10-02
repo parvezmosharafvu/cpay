@@ -15,10 +15,16 @@ const USDT_NETWORKS = [
 ];
 
 function show(tab) {
+  if (!document.getElementById(tab)) tab = 'home';
   document.querySelectorAll('main > section').forEach((s) => { s.hidden = s.id !== tab; });
   document.querySelectorAll('.navi[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  try { localStorage.setItem('cpay-freelancer-tab', tab); } catch (e) {}
 }
 document.querySelectorAll('.navi[data-tab]').forEach((b) => { b.onclick = () => show(b.dataset.tab); });
+try {
+  const saved = localStorage.getItem('cpay-freelancer-tab');
+  if (saved && document.getElementById(saved)) show(saved);
+} catch (e) {}
 
 async function boot() {
   me = await loadProfile();

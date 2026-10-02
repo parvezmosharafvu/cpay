@@ -4,10 +4,16 @@ let me = null;
 let ws = null; // my_withdraw_settings(): own fee, team switch and team fee
 
 function show(tab) {
+  if (!document.getElementById(tab)) tab = 'home';
   document.querySelectorAll('main > section').forEach((s) => { s.hidden = s.id !== tab; });
   document.querySelectorAll('.navi[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  try { localStorage.setItem('cpay-reseller-tab', tab); } catch (e) {}
 }
 document.querySelectorAll('.navi[data-tab]').forEach((b) => { b.onclick = () => show(b.dataset.tab); });
+try {
+  const saved = localStorage.getItem('cpay-reseller-tab');
+  if (saved && document.getElementById(saved)) show(saved);
+} catch (e) {}
 
 async function boot() {
   me = await loadProfile();

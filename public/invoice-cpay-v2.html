@@ -136,6 +136,7 @@ const supabaseClient = window.supabaseClient;
 let timerInterval, realtimeChannel;
 let currentPayCode = '';
 let currentPayUrl = '';   // the lightning: URI handed to the OS
+let currentCashAppUrl = '';
 let returnPage = '/';
 let currentPaymentId = '';
 let merchantName = '';
@@ -264,6 +265,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     currentPayUrl = (cached.payUrl && cached.payUrl.startsWith('lightning:'))
       ? cached.payUrl
       : 'lightning:' + currentPayCode;
+    if (cached.cashAppUrl) currentCashAppUrl = cached.cashAppUrl;
     renderQr(currentPayCode);
   }
 
@@ -353,7 +355,7 @@ async function openCashApp(){
     return;
   }
   toast('Opening Cash App…');
-  window.location.href = cashAppUrl(currentPayCode);
+  window.location.href = currentCashAppUrl || cashAppUrl(currentPayCode);
 }
 
 async function openWallet(){

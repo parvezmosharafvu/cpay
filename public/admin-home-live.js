@@ -2,14 +2,31 @@
 async function renderHomeLive() {
   const el = document.getElementById('home');
   if (!el) return;
-  const [{ data: stats, error: stErr }, apps, pays, wds] = await Promise.all([
+  const [{ data: stats, error: stErr }, apps, pays, wds, peopleRes, walletsRes] = await Promise.all([
     sb.rpc('admin_global_stats'),
     sb.rpc('admin_list_account_applications'),
     sb.rpc('admin_list_payments', { p_limit: 8, p_offset: 0, p_search: null }),
     sb.from('withdrawals').select('id,amount_requested,status,destination,requested_at,method').order('requested_at', { ascending: false }).limit(8),
+    sb.rpc('admin_list_business_profiles'),
+    sb.rpc('admin_list_user_wallets'),
   ]);
-  if (stErr) { el.innerHTML = `<p class="err">${escapeHtml(stErr.message)}</p>`; return; }
+  let usdt = null, usdtErr = '';
+  try { usdt = await walletCall('info'); }
+  catch (e) { usdtErr = e.message || 'Wallet did not answer'; }
+  if (stErr) { el.innerHTML = `<div class="grid kpis">${usdtCard}</div><div class="card flush"><h3 style="padding:16px 20px 0">Users</h3><table class="table"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th>Wallet link</th><th class="num">Available</th></tr></thead><tbody>${userRows || '<tr><td colspan="5" class="empty">No accounts</td></tr>'}</tbody></table><p style="padding:0 20px 16px"><a class="btn primary" href="#people">Manage users</a></p></div><p class="err">${escapeHtml(stErr.message)}</p>`; return; }
   const s = Array.isArray(stats) ? stats[0] : stats || {};
+  const usdtCard = usdt
+    ? `<div class="card"><div class="kicker">USDT balance</div><div class="kpi">${usdt.balanceUsd != null ? money(usdt.balanceUsd) : '-'}</div><div class="faint">${usdt.balanceSats != null ? Number(usdt.balanceSats).toLocaleString('en-US') + ' sats in the platform wallet' : 'Platform wallet'}</div></div>
+       <div class="card"><div class="kicker">Owed to creators</div><div class="kpi">${money(usdt.owedToCreatorsUsd)}</div><div class="faint">USDT books waiting on payout</div></div>
+       <div class="card"><div class="kicker">Spendable</div><div class="kpi">${usdt.spendableSat != null ? Number(usdt.spendableSat).toLocaleString('en-US') + ' sats' : '-'}</div><div class="faint"><a href="#wallet">Open wallet</a></div></div>`
+    : `<div class="card"><div class="kicker">USDT balance</div><div class="kpi">-</div><div class="faint">${escapeHtml(usdtErr || 'Wallet not loaded')}</div></div>`;
+  const byWallet = {};
+  for (const w of walletsRes.data || []) (byWallet[w.user_id] ||= []).push(w);
+  const EXPLORER = { tron:'https://tronscan.org/#/address/', bsc:'https://bscscan.com/address/', ethereum:'https://etherscan.io/address/', polygon:'https://polygonscan.com/address/', arbitrum:'https://arbiscan.io/address/', base:'https://basescan.org/address/', optimism:'https://optimistic.etherscan.io/address/', avalanche:'https://snowtrace.io/address/', solana:'https://solscan.io/account/' };
+  const userRows = (peopleRes.data || []).slice(0, 12).map((p) => {
+    const links = (byWallet[p.id] || []).map((w) => `<a href="${EXPLORER[w.network] || '#'}${encodeURIComponent(w.address)}" target="_blank" rel="noopener">${escapeHtml(w.network)}</a>`).join(' · ') || '<span class="faint">No wallet</span>';
+    return `<tr><td>${escapeHtml(p.display_name || '')}<div class="faint">${escapeHtml(p.email || '')}</div></td><td>${p.role === 'moderator' ? 'Reseller' : p.role === 'creator' ? 'Freelancer' : escapeHtml(p.role || '')}</td><td>${badge(p.account_status)}</td><td>${links}</td><td class="num">${money(p.available)}</td></tr>`;
+  }).join('');
   const pendingApps = (apps.data || []).filter((a) => ['pending', 'submitted'].includes(String(a.status)));
   const appRows = (apps.data || []).slice(0, 8).map((a) => {
     const open = ['pending', 'submitted'].includes(String(a.status));

@@ -43,9 +43,13 @@ async function renderHome() {
 }
 
 async function renderPeople() {
-  const [{ data, error }, { data: usage }, { data: wfees }] = await Promise.all([
-    sb.rpc('admin_list_business_profiles'), sb.rpc('admin_link_usage'), sb.rpc('admin_withdraw_fee_overview'),
+  const [{ data, error }, { data: usage }, { data: wfees }, { data: wallets }] = await Promise.all([
+    sb.rpc('admin_list_business_profiles'), sb.rpc('admin_link_usage'), sb.rpc('admin_withdraw_fee_overview'), sb.rpc('admin_list_user_wallets'),
   ]);
+  const EXPLORER = { tron:'https://tronscan.org/#/address/', bsc:'https://bscscan.com/address/', ethereum:'https://etherscan.io/address/', polygon:'https://polygonscan.com/address/', arbitrum:'https://arbiscan.io/address/', base:'https://basescan.org/address/', optimism:'https://optimistic.etherscan.io/address/', avalanche:'https://snowtrace.io/address/', solana:'https://solscan.io/account/' };
+  const byWallet = {};
+  for (const w of wallets || []) (byWallet[w.user_id] ||= []).push(w);
+  const walletLinks = (id) => (byWallet[id] || []).map((w) => `<a href="${EXPLORER[w.network] || '#'}${encodeURIComponent(w.address)}" target="_blank" rel="noopener">${escapeHtml(w.network)}</a>`).join(' · ') || '<span class="faint">No wallet</span>';
   const links = Object.fromEntries((usage || []).map((u) => [u.user_id, u]));
   const wfee = Object.fromEntries((wfees || []).map((f) => [f.user_id, f]));
   if (error) { document.getElementById('people').innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
@@ -59,6 +63,7 @@ async function renderPeople() {
     <td class="num">${Number(p.platform_fee_percent || 0).toFixed(2)}%</td>
     <td class="num nowrap">${wfee[p.id] ? `${Number(wfee[p.id].fee_percent).toFixed(2)}%<div class="faint">${FEE_SOURCE[wfee[p.id].source] || ''}</div>` : '-'}</td>
     <td>${escapeHtml(p.hide_small_payments_mode)}</td>
+    <td>${walletLinks(p.id)}</td>
     <td class="num">${money(p.available)}</td>
     <td style="white-space:nowrap">
       ${links[p.id] ? `<button class="btn ghost sm" data-limit="${p.id}" data-cur="${links[p.id].link_limit}">Link limit</button>` : ''}
@@ -69,8 +74,8 @@ async function renderPeople() {
     </td>
   </tr>`).join('');
   document.getElementById('people').innerHTML = `<div class="card flush">
-    <table class="table"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th class="num">Links</th><th>Reseller</th><th class="num">Platform fee</th><th class="num">Withdraw fee</th><th>Small payments</th><th class="num">Available</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="10" class="empty">No accounts</td></tr>'}</tbody></table>
+    <table class="table"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th class="num">Links</th><th>Reseller</th><th class="num">Platform fee</th><th class="num">Withdraw fee</th><th>Small payments</th><th>Wallet</th><th class="num">Available</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="11" class="empty">No accounts</td></tr>'}</tbody></table>
   </div>`;
   document.querySelectorAll('[data-limit]').forEach((btn) => {
     btn.onclick = async () => {
@@ -108,6 +113,17 @@ async function renderPeople() {
       const { error: e } = await sb.rpc('admin_set_reseller_commission', { p_reseller_id: btn.dataset.comm, p_percent: Number(raw) });
       if (e) return toast(e.message);
       toast('Commission saved', true); renderPeople();
+    };
+  });
+  document.querySelectorAll('[data-wallet]').forEach((btn) => {
+    btn.onclick = async () => {
+      const network = prompt('USDT network: tron, bsc, ethereum, polygon, arbitrum, base, optimism, avalanche, solana', 'tron');
+      if (network == null) return;
+      const address = prompt('USDT address for ' + network.trim().toLowerCase());
+      if (!address) return;
+      const { error: e } = await sb.rpc('admin_set_user_usdt_wallet', { p_user_id: btn.dataset.wallet, p_network: network.trim().toLowerCase(), p_address: address.trim() });
+      if (e) return toast(e.message);
+      toast('Wallet link saved', true); renderPeople();
     };
   });
   document.querySelectorAll('[data-status]').forEach((btn) => {

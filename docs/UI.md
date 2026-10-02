@@ -11,14 +11,17 @@ The site is static HTML. Payment links are unmatched paths, served as
   field layout. The keypad layout does not also expose the field chips.
 - Keys, pay buttons, and auth controls are at least 44px, with a visible
   focus ring (`public/a11y.css`).
-- Login and register errors use `role="alert"`. Forgot password stays on
-  the login page.
-- The invoice page allows pinch-zoom. `user-scalable=no` is removed.
+- Login, register, and reset errors use `role="alert"`.
+
+## Supabase Preview
+
+Preview failed because remote version `20261001050736` was not in
+`supabase/migrations/`. That file is now in the repo. The other remote
+USDT versions (`20260929102056`, `20260929103557`, `20260929142917`) were
+already present. Re-run the check.
 
 ## Left as they are
 
-- `public/` stays flat. A `pages/` tree would break slug routing unless a
-  build step copies files back to the root. There is no such step.
-- Checkout themes stay. They apply only to the payment page and the invoice
-  page. A domain does not pick a theme.
-- `cpay.css` stays the design system. `a11y.css` is the only extra sheet.
+- `public/` stays flat. A `pages/` tree would break slug routing.
+- Checkout themes stay on the payment page and the invoice page.
+- A domain does not pick a theme.

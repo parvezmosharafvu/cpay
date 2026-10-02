@@ -8,20 +8,11 @@ The site is static HTML. Payment links are unmatched paths, served as
 - Checkout shows only the loading state until the link resolves. Not-found
   is hidden and not announced before that.
 - Quick amounts are one set: $10, $20, $50, $100, $200, and $500 on the
-  field layout. The keypad layout does not also expose the field chips.
-- Keys, pay buttons, and auth controls are at least 44px, with a visible
-  focus ring (`public/a11y.css`).
+  field layout.
 - Login, register, and reset errors use `role="alert"`.
-- The invoice page allows pinch-zoom. `user-scalable=no` is removed.
-  Unpaid and paid steps stay hidden from assistive tech until shown.
-- Invoice help is hidden until How to pay is opened, and Escape closes it.
-
-## Supabase Preview
-
-Preview failed because remote version `20261001050736` was not in
-`supabase/migrations/`. That file is now in the repo. The other remote
-USDT versions (`20260929102056`, `20260929103557`, `20260929142917`) were
-already present.
+- The invoice page allows pinch-zoom. Help stays hidden until opened.
+- Freelancer and reseller desks remember the open tab across refresh
+  (`cpay-freelancer-tab`, `cpay-reseller-tab`). Admin already did this.
 
 ## Left as they are
 

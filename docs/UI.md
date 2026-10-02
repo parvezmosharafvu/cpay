@@ -19,3 +19,6 @@ The site is static HTML. Payment links are unmatched paths, served as
 - `public/` stays flat. A `pages/` tree would break slug routing.
 - Checkout themes stay on the payment page and the invoice page.
 - A domain does not pick a theme.
+
+- Freelancer and reseller Withdraw tabs list the last 30 payouts: when, status, network, requested, after fee, address.
+- Checkout stores the server `cashAppUrl`. The invoice page opens that link, and builds one if the server did not send it.

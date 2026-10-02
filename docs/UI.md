@@ -14,6 +14,7 @@ The site is static HTML. Payment links are unmatched paths, served as
 - Login, register, and reset errors use `role="alert"`.
 - The invoice page allows pinch-zoom. `user-scalable=no` is removed.
   Unpaid and paid steps stay hidden from assistive tech until shown.
+- Invoice help is hidden until How to pay is opened, and Escape closes it.
 
 ## Supabase Preview
 

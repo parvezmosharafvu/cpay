@@ -6,6 +6,7 @@
 <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
+<link rel="stylesheet" href="a11y.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script>
 </head>
@@ -23,11 +24,12 @@
         </select>
       </div>
       <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email"></div>
-      <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="new-password" placeholder="At least 8 characters"></div>
+      <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="new-password" aria-describedby="passwordHint" placeholder="At least 8 characters"></div>
+      <p class="faint" id="passwordHint">At least 8 characters.</p>
       <div class="field" id="affField"><label for="affiliate">Reseller code</label><input id="affiliate" placeholder="Optional"></div>
       <button class="btn primary block lg" id="submitBtn" type="button">Create account</button>
-      <p class="err" id="errorMsg" style="display:none;margin-top:12px"></p>
-      <p class="ok" id="successMsg" style="display:none;margin-top:12px"></p>
+      <p class="err" id="errorMsg" role="alert" style="display:none;margin-top:12px"></p>
+      <p class="ok" id="successMsg" role="status" style="display:none;margin-top:12px"></p>
     </div>
     <p class="foot">Already have an account? <a href="login.html">Log in</a></p>
   </main>

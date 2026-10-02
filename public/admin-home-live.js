@@ -48,7 +48,12 @@ async function renderHomeLive() {
     const acts = open ? `<button class="btn primary sm" data-wdh="${w.id}">Mark paid</button>` : '';
     return `<tr><td class="num">${money(w.amount_requested)}</td><td>${badge(w.status)}</td><td class="mono">${escapeHtml(w.destination || '')}</td><td>${acts}</td></tr>`;
   }).join('');
-  el.innerHTML = `<div class="grid kpis">
+  el.innerHTML = `<div class="grid kpis">${usdtCard}</div>
+  <div class="card flush"><h3 style="padding:16px 20px 0">Users</h3>
+    <table class="table"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th>Wallet link</th><th class="num">Available</th></tr></thead>
+    <tbody>${userRows || '<tr><td colspan="5" class="empty">No accounts</td></tr>'}</tbody></table>
+    <p style="padding:0 20px 16px"><a class="btn primary" href="#people">Manage users</a></p></div>
+  <div class="grid kpis">
     <div class="card"><div class="kicker">Settled volume</div><div class="kpi">${money(s.total_settled)}</div></div>
     <div class="card"><div class="kicker">Platform fees</div><div class="kpi">${money(s.total_admin_profit)}</div></div>
     <div class="card"><div class="kicker">Paid out</div><div class="kpi">${money(s.total_withdrawn)}</div></div>

@@ -6,6 +6,7 @@
 <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
+<link rel="stylesheet" href="a11y.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script>
 </head>
@@ -15,10 +16,11 @@
     <div class="card">
       <h1>Set a new password</h1>
       <p class="sub">Use the link from your email, then choose a new password.</p>
-      <div class="field"><label for="password">New password</label><input id="password" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="password">New password</label><input id="password" type="password" autocomplete="new-password" aria-describedby="passwordHint"></div>
+      <p class="faint" id="passwordHint">At least 8 characters.</p>
       <div class="field"><label for="password2">Confirm</label><input id="password2" type="password" autocomplete="new-password"></div>
       <button class="btn primary block lg" id="saveBtn" type="button">Save password</button>
-      <p class="err" id="errorMsg" style="display:none;margin-top:12px"></p>
+      <p class="err" id="errorMsg" role="alert" style="display:none;margin-top:12px"></p>
     </div>
     <p class="foot"><a href="login.html">Back to log in</a></p>
   </main>

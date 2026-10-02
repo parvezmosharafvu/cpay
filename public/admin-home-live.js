@@ -13,13 +13,14 @@ async function renderHomeLive() {
   let usdt = null, usdtErr = '';
   try { usdt = await walletCall('info'); }
   catch (e) { usdtErr = e.message || 'Wallet did not answer'; }
-  if (stErr) { el.innerHTML = `<div class="grid kpis">${usdtCard}</div><div class="card flush"><h3 style="padding:16px 20px 0">Users</h3><table class="table"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th>Wallet link</th><th class="num">Available</th></tr></thead><tbody>${userRows || '<tr><td colspan="5" class="empty">No accounts</td></tr>'}</tbody></table><p style="padding:0 20px 16px"><a class="btn primary" href="#people">Manage users</a></p></div><p class="err">${escapeHtml(stErr.message)}</p>`; return; }
+  if (stErr) { el.innerHTML = `<p class="err" role="alert">${escapeHtml(stErr.message)}</p>`; return; }
   const s = Array.isArray(stats) ? stats[0] : stats || {};
-  const usdtCard = usdt
-    ? `<div class="card"><div class="kicker">USDT balance</div><div class="kpi">${usdt.balanceUsd != null ? money(usdt.balanceUsd) : '-'}</div><div class="faint">${usdt.balanceSats != null ? Number(usdt.balanceSats).toLocaleString('en-US') + ' sats in the platform wallet' : 'Platform wallet'}</div></div>
-       <div class="card"><div class="kicker">Owed to creators</div><div class="kpi">${money(usdt.owedToCreatorsUsd)}</div><div class="faint">USDT books waiting on payout</div></div>
-       <div class="card"><div class="kicker">Spendable</div><div class="kpi">${usdt.spendableSat != null ? Number(usdt.spendableSat).toLocaleString('en-US') + ' sats' : '-'}</div><div class="faint"><a href="#wallet">Open wallet</a></div></div>`
-    : `<div class="card"><div class="kicker">USDT balance</div><div class="kpi">-</div><div class="faint">${escapeHtml(usdtErr || 'Wallet not loaded')}</div></div>`;
+  const books = (peopleRes.data || []).reduce((n, p) => n + Number(p.available || 0), 0);
+  const walletUsdt = usdt && usdt.balanceUsd != null ? Number(usdt.balanceUsd) : null;
+  const owed = usdt && usdt.owedToCreatorsUsd != null ? Number(usdt.owedToCreatorsUsd) : books;
+  const usdtCard = `<div class="card"><div class="kicker">USDT balance</div><div class="kpi">${walletUsdt == null ? '-' : money(walletUsdt)}</div><div class="faint">${usdt && usdt.balanceSats != null ? Number(usdt.balanceSats).toLocaleString('en-US') + ' sats × Breez rate' : escapeHtml(usdtErr || 'Platform wallet')}</div><div class="faint"><a href="#wallet">Wallet link</a></div></div>
+       <div class="card"><div class="kicker">Owed to creators</div><div class="kpi">${money(owed)}</div><div class="faint">Book USDT waiting on payout. Not a second wallet.</div></div>
+       <div class="card"><div class="kicker">Spendable</div><div class="kpi">${usdt && usdt.spendableSat != null ? Number(usdt.spendableSat).toLocaleString('en-US') + ' sats' : '-'}</div><div class="faint">Wallet sats minus creator books</div></div>`;
   const byWallet = {};
   for (const w of walletsRes.data || []) (byWallet[w.user_id] ||= []).push(w);
   const EXPLORER = { tron:'https://tronscan.org/#/address/', bsc:'https://bscscan.com/address/', ethereum:'https://etherscan.io/address/', polygon:'https://polygonscan.com/address/', arbitrum:'https://arbiscan.io/address/', base:'https://basescan.org/address/', optimism:'https://optimistic.etherscan.io/address/', avalanche:'https://snowtrace.io/address/', solana:'https://solscan.io/account/' };

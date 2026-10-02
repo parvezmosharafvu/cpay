@@ -245,19 +245,31 @@ async function renderFlags() {
     ['feature_reseller_notices', 'Reseller notices'],
     ['hide_small_payments_enabled', 'Global hide-small-payments'],
   ];
-  document.getElementById('flags').innerHTML = `<div class="card flush"><table class="table"><tbody>${keys.map(([k, label]) => `
-    <tr>
-      <td>${escapeHtml(label)}<div class="faint mono">${k}</div></td>
+  const { data, error } = await sb.from('app_settings').select('key, value').in('key', keys.map((r) => r[0]));
+  const map = {};
+  for (const row of data || []) {
+    const v = row.value;
+    map[row.key] = v === true || v === 'true' || (v && v.value === true);
+  }
+  const el = document.getElementById('flags');
+  if (!el) return;
+  el.innerHTML = `<div class="card flush"><table class="table"><tbody>${keys.map(([k, label]) => {
+    const on = map[k] === true;
+    return `<tr>
+      <td>${escapeHtml(label)}<div class="faint">Now: ${on ? 'On' : 'Off'}</div></td>
       <td class="num" style="white-space:nowrap">
-        <button class="btn primary sm" data-k="${k}" data-v="true">On</button>
-        <button class="btn ghost sm" data-k="${k}" data-v="false">Off</button>
+        <button class="btn ${on ? 'primary' : 'ghost'} sm" data-k="${k}" data-v="true" ${on ? 'disabled' : ''}>On</button>
+        <button class="btn ${on ? 'ghost' : 'primary'} sm" data-k="${k}" data-v="false" ${on ? '' : 'disabled'}>Off</button>
       </td>
-    </tr>`).join('')}</tbody></table></div>`;
-  document.querySelectorAll('#flags [data-k]').forEach((b) => {
+    </tr>`;
+  }).join('')}</tbody></table></div>${error ? `<p class="err" role="alert">${escapeHtml(error.message)}</p>` : ''}`;
+  el.querySelectorAll('[data-k]').forEach((b) => {
     b.onclick = async () => {
-      const { error } = await sb.rpc('admin_set_feature_toggle', { p_key: b.dataset.k, p_enabled: b.dataset.v === 'true' });
-      if (error) return toast(error.message);
+      b.disabled = true;
+      const { error: e } = await sb.rpc('admin_set_feature_toggle', { p_key: b.dataset.k, p_enabled: b.dataset.v === 'true' });
+      if (e) { toast(e.message); b.disabled = false; return; }
       toast('Toggle saved', true);
+      renderFlags();
     };
   });
 }

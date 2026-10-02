@@ -4,12 +4,20 @@ let people = [];
 
 let walletShown = false;
 function show(tab) {
+  if (!document.getElementById(tab)) tab = 'home';
   document.querySelectorAll('main > section').forEach((s) => { s.hidden = s.id !== tab; });
   document.querySelectorAll('.navi[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
-  // The wallet talks to the payment service, so it loads on first open only.
+  if (location.hash !== '#' + tab) history.replaceState(null, '', '#' + tab);
+  try { localStorage.setItem('cpay-admin-tab', tab); } catch (e) {}
   if (tab === 'wallet' && me?.role === 'admin' && !walletShown) { walletShown = true; renderWallet(); }
 }
-document.querySelectorAll('.navi[data-tab]').forEach((b) => { b.onclick = () => show(b.dataset.tab); });
+document.querySelectorAll('.navi[data-tab]').forEach((b) => {
+  b.addEventListener('click', (e) => { e.preventDefault(); show(b.dataset.tab); });
+});
+window.addEventListener('hashchange', () => {
+  const tab = location.hash.replace('#', '');
+  if (tab) show(tab);
+});
 
 async function boot() {
   me = await loadProfile();
@@ -24,7 +32,7 @@ async function renderHome() {
   const { data, error } = await sb.rpc('admin_global_stats');
   if (error) { document.getElementById('home').innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
   const s = Array.isArray(data) ? data[0] : data || {};
-  document.getElementById('home').innerHTML = `<div class="grid kpis">
+  document.getElementById('home').innerHTML = `<div class="row" style="margin-bottom:12px"><a class="btn primary" href="#people" id="manageUsers">Manage users</a><a class="btn ghost" href="#wallet" id="openWallet">Open wallet</a></div><div class="grid kpis">
     <div class="card"><div class="kicker">Settled volume</div><div class="kpi">${money(s.total_settled)}</div><div class="faint">All settled payments</div></div>
     <div class="card"><div class="kicker">Platform fees</div><div class="kpi">${money(s.total_admin_profit)}</div><div class="faint">Earned on settled volume</div></div>
     <div class="card"><div class="kicker">Paid out</div><div class="kpi">${money(s.total_withdrawn)}</div><div class="faint">Withdrawals marked paid</div></div>
@@ -100,6 +108,19 @@ async function renderPeople() {
       const { error: e } = await sb.rpc('admin_set_reseller_commission', { p_reseller_id: btn.dataset.comm, p_percent: Number(raw) });
       if (e) return toast(e.message);
       toast('Commission saved', true); renderPeople();
+    };
+  });
+  document.querySelectorAll('[data-status]').forEach((btn) => {
+    btn.onclick = async () => {
+      const next = prompt('Account status: active, pending, suspended, or rejected', btn.dataset.st || 'active');
+      if (next == null) return;
+      const status = next.trim().toLowerCase();
+      if (!['active','pending','suspended','rejected'].includes(status)) return toast('Use active, pending, suspended, or rejected');
+      const { error: e } = await sb.rpc('admin_update_account_control', {
+        p_user_id: btn.dataset.status, p_role: btn.dataset.role, p_account_status: status, p_review_note: 'Set from Manage users'
+      });
+      if (e) return toast(e.message);
+      toast('Account updated', true); renderPeople();
     };
   });
   document.querySelectorAll('[data-hide]').forEach((btn) => {

@@ -219,9 +219,32 @@ async function renderLinks() {
 
 let refreshWithdraw = () => {};
 
+
+async function renderWithdrawHistory() {
+  const host = document.getElementById('wHist');
+  if (!host) return;
+  const { data, error } = await sb.from('withdrawals')
+    .select('requested_at,status,chain,coin,amount_requested,amount_after_fee,destination')
+    .order('requested_at', { ascending: false })
+    .limit(30);
+  if (error) { host.innerHTML = `<p class="err" role="alert">${escapeHtml(error.message)}</p>`; return; }
+  const rows = (data || []).map((w) => `<tr>
+    <td>${escapeHtml(when(w.requested_at))}</td>
+    <td>${badge(w.status)}</td>
+    <td>${escapeHtml(w.chain || w.coin || 'USDT')}</td>
+    <td class="num">${money(w.amount_requested)}</td>
+    <td class="num">${money(w.amount_after_fee)}</td>
+    <td class="mono">${escapeHtml(String(w.destination || '').slice(0, 18))}</td>
+  </tr>`).join('');
+  host.innerHTML = `<div class="card flush"><h3 style="padding:16px 20px 0">Withdrawal history</h3>
+    <table class="table"><thead><tr><th>When</th><th>Status</th><th>Network</th><th class="num">Requested</th><th class="num">After fee</th><th>Address</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="6" class="empty">No withdrawals yet</td></tr>'}</tbody></table></div>`;
+}
+
 async function renderCash() {
   document.getElementById('cash').innerHTML = withdrawForm(`<p class="muted" id="wWho">From your own balance. To withdraw for a teammate, use Withdraw on the Team accounts page.</p>
-    <input type="hidden" id="wUser" value="${me.id}">`);
+    <input type="hidden" id="wUser" value="${me.id}">`) + '<div id="wHist"></div>';
+  renderWithdrawHistory();
   const own = () => document.getElementById('wUser').value === me.id;
   // The reseller's own fee is resolved by the server (own override, else the
   // global default). A teammate's fee is applied by the server on submit.

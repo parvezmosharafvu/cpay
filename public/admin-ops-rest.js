@@ -45,24 +45,7 @@ const FLAG_ROWS = [
   ['hide_small_payments_enabled', 'Global hide-small-payments'],
 ];
 async function renderFlagsLive() {
-  const el = document.getElementById('flags'); if (!el) return;
-  const { data, error } = await sb.from('app_settings').select('key, value').in('key', FLAG_ROWS.map((r) => r[0]));
-  const map = {}; for (const row of data || []) map[row.key] = flagOn(row.value);
-  el.innerHTML = `<div class="card flush"><table class="table"><tbody>${FLAG_ROWS.map(([k, label]) => {
-    const on = map[k] === true;
-    return `<tr><td>${escapeHtml(label)}<div class="faint">Now: ${on ? 'On' : 'Off'}</div></td>
-      <td class="num" style="white-space:nowrap">
-        <button class="btn ${on ? 'primary' : 'ghost'} sm" data-k="${k}" data-v="true">On</button>
-        <button class="btn ${on ? 'ghost' : 'primary'} sm" data-k="${k}" data-v="false">Off</button></td></tr>`;
-  }).join('')}</tbody></table></div>${error ? `<p class="err">${escapeHtml(error.message)}</p>` : ''}`;
-  el.querySelectorAll('[data-k]').forEach((b) => {
-    b.onclick = async () => {
-      b.disabled = true;
-      const { error: e } = await sb.rpc('admin_set_feature_toggle', { p_key: b.dataset.k, p_enabled: b.dataset.v === 'true' });
-      if (e) { toast(e.message); b.disabled = false; return; }
-      toast('Toggle saved', true); renderFlagsLive(); if (typeof renderHealth === 'function') renderHealth();
-    };
-  });
+  if (typeof renderFlags === 'function') return renderFlags();
 }
 async function renderHealth() {
   const el = document.getElementById('health'); if (!el) return;

@@ -119,6 +119,28 @@ async function renderPays() {
   document.getElementById('pay').innerHTML = `<div class="card flush"><table class="table"><thead><tr><th class="num">Amount</th><th>Status</th><th>Link</th><th>When</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">No payments yet</td></tr>'}</tbody></table></div>`;
 }
 
+
+async function renderWithdrawHistory() {
+  const host = document.getElementById('wHist');
+  if (!host) return;
+  const { data, error } = await sb.from('withdrawals')
+    .select('requested_at,status,chain,coin,amount_requested,amount_after_fee,quoted_fee,destination,processed_at')
+    .order('requested_at', { ascending: false })
+    .limit(30);
+  if (error) { host.innerHTML = `<p class="err" role="alert">${escapeHtml(error.message)}</p>`; return; }
+  const rows = (data || []).map((w) => `<tr>
+    <td>${escapeHtml(when(w.requested_at))}</td>
+    <td>${badge(w.status)}</td>
+    <td>${escapeHtml(w.chain || w.coin || 'USDT')}</td>
+    <td class="num">${money(w.amount_requested)}</td>
+    <td class="num">${money(w.amount_after_fee)}</td>
+    <td class="mono">${escapeHtml(String(w.destination || '').slice(0, 18))}</td>
+  </tr>`).join('');
+  host.innerHTML = `<div class="card flush"><h3 style="padding:16px 20px 0">Withdrawal history</h3>
+    <table class="table"><thead><tr><th>When</th><th>Status</th><th>Network</th><th class="num">Requested</th><th class="num">After fee</th><th>Address</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="6" class="empty">No withdrawals yet</td></tr>'}</tbody></table></div>`;
+}
+
 async function renderCash() {
   const [{ data: bal }, { data: ws }, { data: book }] = await Promise.all([
     sb.rpc('get_my_balance'),
@@ -136,7 +158,8 @@ async function renderCash() {
     : `<p class="hint">Save a USDT address in Profile first. Lightning payouts are off.</p>`;
   document.getElementById('cash').innerHTML = withdrawForm(`<p class="muted">Available balance <strong id="wAvail">${money(b.available)}</strong></p>`
     + savedNote
-    + (blocked ? `<div class="notice" id="wBlocked"><strong>Withdrawals are handled by your reseller</strong><div class="muted">${escapeHtml(blocked)}</div></div>` : ''));
+    + (blocked ? `<div class="notice" id="wBlocked"><strong>Withdrawals are handled by your reseller</strong><div class="muted">${escapeHtml(blocked)}</div></div>` : ''))
+    + '<div id="wHist"></div>';
   bindWithdraw(() => fee, {
     blocked,
     submitManual: async () => {
@@ -152,12 +175,14 @@ async function renderCash() {
     },
     onDone: async () => {
       renderHome();
+      renderWithdrawHistory();
       const { data: now } = await sb.rpc('get_my_balance');
       const nb = Array.isArray(now) ? now[0] : now || {};
       document.getElementById('wAvail').textContent = money(nb.available);
     },
   });
-  const dest = document.getElementById('wDest');
+  renderWithdrawHistory();
+    const dest = document.getElementById('wDest');
   const preferred = wallets.find((w) => w.network === book?.preferred_usdt_network) || wallets[0];
   if (dest && preferred && !dest.value) dest.value = preferred.address;
 }

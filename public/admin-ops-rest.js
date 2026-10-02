@@ -3,7 +3,7 @@ const OPS_LABEL = {
   emergency_payments_stop: 'Stop new customer payments',
   emergency_withdrawals_stop: 'Stop withdrawals',
   manual_withdrawals_enabled: 'Manual withdrawals',
-  auto_withdraw_enabled: 'Instant Lightning (off)',
+  auto_withdraw_enabled: 'Auto-queue USDT payouts',
   pending_count: 'Waiting', pending_amount: 'Waiting amount', processing_count: 'Processing',
   last_webhook_at: 'Last webhook', last_daily_stat_at: 'Last daily close',
   last_settled_at: 'Last settled payment', oldest_pending_payment_at: 'Oldest unpaid invoice',

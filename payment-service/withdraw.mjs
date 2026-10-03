@@ -47,6 +47,8 @@ function toRouteView(r, family) {
   return {
     id: routeId(r), provider: r.provider, asset: r.asset, chain: r.chain, chainId: r.chainId ?? null,
     family, decimals: r.decimals, contractAddress: r.contractAddress ?? null,
+    minUsdCents: btc.limits?.minUsdCents ?? null,
+    maxUsdCents: btc.limits?.maxUsdCents ?? null,
     minUsd: btc.limits?.minUsdCents != null ? btc.limits.minUsdCents / 100 : null,
     maxUsd: btc.limits?.maxUsdCents != null ? btc.limits.maxUsdCents / 100 : null,
   };
@@ -258,10 +260,10 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     if (!route) throw new UserError(422, 'That coin and network is not available right now');
     const dest = await validateAddress(String(address ?? '').trim(), route.family);
     const { sendCents, feeCents } = splitFee(amountCents, profile.fee_percent);
-    if (route.minUsd != null && sendCents < route.minUsd * 100) {
+    if (route.minUsdCents != null && sendCents < route.minUsdCents) {
       throw new UserError(422, `The minimum for ${route.asset} on ${route.chain} is $${route.minUsd.toFixed(2)} after the platform fee`);
     }
-    if (route.maxUsd != null && sendCents > route.maxUsd * 100) {
+    if (route.maxUsdCents != null && sendCents > route.maxUsdCents) {
       throw new UserError(422, `The maximum for ${route.asset} on ${route.chain} is $${route.maxUsd.toFixed(2)}`);
     }
 

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { invoiceChargeCents } from "./invoice-amount.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -81,7 +82,9 @@ const costPercent = Number.isFinite(rawCost) ? Math.min(Math.max(rawCost, 0), 10
 // Rounded to cents, because that is what gets both charged and recorded
 // — computing one and storing the other would make every reconciliation
 // off by fractions.
-const chargedAmount = Math.round(amount * (1 + costPercent / 100) * 100) / 100;
+const amountCents = Math.round(amount * 100);
+const chargedAmountCents = invoiceChargeCents(amountCents, costPercent);
+const chargedAmount = chargedAmountCents / 100;
 
 // An admin may set a lower per-profile ceiling than the platform-wide
 // safety ceiling. Apply it to the final payer charge, including markup.

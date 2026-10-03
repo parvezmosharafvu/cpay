@@ -47,6 +47,8 @@ after(async () => {
 
 test('usdToSats rounds up so the invoice never undercharges', () => {
   assert.equal(ledger.usdToSats('10.00', 83948.8), 11913);
+  assert.equal(ledger.usdToSats('1.12', 100000), 1120);
+  assert.equal(ledger.usdToSats('1.12000001', 100000), 1121);
 });
 
 test('a received payment settles its row once, and replays credit nothing', async () => {

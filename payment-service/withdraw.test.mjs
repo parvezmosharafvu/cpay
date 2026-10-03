@@ -79,10 +79,24 @@ test('the route catalog lists BTC-funded stablecoin routes from every family and
   assert.deepEqual(routes.map((r) => r.id).sort(), ['orchestra:arbitrum:usdc', 'orchestra:bsc:usdt', 'orchestra:solana:usdc', 'orchestra:tron:usdt']);
   assert.deepEqual(routes.find((r) => r.id === 'orchestra:tron:usdt'), {
     id: 'orchestra:tron:usdt', provider: 'orchestra', asset: 'USDT', chain: 'tron', chainId: null, family: 'tron',
-    decimals: 6, contractAddress: null, minUsd: 1, maxUsd: 10000,
+    decimals: 6, contractAddress: null, minUsdCents: 100, maxUsdCents: 1_000_000, minUsd: 1, maxUsd: 10000,
   });
   await w.listRoutes();
   assert.equal(breez.calls.routes, 3);
+});
+
+test('withdrawal route limits compare integer cents at their exact boundaries', async () => {
+  const user = await makeUser({ earned: 20, fee: 0 });
+  const breez = fakeBreez();
+  const getRoutes = breez.getCrossChainRoutes.bind(breez);
+  breez.getCrossChainRoutes = async (args) => (await getRoutes(args)).map((p) => ({
+    ...p,
+    acceptedAssets: p.acceptedAssets.map((a) => ({ ...a, limits: { minUsdCents: 880, maxUsdCents: 10_000 } })),
+  }));
+  const w = service(breez);
+  const quote = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '8.80' });
+  assert.equal(quote.sendUsd, '8.80');
+  await assert.rejects(w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '2.01' }), /minimum.*\$8\.80/);
 });
 
 test('quote shows the platform fee, the network fee and what arrives', async () => {

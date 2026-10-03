@@ -1,7 +1,7 @@
 // Every database read and write the payment service makes. `db` is a pg
 // Pool or Client.
 
-function fraction(value) {
+function decimalFraction(value) {
   const match = /^([+-]?)(\d+)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(String(value).trim());
   if (!match) return null;
   const sign = match[1] === '-' ? -1n : 1n;
@@ -13,20 +13,14 @@ function fraction(value) {
 }
 
 export function usdToSats(usd, btcUsdRate) {
-  const amount = fraction(usd);
-  const rate = fraction(btcUsdRate);
+  const amount = decimalFraction(usd);
+  const rate = decimalFraction(btcUsdRate);
   if (!amount || !rate || rate.numerator <= 0n) return NaN;
   const numerator = amount.numerator * 100_000_000n * rate.denominator;
   const denominator = amount.denominator * rate.numerator;
   const quotient = numerator / denominator;
   const remainder = numerator % denominator;
   return Number(quotient + (remainder > 0n ? 1n : 0n));
-}
-
-export function usdCentsToSatsFloor(amountCents, btcUsdRate) {
-  const rate = fraction(btcUsdRate);
-  if (!Number.isSafeInteger(amountCents) || amountCents < 0 || !rate || rate.numerator <= 0n) return NaN;
-  return Number((BigInt(amountCents) * 1_000_000n * rate.denominator) / rate.numerator);
 }
 
 export async function invoiceRow(db, paymentId) {

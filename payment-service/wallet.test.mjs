@@ -75,6 +75,7 @@ function fakeBreez({ balanceSats = 1_000_000_000, leafFailures = 0 } = {}) {
     async getLightningAddress() { return { lightningAddress: 'cpay@breez.tips', username: 'cpay', description: '', lnurl: { url: 'https://breez.tips/lnurlp/cpay', bech32: 'lnurl1cpay' } }; },
     async parse(input) {
       if (input === BOLT11) return { type: 'bolt11Invoice', amountMsat: 5_000_000, invoice: { bolt11: input } };
+      if (input === 'lnbcrt5003u1half-cent') return { type: 'bolt11Invoice', amountMsat: 5_003_000, invoice: { bolt11: input } };
       if (input === 'lnbcrt100000001u1too-large') return { type: 'bolt11Invoice', amountMsat: 100_000_001_000, invoice: { bolt11: input } };
       if (input === 'lnbcrt1amountless') return { type: 'bolt11Invoice', invoice: { bolt11: input } };
       if (input === SPARK) return { type: 'sparkAddress', address: input };
@@ -174,6 +175,51 @@ test('info shows sats, USD at the Breez rate and what is owed to creators', asyn
   assert.ok(Number(info.owedToCreatorsUsd) >= 40);
   assert.equal(info.owedToCreatorsSat, Math.ceil(Number(info.owedToCreatorsUsd) * 1000));
   assert.equal(info.spendableSat, 250_000_000 - info.owedToCreatorsSat);
+});
+
+test('wallet info preserves exact liabilities and rounds monetary values half-up', async () => {
+  const dbStub = { query: async () => ({ rows: [{ owed: '2.67500000' }] }) };
+  const wallet = createWallet({
+    breez: fakeBreez({ balanceSats: 1015 }), db: dbStub,
+    btcUsdRate: async () => RATE, withdrawals: {},
+  });
+  const info = await wallet.info();
+  assert.equal(info.balanceUsd, '1.02');
+  assert.equal(info.owedToCreatorsUsd, '2.68');
+  assert.equal(info.owedToCreatorsSat, 2675);
+});
+
+test('send quote rounds the total to cents using exact half-up arithmetic', async () => {
+  const wallet = createWallet({
+    breez: fakeBreez(), db: { query: async () => ({ rows: [{ owed: '0' }] }) },
+    btcUsdRate: async () => RATE, withdrawals: {},
+  });
+  const quote = await wallet.sendPrepare({ adminId: randomUUID(), destination: 'lnbcrt5003u1half-cent' });
+  assert.equal(quote.totalUsd, '5.02');
+});
+
+test('admin stablecoin quote converts USD cents to sats exactly with floor rounding', async () => {
+  const route = {
+    id: 'orchestra:arbitrum:usdc', provider: 'orchestra', asset: 'USDC', chain: 'arbitrum',
+    family: 'evm', decimals: 6, minUsdCents: 100, maxUsdCents: 1_000_000,
+    minUsd: 1, maxUsd: 10_000,
+  };
+  const withdrawals = {
+    listRoutes: async () => [route],
+    validateAddress: async (address) => address,
+    prepareCrossChain: async () => ({
+      pair: route, prepared: {}, expiresAtMs: Date.now() + 60_000, estimatedOutBase: '0',
+      providerFee: { amount: '0', asset: 'USDC' }, receive: '1', receiveMin: '0.9',
+    }),
+  };
+  const wallet = createWallet({
+    breez: fakeBreez(), db: { query: async () => ({ rows: [{ owed: '0' }] }) },
+    btcUsdRate: async () => 80000.32, withdrawals,
+  });
+  const quote = await wallet.stableQuote({
+    adminId: randomUUID(), routeId: route.id, address: EVM, amountUsd: '2500.01',
+  });
+  assert.equal(quote.amountSat, 3_125_000);
 });
 
 test('payments are paged, newest first, with bigints as strings', async () => {

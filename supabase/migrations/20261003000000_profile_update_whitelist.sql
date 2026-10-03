@@ -14,6 +14,8 @@ declare
     'display_name',
     'bio',
     'public_slug',
+    'cost_locked',
+    'team_cost_percent',
     'cost_percent',
     'withdraw_threshold',
     'preferred_usdt_network',

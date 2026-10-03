@@ -14,6 +14,10 @@ Checks, in order of how often each has actually caught something here:
   5. payment surfaces keep accessible controls and QR ownership guards
   6. admin release gates stay server-backed and audited
   7. the payment processor is not named on any non-admin page
+  8. no traditional payment method (bKash, Nagad, Binance Pay, bank
+     transfer) is named anywhere in public/
+  9. wallets-config.js entries are well formed: verified entries cite a
+     source and date, and handoff links use an allowed scheme
 """
 import glob
 import re
@@ -157,6 +161,10 @@ def check_payment_accessibility_and_qr() -> None:
             'id="copyBtn" class="pill-btn btn-copy" type="button"',
             'id="payBtn" class="pill-btn btn-pay" type="button"',
             'id="modalCloseBtn" type="button" aria-label=',
+            'id="otherWalletsBtn"',
+            'role="dialog" aria-modal="true" aria-labelledby="walletSheetTitle"',
+            'id="statePanel" role="status" aria-live="polite"',
+            'src="wallets-config.js"',
         ],
     }
     for rel, needles in pages.items():
@@ -292,6 +300,64 @@ def check_provider_name_hidden() -> None:
         print(f"ok   provider name absent from {len(files)} non-admin public files")
 
 
+def check_no_traditional_payment_terms() -> None:
+    files = [
+        p for p in sorted(glob.glob("public/**/*", recursive=True))
+        if os.path.isfile(p)
+        and os.path.splitext(p)[1] in (".html", ".js", ".css", ".json", ".svg", ".txt", ".xml", ".webmanifest")
+    ]
+    pat = re.compile(r"bkash|nagad|binance|bank[ -]?transfer|bank account|wire transfer", re.I)
+    hits = []
+    for path in files:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for n, line in enumerate(fh, 1):
+                if pat.search(line):
+                    hits.append(f"{path}:{n}")
+    if hits:
+        failures.append(f"traditional payment method named in public/: {hits[:10]}")
+    else:
+        print(f"ok   no traditional payment methods in {len(files)} public files")
+
+
+WALLET_CHECK_JS = r"""
+const fs = require('fs'); const vm = require('vm');
+const ctx = { window: {} }; vm.createContext(ctx);
+vm.runInContext(fs.readFileSync('public/wallets-config.js', 'utf8'), ctx);
+const list = ctx.window.CPAY_WALLETS; const errs = [];
+if (!Array.isArray(list) || !list.length) errs.push('CPAY_WALLETS is empty');
+const ids = new Set();
+for (const w of list || []) {
+  const id = w && w.id;
+  if (!id || ids.has(id)) errs.push('missing or duplicate id: ' + id); ids.add(id);
+  for (const k of ['displayName','protocol','platforms','handoff','lightning','invoiceTypes','group','enabled','verification'])
+    if (!(k in w)) errs.push(id + ': missing ' + k);
+  if (/breez/i.test(JSON.stringify(w))) errs.push(id + ': names the payment provider');
+  if (!['universal','deeplink','lightning','copy'].includes(w.handoff)) errs.push(id + ': bad handoff');
+  if (w.handoff === 'universal' && !/^https:\/\/[^/]+\/.*\{bolt11\}/.test(w.universalLink || '')) errs.push(id + ': universalLink must be https with {bolt11}');
+  if (w.handoff === 'deeplink' && !/^[a-z][a-z0-9+.-]*:.*\{bolt11\}/.test(w.deepLink || '')) errs.push(id + ': deepLink needs {bolt11}');
+  if (w.deepLink && /^(javascript|data|vbscript|file):/i.test(w.deepLink)) errs.push(id + ': unsafe deepLink scheme');
+  const v = w.verification || {};
+  if (!['verified','unverified'].includes(v.status)) errs.push(id + ': verification.status');
+  if (v.status === 'verified' && !(/^https:\/\//.test(v.source || '') && /^\d{4}-\d{2}-\d{2}$/.test(v.date || '')))
+    errs.push(id + ': verified entries need an https source and a YYYY-MM-DD date');
+  if (v.status !== 'verified' && w.enabled && w.group === 'featured') errs.push(id + ': only verified wallets can be featured');
+}
+if (errs.length) { console.error(errs.join('\n')); process.exit(1); }
+console.log(list.length);
+"""
+
+
+def check_wallet_config() -> None:
+    if not os.path.exists("public/wallets-config.js"):
+        failures.append("public/wallets-config.js missing")
+        return
+    proc = subprocess.run(["node", "-e", WALLET_CHECK_JS], capture_output=True, text=True)
+    if proc.returncode:
+        failures.append("wallets-config.js: " + "; ".join(proc.stderr.strip().splitlines()[:10]))
+    else:
+        print(f"ok   wallets-config.js ({proc.stdout.strip()} entries well formed)")
+
+
 check_js_syntax()
 check_dom_references()
 check_rpc_signatures()
@@ -299,6 +365,8 @@ check_reserved_slug_lists()
 check_payment_accessibility_and_qr()
 check_admin_release_gates()
 check_direct_upload_contract()
+check_no_traditional_payment_terms()
+check_wallet_config()
 check_provider_name_hidden()
 
 if failures:

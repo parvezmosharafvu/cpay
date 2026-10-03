@@ -51,11 +51,18 @@ document.getElementById('submitBtn').onclick = async () => {
   err.style.display=ok.style.display='none';
   if (!email || !password){ err.textContent='Email and password required.'; err.style.display='block'; return; }
   if (password.length < 8){ err.textContent='Use at least 8 characters.'; err.style.display='block'; return; }
-  const btn = document.getElementById('submitBtn'); btn.disabled = true;
-  const { data, error } = await window.supabaseClient.auth.signUp({
-    email, password,
-    options: { data: { display_name: displayName || undefined, requested_role: requestedRole, affiliate_code: affiliate || undefined } }
-  });
+  const btn = document.getElementById('submitBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  let data, error;
+  try {
+    ({ data, error } = await window.supabaseClient.auth.signUp({
+      email, password,
+      options: { data: { display_name: displayName || undefined, requested_role: requestedRole, affiliate_code: affiliate || undefined } }
+    }));
+  } catch (e) {
+    error = { message: 'Could not reach the server. Check your connection and try again.' };
+  }
   if (error){ err.textContent=error.message; err.style.display='block'; btn.disabled=false; return; }
   if (data.session){ location.href = requestedRole === 'reseller' ? 'reseller.html' : 'dashboard.html'; return; }
   ok.textContent = 'Application received. Confirm your email. An admin then approves the account, unless auto-approval is on.';

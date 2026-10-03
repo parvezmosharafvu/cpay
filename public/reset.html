@@ -36,8 +36,15 @@ document.getElementById('saveBtn').onclick = async () => {
   const b = document.getElementById('password2').value;
   if (!a || a.length < 8){ showErr('Use at least 8 characters.'); return; }
   if (a !== b){ showErr('The two passwords do not match.'); return; }
-  const btn = document.getElementById('saveBtn'); btn.disabled = true;
-  const { error } = await window.supabaseClient.auth.updateUser({ password: a });
+  const btn = document.getElementById('saveBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  let error;
+  try {
+    ({ error } = await window.supabaseClient.auth.updateUser({ password: a }));
+  } catch (e) {
+    error = { message: 'Could not reach the server. Check your connection and try again.' };
+  }
   if (error){ showErr(error.message); btn.disabled = false; return; }
   location.href = 'login.html';
 };

@@ -151,11 +151,8 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     try {
       if (parsed?.type === 'bolt11Invoice') {
         kind = 'lightning';
-        const amountMsat = parsed.amountMsat == null ? 0n : BigInt(parsed.amountMsat);
-        const fixedSats = amountMsat > 0n ? (amountMsat + 999n) / 1000n : 0n;
-        if (fixedSats > BigInt(MAX_SEND_SAT)) throw new UserError(422, 'Amount must be between 1 and 100000000 sats');
-        const fixed = fixedSats > 0n ? Number(fixedSats) : null;
-        sat = fixed ?? amount();
+        const fixed = parsed.amountMsat != null ? Math.ceil(parsed.amountMsat / 1000) : null;
+        sat = fixed === null ? amount() : wholeSats(fixed, { label: 'Invoice amount' });
         res = await breez.prepareSendPayment({ paymentRequest: { type: 'input', input }, amount: fixed ? undefined : BigInt(sat) });
         feeSat = Number(res.paymentMethod.lightningFeeSats ?? 0);
       } else if (parsed?.type === 'sparkAddress') {
@@ -194,8 +191,8 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     if (amountCents === null) throw new UserError(400, 'Enter an amount in dollars and cents');
     const route = (await withdrawals.listRoutes()).find((r) => r.id === String(routeId ?? ''));
     if (!route) throw new UserError(422, 'That coin and network is not available right now');
-    if (route.minUsdCents != null && amountCents < route.minUsdCents) throw new UserError(422, `The minimum for ${route.asset} on ${route.chain} is $${formatCents(route.minUsdCents)}`);
-    if (route.maxUsdCents != null && amountCents > route.maxUsdCents) throw new UserError(422, `The maximum for ${route.asset} on ${route.chain} is $${formatCents(route.maxUsdCents)}`);
+    if (route.minUsdCents != null && amountCents < route.minUsdCents) throw new UserError(422, `The minimum for ${route.asset} on ${route.chain} is $${route.minUsd.toFixed(2)}`);
+    if (route.maxUsdCents != null && amountCents > route.maxUsdCents) throw new UserError(422, `The maximum for ${route.asset} on ${route.chain} is $${route.maxUsd.toFixed(2)}`);
     const dest = await withdrawals.validateAddress(String(address ?? '').trim(), route.family);
     const rate = await btcUsdRate();
     const amountSat = usdCentsToSats(amountCents, rate, 'floor');
@@ -208,7 +205,7 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     const view = {
       kind: 'stablecoin', destination: dest,
       route: { id: route.id, asset: q.pair.asset, chain: q.pair.chain, family: route.family, provider: q.pair.provider },
-      amountUsd: formatCents(amountCents), amountSat, feeSat: 0, totalSat: amountSat, btcUsdRate: rate,
+      amountUsd: (amountCents / 100).toFixed(2), amountSat, feeSat: 0, totalSat: amountSat, btcUsdRate: rate,
       providerFee: q.providerFee, receive: q.receive, receiveMin: q.receiveMin, asset: q.pair.asset,
       networkFeeUsd: networkFeeUsd(amountCents, q.estimatedOutBase, q.pair.decimals),
       expiresAt: new Date(q.expiresAtMs).toISOString(),

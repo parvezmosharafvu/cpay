@@ -3,9 +3,8 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { createWithdrawals } from './withdraw.mjs';
-import { createWallet, createAdminWalletRoute, bearerAuth, paymentView, owedToCreatorsUsd } from './wallet.mjs';
+import { createWallet, createAdminWalletRoute, bearerAuth, paymentView } from './wallet.mjs';
 import { settlePayment } from './ledger.mjs';
-import { usdToSats } from './money.mjs';
 
 // The admin Wallet tab's service side, against a database with every
 // migration applied and a fake Breez SDK. Other test files run at the same
@@ -76,7 +75,8 @@ function fakeBreez({ balanceSats = 1_000_000_000, leafFailures = 0 } = {}) {
     async getLightningAddress() { return { lightningAddress: 'cpay@breez.tips', username: 'cpay', description: '', lnurl: { url: 'https://breez.tips/lnurlp/cpay', bech32: 'lnurl1cpay' } }; },
     async parse(input) {
       if (input === BOLT11) return { type: 'bolt11Invoice', amountMsat: 5_000_000, invoice: { bolt11: input } };
-      if (input === 'lnbcrt1partial') return { type: 'bolt11Invoice', amountMsat: 5_000_001, invoice: { bolt11: input } };
+      if (input === 'lnbcrt5003u1half-cent') return { type: 'bolt11Invoice', amountMsat: 5_003_000, invoice: { bolt11: input } };
+      if (input === 'lnbcrt100000001u1too-large') return { type: 'bolt11Invoice', amountMsat: 100_000_001_000, invoice: { bolt11: input } };
       if (input === 'lnbcrt1amountless') return { type: 'bolt11Invoice', invoice: { bolt11: input } };
       if (input === SPARK) return { type: 'sparkAddress', address: input };
       if (input === 'friend@example.com') return { type: 'lightningAddress', address: input, payRequest: { callback: 'https://example.com/cb', minSendable: 1000, maxSendable: 1e11, domain: 'example.com' } };
@@ -173,8 +173,53 @@ test('info shows sats, USD at the Breez rate and what is owed to creators', asyn
   assert.equal(info.btcUsdRate, RATE);
   assert.equal(info.balanceUsd, '250000.00');
   assert.ok(Number(info.owedToCreatorsUsd) >= 40);
-  assert.equal(info.owedToCreatorsSat, usdToSats(await owedToCreatorsUsd(db), RATE));
+  assert.equal(info.owedToCreatorsSat, Math.ceil(Number(info.owedToCreatorsUsd) * 1000));
   assert.equal(info.spendableSat, 250_000_000 - info.owedToCreatorsSat);
+});
+
+test('wallet info preserves exact liabilities and rounds monetary values half-up', async () => {
+  const dbStub = { query: async () => ({ rows: [{ owed: '2.67500000' }] }) };
+  const wallet = createWallet({
+    breez: fakeBreez({ balanceSats: 1015 }), db: dbStub,
+    btcUsdRate: async () => RATE, withdrawals: {},
+  });
+  const info = await wallet.info();
+  assert.equal(info.balanceUsd, '1.02');
+  assert.equal(info.owedToCreatorsUsd, '2.68');
+  assert.equal(info.owedToCreatorsSat, 2675);
+});
+
+test('send quote rounds the total to cents using exact half-up arithmetic', async () => {
+  const wallet = createWallet({
+    breez: fakeBreez(), db: { query: async () => ({ rows: [{ owed: '0' }] }) },
+    btcUsdRate: async () => RATE, withdrawals: {},
+  });
+  const quote = await wallet.sendPrepare({ adminId: randomUUID(), destination: 'lnbcrt5003u1half-cent' });
+  assert.equal(quote.totalUsd, '5.02');
+});
+
+test('admin stablecoin quote converts USD cents to sats exactly with floor rounding', async () => {
+  const route = {
+    id: 'orchestra:arbitrum:usdc', provider: 'orchestra', asset: 'USDC', chain: 'arbitrum',
+    family: 'evm', decimals: 6, minUsdCents: 100, maxUsdCents: 1_000_000,
+    minUsd: 1, maxUsd: 10_000,
+  };
+  const withdrawals = {
+    listRoutes: async () => [route],
+    validateAddress: async (address) => address,
+    prepareCrossChain: async () => ({
+      pair: route, prepared: {}, expiresAtMs: Date.now() + 60_000, estimatedOutBase: '0',
+      providerFee: { amount: '0', asset: 'USDC' }, receive: '1', receiveMin: '0.9',
+    }),
+  };
+  const wallet = createWallet({
+    breez: fakeBreez(), db: { query: async () => ({ rows: [{ owed: '0' }] }) },
+    btcUsdRate: async () => 80000.32, withdrawals,
+  });
+  const quote = await wallet.stableQuote({
+    adminId: randomUUID(), routeId: route.id, address: EVM, amountUsd: '2500.01',
+  });
+  assert.equal(quote.amountSat, 3_125_000);
 });
 
 test('payments are paged, newest first, with bigints as strings', async () => {
@@ -255,14 +300,6 @@ test('a bolt11 send shows the fee, then sends once, audits twice and leaves crea
   assert.equal(await withdrawals.onPayment(breez.sent.get(prep.prepareId)), null, 'the withdrawal tracker ignores admin sends');
 });
 
-test('a fixed BOLT11 amount in millisatoshis rounds up using integer arithmetic', async () => {
-  const { wallet } = setup(fakeBreez({ balanceSats: 1_000_000 }));
-  const admin = await makeUser({ role: 'admin' });
-  const prepared = await wallet.sendPrepare({ adminId: admin, destination: 'lnbcrt1partial', amountSat: 1 });
-  assert.equal(prepared.amountSat, 5001);
-  assert.equal(prepared.totalSat, 5001 + prepared.feeSat);
-});
-
 test('an admin send that hits the leaf error is retried after a sync with the same key, and audited once', async () => {
   const slept = [];
   const { route, breez } = setup(fakeBreez({ leafFailures: 2 }), { sleep: async (ms) => { slept.push(ms); } });
@@ -298,6 +335,7 @@ test('Lightning address sends go through LNURL-pay and Spark sends through prepa
 
   await assert.rejects(route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: SPARK }), /whole number of sats/);
   await assert.rejects(route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: 'lnbcrt1amountless' }), /whole number of sats/);
+  await assert.rejects(route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: 'lnbcrt100000001u1too-large' }), /Invoice amount must be between 1 and 100000000 sats/);
   await assert.rejects(route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: 'hello' }), /Paste a Lightning invoice/);
   await assert.rejects(route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: EVM, amountSat: 10 }), /Use Withdraw stablecoin/);
 });
@@ -358,6 +396,21 @@ test('the stablecoin send quotes through the withdraw route logic and never writ
   assert.deepEqual(await balanceOf(creator), before);
   assert.equal((await db.query('select count(*) from withdrawals where id::text = $1 or quote_id::text = $1', [q.quoteId])).rows[0].count, '0');
   assert.deepEqual(await withdrawals.reconcile({ synced: true }).then(() => 'ok'), 'ok');
+});
+
+test('admin stablecoin quote accepts an exact integer-cent route maximum', async () => {
+  const breez = fakeBreez();
+  const getRoutes = breez.getCrossChainRoutes.bind(breez);
+  breez.getCrossChainRoutes = async (args) => (await getRoutes(args)).map((p) => ({
+    ...p,
+    acceptedAssets: p.acceptedAssets.map((a) => ({ ...a, limits: { minUsdCents: 100, maxUsdCents: 201 } })),
+  }));
+  const { route } = setup(breez);
+  const admin = await makeUser({ role: 'admin' });
+  const [, quote] = await route('POST', '/admin/wallet/stable-quote', {
+    adminId: admin, routeId: 'orchestra:arbitrum:usdc', address: EVM, amountUsd: '2.01',
+  });
+  assert.equal(quote.amountUsd, '2.01');
 });
 
 test('a Lightning payment into an admin invoice credits no creator', async () => {

@@ -121,32 +121,6 @@ test('malformed input gets a 4xx with a plain message, never a 500', async () =>
   assert.equal(logs.filter((e) => e.event === 'request-failed').length, 0);
 });
 
-test('concurrent invoice requests for one payment create and attach only one Lightning invoice', async () => {
-  const user = await makeUser({ earned: 0 });
-  const { rows } = await db.query(
-    `insert into payments(user_id, amount_requested, status, expires_at)
-     values ($1, 10, 'new', now() + interval '1 hour') returning id`,
-    [user],
-  );
-  const paymentId = rows[0].id;
-  const fake = fakeBreez({ invoiceMode: 'hang' });
-  const { call } = await start(fake);
-  const first = call('/invoices', { body: { paymentId } });
-  await until(() => fake.calls.invoice === 1);
-  const second = call('/invoices', { body: { paymentId } });
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  fake.releaseInvoice();
-  const [a, b] = await Promise.all([first, second]);
-
-  assert.equal(a.status, 200);
-  assert.equal(b.status, 200);
-  assert.equal(a.body.bolt11, b.body.bolt11);
-  assert.equal(fake.calls.invoice, 1);
-  const stored = await db.query('select invoice_ref, lightning_invoice, amount_sat from payments where id = $1', [paymentId]);
-  assert.equal(stored.rows[0].lightning_invoice, a.body.bolt11);
-  assert.equal(stored.rows[0].amount_sat, '10000');
-});
-
 test('a settled payment is credited once across replayed events and catch-up', async () => {
   const user = await makeUser({ earned: 0 });
   const hash = randomUUID().replaceAll('-', '').repeat(2);
@@ -172,6 +146,38 @@ test('a settled payment is credited once across replayed events and catch-up', a
   assert.equal(credited, '9.70000000');
   const events = await db.query(`select count(*)::int as n from webhook_events where delivery_id = $1`, [`breez:${payment.id}`]);
   assert.equal(events.rows[0].n, 1);
+});
+
+test('concurrent invoice requests create and attach only one Lightning invoice', async () => {
+  const user = await makeUser({ earned: 0 });
+  const { rows: [payment] } = await db.query(
+    `insert into payments(user_id, amount_requested, status, expires_at)
+     values ($1, 1.12, 'new', now() + interval '1 hour') returning id`,
+    [user],
+  );
+  const fake = fakeBreez();
+  let releaseInvoice;
+  let receiveCalls = 0;
+  const waiting = new Promise((resolve) => { releaseInvoice = resolve; });
+  fake.receivePayment = async () => {
+    receiveCalls++;
+    await waiting;
+    return { paymentRequest: 'lnbcrt1concurrent' };
+  };
+  fake.parse = async () => ({ paymentHash: 'ab'.repeat(32) });
+  const { call } = await start(fake);
+  const first = call('/invoices', { body: { paymentId: payment.id } });
+  await until(() => receiveCalls === 1);
+  const second = call('/invoices', { body: { paymentId: payment.id } });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(receiveCalls, 1);
+  releaseInvoice();
+  const [a, b] = await Promise.all([first, second]);
+  assert.equal(a.status, 200);
+  assert.deepEqual(b.body, a.body);
+  assert.equal(receiveCalls, 1);
+  const { rows } = await db.query('select lightning_invoice, invoice_ref, amount_sat from payments where id = $1', [payment.id]);
+  assert.deepEqual(rows[0], { lightning_invoice: 'lnbcrt1concurrent', invoice_ref: 'ab'.repeat(32), amount_sat: '1120' });
 });
 
 test('SIGTERM mid-send: new connections are refused, the send finishes, then the SDK disconnects', async () => {

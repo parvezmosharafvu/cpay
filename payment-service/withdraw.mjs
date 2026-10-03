@@ -3,7 +3,7 @@
 // Pool, `btcUsdRate` an async function returning USD per BTC.
 
 import { randomUUID } from 'node:crypto';
-import { decimalToCents, decimalToScaledInteger, formatCents, usdCentsToSats } from './money.mjs';
+import { usdCentsToSats } from './money.mjs';
 
 export const ROUTE_CACHE_MS = 10 * 60 * 1000;
 // A 'sending' row with no Breez payment is refunded only once its quote has
@@ -48,7 +48,8 @@ function toRouteView(r, family) {
   return {
     id: routeId(r), provider: r.provider, asset: r.asset, chain: r.chain, chainId: r.chainId ?? null,
     family, decimals: r.decimals, contractAddress: r.contractAddress ?? null,
-    minUsdCents: btc.limits?.minUsdCents ?? null, maxUsdCents: btc.limits?.maxUsdCents ?? null,
+    minUsdCents: btc.limits?.minUsdCents ?? null,
+    maxUsdCents: btc.limits?.maxUsdCents ?? null,
     minUsd: btc.limits?.minUsdCents != null ? btc.limits.minUsdCents / 100 : null,
     maxUsd: btc.limits?.maxUsdCents != null ? btc.limits.maxUsdCents / 100 : null,
   };
@@ -66,11 +67,9 @@ export function fromBaseUnits(value, decimals) {
 
 // Same rounding as the database: amount_after_fee = round(amount * (1 - fee/100), 2).
 export function splitFee(amountCents, feePercent) {
-  const feeBps = decimalToScaledInteger(feePercent, 2);
-  if (feeBps < 0n || feeBps > 10_000n) throw new RangeError('Fee percentage is out of range');
-  const amount = BigInt(amountCents);
-  const sendCents = (amount * (10_000n - feeBps) + 5_000n) / 10_000n;
-  return { sendCents: Number(sendCents), feeCents: Number(amount - sendCents) };
+  const feeBps = Math.round(Number(feePercent) * 100);
+  const sendCents = Math.floor((amountCents * (10000 - feeBps) + 5000) / 10000);
+  return { sendCents, feeCents: amountCents - sendCents };
 }
 
 // sendUsd minus the coins the destination gets, exact to the coin's base
@@ -88,11 +87,10 @@ export function networkFeeUsd(sendCents, estimatedOutBase, decimals) {
 export function parseAmountCents(amount) {
   const s = String(amount ?? '').trim();
   if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
-  const cents = decimalToCents(s);
-  return cents >= 0 ? cents : null;
+  return Math.round(Number(s) * 100);
 }
 
-const cents = formatCents;
+const cents = (c) => (c / 100).toFixed(2);
 
 // The withdrawal outcome a Breez payment implies. 'stuck' means the
 // cross-chain leg failed without a refund: the row stays 'sending' for a
@@ -256,18 +254,18 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     const profile = await profileFor(userId);
     if (!profile || profile.account_status !== 'active') throw new UserError(403, 'Account approval is required before requesting withdrawals');
     if (!profile.self_withdraw_allowed) throw new UserError(403, SELF_WITHDRAW_OFF);
-    if (amountCents > decimalToCents(profile.available)) {
-      throw new UserError(422, `Insufficient balance. Available: $${cents(decimalToCents(profile.available))}`);
+    if (amountCents > Math.round(Number(profile.available) * 100)) {
+      throw new UserError(422, `Insufficient balance. Available: $${Number(profile.available).toFixed(2)}`);
     }
     const route = (await listRoutes()).find((r) => r.id === id);
     if (!route) throw new UserError(422, 'That coin and network is not available right now');
     const dest = await validateAddress(String(address ?? '').trim(), route.family);
     const { sendCents, feeCents } = splitFee(amountCents, profile.fee_percent);
     if (route.minUsdCents != null && sendCents < route.minUsdCents) {
-      throw new UserError(422, `The minimum for ${route.asset} on ${route.chain} is $${cents(route.minUsdCents)} after the platform fee`);
+      throw new UserError(422, `The minimum for ${route.asset} on ${route.chain} is $${route.minUsd.toFixed(2)} after the platform fee`);
     }
     if (route.maxUsdCents != null && sendCents > route.maxUsdCents) {
-      throw new UserError(422, `The maximum for ${route.asset} on ${route.chain} is $${cents(route.maxUsdCents)}`);
+      throw new UserError(422, `The maximum for ${route.asset} on ${route.chain} is $${route.maxUsd.toFixed(2)}`);
     }
 
     const rate = await btcUsdRate();

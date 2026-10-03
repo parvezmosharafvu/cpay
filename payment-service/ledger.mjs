@@ -1,9 +1,26 @@
 // Every database read and write the payment service makes. `db` is a pg
 // Pool or Client.
 
-import { usdToSats } from './money.mjs';
-
-export { usdToSats };
+export function usdToSats(usd, btcUsdRate) {
+  const fraction = (value) => {
+    const match = /^([+-]?)(\d+)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(String(value).trim());
+    if (!match) return null;
+    const sign = match[1] === '-' ? -1n : 1n;
+    const digits = BigInt(`${match[2]}${match[3] ?? ''}`) * sign;
+    const scale = (match[3]?.length ?? 0) - Number(match[4] ?? 0);
+    return scale >= 0
+      ? { numerator: digits, denominator: 10n ** BigInt(scale) }
+      : { numerator: digits * 10n ** BigInt(-scale), denominator: 1n };
+  };
+  const amount = fraction(usd);
+  const rate = fraction(btcUsdRate);
+  if (!amount || !rate || rate.numerator <= 0n) return NaN;
+  const numerator = amount.numerator * 100_000_000n * rate.denominator;
+  const denominator = amount.denominator * rate.numerator;
+  const quotient = numerator / denominator;
+  const remainder = numerator % denominator;
+  return Number(quotient + (remainder > 0n ? 1n : 0n));
+}
 
 export async function invoiceRow(db, paymentId) {
   const { rows } = await db.query(
@@ -12,31 +29,6 @@ export async function invoiceRow(db, paymentId) {
     [paymentId],
   );
   return rows[0] ?? null;
-}
-
-export async function withInvoiceLock(db, paymentId, operation) {
-  const client = await db.connect();
-  const lockKey = `cpay:create-invoice:${paymentId}`;
-  let locked = false;
-  let operationError;
-  try {
-    await client.query('select pg_advisory_lock(hashtextextended($1, 0))', [lockKey]);
-    locked = true;
-    return await operation();
-  } catch (error) {
-    operationError = error;
-    throw error;
-  } finally {
-    let releaseError = locked ? undefined : operationError;
-    if (locked) {
-      try {
-        await client.query('select pg_advisory_unlock(hashtextextended($1, 0))', [lockKey]);
-      } catch (error) {
-        releaseError = error;
-      }
-    }
-    client.release(releaseError);
-  }
 }
 
 // Returns false when the row already has an invoice (a concurrent request
@@ -64,10 +56,10 @@ export function paymentHashOf(payment) {
 export async function settlePayment(db, payment) {
   if (payment.paymentType !== 'receive' || payment.status !== 'completed') return 'ignored';
   const hash = paymentHashOf(payment);
-  if (!hash && payment.details?.type !== 'lightning') return 'no_hash';
+  if (!hash) return 'no_hash';
   const { rows } = await db.query('select settle_breez_payment($1, $2, $3) as outcome', [
     payment.id,
-    hash || null,
+    hash,
     String(payment.amount),
   ]);
   return rows[0].outcome;

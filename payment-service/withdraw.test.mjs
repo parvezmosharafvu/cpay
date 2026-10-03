@@ -85,6 +85,27 @@ test('the route catalog lists BTC-funded stablecoin routes from every family and
   assert.equal(breez.calls.routes, 3);
 });
 
+test('withdrawal route limits compare integer cents at their exact boundaries', async () => {
+  const user = await makeUser({ earned: 20, fee: 0 });
+  const breez = fakeBreez();
+  const getRoutes = breez.getCrossChainRoutes.bind(breez);
+  breez.getCrossChainRoutes = async (args) => (await getRoutes(args)).map((p) => ({
+    ...p,
+    acceptedAssets: p.acceptedAssets.map((a) => ({ ...a, limits: { minUsdCents: 880, maxUsdCents: 10_000 } })),
+  }));
+  const w = service(breez);
+  const quote = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '8.80' });
+  assert.equal(quote.sendUsd, '8.80');
+  await assert.rejects(w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '8.79' }), /minimum.*\$8\.80/);
+});
+
+test('stablecoin withdrawal converts USD cents to sats exactly with floor rounding', async () => {
+  const user = await makeUser({ earned: 3000, fee: 0 });
+  const w = service(fakeBreez(), { btcUsdRate: async () => 80000.32 });
+  const quote = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '2500.01' });
+  assert.equal(quote.amountSat, 3_125_000);
+});
+
 test('quote shows the platform fee, the network fee and what arrives', async () => {
   const user = await makeUser({ earned: 200 });
   const w = service(fakeBreez());

@@ -134,8 +134,13 @@ export function createApp({ sdk, db, secret, log = logJson, confirmWaitMs, now =
   }
 
   async function createInvoice(paymentId) {
-    return ledger.withInvoiceLock(db, paymentId, async () => {
-      const row = await ledger.invoiceRow(db, paymentId);
+    const client = await db.connect();
+    let transactionStarted = false;
+    try {
+      await client.query('begin');
+      transactionStarted = true;
+      await client.query('select pg_advisory_xact_lock(hashtextextended($1, 0))', [paymentId]);
+      const row = await ledger.invoiceRow(client, paymentId);
       if (!row) return [404, { error: 'payment not found' }];
       if (row.lightning_invoice) {
         return [200, { ...invoiceLinks(row.lightning_invoice), paymentHash: row.invoice_ref, amountSat: Number(row.amount_sat) }];
@@ -150,16 +155,23 @@ export function createApp({ sdk, db, secret, log = logJson, confirmWaitMs, now =
         paymentMethod: { type: 'bolt11Invoice', description: 'cpay payment', amountSats: amountSat, expirySecs },
       });
       const parsed = await sdk.parse(paymentRequest);
-      const attached = await ledger.attachInvoice(db, {
+      const attached = await ledger.attachInvoice(client, {
         paymentId, paymentHash: parsed.paymentHash, bolt11: paymentRequest, amountSat, btcUsdRate: btcUsd,
       });
       if (!attached) {
+        await client.query('commit');
+        transactionStarted = false;
         const again = await ledger.invoiceRow(db, paymentId);
         if (!again?.lightning_invoice) return [409, { error: 'payment is no longer open' }];
         return [200, { ...invoiceLinks(again.lightning_invoice), paymentHash: again.invoice_ref, amountSat: Number(again.amount_sat) }];
       }
+      await client.query('commit');
+      transactionStarted = false;
       return [200, { ...invoiceLinks(paymentRequest), paymentHash: parsed.paymentHash, amountSat }];
-    });
+    } finally {
+      if (transactionStarted) await client.query('rollback').catch(() => {});
+      client.release();
+    }
   }
 
   // Unauthenticated, for the host's health check: booleans and one

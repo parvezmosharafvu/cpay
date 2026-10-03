@@ -20,9 +20,9 @@ export function pair(chain, asset, { provider = 'orchestra', minUsdCents = 100, 
 // A stand-in for the Breez SDK with the calls withdraw.mjs makes. `mode`
 // picks how sendPayment behaves; the first `leafFailures` sends throw the
 // stale-reservation leaf error instead.
-export function fakeBreez({ mode = 'ok', feeBase = 520_000n, leafFailures = 0, quoteTtlMs = 60_000 } = {}) {
+export function fakeBreez({ mode = 'ok', feeBase = 520_000n, leafFailures = 0, quoteTtlMs = 60_000, invoiceMode = 'ok' } = {}) {
   const payments = new Map();
-  const calls = { routes: 0, send: 0, prepare: 0, sync: 0, disconnect: 0 };
+  const calls = { routes: 0, send: 0, prepare: 0, sync: 0, disconnect: 0, invoice: 0 };
   // Received payments listPayments returns, and the order of notable calls.
   const received = [];
   const order = [];
@@ -33,16 +33,24 @@ export function fakeBreez({ mode = 'ok', feeBase = 520_000n, leafFailures = 0, q
     solana: [pair('solana', 'USDC')],
   };
   let release;
+  let releaseInvoice;
   const fake = {
     payments, calls, mode, leafFailures, received, order, onEvent: null,
     releaseHang: () => release?.(),
+    releaseInvoice: () => releaseInvoice?.(),
     async getCrossChainRoutes({ addressDetails }) { calls.routes++; return byFamily[addressDetails.addressFamily] ?? []; },
     async parse(input) {
+      if (input.startsWith('lnbcrt1-invoice-')) return { type: 'bolt11Invoice', paymentHash: `hash-${input}` };
       if (/^0x[0-9a-fA-F]{40}$/.test(input)) return { type: 'crossChainAddress', address: input, addressFamily: 'evm' };
       if (/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(input)) return { type: 'crossChainAddress', address: input, addressFamily: 'tron' };
       throw new Error('unrecognized input');
     },
     async getInfo() { return { balanceSats: 50_000_000 }; },
+    async receivePayment({ paymentMethod }) {
+      calls.invoice++;
+      if (invoiceMode === 'hang') await new Promise((resolve) => { releaseInvoice = resolve; });
+      return { paymentRequest: `lnbcrt1-invoice-${calls.invoice}-${paymentMethod.amountSats}` };
+    },
     async addEventListener({ onEvent }) { fake.onEvent = onEvent; return 'listener'; },
     async disconnect() { calls.disconnect++; order.push('disconnect'); },
     async listFiatRates() { return { rates: [{ coin: 'USD', value: RATE }] }; },
@@ -106,4 +114,3 @@ export function fakeBreez({ mode = 'ok', feeBase = 520_000n, leafFailures = 0, q
   };
   return fake;
 }
-

@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { createWithdrawals } from './withdraw.mjs';
-import { createWallet, createAdminWalletRoute, bearerAuth, paymentView } from './wallet.mjs';
+import { createWallet, createAdminWalletRoute, bearerAuth, paymentView, owedToCreatorsUsd } from './wallet.mjs';
 import { settlePayment } from './ledger.mjs';
+import { usdToSats } from './money.mjs';
 
 // The admin Wallet tab's service side, against a database with every
 // migration applied and a fake Breez SDK. Other test files run at the same
@@ -171,7 +172,7 @@ test('info shows sats, USD at the Breez rate and what is owed to creators', asyn
   assert.equal(info.btcUsdRate, RATE);
   assert.equal(info.balanceUsd, '250000.00');
   assert.ok(Number(info.owedToCreatorsUsd) >= 40);
-  assert.equal(info.owedToCreatorsSat, Math.ceil(Number(info.owedToCreatorsUsd) * 1000));
+  assert.equal(info.owedToCreatorsSat, usdToSats(await owedToCreatorsUsd(db), RATE));
   assert.equal(info.spendableSat, 250_000_000 - info.owedToCreatorsSat);
 });
 

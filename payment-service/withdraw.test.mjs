@@ -96,7 +96,7 @@ test('withdrawal route limits compare integer cents at their exact boundaries', 
   const w = service(breez);
   const quote = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '8.80' });
   assert.equal(quote.sendUsd, '8.80');
-  await assert.rejects(w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '2.01' }), /minimum.*\$8\.80/);
+  await assert.rejects(w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '8.79' }), /minimum.*\$8\.80/);
 });
 
 test('stablecoin withdrawal converts USD cents to sats exactly with floor rounding', async () => {

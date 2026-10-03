@@ -76,6 +76,7 @@ function fakeBreez({ balanceSats = 1_000_000_000, leafFailures = 0 } = {}) {
     async getLightningAddress() { return { lightningAddress: 'cpay@breez.tips', username: 'cpay', description: '', lnurl: { url: 'https://breez.tips/lnurlp/cpay', bech32: 'lnurl1cpay' } }; },
     async parse(input) {
       if (input === BOLT11) return { type: 'bolt11Invoice', amountMsat: 5_000_000, invoice: { bolt11: input } };
+      if (input === 'lnbcrt1partial') return { type: 'bolt11Invoice', amountMsat: 5_000_001, invoice: { bolt11: input } };
       if (input === 'lnbcrt1amountless') return { type: 'bolt11Invoice', invoice: { bolt11: input } };
       if (input === SPARK) return { type: 'sparkAddress', address: input };
       if (input === 'friend@example.com') return { type: 'lightningAddress', address: input, payRequest: { callback: 'https://example.com/cb', minSendable: 1000, maxSendable: 1e11, domain: 'example.com' } };
@@ -252,6 +253,14 @@ test('a bolt11 send shows the fee, then sends once, audits twice and leaves crea
   assert.deepEqual(await balanceOf(creator), before);
   assert.equal(await withdrawalCount(creator), 0);
   assert.equal(await withdrawals.onPayment(breez.sent.get(prep.prepareId)), null, 'the withdrawal tracker ignores admin sends');
+});
+
+test('a fixed BOLT11 amount in millisatoshis rounds up using integer arithmetic', async () => {
+  const { wallet } = setup(fakeBreez({ balanceSats: 1_000_000 }));
+  const admin = await makeUser({ role: 'admin' });
+  const prepared = await wallet.sendPrepare({ adminId: admin, destination: 'lnbcrt1partial', amountSat: 1 });
+  assert.equal(prepared.amountSat, 5001);
+  assert.equal(prepared.totalSat, 5001 + prepared.feeSat);
 });
 
 test('an admin send that hits the leaf error is retried after a sync with the same key, and audited once', async () => {

@@ -151,7 +151,10 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     try {
       if (parsed?.type === 'bolt11Invoice') {
         kind = 'lightning';
-        const fixed = parsed.amountMsat ? Math.ceil(parsed.amountMsat / 1000) : null;
+        const amountMsat = parsed.amountMsat == null ? 0n : BigInt(parsed.amountMsat);
+        const fixedSats = amountMsat > 0n ? (amountMsat + 999n) / 1000n : 0n;
+        if (fixedSats > BigInt(MAX_SEND_SAT)) throw new UserError(422, 'Amount must be between 1 and 100000000 sats');
+        const fixed = fixedSats > 0n ? Number(fixedSats) : null;
         sat = fixed ?? amount();
         res = await breez.prepareSendPayment({ paymentRequest: { type: 'input', input }, amount: fixed ? undefined : BigInt(sat) });
         feeSat = Number(res.paymentMethod.lightningFeeSats ?? 0);

@@ -103,10 +103,10 @@ if (profileLimitError) {
   console.error("profile invoice-limit read failed:", profileLimitError.message);
   return json({ error: "Payment service temporarily unavailable" }, 503);
 }
-  const profileMaxInvoiceCents = decimalUnits(profileLimit?.max_invoice_amount ?? 5000, 2);
-  if (profileMaxInvoiceCents !== null && chargedAmountCents > profileMaxInvoiceCents) {
+const profileMaxInvoiceCents = decimalUnits(profileLimit?.max_invoice_amount ?? 5000, 2);
+if (profileMaxInvoiceCents !== null && chargedAmountCents > profileMaxInvoiceCents) {
   return json({
-      error: `This profile accepts payments up to $${formatCents(profileMaxInvoiceCents)} per invoice.`,
+    error: `This profile accepts payments up to $${formatCents(profileMaxInvoiceCents)} per invoice.`,
   }, 400);
 }
 

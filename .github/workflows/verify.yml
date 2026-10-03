@@ -86,6 +86,26 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/profile_update_whitelist_test.sql
 
+      - name: revenue_desk() is admins and service role only
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/revenue_desk_access_test.sql
+
+      - name: anon can only execute allowlisted SECURITY DEFINER functions
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # A separate database with Supabase's default privileges, so the
+          # check sees the grants production has. The main database above
+          # is not touched.
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -c 'create database privcheck'
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -q -f ci/bootstrap.sql
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -q -f ci/supabase_default_privileges.sql
+          for f in supabase/migrations/*.sql; do
+            psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/anon_rpc_allowlist.sql
+
       - name: Runtime regression — overpayment cap and message soft-delete
         env:
           PGPASSWORD: postgres

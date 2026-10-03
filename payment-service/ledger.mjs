@@ -1,25 +1,33 @@
 // Every database read and write the payment service makes. `db` is a pg
 // Pool or Client.
 
+function decimalFraction(value) {
+  const match = /^([+-]?)(\d+)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(String(value).trim());
+  if (!match) return null;
+  const sign = match[1] === '-' ? -1n : 1n;
+  const digits = BigInt(`${match[2]}${match[3] ?? ''}`) * sign;
+  const scale = (match[3]?.length ?? 0) - Number(match[4] ?? 0);
+  return scale >= 0
+    ? { numerator: digits, denominator: 10n ** BigInt(scale) }
+    : { numerator: digits * 10n ** BigInt(-scale), denominator: 1n };
+}
+
 export function usdToSats(usd, btcUsdRate) {
-  const fraction = (value) => {
-    const match = /^([+-]?)(\d+)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(String(value).trim());
-    if (!match) return null;
-    const sign = match[1] === '-' ? -1n : 1n;
-    const digits = BigInt(`${match[2]}${match[3] ?? ''}`) * sign;
-    const scale = (match[3]?.length ?? 0) - Number(match[4] ?? 0);
-    return scale >= 0
-      ? { numerator: digits, denominator: 10n ** BigInt(scale) }
-      : { numerator: digits * 10n ** BigInt(-scale), denominator: 1n };
-  };
-  const amount = fraction(usd);
-  const rate = fraction(btcUsdRate);
+  const amount = decimalFraction(usd);
+  const rate = decimalFraction(btcUsdRate);
   if (!amount || !rate || rate.numerator <= 0n) return NaN;
   const numerator = amount.numerator * 100_000_000n * rate.denominator;
   const denominator = amount.denominator * rate.numerator;
   const quotient = numerator / denominator;
   const remainder = numerator % denominator;
   return Number(quotient + (remainder > 0n ? 1n : 0n));
+}
+
+export function usdCentsToSats(amountCents, btcUsdRate) {
+  const cents = BigInt(amountCents);
+  const rate = decimalFraction(btcUsdRate);
+  if (cents < 0n || !rate || rate.numerator <= 0n) return NaN;
+  return Number((cents * 1_000_000n * rate.denominator) / rate.numerator);
 }
 
 export async function invoiceRow(db, paymentId) {

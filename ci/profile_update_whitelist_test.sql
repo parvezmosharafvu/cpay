@@ -6,6 +6,7 @@ language sql stable
 as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 grant usage on schema auth to authenticated;
 grant execute on function auth.uid() to authenticated;
+grant select on public.profiles to authenticated;
 
 insert into auth.users(id, email)
 values ('22222222-2222-2222-2222-222222222222', 'profile-test@test.invalid');

@@ -204,3 +204,20 @@ username per wallet and would need changing.
 Not built in this phase because of that blocker, because payer-chosen
 amounts need a pricing rule (does the link markup apply?), and because the
 regtest network has no Lightning network to test it against.
+
+## Merchant API (`/v1`)
+
+Active freelancer and reseller accounts create keys with the `merchant_create_api_key(name, scopes)` RPC
+(shown once; only a sha256 is stored) and revoke them with `merchant_revoke_api_key(id)`.
+Send the key as an `Authorization` header using the `Bearer` scheme. The shared service secret does not apply to `/v1`.
+
+| Route | Scope |
+| --- | --- |
+| `POST /v1/invoices` `{amount, reference?}` (+ optional `Idempotency-Key`) | `invoices:write` |
+| `GET /v1/invoices/:id`, `GET /v1/invoices/:id/status` | `invoices:read` |
+| `GET /v1/payments?limit&offset&status`, `GET /v1/payments/:id` | `payments:read` |
+| `GET /v1/balance` | `balance:read` |
+
+401 invalid/revoked key, 403 missing scope, 404 not yours, 409 idempotency-key reuse with a different body,
+429 over 60 requests/minute per key. Invoices go through the same `createInvoice` as checkout. Key creation,
+revocation, invoice creation, balance/payment reads and scope denials are written to `audit_log`.

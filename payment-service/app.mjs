@@ -4,6 +4,7 @@
 
 import * as ledger from './ledger.mjs';
 import { createWithdrawals, UserError, wait } from './withdraw.mjs';
+import { createMerchantRoute } from './merchant-api.mjs';
 import { bearerAuth, createWallet, createAdminWalletRoute } from './wallet.mjs';
 
 export const MAX_BODY_BYTES = 10_000;
@@ -71,6 +72,7 @@ export function createApp({ sdk, db, secret, log = logJson, confirmWaitMs, now =
   const wallet = createWallet({ breez: sdk, db, btcUsdRate, withdrawals, log, track });
   const adminWalletRoute = createAdminWalletRoute({ wallet, withdrawals });
   const authorised = bearerAuth(secret);
+  const merchantRoute = createMerchantRoute({ db, createInvoice: (id) => createInvoice(id), readJson, log });
 
   async function settle(payment, source) {
     const outcome = await ledger.settlePayment(db, payment);
@@ -205,6 +207,8 @@ export function createApp({ sdk, db, secret, log = logJson, confirmWaitMs, now =
     const path = new URL(req.url, 'http://localhost').pathname;
     const method = req.method;
     if (path === '/health') return method === 'GET' ? health() : [405, { error: 'method not allowed' }];
+    // Merchant API keys authenticate themselves (hashed in the database); the shared secret does not apply.
+    if (path.startsWith('/v1/')) return draining ? [503, { error: 'shutting down' }] : merchantRoute(req);
     if (!authorised(req.headers.authorization)) return [401, { error: 'unauthorized' }];
     if (draining) return [503, { error: 'shutting down' }];
     if (path === '/invoices') {

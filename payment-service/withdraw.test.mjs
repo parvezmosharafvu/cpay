@@ -91,7 +91,7 @@ test('withdrawal route limits compare integer cents at their exact boundaries', 
   const getRoutes = breez.getCrossChainRoutes.bind(breez);
   breez.getCrossChainRoutes = async (args) => (await getRoutes(args)).map((p) => ({
     ...p,
-    acceptedAssets: p.acceptedAssets.map((a) => ({ ...a, limits: { minUsdCents: 880, maxUsdCents: 10_000 } })),
+    acceptedAssets: p.acceptedAssets.map((a) => ({ ...a, limits: { minUsdCents: 880, maxUsdCents: 880 } })),
   }));
   const w = service(breez);
   const quote = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '8.80' });

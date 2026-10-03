@@ -6,6 +6,7 @@ import http from 'node:http';
 import pg from 'pg';
 import { createApp, logJson } from './app.mjs';
 
+const WEBHOOK_POLL_MS = 15_000;
 const errorText = (e) => String(e?.message ?? e).slice(0, 300);
 
 export function createService({ config, breez, log = logJson }) {
@@ -15,6 +16,7 @@ export function createService({ config, breez, log = logJson }) {
   let app = null;
   let server = null;
   let timer = null;
+  let webhookTimer = null;
   let stopping = null;
 
   async function start() {
@@ -35,6 +37,7 @@ export function createService({ config, breez, log = logJson }) {
     await app.catchUp();
     if (stopping) return null;
     timer = setInterval(() => app.catchUp().catch((e) => log({ event: 'catch-up-failed', error: errorText(e) })), config.catchUpMs);
+    webhookTimer = setInterval(() => app.dispatchWebhooks().catch((e) => log({ event: 'webhook-dispatch-failed', error: errorText(e) })), WEBHOOK_POLL_MS);
     server = http.createServer(app.handle);
     await new Promise((resolve) => server.listen(config.port, resolve));
     const { port } = server.address();
@@ -52,6 +55,7 @@ export function createService({ config, breez, log = logJson }) {
     log({ event: 'shutdown', signal });
     await started.catch(() => {});
     clearInterval(timer);
+    clearInterval(webhookTimer);
     server?.close();
     server?.closeIdleConnections();
     const { drained } = app ? await app.drain(config.shutdownTimeoutMs) : { drained: true };

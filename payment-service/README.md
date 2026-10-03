@@ -221,3 +221,16 @@ Send the key as an `Authorization` header using the `Bearer` scheme. The shared 
 401 invalid/revoked key, 403 missing scope, 404 not yours, 409 idempotency-key reuse with a different body,
 429 over 60 requests/minute per key. Invoices go through the same `createInvoice` as checkout. Key creation,
 revocation, invoice creation, balance/payment reads and scope denials are written to `audit_log`.
+
+## Merchant webhooks
+
+Merchants manage endpoints with the `merchant_create_webhook_endpoint(url, events)`, `merchant_list_webhook_endpoints`,
+`merchant_set_webhook_endpoint`, `merchant_rotate_webhook_secret`, `merchant_delete_webhook_endpoint` and
+`merchant_list_webhook_deliveries` RPCs (https URLs only; the `whsec_` secret is shown once).
+Events: `payment.created`, `payment.pending`, `payment.succeeded`, `payment.failed`, `payment.expired`.
+A trigger on `payments` queues one event per payment and type, so every state change emits it; `webhooks.mjs` delivers
+them every 15s. Each request carries `cpay-event-id`, `cpay-timestamp` and
+`cpay-signature: t=<unix>,v1=<hmac-sha256 hex of "<t>.<raw body>">`. Verify with the secret, reject timestamps more than
+5 minutes old, and ignore event ids you have already processed. Failures retry after 30s, 60s, 2m ... (cap 6h) up to 8
+attempts; 30 failures in a row disable the endpoint. Any non-2xx answer (including redirects) is a failure.
+Endpoints resolving to private addresses are never contacted.

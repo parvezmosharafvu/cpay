@@ -4,6 +4,7 @@
 
 import * as ledger from './ledger.mjs';
 import { createWithdrawals, UserError, wait } from './withdraw.mjs';
+import { createWebhookDispatcher } from './webhooks.mjs';
 import { createMerchantRoute } from './merchant-api.mjs';
 import { bearerAuth, createWallet, createAdminWalletRoute } from './wallet.mjs';
 
@@ -72,6 +73,14 @@ export function createApp({ sdk, db, secret, log = logJson, confirmWaitMs, now =
   const wallet = createWallet({ breez: sdk, db, btcUsdRate, withdrawals, log, track });
   const adminWalletRoute = createAdminWalletRoute({ wallet, withdrawals });
   const authorised = bearerAuth(secret);
+  const webhooks = createWebhookDispatcher({ db, log });
+  let dispatching = null;
+  // One delivery pass at a time, none once shutdown has begun.
+  function dispatchWebhooks() {
+    if (draining) return Promise.resolve();
+    dispatching ??= track(webhooks.deliverDue().finally(() => { dispatching = null; }));
+    return dispatching;
+  }
   const merchantRoute = createMerchantRoute({ db, createInvoice: (id) => createInvoice(id), readJson, log });
 
   async function settle(payment, source) {
@@ -256,7 +265,7 @@ export function createApp({ sdk, db, secret, log = logJson, confirmWaitMs, now =
 
   return {
     handle: (req, res) => track(handle(req, res)),
-    onEvent, catchUp, drain, health, track,
+    onEvent, catchUp, dispatchWebhooks, drain, health, track,
     markSynced: () => { lastSyncedAt = now(); },
   };
 }

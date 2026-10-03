@@ -25,8 +25,8 @@ function fiatValue(satAmount, cur) {
 function walletShell() {
   return `<div class="grid kpis wallet-kpis">
       <div class="card"><div class="kicker">Wallet balance</div><div class="kpi" id="wbSats">-</div><div class="faint" id="wbUsd">Loading…</div></div>
-      <div class="card"><div class="kicker">Owed to creators</div><div class="kpi" id="wbOwed">-</div><div class="faint" id="wbOwedSats"></div></div>
-      <div class="card"><div class="kicker">Spendable</div><div class="kpi" id="wbSpend">-</div><div class="faint">Balance minus what creators are owed</div></div>
+      <div class="card"><div class="kicker">Owed to freelancers</div><div class="kpi" id="wbOwed">-</div><div class="faint" id="wbOwedSats"></div></div>
+      <div class="card"><div class="kicker">Spendable</div><div class="kpi" id="wbSpend">-</div><div class="faint">Balance minus what freelancers are owed</div></div>
       <div class="card"><div class="kicker">Breez rate</div><div class="kpi" id="wbRate">-</div>
         <div class="row"><select id="wbCur" class="input sm-select" aria-label="Currency"></select><span class="faint" id="wbCurBal"></span></div></div>
     </div>
@@ -68,7 +68,7 @@ function walletShell() {
         <div class="field"><label for="wqNet">Coin and network</label><select id="wqNet"><option value="">Loading networks…</option></select></div>
         <div class="field"><label for="wqAddr">Destination address</label><input id="wqAddr" autocomplete="off" placeholder="Address"></div>
         <div class="field short"><label for="wqAmt">Amount (USD)</label><input id="wqAmt" type="number" min="1" step="0.01" inputmode="decimal" placeholder="0.00"></div>
-        <p class="hint">Paid from the platform wallet through the same Breez route and quote as creator withdrawals. No creator balance changes.</p>
+        <p class="hint">Paid from the platform wallet through the same Breez route and quote as freelancer withdrawals. No freelancer balance changes.</p>
         <button class="btn ghost" id="wqBtn">Get quote</button>
       </div>
       <div class="card summary">
@@ -99,7 +99,7 @@ function renderBalance() {
   $w('wbSats').textContent = sats(i.balanceSats);
   $w('wbUsd').textContent = i.balanceUsd != null ? `${money(i.balanceUsd)} at the Breez rate` : (i.rateError || 'No rate');
   $w('wbOwed').textContent = money(i.owedToCreatorsUsd);
-  $w('wbOwedSats').textContent = i.owedToCreatorsSat != null ? `${sats(i.owedToCreatorsSat)} held for creators` : '';
+  $w('wbOwedSats').textContent = i.owedToCreatorsSat != null ? `${sats(i.owedToCreatorsSat)} held for freelancers` : '';
   $w('wbSpend').textContent = sats(i.spendableSat);
   $w('wbRate').textContent = cur?.btcRate ? `${fiatValue(1e8, cur)}` : (i.btcUsdRate ? `$${Number(i.btcUsdRate).toLocaleString('en-US')}` : '-');
   $w('wbCurBal').textContent = cur ? `per BTC · balance ${fiatValue(i.balanceSats, cur) ?? 'no rate'}` : 'per BTC';

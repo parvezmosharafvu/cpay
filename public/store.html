@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="CPAY creator storefront">
+<meta name="description" content="CPAY freelancer storefront">
 <title>CPAY Store</title>
 <link rel="icon" href="/favicon-site.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
@@ -35,14 +35,14 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
   const {data,error}=await sb.rpc('get_public_store',{p_user_id:uid});
   if(error||!data?.length){state.textContent='Store not found or unavailable.';return}
   const r=data[0];
-  document.title=(r.display_name||'CPAY creator')+' · CPAY';
+  document.title=(r.display_name||'CPAY freelancer')+' · CPAY';
   // store_theme (midnight, snow, glass, sunset) maps onto the shared checkout designs.
   setDesign(r.theme||'midnight');
   if(/^#[0-9a-f]{6}$/i.test(r.accent||''))document.documentElement.style.setProperty('--merchant-accent',r.accent);
-  name.textContent=r.display_name||'CPAY creator';
+  name.textContent=r.display_name||'CPAY freelancer';
   tagline.textContent=r.tagline||'Choose a payment option';
   bio.textContent=r.bio||'';bio.style.display=r.bio?'block':'none';
-  if(r.avatar_url){const img=document.createElement('img');img.src=r.avatar_url;img.alt=r.display_name||'Creator';avatar.textContent='';avatar.appendChild(img);}
+  if(r.avatar_url){const img=document.createElement('img');img.src=r.avatar_url;img.alt=r.display_name||'Freelancer';avatar.textContent='';avatar.appendChild(img);}
   else avatar.textContent=(r.display_name||'$').trim().charAt(0).toUpperCase()||'$';
   const links=Array.isArray(r.links)?r.links:[];
   state.style.display='none';

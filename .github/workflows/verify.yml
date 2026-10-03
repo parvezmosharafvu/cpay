@@ -76,6 +76,11 @@ jobs:
           done
           echo "All migrations applied cleanly to an empty database."
 
+      - name: Profile updates stay within the authenticated allowlist
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/profile_update_whitelist_test.sql
+
       - name: Runtime regression — overpayment cap and message soft-delete
         env:
           PGPASSWORD: postgres
@@ -178,6 +183,8 @@ jobs:
         run: npm run build
       - name: Static checks
         run: python3 ci/check_frontend.py
+      - name: Frontend HTML escaping regression tests
+        run: node --test tests/frontend/app.test.mjs
 
   hygiene:
     name: Ledger snapshots are where you expect

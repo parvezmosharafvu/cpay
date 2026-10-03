@@ -59,8 +59,8 @@ as $$
   select count(*)::integer from deleted;
 $$;
 
-grant execute on function public.prune_webhook_events() to public;
-revoke execute on function public.prune_webhook_events() from anon, authenticated;
+revoke all on function public.prune_webhook_events() from public, anon, authenticated;
+grant execute on function public.prune_webhook_events() to service_role;
 
 create or replace function public.settle_breez_payment(
   p_breez_payment_id text,

@@ -91,12 +91,20 @@ test('withdrawal route limits compare integer cents at their exact boundaries', 
   const getRoutes = breez.getCrossChainRoutes.bind(breez);
   breez.getCrossChainRoutes = async (args) => (await getRoutes(args)).map((p) => ({
     ...p,
-    acceptedAssets: p.acceptedAssets.map((a) => ({ ...a, limits: { minUsdCents: 880, maxUsdCents: 10_000 } })),
+    acceptedAssets: p.acceptedAssets.map((a) => ({ ...a, limits: { minUsdCents: 880, maxUsdCents: 880 } })),
   }));
   const w = service(breez);
   const quote = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '8.80' });
   assert.equal(quote.sendUsd, '8.80');
-  await assert.rejects(w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '2.01' }), /minimum.*\$8\.80/);
+  await assert.rejects(w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '8.79' }), /minimum.*\$8\.80/);
+  await assert.rejects(w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '8.81' }), /maximum.*\$8\.80/);
+});
+
+test('withdrawal satoshi conversion does not lose an integral satoshi to floating point', async () => {
+  const user = await makeUser({ earned: 3000, fee: 0 });
+  const w = service(fakeBreez(), { btcUsdRate: async () => 80_000.32 });
+  const quote = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '2500.01' });
+  assert.equal(quote.amountSat, 3_125_000);
 });
 
 test('quote shows the platform fee, the network fee and what arrives', async () => {

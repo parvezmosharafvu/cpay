@@ -3,6 +3,7 @@
 // Pool, `btcUsdRate` an async function returning USD per BTC.
 
 import { randomUUID } from 'node:crypto';
+import { usdCentsToSats } from './money.mjs';
 
 export const ROUTE_CACHE_MS = 10 * 60 * 1000;
 // A 'sending' row with no Breez payment is refunded only once its quote has
@@ -268,7 +269,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     }
 
     const rate = await btcUsdRate();
-    const amountSat = Math.floor((sendCents * 1e6) / rate);
+    const amountSat = usdCentsToSats(sendCents, rate, 'floor');
     const { pair, prepared, expiresAtMs, receive, receiveMin, providerFee, estimatedOutBase } = await prepareCrossChain({
       route, address: dest, amountSat,
       lowBalanceMessage: 'Instant withdrawals are temporarily unavailable. Try again later.',

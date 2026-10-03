@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { createWithdrawals } from './withdraw.mjs';
-import { createWallet, createAdminWalletRoute, bearerAuth, paymentView } from './wallet.mjs';
+import { createWallet, createAdminWalletRoute, bearerAuth, paymentView, owedToCreatorsUsd } from './wallet.mjs';
 import { settlePayment } from './ledger.mjs';
+import { usdToSats } from './money.mjs';
 
 // The admin Wallet tab's service side, against a database with every
 // migration applied and a fake Breez SDK. Other test files run at the same
@@ -172,8 +173,15 @@ test('info shows sats, USD at the Breez rate and what is owed to creators', asyn
   assert.equal(info.btcUsdRate, RATE);
   assert.equal(info.balanceUsd, '250000.00');
   assert.ok(Number(info.owedToCreatorsUsd) >= 40);
-  assert.equal(info.owedToCreatorsSat, Math.ceil(Number(info.owedToCreatorsUsd) * 1000));
+  assert.equal(info.owedToCreatorsSat, usdToSats(await owedToCreatorsUsd(db), RATE));
   assert.equal(info.spendableSat, 250_000_000 - info.owedToCreatorsSat);
+});
+
+test('wallet info rounds satoshi values half-up', async () => {
+  const { route } = setup(fakeBreez({ balanceSats: 1015 }));
+  const admin = await makeUser({ role: 'admin' });
+  const [, info] = await route('POST', '/admin/wallet/info', { adminId: admin });
+  assert.equal(info.balanceUsd, '1.02');
 });
 
 test('payments are paged, newest first, with bigints as strings', async () => {
@@ -365,6 +373,30 @@ test('admin stablecoin quote accepts an exact integer-cent route maximum', async
     adminId: admin, routeId: 'orchestra:arbitrum:usdc', address: EVM, amountUsd: '2.01',
   });
   assert.equal(quote.amountUsd, '2.01');
+});
+
+test('admin stablecoin quote does not lose an integral satoshi to floating point', async () => {
+  const { route } = setup(fakeBreez(), { btcUsdRate: async () => 80_000.32 });
+  const admin = await makeUser({ role: 'admin' });
+  const [, quote] = await route('POST', '/admin/wallet/stable-quote', {
+    adminId: admin, routeId: 'orchestra:arbitrum:usdc', address: EVM, amountUsd: '2500.01',
+  });
+  assert.equal(quote.amountSat, 3_125_000);
+});
+
+test('wallet send confirmation rounds exact half-cent totals half-up', async () => {
+  const breez = fakeBreez();
+  const prepare = breez.prepareSendPayment.bind(breez);
+  breez.prepareSendPayment = async (request) => {
+    const result = await prepare(request);
+    result.paymentMethod.lightningFeeSats = 15;
+    return result;
+  };
+  const { route } = setup(breez);
+  const admin = await makeUser({ role: 'admin' });
+  const [, quote] = await route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 });
+  assert.equal(quote.totalSat, 5015);
+  assert.equal(quote.totalUsd, '5.02');
 });
 
 test('a Lightning payment into an admin invoice credits no creator', async () => {

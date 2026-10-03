@@ -76,6 +76,11 @@ jobs:
           done
           echo "All migrations applied cleanly to an empty database."
 
+      - name: Preserve receipt history while restoring settlement behavior
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/lightning_receipt_rollback_test.sql
+
       - name: Profile updates stay within the authenticated allowlist
         env:
           PGPASSWORD: postgres

@@ -6,6 +6,7 @@
 
 import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { UserError, parseAmountCents, networkFeeUsd, retryLeafErrors, wait, LEAF_RETRY_MS } from './withdraw.mjs';
+import { usdCentsToSatsFloor } from './ledger.mjs';
 
 export const PREPARE_TTL_MS = 10 * 60 * 1000;
 export const MAX_PAGE = 50;
@@ -194,7 +195,7 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     if (route.maxUsdCents != null && amountCents > route.maxUsdCents) throw new UserError(422, `The maximum for ${route.asset} on ${route.chain} is $${route.maxUsd.toFixed(2)}`);
     const dest = await withdrawals.validateAddress(String(address ?? '').trim(), route.family);
     const rate = await btcUsdRate();
-    const amountSat = Math.floor((amountCents * 1e6) / rate);
+    const amountSat = usdCentsToSatsFloor(amountCents, rate);
     await guard(amountSat);
     const q = await withdrawals.prepareCrossChain({
       route, address: dest, amountSat,

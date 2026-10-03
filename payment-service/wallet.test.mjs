@@ -367,6 +367,15 @@ test('admin stablecoin quote accepts an exact integer-cent route maximum', async
   assert.equal(quote.amountUsd, '2.01');
 });
 
+test('admin stablecoin quote preserves exact sats at a decimal BTC/USD rate', async () => {
+  const admin = await makeUser({ role: 'admin' });
+  const { route } = setup(undefined, { btcUsdRate: async () => 80_000.32 });
+  const [, quote] = await route('POST', '/admin/wallet/stable-quote', {
+    adminId: admin, routeId: 'orchestra:arbitrum:usdc', address: EVM, amountUsd: '2500.01',
+  });
+  assert.equal(quote.amountSat, 3_125_000);
+});
+
 test('a Lightning payment into an admin invoice credits no creator', async () => {
   const creator = await makeUser({ earned: 30 });
   const before = await balanceOf(creator);

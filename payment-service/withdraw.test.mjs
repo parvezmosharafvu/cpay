@@ -122,6 +122,13 @@ test('quote shows the platform fee, the network fee and what arrives', async () 
   assert.ok(Date.parse(q.expiresAt) > Date.now());
 });
 
+test('withdrawal quotes convert cents to sats exactly at decimal BTC rates', async () => {
+  const user = await makeUser({ earned: 2500.01, fee: 0 });
+  const w = service(fakeBreez(), { btcUsdRate: async () => 80000.32 });
+  const q = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '2500.01' });
+  assert.equal(q.amountSat, 3_125_000);
+});
+
 test('quote with a 0% platform fee sends the whole amount', async () => {
   const user = await makeUser({ earned: 50, fee: 0 });
   const q = await service(fakeBreez()).quote({ userId: user, routeId: 'orchestra:bsc:usdt', address: EVM, amountUsd: '10.29' });

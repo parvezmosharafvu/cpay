@@ -165,7 +165,7 @@ async function renderChat() {
   el.innerHTML = `<div class="card">
       <h3>Select freelancer</h3>
       <div class="field"><label for="creatorSelect">Account</label>
-        <select id="creatorSelect"><option value="">— Choose a creator —</option></select></div>
+        <select id="creatorSelect"><option value="">— Choose a freelancer —</option></select></div>
       <p class="faint">Red dot = unread from that freelancer. Same list as the old Messages tab.</p>
     </div>
     <div class="card">
@@ -193,7 +193,7 @@ async function loadCreatorList() {
   if (error) { sel.innerHTML = `<option value="">${escapeHtml(error.message)}</option>`; return; }
   const list = (data || []).slice().sort((a, b) => (b.unread_count || 0) - (a.unread_count || 0));
   const prev = sel.value || selectedCreatorId;
-  sel.innerHTML = '<option value="">— Choose a creator —</option>' + list.map((c) => {
+  sel.innerHTML = '<option value="">— Choose a freelancer —</option>' + list.map((c) => {
     const unread = Number(c.unread_count || 0);
     const label = `${unread ? '🔴 ' : ''}${c.display_name || c.email}${unread ? ` (${unread} new)` : ''}`;
     return `<option value="${escapeHtml(c.id)}">${escapeHtml(label)}</option>`;

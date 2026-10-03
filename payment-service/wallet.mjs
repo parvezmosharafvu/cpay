@@ -6,6 +6,7 @@
 
 import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { UserError, parseAmountCents, networkFeeUsd, retryLeafErrors, wait, LEAF_RETRY_MS } from './withdraw.mjs';
+import { decimalToCents, formatCents, satsToUsdCents, usdCentsToSats, usdToSats } from './money.mjs';
 
 export const PREPARE_TTL_MS = 10 * 60 * 1000;
 export const MAX_PAGE = 50;
@@ -52,7 +53,7 @@ export async function owedToCreatorsUsd(db) {
     `select (coalesce((select sum(greatest(b.available, 0)) from profiles p cross join lateral get_balance_for(p.id) b), 0)
            + coalesce((select sum(amount_requested) from withdrawals where status in ('pending','approved','processing','sending')), 0))::text as owed`,
   );
-  return Number(rows[0].owed);
+  return rows[0].owed;
 }
 
 export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => Date.now(), sleep = wait, log = () => {}, track = (p) => p }) {
@@ -71,7 +72,7 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     const { balanceSats } = await breez.getInfo({ ensureSynced: false });
     const rate = await btcUsdRate();
     const owedUsd = await owedToCreatorsUsd(db);
-    const owedSat = Math.ceil((owedUsd * 1e8) / rate);
+    const owedSat = usdToSats(owedUsd, rate);
     return { balanceSats: Number(balanceSats), rate, owedUsd, owedSat, spendableSat: Math.max(0, Number(balanceSats) - owedSat) };
   }
 
@@ -79,7 +80,7 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     const s = await spendable();
     if (totalSat > s.spendableSat) {
       throw new UserError(422, `This send needs ${totalSat} sats but only ${s.spendableSat} are spendable. `
-        + `The wallet holds ${s.balanceSats} sats and ${s.owedSat} of them back $${s.owedUsd.toFixed(2)} owed to creators.`);
+        + `The wallet holds ${s.balanceSats} sats and ${s.owedSat} of them back $${formatCents(decimalToCents(s.owedUsd))} owed to creators.`);
     }
     return s;
   }
@@ -89,13 +90,13 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     let rate = null, rateError = null;
     try { rate = await btcUsdRate(); } catch (e) { rateError = String(e?.message ?? e); }
     const owedUsd = await owedToCreatorsUsd(db);
-    const owedSat = rate ? Math.ceil((owedUsd * 1e8) / rate) : null;
+    const owedSat = rate ? usdToSats(owedUsd, rate) : null;
     const bal = Number(balanceSats);
     return {
       balanceSats: bal,
       btcUsdRate: rate,
-      balanceUsd: rate ? ((bal * rate) / 1e8).toFixed(2) : null,
-      owedToCreatorsUsd: owedUsd.toFixed(2),
+      balanceUsd: rate ? formatCents(satsToUsdCents(bal, rate)) : null,
+      owedToCreatorsUsd: formatCents(decimalToCents(owedUsd)),
       owedToCreatorsSat: owedSat,
       spendableSat: owedSat === null ? null : Math.max(0, bal - owedSat),
       rateError,
@@ -150,7 +151,10 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     try {
       if (parsed?.type === 'bolt11Invoice') {
         kind = 'lightning';
-        const fixed = parsed.amountMsat ? Math.ceil(parsed.amountMsat / 1000) : null;
+        const amountMsat = parsed.amountMsat == null ? 0n : BigInt(parsed.amountMsat);
+        const fixedSats = amountMsat > 0n ? (amountMsat + 999n) / 1000n : 0n;
+        if (fixedSats > BigInt(MAX_SEND_SAT)) throw new UserError(422, 'Amount must be between 1 and 100000000 sats');
+        const fixed = fixedSats > 0n ? Number(fixedSats) : null;
         sat = fixed ?? amount();
         res = await breez.prepareSendPayment({ paymentRequest: { type: 'input', input }, amount: fixed ? undefined : BigInt(sat) });
         feeSat = Number(res.paymentMethod.lightningFeeSats ?? 0);
@@ -179,7 +183,7 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     const expiresAtMs = now() + PREPARE_TTL_MS;
     const view = {
       kind, destination: input, amountSat: sat, feeSat, totalSat: sat + feeSat,
-      totalUsd: ((sat + feeSat) * s.rate / 1e8).toFixed(2), expiresAt: new Date(expiresAtMs).toISOString(),
+      totalUsd: formatCents(satsToUsdCents(sat + feeSat, s.rate)), expiresAt: new Date(expiresAtMs).toISOString(),
     };
     const prepareId = remember({ adminId, kind, lnurl, res, view, expiresAtMs });
     return { prepareId, ...view };
@@ -190,11 +194,11 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     if (amountCents === null) throw new UserError(400, 'Enter an amount in dollars and cents');
     const route = (await withdrawals.listRoutes()).find((r) => r.id === String(routeId ?? ''));
     if (!route) throw new UserError(422, 'That coin and network is not available right now');
-    if (route.minUsd != null && amountCents < route.minUsd * 100) throw new UserError(422, `The minimum for ${route.asset} on ${route.chain} is $${route.minUsd.toFixed(2)}`);
-    if (route.maxUsd != null && amountCents > route.maxUsd * 100) throw new UserError(422, `The maximum for ${route.asset} on ${route.chain} is $${route.maxUsd.toFixed(2)}`);
+    if (route.minUsdCents != null && amountCents < route.minUsdCents) throw new UserError(422, `The minimum for ${route.asset} on ${route.chain} is $${formatCents(route.minUsdCents)}`);
+    if (route.maxUsdCents != null && amountCents > route.maxUsdCents) throw new UserError(422, `The maximum for ${route.asset} on ${route.chain} is $${formatCents(route.maxUsdCents)}`);
     const dest = await withdrawals.validateAddress(String(address ?? '').trim(), route.family);
     const rate = await btcUsdRate();
-    const amountSat = Math.floor((amountCents * 1e6) / rate);
+    const amountSat = usdCentsToSats(amountCents, rate, 'floor');
     await guard(amountSat);
     const q = await withdrawals.prepareCrossChain({
       route, address: dest, amountSat,
@@ -204,7 +208,7 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     const view = {
       kind: 'stablecoin', destination: dest,
       route: { id: route.id, asset: q.pair.asset, chain: q.pair.chain, family: route.family, provider: q.pair.provider },
-      amountUsd: (amountCents / 100).toFixed(2), amountSat, feeSat: 0, totalSat: amountSat, btcUsdRate: rate,
+      amountUsd: formatCents(amountCents), amountSat, feeSat: 0, totalSat: amountSat, btcUsdRate: rate,
       providerFee: q.providerFee, receive: q.receive, receiveMin: q.receiveMin, asset: q.pair.asset,
       networkFeeUsd: networkFeeUsd(amountCents, q.estimatedOutBase, q.pair.decimals),
       expiresAt: new Date(q.expiresAtMs).toISOString(),

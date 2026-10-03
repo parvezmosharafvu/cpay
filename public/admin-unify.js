@@ -38,7 +38,10 @@ async function renderPayouts() {
 async function renderPayments() {
   const el = document.getElementById('payments');
   if (!el) return;
-  const { data, error } = await sb.rpc('admin_list_payments', { p_limit: 80, p_offset: 0, p_search: null });
+  const [{ data, error }, reconciliation] = await Promise.all([
+    sb.rpc('admin_list_payments', { p_limit: 80, p_offset: 0, p_search: null }),
+    sb.rpc('admin_list_lightning_reconciliation', { p_limit: 100 }),
+  ]);
   if (error) { el.innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
   const rows = (data || []).map((p) => {
     const settle = p.status !== 'settled' && p.status !== 'expired'
@@ -53,8 +56,21 @@ async function renderPayments() {
       <td>${settle}</td>
     </tr>`;
   }).join('');
+  const receiptRows = (reconciliation.data || []).map((r) => `<tr>
+      <td>${escapeHtml(when(r.received_at))}</td>
+      <td>${badge(r.settlement_outcome)}</td>
+      <td class="mono">${escapeHtml(r.breez_payment_id || '')}</td>
+      <td class="mono">${escapeHtml(r.payment_hash || 'No payment hash')}</td>
+      <td class="num">${escapeHtml(r.receipt_amount_sat ?? '-')}</td>
+      <td class="num">${escapeHtml(r.invoice_amount_sat ?? '-')}</td>
+      <td>${escapeHtml(r.creator_email || (r.payment_id ? '—' : 'Unmatched receipt'))}</td>
+    </tr>`).join('');
   el.innerHTML = `<div class="card flush"><table class="table"><thead><tr><th>When</th><th>Status</th><th class="num">Amount</th><th>Account</th><th>Link</th><th>Invoice</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="7" class="empty">No payments yet</td></tr>'}</tbody></table></div>`;
+    <tbody>${rows || '<tr><td colspan="7" class="empty">No payments yet</td></tr>'}</tbody></table></div>
+    <div class="card flush"><h3 style="padding:16px 20px 0">Lightning reconciliation</h3>
+      ${reconciliation.error ? `<p class="err" role="alert">${escapeHtml(reconciliation.error.message)}</p>` : ''}
+      <table class="table"><thead><tr><th>Received</th><th>Outcome</th><th>Breez receipt</th><th>Payment hash</th><th class="num">Received sats</th><th class="num">Invoice sats</th><th>Account</th></tr></thead>
+      <tbody>${receiptRows || '<tr><td colspan="7" class="empty">No unmatched or discrepant receipts</td></tr>'}</tbody></table></div>`;
   el.querySelectorAll('[data-pay]').forEach((btn) => {
     btn.onclick = async () => {
       btn.disabled = true;

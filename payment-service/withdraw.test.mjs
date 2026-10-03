@@ -79,7 +79,7 @@ test('the route catalog lists BTC-funded stablecoin routes from every family and
   assert.deepEqual(routes.map((r) => r.id).sort(), ['orchestra:arbitrum:usdc', 'orchestra:bsc:usdt', 'orchestra:solana:usdc', 'orchestra:tron:usdt']);
   assert.deepEqual(routes.find((r) => r.id === 'orchestra:tron:usdt'), {
     id: 'orchestra:tron:usdt', provider: 'orchestra', asset: 'USDT', chain: 'tron', chainId: null, family: 'tron',
-    decimals: 6, contractAddress: null, minUsd: 1, maxUsd: 10000,
+    decimals: 6, contractAddress: null, minUsdCents: 100, maxUsdCents: 1_000_000, minUsd: 1, maxUsd: 10000,
   });
   await w.listRoutes();
   assert.equal(breez.calls.routes, 3);

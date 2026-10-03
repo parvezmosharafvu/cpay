@@ -26,5 +26,6 @@
   //   "routes": [
   //     { "pattern": "yourdomain.com/*", "zone_name": "yourdomain.com" }
   //   ]
-  // — but then every domain change is a code change.
+  // — but then every domain change is a code change.,
+  "previews": {}
 }

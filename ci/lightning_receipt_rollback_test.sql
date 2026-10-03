@@ -13,7 +13,7 @@ values (
   'lightning-receipt-rollback-test', 'review-hash', 'breez.payment_received', 1015, 'underpaid'
 );
 
-\i supabase/migrations/20261003020000_restore_lightning_receipt_behavior.sql
+\i supabase/migrations/20261003030000_restore_lightning_receipt_behavior.sql
 
 do $$
 declare

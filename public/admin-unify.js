@@ -39,22 +39,70 @@ async function renderPayments() {
   const el = document.getElementById('payments');
   if (!el) return;
   const { data, error } = await sb.rpc('admin_list_payments', { p_limit: 80, p_offset: 0, p_search: null });
-  if (error) { el.innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
-  const rows = (data || []).map((p) => {
-    const settle = p.status !== 'settled' && p.status !== 'expired'
-      ? `<button class="btn ghost sm" data-pay="${p.id}">Mark settled</button>` : '';
-    return `<tr>
-      <td>${escapeHtml(when(p.settled_at || p.created_at))}</td>
-      <td>${badge(p.status)}</td>
-      <td class="num">${money(p.amount_settled ?? p.amount_requested)}</td>
-      <td>${escapeHtml(p.creator_name || p.creator_email || '')}</td>
-      <td class="mono">${escapeHtml(p.link_slug || '')}</td>
-      <td class="mono">${escapeHtml(p.invoice_ref || String(p.id).slice(0, 8))}</td>
-      <td>${settle}</td>
-    </tr>`;
-  }).join('');
-  el.innerHTML = `<div class="card flush"><table class="table"><thead><tr><th>When</th><th>Status</th><th class="num">Amount</th><th>Account</th><th>Link</th><th>Invoice</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="7" class="empty">No payments yet</td></tr>'}</tbody></table></div>`;
+  if (error) {
+    const message = document.createElement('p');
+    message.className = 'err';
+    message.textContent = error.message;
+    el.replaceChildren(message);
+    return;
+  }
+  const card = document.createElement('div');
+  card.className = 'card flush';
+  const table = document.createElement('table');
+  table.className = 'table';
+  const head = document.createElement('thead');
+  const header = document.createElement('tr');
+  for (const label of ['When', 'Status', 'Amount', 'Account', 'Link', 'Invoice', '']) {
+    const th = document.createElement('th');
+    th.textContent = label;
+    if (label === 'Amount') th.className = 'num';
+    header.append(th);
+  }
+  head.append(header);
+  table.append(head);
+  const body = document.createElement('tbody');
+  const addCell = (row, value, className = '') => {
+    const td = document.createElement('td');
+    td.textContent = value;
+    if (className) td.className = className;
+    row.append(td);
+    return td;
+  };
+  if (!data?.length) {
+    const row = document.createElement('tr');
+    const cell = addCell(row, 'No payments yet', 'empty');
+    cell.colSpan = 7;
+    body.append(row);
+  } else {
+    for (const p of data) {
+      const row = document.createElement('tr');
+      addCell(row, when(p.settled_at || p.created_at));
+      const status = String(p.status || '').toLowerCase();
+      const statusCell = document.createElement('td');
+      const statusBadge = document.createElement('span');
+      statusBadge.className = `badge ${status.replace(/[^a-z0-9_-]/g, '')}`;
+      statusBadge.textContent = status || 'unknown';
+      statusCell.append(statusBadge);
+      row.append(statusCell);
+      addCell(row, money(p.amount_settled ?? p.amount_requested), 'num');
+      addCell(row, p.creator_name || p.creator_email || '');
+      addCell(row, p.link_slug || '', 'mono');
+      addCell(row, p.invoice_ref || String(p.id).slice(0, 8), 'mono');
+      const actionCell = document.createElement('td');
+      if (p.status !== 'settled' && p.status !== 'expired') {
+        const button = document.createElement('button');
+        button.className = 'btn ghost sm';
+        button.dataset.pay = p.id;
+        button.textContent = 'Mark settled';
+        actionCell.append(button);
+      }
+      row.append(actionCell);
+      body.append(row);
+    }
+  }
+  table.append(body);
+  card.append(table);
+  el.replaceChildren(card);
   el.querySelectorAll('[data-pay]').forEach((btn) => {
     btn.onclick = async () => {
       btn.disabled = true;

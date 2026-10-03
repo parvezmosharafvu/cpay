@@ -30,16 +30,23 @@ function divideRounded(numerator, denominator, mode) {
   return quotient;
 }
 
-export function decimalToScaledInteger(value, scale, mode = 'half-up') {
-  const { numerator, denominator } = decimalFraction(value);
-  return divideRounded(numerator * 10n ** BigInt(scale), denominator, mode);
+function safeInteger(value, message) {
+  const result = Number(value);
+  if (!Number.isSafeInteger(result)) throw new RangeError(message);
+  return result;
 }
 
 export function decimalToCents(value) {
-  const cents = decimalToScaledInteger(value, 2);
-  const result = Number(cents);
-  if (!Number.isSafeInteger(result)) throw new RangeError('Dollar amount is out of range');
-  return result;
+  const { numerator, denominator } = decimalFraction(value);
+  return safeInteger(divideRounded(numerator * 100n, denominator, 'half-up'), 'Dollar amount is out of range');
+}
+
+export function usdToSats(usd, btcUsdRate) {
+  const amount = decimalFraction(usd);
+  const rate = decimalFraction(btcUsdRate);
+  if (amount.numerator < 0n || rate.numerator <= 0n) throw new RangeError('Amount and BTC/USD rate must be nonnegative and positive');
+  const sats = divideRounded(amount.numerator * rate.denominator * 100_000_000n, amount.denominator * rate.numerator, 'ceil');
+  return safeInteger(sats, 'Satoshi amount is out of range');
 }
 
 export function formatCents(value) {
@@ -49,35 +56,20 @@ export function formatCents(value) {
   return `${sign}${absolute / 100n}.${String(absolute % 100n).padStart(2, '0')}`;
 }
 
-export function usdToSats(usd, btcUsdRate) {
-  const amount = decimalFraction(usd);
-  const rate = decimalFraction(btcUsdRate);
-  if (amount.numerator < 0n || rate.numerator <= 0n) throw new RangeError('Amount and BTC/USD rate must be nonnegative and positive');
-  const sats = divideRounded(amount.numerator * rate.denominator * 100_000_000n, amount.denominator * rate.numerator, 'ceil');
-  const result = Number(sats);
-  if (!Number.isSafeInteger(result)) throw new RangeError('Satoshi amount is out of range');
-  return result;
-}
-
 export function usdCentsToSats(cents, btcUsdRate, mode = 'floor') {
   const amountCents = BigInt(cents);
   const rate = decimalFraction(btcUsdRate);
   if (amountCents < 0n || rate.numerator <= 0n) throw new RangeError('Amount and BTC/USD rate must be nonnegative and positive');
   const sats = divideRounded(amountCents * 1_000_000n * rate.denominator, rate.numerator, mode);
-  const result = Number(sats);
-  if (!Number.isSafeInteger(result)) throw new RangeError('Satoshi amount is out of range');
-  return result;
+  return safeInteger(sats, 'Satoshi amount is out of range');
 }
 
 export function satsToUsdCents(sats, btcUsdRate) {
   const amountSats = BigInt(sats);
   const rate = decimalFraction(btcUsdRate);
   if (amountSats < 0n || rate.numerator <= 0n) throw new RangeError('Amount and BTC/USD rate must be nonnegative and positive');
-  return decimalToSafeNumber(divideRounded(amountSats * rate.numerator * 100n, rate.denominator * 100_000_000n, 'half-up'));
-}
-
-function decimalToSafeNumber(value) {
-  const result = Number(value);
-  if (!Number.isSafeInteger(result)) throw new RangeError('Dollar amount is out of range');
-  return result;
+  return safeInteger(
+    divideRounded(amountSats * rate.numerator * 100n, rate.denominator * 100_000_000n, 'half-up'),
+    'Dollar amount is out of range',
+  );
 }

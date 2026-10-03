@@ -33,9 +33,9 @@
 </header>
 
 <!-- LOADING / INVOICE GONE -->
-<div class="checkout-card state-panel" id="statePanel">
+<div class="checkout-card state-panel" id="statePanel" role="status" aria-live="polite" aria-busy="true">
   <div class="spinner" id="stateSpinner"></div>
-  <div class="state-title" id="stateTitle" style="display:none;"></div>
+  <div class="state-title" id="stateTitle" style="display:none;" role="alert"></div>
   <div class="state-sub" id="stateSub">Loading invoice…</div>
   <button class="btn primary" id="stateBtn" type="button" style="display:none; margin-top:10px;">Start over</button>
 </div>
@@ -54,8 +54,9 @@
   <div class="amount-due">
     <div class="kicker">Amount due</div>
     <div class="amount-value" id="amountDue">-</div>
+    <div class="sats-amount" id="satsAmount" hidden></div>
     <div class="row" style="justify-content:center">
-      <span class="status-chip" role="status" aria-live="polite">Waiting for payment</span>
+      <span class="status-chip" id="statusChip" role="status" aria-live="polite">Waiting for payment</span>
       <span class="timer-pill" id="timerPill" role="timer" aria-live="polite">--:--</span>
     </div>
   </div>
@@ -67,12 +68,16 @@
     </div>
   </button>
   <div class="invoice-text" id="invoiceText" title="Lightning invoice"></div>
+<p class="faint uri-line" id="uriLine" hidden><span>Lightning URI</span> <button class="link-btn" id="copyUriBtn" type="button">Copy Lightning URI</button></p>
 
   <div class="action-footer">
     <button id="copyBtn" class="pill-btn btn-copy" type="button">Copy invoice</button>
     <button id="payBtn" class="pill-btn btn-pay" type="button">Open Cash App</button>
   </div>
-  <p class="pay-hint">Scan the code with Cash App or any Lightning wallet. The amount is already in the invoice.</p>
+  <div class="action-footer">
+    <button id="walletBtn" class="pill-btn btn-copy" type="button">Open in Lightning wallet</button>
+  </div>
+  <p class="pay-hint">Scan the code with Cash App or any Lightning wallet, or use the buttons above on your phone. The amount is already in the invoice.</p>
   <div class="quick-actions">
     <button class="link-btn" id="helpBtn" type="button">How to pay</button>
     <button class="link-btn" id="shareInvoiceBtn" type="button">Share</button>
@@ -128,6 +133,17 @@
 </div>
 
 <div id="toast" class="float-toast" role="status" aria-live="polite"></div>
+<style>
+.sats-amount{margin-top:4px;font-size:15px;font-weight:600;color:var(--muted,#667);font-variant-numeric:tabular-nums}
+.uri-line{display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 0;font-size:13px}
+.status-chip.ok{color:var(--ok,#0a7d32);background:color-mix(in srgb,var(--ok,#0a7d32) 12%,transparent)}
+.status-chip.bad{color:var(--danger,#b42318);background:color-mix(in srgb,var(--danger,#b42318) 12%,transparent)}
+.status-chip.bad::before,.status-chip.ok::before{animation:none}
+.pill-btn,.link-btn,.icon-btn,.qr-link-button{min-height:44px}
+.pill-btn:focus-visible,.link-btn:focus-visible,.icon-btn:focus-visible,.qr-link-button:focus-visible{outline:3px solid var(--accent,#00a82d);outline-offset:2px}
+.no-phone #payBtn,.no-phone #walletBtn{opacity:.85}
+@media (prefers-reduced-motion:reduce){.status-chip::before{animation:none}}
+</style>
 
 <script>
 // Uses window.supabaseClient set up in config.js (same pattern as every other page)
@@ -161,6 +177,32 @@ function isPhone(){ return /iPad|iPhone|iPod|Android/.test(navigator.userAgent);
 
 function el(id){ return document.getElementById(id); }
 
+// Sats come from the invoice itself (BOLT11 human-readable part), so the
+// figure shown is exactly what the wallet will pay. Returns null for an
+// amountless or unreadable invoice.
+function satsFromBolt11(invoice){
+  const m = /^ln(?:bc|tbs|tb|bcrt)(\d+)([munp])?1/i.exec(String(invoice || '').replace(/^lightning:/i, '').trim());
+  if (!m) return null;
+  const n = BigInt(m[1]);
+  const perBtc = 100000000n;
+  const div = { m: 1000n, u: 1000000n, n: 1000000000n, p: 1000000000000n }[(m[2] || '').toLowerCase()] || 1n;
+  const sats = (n * perBtc) / div;
+  return sats > 0n ? Number(sats) : null;
+}
+function renderSats(){
+  const sats = satsFromBolt11(currentPayCode);
+  const box = el('satsAmount');
+  if (!sats){ box.hidden = true; return; }
+  box.textContent = '\u2248 ' + sats.toLocaleString('en-US') + ' sats';
+  box.hidden = false;
+}
+function setChip(kind, text){
+  const chip = el('statusChip');
+  chip.textContent = text;
+  chip.classList.toggle('ok', kind === 'ok');
+  chip.classList.toggle('bad', kind === 'bad');
+}
+
 function showStep(n){
   el('statePanel').style.display = 'none';
   el('step2').hidden = n !== 2;
@@ -173,6 +215,7 @@ function showState(title, sub, btnLabel, btnHref){
   el('step2').hidden = true;
   el('step3').hidden = true;
   el('statePanel').style.display = 'flex';
+  el('statePanel').setAttribute('aria-busy', title ? 'false' : 'true');
   el('stateSpinner').style.display = title ? 'none' : 'block';
   el('stateTitle').style.display = title ? 'block' : 'none';
   el('stateTitle').textContent = title || '';
@@ -195,6 +238,19 @@ function showInvoiceGone(msg){
     'Start over',
     returnPage || '/'
   );
+}
+
+function showExpired(){
+  clearInterval(timerInterval);
+  if (realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
+  sessionStorage.removeItem('invoiceSession');
+  showState('This invoice has expired.', 'Nothing was charged. Start a new payment to get a fresh invoice.', 'Start a new payment', returnPage || '/');
+}
+
+// The invoice may be fine; the page just could not reach the server.
+function showLoadError(){
+  showState('We could not load this invoice.', 'Check your connection and try again. If you already paid, do not pay twice: the payment will still be recorded.', 'Try again');
+  el('stateBtn').onclick = () => window.location.reload();
 }
 
 function toast(msg){
@@ -220,6 +276,7 @@ function renderQr(qrText){
       'word-break:break-all; font-family:monospace; max-width:190px; max-height:190px; overflow:hidden;">' +
       qrText.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</div>';
     box.dataset.rendered = '1';
+    el('invoiceText').textContent = qrText;
     toast('QR code could not load. Use Copy invoice instead.');
     return;
   }
@@ -233,6 +290,10 @@ function renderQr(qrText){
   });
   box.dataset.rendered = '1';
   el('invoiceText').textContent = qrText;
+  const qrImg = box.querySelector('canvas, img');
+  if (qrImg) qrImg.setAttribute('aria-label', 'Lightning invoice QR code');
+  el('uriLine').hidden = false;
+  renderSats();
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -269,9 +330,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     renderQr(currentPayCode);
   }
 
-  const { data: rows, error } = await supabaseClient.rpc('get_invoice_public', { p_payment_id: currentPaymentId });
+  let rows, error;
+  try { ({ data: rows, error } = await supabaseClient.rpc('get_invoice_public', { p_payment_id: currentPaymentId })); }
+  catch (e) { error = e; }
   const row = Array.isArray(rows) ? rows[0] : rows;
-  if (error || !row){ showInvoiceGone(); return; }
+  if (error){ showLoadError(); return; }
+  if (!row){ showInvoiceGone(); return; }
 
   // Rebuild the QR from the server when there was no usable cache — this is
   // what makes the link work on a second device, after a refresh, or once
@@ -298,12 +362,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     return;
   }
   if (row.status === 'expired' || row.status === 'invalid'){
-    sessionStorage.removeItem('invoiceSession');
-    showInvoiceGone('This invoice has expired.');
+    showExpired();
     return;
   }
 
   showStep(2);
+  setChip('wait', row.status === 'pending' ? 'Payment detected, confirming' : 'Waiting for payment');
+  if (!isPhone()) document.body.classList.add('no-phone');
   startTimer(row.expires_at);
   subscribeToPaymentUpdates(currentPaymentId, row.amount_requested);
 });
@@ -332,6 +397,12 @@ async function copyInvoice(){
       return false;
     }
   }
+}
+
+async function copyUri(){
+  const uri = currentPayUrl || ('lightning:' + currentPayCode);
+  try { await navigator.clipboard.writeText(uri); toast('Lightning URI copied'); }
+  catch { toast('Could not copy. Press and hold the QR code instead.'); }
 }
 
 async function copyAddress(){
@@ -405,7 +476,7 @@ function startTimer(expiresAt){
     clearInterval(timerInterval);
     if (realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
     sessionStorage.removeItem('invoiceSession');
-    showInvoiceGone('This invoice has expired.');
+    showExpired();
   };
 
   update();
@@ -428,21 +499,43 @@ function subscribeToPaymentUpdates(paymentId, amount){
       const status = payload.new.status;
       if (status === 'settled'){
         finishAsSettled(payload.new.amount_settled || amount);
+      } else if (status === 'pending'){
+        setChip('wait', 'Payment detected, confirming');
       } else if (status === 'expired' || status === 'invalid'){
         clearInterval(timerInterval);
         supabaseClient.removeChannel(realtimeChannel);
         sessionStorage.removeItem('invoiceSession');
-        showInvoiceGone('This invoice has expired.');
+        showExpired();
       }
     })
-    .subscribe();
+    .subscribe((state) => {
+      if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT') setChip('wait', 'Waiting for payment (reconnecting)');
+      if (state === 'SUBSCRIBED') { setChip('wait', 'Waiting for payment'); recheckStatus(); }
+    });
 }
+
+// A phone that left for a wallet app may have missed realtime events while
+// the tab slept. One read on return catches a payment made in the meantime.
+async function recheckStatus(){
+  if (!currentPaymentId || el('step2').hidden) return;
+  try {
+    const { data } = await supabaseClient.rpc('get_invoice_public', { p_payment_id: currentPaymentId });
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return;
+    if (row.status === 'settled') finishAsSettled(row.amount_settled || row.amount_requested);
+    else if (row.status === 'expired' || row.status === 'invalid') showExpired();
+  } catch {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') recheckStatus(); });
 
 function finishAsSettled(amount){
   clearInterval(timerInterval);
   if (realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
   sessionStorage.removeItem('invoiceSession');
   showStep(3);
+  setChip('ok', 'Paid');
+  el('step3').setAttribute('tabindex', '-1');
+  el('step3').focus({ preventScroll: true });
 
   const paid = parseFloat(amount).toFixed(2);
   const when = new Date();
@@ -550,6 +643,8 @@ el('rcpSaveBtn').addEventListener('click', saveReceipt);
 el('modalCloseBtn').addEventListener('click', closeModal);
 el('modalGotItBtn').addEventListener('click', closeModal);
 el('qrLink').addEventListener('click', openWallet);
+el('walletBtn').addEventListener('click', openWallet);
+el('copyUriBtn').addEventListener('click', copyUri);
 el('howToPayModal').addEventListener('click', (e) => {
   if (e.target === el('howToPayModal')) closeModal();
 });

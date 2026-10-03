@@ -1,5 +1,7 @@
 begin;
 
+\i supabase/migrations/20261003010000_lightning_receipt_reconciliation.sql
+
 alter table public.webhook_events
   add column if not exists receipt_amount_sat bigint,
   add column if not exists settlement_outcome text;
@@ -39,7 +41,7 @@ begin
   select receipt_amount_sat, settlement_outcome into v_amount, v_outcome
     from public.lightning_receipt_reconciliation_archive
    where delivery_id = 'lightning-receipt-rollback-test';
-  if v_amount <> 1015 or v_outcome <> 'underpaid' then
+  if v_amount is distinct from 1015 or v_outcome is distinct from 'underpaid' then
     raise exception 'receipt metadata was not archived';
   end if;
 

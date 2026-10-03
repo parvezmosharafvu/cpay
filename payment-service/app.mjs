@@ -134,32 +134,30 @@ export function createApp({ sdk, db, secret, log = logJson, confirmWaitMs, now =
   }
 
   async function createInvoice(paymentId) {
-    return ledger.withInvoiceLock(db, paymentId, async () => {
-      const row = await ledger.invoiceRow(db, paymentId);
-      if (!row) return [404, { error: 'payment not found' }];
-      if (row.lightning_invoice) {
-        return [200, { ...invoiceLinks(row.lightning_invoice), paymentHash: row.invoice_ref, amountSat: Number(row.amount_sat) }];
-      }
-      if (row.status !== 'new') return [409, { error: `payment is ${row.status}` }];
-      const expirySecs = Math.floor((new Date(row.expires_at).getTime() - now()) / 1000);
-      if (expirySecs < 60) return [409, { error: 'payment expires too soon' }];
+    const row = await ledger.invoiceRow(db, paymentId);
+    if (!row) return [404, { error: 'payment not found' }];
+    if (row.lightning_invoice) {
+      return [200, { ...invoiceLinks(row.lightning_invoice), paymentHash: row.invoice_ref, amountSat: Number(row.amount_sat) }];
+    }
+    if (row.status !== 'new') return [409, { error: `payment is ${row.status}` }];
+    const expirySecs = Math.floor((new Date(row.expires_at).getTime() - now()) / 1000);
+    if (expirySecs < 60) return [409, { error: 'payment expires too soon' }];
 
-      const btcUsd = await btcUsdRate();
-      const amountSat = ledger.usdToSats(row.amount_requested, btcUsd);
-      const { paymentRequest } = await sdk.receivePayment({
-        paymentMethod: { type: 'bolt11Invoice', description: 'cpay payment', amountSats: amountSat, expirySecs },
-      });
-      const parsed = await sdk.parse(paymentRequest);
-      const attached = await ledger.attachInvoice(db, {
-        paymentId, paymentHash: parsed.paymentHash, bolt11: paymentRequest, amountSat, btcUsdRate: btcUsd,
-      });
-      if (!attached) {
-        const again = await ledger.invoiceRow(db, paymentId);
-        if (!again?.lightning_invoice) return [409, { error: 'payment is no longer open' }];
-        return [200, { ...invoiceLinks(again.lightning_invoice), paymentHash: again.invoice_ref, amountSat: Number(again.amount_sat) }];
-      }
-      return [200, { ...invoiceLinks(paymentRequest), paymentHash: parsed.paymentHash, amountSat }];
+    const btcUsd = await btcUsdRate();
+    const amountSat = ledger.usdToSats(row.amount_requested, btcUsd);
+    const { paymentRequest } = await sdk.receivePayment({
+      paymentMethod: { type: 'bolt11Invoice', description: 'cpay payment', amountSats: amountSat, expirySecs },
     });
+    const parsed = await sdk.parse(paymentRequest);
+    const attached = await ledger.attachInvoice(db, {
+      paymentId, paymentHash: parsed.paymentHash, bolt11: paymentRequest, amountSat, btcUsdRate: btcUsd,
+    });
+    if (!attached) {
+      const again = await ledger.invoiceRow(db, paymentId);
+      if (!again?.lightning_invoice) return [409, { error: 'payment is no longer open' }];
+      return [200, { ...invoiceLinks(again.lightning_invoice), paymentHash: again.invoice_ref, amountSat: Number(again.amount_sat) }];
+    }
+    return [200, { ...invoiceLinks(paymentRequest), paymentHash: parsed.paymentHash, amountSat }];
   }
 
   // Unauthenticated, for the host's health check: booleans and one

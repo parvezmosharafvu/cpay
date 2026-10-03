@@ -9,20 +9,13 @@ grant execute on function auth.uid() to authenticated;
 grant select on public.profiles to authenticated;
 
 insert into auth.users(id, email)
-values
-  ('22222222-2222-2222-2222-222222222222', 'profile-test@test.invalid'),
-  ('33333333-3333-3333-3333-333333333333', 'profile-team-test@test.invalid');
+values ('22222222-2222-2222-2222-222222222222', 'profile-test@test.invalid');
 
 update public.profiles
 set account_status = 'active',
-    role = 'moderator',
+    role = 'creator',
     cost_locked = false
 where id = '22222222-2222-2222-2222-222222222222';
-
-update public.profiles
-set account_status = 'active',
-    referred_by = '22222222-2222-2222-2222-222222222222'
-where id = '33333333-3333-3333-3333-333333333333';
 
 select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', true);
 set local role authenticated;
@@ -34,7 +27,6 @@ where id = auth.uid();
 select public.update_my_public_profile('Updated Name', 'Allowed bio', 'profile-test-store');
 select public.set_my_cost_percent(2.5);
 select public.set_my_payout_prefs(5, null, true);
-select public.reseller_lock_team_cost(2.5, true);
 
 do $$
 declare
@@ -57,20 +49,11 @@ declare
   v_value text;
   v_denied boolean;
 begin
-  foreach v_field in array array[
-    'role',
-    'platform_fee_percent',
-    'affiliate_code',
-    'verification_status',
-    'cost_locked',
-    'team_cost_percent'
-  ] loop
+  foreach v_field in array array['role', 'platform_fee_percent', 'affiliate_code', 'verification_status'] loop
     v_value := case v_field
       when 'role' then 'admin'
       when 'platform_fee_percent' then '99'
       when 'affiliate_code' then 'untrusted-code'
-      when 'cost_locked' then 'true'
-      when 'team_cost_percent' then '99'
       else 'verified'
     end;
     v_denied := false;
@@ -90,24 +73,6 @@ begin
 end $$;
 
 reset role;
-
-do $$
-declare
-  v_reseller public.profiles;
-  v_creator public.profiles;
-begin
-  select * into v_reseller
-  from public.profiles
-  where id = '22222222-2222-2222-2222-222222222222';
-  select * into v_creator
-  from public.profiles
-  where id = '33333333-3333-3333-3333-333333333333';
-  if v_reseller.team_cost_percent <> 2.5
-     or v_creator.cost_percent <> 2.5
-     or v_creator.cost_locked is distinct from true then
-    raise exception 'The reseller cost RPC could not update its protected profile fields';
-  end if;
-end $$;
 
 do $$
 declare

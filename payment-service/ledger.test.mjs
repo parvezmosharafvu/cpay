@@ -51,11 +51,6 @@ test('usdToSats rounds up so the invoice never undercharges', () => {
   assert.equal(ledger.usdToSats('1.12000001', 100000), 1121);
 });
 
-test('usdCentsToSats floors exact decimal-rate conversions without floating-point loss', () => {
-  assert.equal(ledger.usdCentsToSats(250001, 80000.32), 3_125_000);
-  assert.equal(ledger.usdCentsToSats(1, 80000.32), 12);
-});
-
 test('a received payment settles its row once, and replays credit nothing', async () => {
   assert.equal(await earned(), '0');
   assert.equal(await ledger.settlePayment(db, receive('breez-1', 11913)), 'settled');

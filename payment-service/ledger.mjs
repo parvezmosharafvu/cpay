@@ -23,13 +23,6 @@ export function usdToSats(usd, btcUsdRate) {
   return Number(quotient + (remainder > 0n ? 1n : 0n));
 }
 
-export function usdCentsToSats(amountCents, btcUsdRate) {
-  const cents = BigInt(amountCents);
-  const rate = decimalFraction(btcUsdRate);
-  if (cents < 0n || !rate || rate.numerator <= 0n) return NaN;
-  return Number((cents * 1_000_000n * rate.denominator) / rate.numerator);
-}
-
 export async function invoiceRow(db, paymentId) {
   const { rows } = await db.query(
     `select id, status, amount_requested, expires_at, lightning_invoice, invoice_ref, amount_sat

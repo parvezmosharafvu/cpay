@@ -133,7 +133,7 @@ function fakeBreez({ balanceSats = 1_000_000_000, leafFailures = 0 } = {}) {
 }
 
 function setup(breez = fakeBreez(), opts = {}) {
-  const btcUsdRate = async () => RATE;
+  const btcUsdRate = opts.btcUsdRate ?? (async () => RATE);
   const withdrawals = createWithdrawals({ breez, db, btcUsdRate });
   const wallet = createWallet({ breez, db, btcUsdRate, withdrawals, ...opts });
   return { breez, withdrawals, wallet, route: createAdminWalletRoute({ wallet, withdrawals }) };
@@ -365,6 +365,17 @@ test('admin stablecoin quote accepts an exact integer-cent route maximum', async
     adminId: admin, routeId: 'orchestra:arbitrum:usdc', address: EVM, amountUsd: '2.01',
   });
   assert.equal(quote.amountUsd, '2.01');
+});
+
+test('admin stablecoin quotes convert cents to sats exactly at decimal BTC rates', async () => {
+  const { route, breez } = setup(fakeBreez(), { btcUsdRate: async () => 80000.32 });
+  const admin = await makeUser({ role: 'admin' });
+  const [, quote] = await route('POST', '/admin/wallet/stable-quote', {
+    adminId: admin, routeId: 'orchestra:arbitrum:usdc', address: EVM, amountUsd: '2500.01',
+  });
+  assert.equal(quote.amountSat, 3_125_000);
+  const prep = breez.calls.filter((c) => c[0] === 'prepareSendPayment').at(-1)[1];
+  assert.equal(prep.amount, 3_125_000n);
 });
 
 test('a Lightning payment into an admin invoice credits no creator', async () => {

@@ -25,6 +25,17 @@ to settle before mainnet.
   each to the same function, so payments received while the service was
   down or an event was missed still settle. The same pass marks unpaid
   invoices past `expires_at` as `expired`.
+- Receipt log, record-only (migration 20261003050000), only when
+  `RECEIPT_RECORDING=shadow` (default `off`): before each completed receive
+  goes to `settle_breez_payment()`, `receipts.mjs` records it with
+  `record_lightning_receipt()` on a separate pool (2 connections, 1 s connect
+  wait, 2 s statement timeout, 2.5 s client timeout), then copies the legacy
+  outcome next to it. Settlement itself is unchanged, and any recording
+  failure (missing function, constraint, timeout, connection error, mapping
+  error) is logged as `receipt-record-failed` and settlement runs exactly as
+  without recording. The stored payload is an allowlist of plain fields
+  (never the invoice, description, preimage or any key material). Nothing in
+  it credits, evaluates or changes a payment.
 - `GET /health` needs no secret, so a host's health check can call it. It
   returns 200 when the database answers, the SDK answers, the wallet has
   synced in the last 10 minutes and the service is not shutting down, 503
@@ -164,7 +175,10 @@ withdrawal in the database, so files must not overlap).
 input checks, `/health`, log redaction, and graceful shutdown with a send,
 an admin send and leaf optimization in flight. `balance-guard.test.mjs`
 checks migration 0105: no withdrawal row may take a balance below zero,
-including two at once. `config.test.mjs` covers every variable. `ledger.test.mjs` works inside a transaction that is
+including two at once. `receipts.test.mjs` covers the receipt log: every
+recording failure mode leaves settlement as on main, a golden fixture set
+answers identically with recording off and on, repeat deliveries make one
+receipt, recording changes no balance or payment, and the payload allowlist. `config.test.mjs` covers every variable. `ledger.test.mjs` works inside a transaction that is
 rolled back. `withdraw.test.mjs` commits (confirm and crash recovery need
 several connections), uses fresh users and deletes them at the end; it
 drives `withdraw.mjs` with a fake Breez SDK, since regtest has no

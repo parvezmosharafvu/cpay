@@ -114,6 +114,7 @@ these and nothing else; it refuses to start and names every bad variable
 | `PORT` | no | `8080` | HTTP port |
 | `CATCH_UP_INTERVAL_SECS` | no | `300` | How often the service re-reads recent wallet payments in case an event was missed (30 to 3600) |
 | `SHUTDOWN_TIMEOUT_SECS` | no | `90` | On SIGTERM or SIGINT, how long to wait for sends in flight before disconnecting anyway (1 to 600). Give the host's stop timeout at least this plus 10 seconds |
+| `RECEIPT_RECORDING` | no | `off` | `shadow` writes every completed receive to `lightning_receipts` (record-only, migration 20261003050000) on a separate 2-connection pool before the unchanged settlement runs. Anything else, including unset or a typo, means `off`. Recording can never stop or change settlement |
 
 The service never logs these values: every log line passes through a redactor
 that replaces the secret, the API key, the words, and the database URL and

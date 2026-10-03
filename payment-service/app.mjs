@@ -3,6 +3,7 @@
 // real SDK and database and hands them in; tests hand in fakes.
 
 import * as ledger from './ledger.mjs';
+import { createReceiptRecorder, settleWithReceipt } from './receipts.mjs';
 import { createWithdrawals, UserError, wait } from './withdraw.mjs';
 import { bearerAuth, createWallet, createAdminWalletRoute } from './wallet.mjs';
 
@@ -42,7 +43,12 @@ async function readJson(req) {
   return body;
 }
 
-export function createApp({ sdk, db, secret, log = logJson, confirmWaitMs, now = () => Date.now() }) {
+export function createApp({
+  sdk, db, secret, log = logJson, confirmWaitMs, now = () => Date.now(),
+  // F1 PR 1 receipt log: 'off' (default) or 'shadow'. recordDb is a separate
+  // small pool so recording can never take the settlement path's connections.
+  receiptRecording = 'off', recordDb = null, recordTimeoutMs,
+}) {
   let lastSyncedAt = 0;
   let optimizing = false;
   let draining = false;
@@ -71,9 +77,15 @@ export function createApp({ sdk, db, secret, log = logJson, confirmWaitMs, now =
   const wallet = createWallet({ breez: sdk, db, btcUsdRate, withdrawals, log, track });
   const adminWalletRoute = createAdminWalletRoute({ wallet, withdrawals });
   const authorised = bearerAuth(secret);
+  const receipts = createReceiptRecorder({
+    mode: receiptRecording, recordDb, log, ...(recordTimeoutMs ? { timeoutMs: recordTimeoutMs } : {}),
+  });
 
+  // Recording (shadow only) runs first and can never stop the legacy
+  // settlement: see settleWithReceipt() in receipts.mjs. The settlement
+  // call itself is ledger.settlePayment(), unchanged from main.
   async function settle(payment, source) {
-    const outcome = await ledger.settlePayment(db, payment);
+    const outcome = await settleWithReceipt({ db, recorder: receipts, payment, source });
     log({ event: 'settle', source, breezPaymentId: payment.id, amountSat: String(payment.amount), outcome });
     return outcome;
   }
@@ -122,7 +134,10 @@ export function createApp({ sdk, db, secret, log = logJson, confirmWaitMs, now =
     });
     if (synced) lastSyncedAt = now();
     const withdrawalOutcomes = await withdrawals.reconcile({ synced });
-    log({ event: 'catch-up', since, outcomes, expired, withdrawals: withdrawalOutcomes });
+    log({
+      event: 'catch-up', since, outcomes, expired, withdrawals: withdrawalOutcomes,
+      ...(receipts.enabled ? { receipts: receipts.stats() } : {}),
+    });
   }
 
   let catchUpRunning = null;
@@ -266,5 +281,6 @@ export function createApp({ sdk, db, secret, log = logJson, confirmWaitMs, now =
     handle: (req, res) => track(handle(req, res)),
     onEvent, catchUp, drain, health, track,
     markSynced: () => { lastSyncedAt = now(); },
+    receiptStats: () => receipts.stats(),
   };
 }

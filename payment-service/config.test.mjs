@@ -63,3 +63,13 @@ test('log lines never carry the secret, the mnemonic, the API key or the databas
   for (const s of [SECRET, WORDS, 'api-key-value-9', 'db-pass-123']) assert.ok(!out.includes(s), s);
   assert.equal(out.match(/\[redacted\]/g).length, 5);
 });
+
+test('RECEIPT_RECORDING: only "shadow" turns the receipt log on; unset, empty and unknown values mean off', () => {
+  assert.equal(loadConfig(base).receiptRecording, 'off');
+  for (const v of ['', 'off', 'OFF', 'on', 'true', '1', 'record', 'shadowed', 'enforce']) {
+    assert.equal(loadConfig({ ...base, RECEIPT_RECORDING: v }).receiptRecording, 'off', v);
+  }
+  for (const v of ['shadow', 'SHADOW', ' Shadow ']) {
+    assert.equal(loadConfig({ ...base, RECEIPT_RECORDING: v }).receiptRecording, 'shadow', v);
+  }
+});

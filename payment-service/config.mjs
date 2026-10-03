@@ -51,7 +51,15 @@ export function loadConfig(env = process.env) {
   return Object.freeze({
     network, apiKey, mnemonic, dataDir, databaseUrl, secret, port,
     catchUpMs: catchUpSecs * 1000, shutdownTimeoutMs: shutdownSecs * 1000,
+    receiptRecording: receiptRecordingMode(env.RECEIPT_RECORDING),
   });
+}
+
+// F1 PR 1 receipt log. Only the exact value 'shadow' (any case, trimmed)
+// turns recording on; anything else, including unset, empty or unknown
+// values, means 'off'. Never an error: a typo must not stop the service.
+export function receiptRecordingMode(raw) {
+  return String(raw ?? '').trim().toLowerCase() === 'shadow' ? 'shadow' : 'off';
 }
 
 // Replaces every secret value in a log line. The database password is

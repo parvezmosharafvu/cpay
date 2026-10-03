@@ -91,6 +91,17 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/revenue_desk_access_test.sql
 
+      - name: Receipt log (F1 PR 1) records only, settlement unchanged
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # Backfill from the real pre-migration history (reconciliation live,
+          # then archived and restored), settle_breez_payment() byte-identical,
+          # the record function's outcomes and payload allowlist, and the
+          # grants: anon and authenticated cannot read, write or execute.
+          # BEGIN/ROLLBACK.
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/lightning_receipt_log_test.sql
+
       - name: anon can only execute allowlisted SECURITY DEFINER functions
         env:
           PGPASSWORD: postgres
@@ -159,6 +170,21 @@ jobs:
           # config, and the whole service over HTTP with a fake SDK,
           # including graceful shutdown. Files run one at a time: a service
           # start reconciles every 'sending' withdrawal in the database.
+          npm ci --no-audit --no-fund
+          npm test
+
+      - name: Previous payment service (main) against the new schema
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: |
+          # Old service, new migration: the payment service as it is on main
+          # runs its own tests against this branch's migrated database, so a
+          # deploy order of "migration first, service later" is proven safe.
+          # On a push to main this compares main with itself.
+          git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+          mkdir -p /tmp/previous
+          git archive origin/main payment-service | tar -x -C /tmp/previous
+          cd /tmp/previous/payment-service
           npm ci --no-audit --no-fund
           npm test
 

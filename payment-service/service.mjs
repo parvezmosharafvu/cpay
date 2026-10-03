@@ -5,12 +5,24 @@
 import http from 'node:http';
 import pg from 'pg';
 import { createApp, logJson } from './app.mjs';
+import { RECORD_STATEMENT_TIMEOUT_MS } from './receipts.mjs';
 
 const errorText = (e) => String(e?.message ?? e).slice(0, 300);
 
 export function createService({ config, breez, log = logJson }) {
   const db = new pg.Pool({ connectionString: config.databaseUrl });
   db.on('error', (e) => log({ event: 'db-idle-client-error', error: errorText(e) }));
+  // F1 PR 1: receipt recording gets its own two-connection pool with a
+  // server-side statement timeout and a bounded connect wait, so it can
+  // neither exhaust nor hold up the pool settlement uses.
+  const receiptRecording = config.receiptRecording === 'shadow' ? 'shadow' : 'off';
+  const recordDb = receiptRecording === 'shadow'
+    ? new pg.Pool({
+      connectionString: config.databaseUrl, max: 2, connectionTimeoutMillis: 1_000,
+      statement_timeout: RECORD_STATEMENT_TIMEOUT_MS, idleTimeoutMillis: 30_000,
+    })
+    : null;
+  recordDb?.on('error', (e) => log({ event: 'db-idle-client-error', pool: 'receipts', error: errorText(e) }));
   let sdk = null;
   let app = null;
   let server = null;
@@ -28,7 +40,8 @@ export function createService({ config, breez, log = logJson }) {
       seed: { type: 'mnemonic', mnemonic: config.mnemonic },
       storageDir: config.dataDir,
     });
-    app = createApp({ sdk, db, secret: config.secret, log });
+    app = createApp({ sdk, db, secret: config.secret, log, receiptRecording, recordDb, recordTimeoutMs: config.recordTimeoutMs });
+    log({ event: 'receipt-recording', mode: receiptRecording });
     await sdk.addEventListener({ onEvent: app.onEvent });
     await sdk.getInfo({ ensureSynced: true });
     app.markSynced();
@@ -61,6 +74,7 @@ export function createService({ config, breez, log = logJson }) {
       try { await sdk.disconnect(); } catch (e) { disconnected = false; log({ event: 'sdk-disconnect-failed', error: errorText(e) }); }
     }
     await db.end().catch(() => {});
+    await recordDb?.end().catch(() => {});
     log({ event: 'stopped', drained, disconnected });
     return { ok: drained && disconnected, drained, disconnected };
   }

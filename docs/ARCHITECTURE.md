@@ -1,7 +1,7 @@
 # cpay architecture
 
 Internal document. It names the payment processor (Breez SDK Spark); the
-freelancer, reseller and customer pages never do (see "What users see").
+freelancer and customer pages never do (see "What users see").
 
 Product payout is USDT to a saved address (USDC only if a route exists).
 bKash, Nagad, Binance Pay, bank and Lightning payouts are not offered.

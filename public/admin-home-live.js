@@ -26,7 +26,7 @@ async function renderHomeLive() {
   const EXPLORER = { tron:'https://tronscan.org/#/address/', bsc:'https://bscscan.com/address/', ethereum:'https://etherscan.io/address/', polygon:'https://polygonscan.com/address/', arbitrum:'https://arbiscan.io/address/', base:'https://basescan.org/address/', optimism:'https://optimistic.etherscan.io/address/', avalanche:'https://snowtrace.io/address/', solana:'https://solscan.io/account/' };
   const userRows = (peopleRes.data || []).slice(0, 12).map((p) => {
     const links = (byWallet[p.id] || []).map((w) => `<a href="${EXPLORER[w.network] || '#'}${encodeURIComponent(w.address)}" target="_blank" rel="noopener">${escapeHtml(w.network)}</a>`).join(' · ') || '<span class="faint">No wallet</span>';
-    return `<tr><td>${escapeHtml(p.display_name || '')}<div class="faint">${escapeHtml(p.email || '')}</div></td><td>${p.role === 'moderator' ? 'Reseller' : p.role === 'creator' ? 'Freelancer' : escapeHtml(p.role || '')}</td><td>${badge(p.account_status)}</td><td>${links}</td><td class="num">${money(p.available)}</td></tr>`;
+    return `<tr><td>${escapeHtml(p.display_name || '')}<div class="faint">${escapeHtml(p.email || '')}</div></td><td>${p.role === 'creator' ? 'Freelancer' : escapeHtml(p.role || '')}</td><td>${badge(p.account_status)}</td><td>${links}</td><td class="num">${money(p.available)}</td></tr>`;
   }).join('');
   const pendingApps = (apps.data || []).filter((a) => ['pending', 'submitted'].includes(String(a.status)));
   const appRows = (apps.data || []).slice(0, 8).map((a) => {

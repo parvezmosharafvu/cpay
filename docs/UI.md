@@ -11,8 +11,8 @@ The site is static HTML. Payment links are unmatched paths, served as
   field layout.
 - Login, register, and reset errors use `role="alert"`.
 - The invoice page allows pinch-zoom. Help stays hidden until opened.
-- Freelancer and reseller desks remember the open tab across refresh
-  (`cpay-freelancer-tab`, `cpay-reseller-tab`). Admin already did this.
+- The freelancer desk remembers the open tab across refresh
+  (`cpay-freelancer-tab`). Admin already did this.
 
 ## Left as they are
 
@@ -20,5 +20,5 @@ The site is static HTML. Payment links are unmatched paths, served as
 - Checkout themes stay on the payment page and the invoice page.
 - A domain does not pick a theme.
 
-- Freelancer and reseller Withdraw tabs list the last 30 payouts: when, status, network, requested, after fee, address.
+- The freelancer Withdraw tab lists the last 30 payouts: when, status, network, requested, after fee, address.
 - Checkout stores the server `cashAppUrl`. The invoice page opens that link, and builds one if the server did not send it.

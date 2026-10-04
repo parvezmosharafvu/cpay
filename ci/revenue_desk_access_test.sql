@@ -12,13 +12,13 @@ grant execute on function auth.uid() to anon, authenticated, service_role;
 insert into auth.users(id, email) values
   ('33333333-3333-3333-3333-333333333331', 'desk-admin@test.invalid'),
   ('33333333-3333-3333-3333-333333333332', 'desk-creator@test.invalid'),
-  ('33333333-3333-3333-3333-333333333333', 'desk-reseller@test.invalid');
+  ('33333333-3333-3333-3333-333333333333', 'desk-pending@test.invalid');
 
 update public.profiles set role = 'admin', account_status = 'active'
  where id = '33333333-3333-3333-3333-333333333331';
 update public.profiles set role = 'creator', account_status = 'active'
  where id = '33333333-3333-3333-3333-333333333332';
-update public.profiles set role = 'moderator', account_status = 'active'
+update public.profiles set role = 'creator', account_status = 'pending'
  where id = '33333333-3333-3333-3333-333333333333';
 
 -- Grants: anon and PUBLIC have no EXECUTE at all.
@@ -54,7 +54,7 @@ begin
 end $$;
 reset role;
 
--- 2. Signed in, not admin: freelancer, reseller, and a JWT with no sub.
+-- 2. Signed in, not admin: an active freelancer, a pending one, and a JWT with no sub.
 do $$
 declare
   v_sub text;

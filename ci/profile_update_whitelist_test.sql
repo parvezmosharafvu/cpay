@@ -13,8 +13,7 @@ values ('22222222-2222-2222-2222-222222222222', 'profile-test@test.invalid');
 
 update public.profiles
 set account_status = 'active',
-    role = 'creator',
-    cost_locked = false
+    role = 'creator'
 where id = '22222222-2222-2222-2222-222222222222';
 
 select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', true);
@@ -49,11 +48,11 @@ declare
   v_value text;
   v_denied boolean;
 begin
-  foreach v_field in array array['role', 'platform_fee_percent', 'affiliate_code', 'verification_status'] loop
+  foreach v_field in array array['role', 'platform_fee_percent', 'withdrawal_fee_percent', 'verification_status'] loop
     v_value := case v_field
       when 'role' then 'admin'
       when 'platform_fee_percent' then '99'
-      when 'affiliate_code' then 'untrusted-code'
+      when 'withdrawal_fee_percent' then '0'
       else 'verified'
     end;
     v_denied := false;

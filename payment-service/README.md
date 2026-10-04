@@ -59,10 +59,9 @@ to settle before mainnet.
   - `POST /withdraw/quote {userId, routeId, address, amountUsd}` checks the
     amount (at least $5, whole cents, within the available balance and the
     route's limits) and that `sdk.parse` reads the address as the route's
-    family. It refuses (403) a freelancer whose reseller has self-withdraw
-    off (`self_withdraw_allowed()`, 0101) and takes `resolve_withdrawal_fee()`
-    as the platform fee (account override, else reseller team fee, else the
-    global default, 0% since 0100), converts the rest to sats at the
+    family. It takes `resolve_withdrawal_fee()` as the platform fee (account
+    override, else the global default, 0% since 0100; 20261005020000),
+    converts the rest to sats at the
     Breez BTC/USD rate (rounded down), and asks `prepareSendPayment` for a
     cross-chain quote with fees included. The answer shows the amount,
     platform fee, `networkFeeUsd` (the swap plus network fee, exact: what is

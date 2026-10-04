@@ -15,7 +15,7 @@ change to the previous production project.
 
 ## Identity and admin control
 
-- [ ] An admin can approve and suspend test Freelancers and Resellers.
+- [ ] An admin can approve and suspend test Freelancers.
 - [ ] Pending, rejected and suspended profiles cannot create public payment
   links or request payouts.
 - [ ] Profile controls, domains, themes, limits, feature flags and audit
@@ -54,11 +54,10 @@ change to the previous production project.
   default when 0101 ran now inherits; any other value stays as that
   account's override. Check the Withdraw fee column in the admin Accounts
   tab and clear or set overrides as intended.
-- [ ] Reseller self-withdraw: every reseller starts with it off (0101), so
-  their freelancers cannot withdraw by themselves until the reseller or an
-  admin turns it on. Tell resellers before launch, and keep
-  `feature_reseller_team_withdraw` on, or only an admin can withdraw for
-  those freelancers.
+- [ ] Withdrawals: every account withdraws by itself; the fee is the
+  account's override, else the global default (20261005020000). An admin
+  can also queue a USDT withdrawal for an account (Accounts → Withdraw for),
+  always to the address saved on that account.
 
 ## Cloudflare and public site
 

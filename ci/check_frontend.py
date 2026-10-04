@@ -313,6 +313,38 @@ def check_reseller_commission_removed() -> None:
         print(f"ok   reseller commission absent from {len(files)} public pages and scripts")
 
 
+def check_reseller_role_removed() -> None:
+    # 20261005020000 removed the reseller role: its pages, tables, columns
+    # and RPCs are gone. A page that still asks for them would break. The
+    # reserved-slug lists keep 'moderator' and 'reseller' on purpose, so
+    # nobody can take those paths as a payment-link slug.
+    gone_pages = [p for p in ("public/reseller.html", "public/moderator.html", "public/reseller-desk.js") if os.path.exists(p)]
+    if gone_pages:
+        failures.append(f"reseller pages still present: {gone_pages}")
+    files = [
+        p for p in sorted(glob.glob("public/**/*", recursive=True))
+        if os.path.isfile(p) and os.path.splitext(p)[1] in (".html", ".js", ".css")
+        and "/assets/" not in p
+    ]
+    pattern = re.compile(
+        r"reseller|moderator|cost_locked|affiliate|team_messages|send_team_message|"
+        r"self_withdraw|my_reseller_id|team_cost_percent|staff_[a-z_]+|daily_close",
+        re.I,
+    )
+    hits = []
+    for path in files:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for n, line in enumerate(fh, 1):
+                if "'moderator','reseller'" in line:
+                    continue  # reserved slug list
+                if pattern.search(line):
+                    hits.append(f"{path}:{n}")
+    if hits:
+        failures.append(f"reseller role still referenced: {hits[:10]}")
+    else:
+        print(f"ok   reseller role absent from {len(files)} public pages, scripts and styles")
+
+
 check_js_syntax()
 check_dom_references()
 check_rpc_signatures()
@@ -322,6 +354,7 @@ check_admin_release_gates()
 check_direct_upload_contract()
 check_provider_name_hidden()
 check_reseller_commission_removed()
+check_reseller_role_removed()
 
 if failures:
     text = "\n".join(f"FAIL {f}" for f in failures)

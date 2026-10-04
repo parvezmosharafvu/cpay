@@ -3,17 +3,16 @@
 -- a signed-in user who does not own the victim's data
 -- ============================================================
 -- For each function in ci/authenticated_rpc_allowlist.sql, as two
--- attackers (a plain freelancer, and a reseller whose team does not include
--- the victim), call it with all-NULL arguments and again with each uuid
--- argument set to one of the victim's ids (user, reseller, link, payment,
--- support message, wallet). A call passes when it is refused (any error)
+-- attackers (an active freelancer and a pending one), call it with all-NULL
+-- arguments and again with each uuid argument set to one of the victims'
+-- ids (users, link, payment, support message, wallet). A call passes when it is refused (any error)
 -- or when it returns none of the victim's identifiers and leaves the
 -- victim's rows unchanged. Admin-kind functions must additionally return
 -- nothing for a non-admin (error, null, false or empty).
 --
 -- This is broad, not deep: NULL/foreign-id calls do not reach every code
--- path. It complements the targeted tests (ci/reseller_authz_test.sql for
--- M1-M3, revenue_desk_access_test.sql, dashboards_test.sql, ...).
+-- path. It complements the targeted tests (ci/role_removal_test.sql,
+-- revenue_desk_access_test.sql, dashboards_test.sql, ...).
 -- Public-kind functions are called with NULLs only: they return public
 -- data by id on purpose. Runs inside BEGIN/ROLLBACK.
 -- ============================================================
@@ -26,18 +25,15 @@ as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$
 grant usage on schema auth to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;
 
--- Victim reseller r1 with freelancer vf (referred and assigned). Attackers:
--- plain freelancer ax, reseller ar (no team).
+-- Victims: freelancers v1 and vf (vf owns the link, payment, message and
+-- wallet). Attackers: active freelancer ax, pending freelancer ap.
 insert into auth.users(id, email) values
-  ('5b000000-0000-0000-0000-0000000000a1', 'sweep-victim-reseller@test.invalid'),
+  ('5b000000-0000-0000-0000-0000000000a1', 'sweep-victim-other@test.invalid'),
   ('5b000000-0000-0000-0000-0000000000f1', 'sweep-victim-freelancer@test.invalid'),
   ('5b000000-0000-0000-0000-0000000000e1', 'sweep-attacker-freelancer@test.invalid'),
-  ('5b000000-0000-0000-0000-0000000000e2', 'sweep-attacker-reseller@test.invalid');
+  ('5b000000-0000-0000-0000-0000000000e2', 'sweep-attacker-pending@test.invalid');
 update profiles set account_status = 'active' where id::text like '5b000000-%';
-update profiles set role = 'moderator' where id in ('5b000000-0000-0000-0000-0000000000a1', '5b000000-0000-0000-0000-0000000000e2');
-update profiles set referred_by = '5b000000-0000-0000-0000-0000000000a1' where id = '5b000000-0000-0000-0000-0000000000f1';
-insert into moderator_assignments(moderator_id, creator_id)
-values ('5b000000-0000-0000-0000-0000000000a1', '5b000000-0000-0000-0000-0000000000f1');
+update profiles set account_status = 'pending' where id = '5b000000-0000-0000-0000-0000000000e2';
 insert into payment_links(id, user_id, slug)
 values ('5b000000-0000-0000-0000-0000000001f1', '5b000000-0000-0000-0000-0000000000f1', 'sweep-victim-link');
 insert into payments(id, user_id, payment_link_id, amount_requested, method, status, expires_at, invoice_ref, customer_city)
@@ -55,7 +51,7 @@ insert into sweep_markers values
   ('5b000000-0000-0000-0000-0000000000a1'), ('5b000000-0000-0000-0000-0000000000f1'),
   ('5b000000-0000-0000-0000-0000000001f1'), ('5b000000-0000-0000-0000-0000000002f1'),
   ('5b000000-0000-0000-0000-0000000003f1'), ('5b000000-0000-0000-0000-0000000004f1'),
-  ('sweep-victim-reseller@test.invalid'), ('sweep-victim-freelancer@test.invalid'),
+  ('sweep-victim-other@test.invalid'), ('sweep-victim-freelancer@test.invalid'),
   ('sweep-victim-invoice-ref'), ('SweepVictimCity'), ('TSweepVictimWa11etAddressXXXXXXXXX'),
   ('sweep victim message');
 
@@ -71,7 +67,6 @@ create function pg_temp.victim_state() returns text language sql as $$
     (select string_agg(to_jsonb(t)::text, ',' order by t.id) from payments t where t.user_id::text like '5b000000-0000-0000-0000-0000000000_1'),
     (select string_agg(to_jsonb(t)::text, ',' order by t.id) from support_messages t where t.user_id::text like '5b000000-0000-0000-0000-0000000000_1'),
     (select string_agg(to_jsonb(t)::text, ',' order by t.id) from usdt_wallets t where t.user_id::text like '5b000000-0000-0000-0000-0000000000_1'),
-    (select string_agg(to_jsonb(t)::text, ',' order by t.creator_id) from moderator_assignments t where t.moderator_id = '5b000000-0000-0000-0000-0000000000a1'),
     (select string_agg(to_jsonb(t)::text, ',' order by t.id) from withdrawals t where t.user_id::text like '5b000000-0000-0000-0000-0000000000_1')
   ))
 $$;

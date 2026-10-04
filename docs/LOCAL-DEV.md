@@ -54,7 +54,7 @@ deno check supabase/functions/<name>/index.ts
 |---|---|---|
 | Edge function secrets | `PAYMENT_SERVICE_URL`, `PAYMENT_SERVICE_SECRET` | create-invoice, user-withdraw, admin-actions, health |
 | | `CRON_SECRET` | health, daily-report, ledger-backup, telegram-notify (cron callers) |
-| | `ALERT_WEBHOOK_URL`, `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID`, `ALERT_ON_SETTLED` | alerts, reseller Telegram groups |
+| | `ALERT_WEBHOOK_URL`, `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID`, `ALERT_ON_SETTLED` | alerts, admin Telegram group |
 | | `ALLOWED_ORIGINS` (optional) | CORS on user-withdraw, admin-actions (on top of `site_domains`) |
 | | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` | ledger-backup |
 | | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | injected by Supabase |

@@ -12,27 +12,21 @@ as $$ select nullif(current_setting('test.uid', true), '')::uuid $$;
 
 insert into auth.users (id, email, raw_user_meta_data) values
  ('a1000000-0000-0000-0000-000000000001', 'boss@cpay.test', '{}'),
- ('b1000000-0000-0000-0000-000000000001', 'res.one@cpay.test', '{}'),
- ('b1000000-0000-0000-0000-000000000002', 'res.two@cpay.test', '{}'),
- ('c1000000-0000-0000-0000-000000000001', 'aff.freelancer@gmail.test', '{}'),
- ('c1000000-0000-0000-0000-000000000002', 'assigned.freelancer@gmail.test', '{}'),
+ ('c1000000-0000-0000-0000-000000000001', 'one.freelancer@gmail.test', '{}'),
+ ('c1000000-0000-0000-0000-000000000002', 'two.freelancer@gmail.test', '{}'),
  ('c1000000-0000-0000-0000-000000000003', 'solo.freelancer@gmail.test', '{}');
 update profiles set account_status = 'active'
  where id in (select id from auth.users where email like '%.test');
 update profiles set role = 'admin' where id = 'a1000000-0000-0000-0000-000000000001';
-update profiles set role = 'moderator' where id in ('b1000000-0000-0000-0000-000000000001', 'b1000000-0000-0000-0000-000000000002');
-update profiles set referred_by = 'b1000000-0000-0000-0000-000000000001' where id = 'c1000000-0000-0000-0000-000000000001';
-insert into moderator_assignments (moderator_id, creator_id)
-values ('b1000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000002');
 update profiles set cost_percent = 2 where id = 'c1000000-0000-0000-0000-000000000001';
 
--- Links: aff has L1 (5%) and L2 (no own rate, profile 2%). assigned has
+-- Links: one has L1 (5%) and L2 (no own rate, profile 2%). two has
 -- L4 (1%). solo has L3 (10%).
 insert into payment_links (id, user_id, slug, display_name, cost_percent) values
- ('d1000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001', 'aff-main',  'Aff main', 5),
- ('d1000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001', 'aff-promo', 'Aff promo', null),
+ ('d1000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001', 'one-main',  'One main', 5),
+ ('d1000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001', 'one-promo', 'One promo', null),
  ('d1000000-0000-0000-0000-000000000003', 'c1000000-0000-0000-0000-000000000003', 'solo-main', 'Solo', 10),
- ('d1000000-0000-0000-0000-000000000004', 'c1000000-0000-0000-0000-000000000002', 'asg-main',  'Assigned', 1);
+ ('d1000000-0000-0000-0000-000000000004', 'c1000000-0000-0000-0000-000000000002', 'two-main',  'Two', 1);
 update payment_links set created_at = now() - interval '5 days';
 
 -- Pays and settles like production: insert 'new', update to 'settled'
@@ -98,9 +92,8 @@ declare
 begin
   select * into r_y from my_daily_summary(3) where business_day = v_y;
   select * into r_t from my_daily_summary(3) where business_day = v_y + 1;
-  -- Y: 100 (L1 at 5%) + 20 (L2 at profile 2%). Fee 3%. No reseller
-  -- commission since 20261005010000: earnings = settled - platform fee,
-  -- even for a freelancer who signed up with a reseller's code.
+  -- Y: 100 (L1 at 5%) + 20 (L2 at profile 2%). Fee 3%.
+  -- Earnings = settled - platform fee.
   if r_y.payment_count <> 2 or r_y.settled <> 120 or r_y.platform_fee <> 3.60
      or r_y.earnings <> 116.40
      or r_y.cost_rates <> array[2.000, 5.000]::numeric[] or r_y.link_count <> 2 or r_y.paid_link_count <> 2 then
@@ -117,16 +110,16 @@ begin
     v_y + 1, r_t.payment_count, r_t.settled, r_t.earnings, r_t.cost_rates;
 
   -- per link: L1 was 5% for the 16:59 payment and 8% for the 17:01 one.
-  if (select cost_percent_used_max from daily_link_breakdown(3) where slug = 'aff-main' and business_day = v_y) <> 5
-     or (select cost_percent_used_max from daily_link_breakdown(3) where slug = 'aff-main' and business_day = v_y + 1) <> 8
-     or (select cost_percent_now from daily_link_breakdown(3) where slug = 'aff-main' and business_day = v_y) <> 8
-     or (select cost_percent_used_max from daily_link_breakdown(3) where slug = 'aff-promo' and business_day = v_y) <> 2 then
+  if (select cost_percent_used_max from daily_link_breakdown(3) where slug = 'one-main' and business_day = v_y) <> 5
+     or (select cost_percent_used_max from daily_link_breakdown(3) where slug = 'one-main' and business_day = v_y + 1) <> 8
+     or (select cost_percent_now from daily_link_breakdown(3) where slug = 'one-main' and business_day = v_y) <> 8
+     or (select cost_percent_used_max from daily_link_breakdown(3) where slug = 'one-promo' and business_day = v_y) <> 2 then
     raise exception 'per-link cost rate wrong';
   end if;
   if exists (select 1 from daily_link_breakdown(3) where user_id <> auth.uid()) then
     raise exception 'breakdown leaked another user';
   end if;
-  raise notice 'PASS per-link: aff-main used 5%% on %, 8%% on %, now 8%%; aff-promo 2%% (profile fallback)', v_y, v_y + 1;
+  raise notice 'PASS per-link: one-main used 5%% on %, 8%% on %, now 8%%; one-promo 2%% (profile fallback)', v_y, v_y + 1;
 
   -- my_earnings_split used to fail with "cost_percent is ambiguous".
   perform * from my_earnings_split();
@@ -145,37 +138,11 @@ begin
   begin perform * from daily_link_breakdown(3, 'c1000000-0000-0000-0000-000000000003');
         raise exception 'freelancer read another freelancer';
   exception when others then if sqlerrm <> 'Not authorized' then raise; end if; end;
-  begin perform * from reseller_team_daily_summary(3); raise exception 'freelancer read a team';
-  exception when others then if sqlerrm <> 'Not authorized' then raise; end if; end;
   begin perform * from admin_daily_summary(3); raise exception 'freelancer read admin summary';
   exception when others then if sqlerrm <> 'Not authorized' then raise; end if; end;
   begin perform * from admin_daily_timeseries(3); raise exception 'freelancer read admin series';
   exception when others then if sqlerrm <> 'Not authorized' then raise; end if; end;
-  raise notice 'PASS freelancer denied: other breakdown, team, admin summary, admin series';
-end $$;
-
--- ---------------------------------------------------------------
--- 3. Reseller sees self + team (affiliate and assigned), not others
--- ---------------------------------------------------------------
-set test.uid = 'b1000000-0000-0000-0000-000000000001';
-do $$
-declare v_y date := (select y from t_clock); v_emails text;
-begin
-  select string_agg(distinct email, ',' order by email) into v_emails from reseller_team_daily_summary(3);
-  if v_emails <> 'aff.freelancer@gmail.test,assigned.freelancer@gmail.test,res.one@cpay.test' then
-    raise exception 'team is %', v_emails;
-  end if;
-  if (select sum(settled) from reseller_team_daily_summary(3)) <> 200
-     or (select sum(earnings) from reseller_team_daily_summary(3) where affiliate) <> 170 - 5.10
-     or exists (select 1 from reseller_team_daily_summary(3) where earnings <> settled - platform_fee)
-     or (select count(*) from reseller_team_daily_summary(3) where is_self) <> 3 then
-    raise exception 'team numbers wrong';
-  end if;
-  perform * from daily_link_breakdown(3, 'c1000000-0000-0000-0000-000000000002');
-  begin perform * from daily_link_breakdown(3, 'c1000000-0000-0000-0000-000000000003');
-        raise exception 'reseller read outsider links';
-  exception when others then if sqlerrm <> 'Not authorized' then raise; end if; end;
-  raise notice 'PASS reseller team = %; settled 200 over 3 days; affiliate earnings 164.90 (settled - fee, no commission); outsider denied', v_emails;
+  raise notice 'PASS freelancer denied: other breakdown, admin summary, admin series';
 end $$;
 
 -- ---------------------------------------------------------------
@@ -188,12 +155,9 @@ begin
   select count(distinct user_id) into v_n from admin_daily_summary(3) where user_id::text like 'c1000000-%';
   if v_n <> 3 then raise exception 'admin sees % people with activity, want 3', v_n; end if;
   if exists (select 1 from admin_daily_summary(3) where email is null) then raise exception 'row without email'; end if;
-  select * into r from admin_daily_summary(3) where email = 'aff.freelancer@gmail.test' and business_day = v_y;
-  if r.reseller_email <> 'res.one@cpay.test' or r.settled <> 120 or r.max_payment_links <> 10 or r.account_status <> 'active' then
+  select * into r from admin_daily_summary(3) where email = 'one.freelancer@gmail.test' and business_day = v_y;
+  if r.role <> 'creator' or r.settled <> 120 or r.max_payment_links <> 10 or r.account_status <> 'active' then
     raise exception 'admin row wrong: %', row_to_json(r);
-  end if;
-  if (select reseller_email from admin_daily_summary(3) where email like 'assigned%' limit 1) <> 'res.one@cpay.test' then
-    raise exception 'assigned freelancer reseller missing';
   end if;
   -- unfiltered = every settled payment in the window (other rows may exist
   -- when this runs on a seeded DB), and the three test people add to 270
@@ -203,10 +167,9 @@ begin
      or (select sum(t.settled) from unnest(array['c1000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000002',
                                                  'c1000000-0000-0000-0000-000000000003']::uuid[]) u,
                                     lateral admin_daily_timeseries(3, u) t) <> 270
-     or (select sum(settled) from admin_daily_timeseries(3, null, 'b1000000-0000-0000-0000-000000000001')) <> 200
      or (select sum(settled) from admin_daily_timeseries(3, 'c1000000-0000-0000-0000-000000000003')) <> 70
-     or (select settled from admin_daily_timeseries(3, null, 'b1000000-0000-0000-0000-000000000001') where business_day = v_y) <> 120
-     or (select settled from admin_daily_timeseries(3, null, 'b1000000-0000-0000-0000-000000000001') where business_day = v_y + 1) <> 80
+     or (select settled from admin_daily_timeseries(3, 'c1000000-0000-0000-0000-000000000001') where business_day = v_y) <> 120
+     or (select settled from admin_daily_timeseries(3, 'c1000000-0000-0000-0000-000000000001') where business_day = v_y + 1) <> 50
      or (select count(*) from admin_daily_timeseries(45)) <> 45 then
     raise exception 'timeseries wrong';
   end if;
@@ -217,8 +180,8 @@ begin
         <> (select sum(settled) from daily_link_breakdown(3, 'c1000000-0000-0000-0000-000000000001')) then
     raise exception 'series / summary / breakdown disagree';
   end if;
-  raise notice 'PASS admin: 3 active people all with email; aff row reseller=% settled=% limit=%; series = ledger; test people total 270; res.one filter 200 (Y 120, Y+1 80); solo filter 70',
-    r.reseller_email, r.settled, r.max_payment_links;
+  raise notice 'PASS admin: 3 active people all with email; one row role=% settled=% limit=%; series = ledger; test people total 270; one filter Y 120, Y+1 50; solo filter 70',
+    r.role, r.settled, r.max_payment_links;
 end $$;
 
 -- ---------------------------------------------------------------
@@ -273,7 +236,7 @@ end $$;
 set test.uid = 'c1000000-0000-0000-0000-000000000001';
 do $$
 begin
-  insert into payment_links (user_id, slug, display_name) values (auth.uid(), 'aff-third', 'Third');
+  insert into payment_links (user_id, slug, display_name) values (auth.uid(), 'one-third', 'Third');
   raise exception 'per-person limit of 2 ignored';
 exception when others then if sqlerrm <> 'Limit reached: you can have at most 2 active links' then raise; end if;
   raise notice 'PASS link limit: per-person limit 2 still enforced under the ceiling';
@@ -300,10 +263,10 @@ set test.uid = 'a1000000-0000-0000-0000-000000000001';
 do $$
 declare v_id uuid; v_msg text;
 begin
-  select id into v_id from reseller_request_withdrawal_for('c1000000-0000-0000-0000-000000000003', 35, 'tron', '');
+  select id into v_id from admin_request_withdrawal_for('c1000000-0000-0000-0000-000000000003', 35, 'tron', '');
   update withdrawals set requested_at = (select t from t_clock) + interval '1 minute' where id = v_id;
   begin
-    perform reseller_request_withdrawal_for('c1000000-0000-0000-0000-000000000003', 10, 'tron', '');
+    perform admin_request_withdrawal_for('c1000000-0000-0000-0000-000000000003', 10, 'tron', '');
     raise exception '17:01 withdrawal did not count toward the daily limit';
   exception when others then v_msg := sqlerrm;
     if v_msg not like 'This request exceeds the daily withdrawal limit%' then raise; end if;
@@ -319,21 +282,13 @@ do $$
 declare r record;
 begin
   select * into r from my_dashboard_profile();
-  if r.email <> 'aff.freelancer@gmail.test' or r.reseller_email <> 'res.one@cpay.test' or r.reseller_via <> 'signup'
+  if r.email <> 'one.freelancer@gmail.test' or r.role <> 'creator'
      or r.links_used <> 2 or r.link_limit <> 2 or r.cost_percent <> 2 then
-    raise exception 'aff profile card wrong: %', row_to_json(r);
+    raise exception 'profile card wrong: %', row_to_json(r);
   end if;
   begin perform * from admin_link_usage(); raise exception 'freelancer read link usage';
   exception when others then if sqlerrm <> 'Not authorized' then raise; end if; end;
-  raise notice 'PASS profile card: % via % reseller %, links %/%', r.email, r.reseller_via, r.reseller_email, r.links_used, r.link_limit;
-end $$;
-set test.uid = 'c1000000-0000-0000-0000-000000000002';
-do $$
-begin
-  if (select reseller_via from my_dashboard_profile()) <> 'assigned'
-     or (select reseller_email from my_dashboard_profile()) <> 'res.one@cpay.test' then
-    raise exception 'assigned profile card wrong';
-  end if;
+  raise notice 'PASS profile card: % (%), links %/%', r.email, r.role, r.links_used, r.link_limit;
 end $$;
 set test.uid = 'a1000000-0000-0000-0000-000000000001';
 do $$
@@ -356,10 +311,11 @@ begin
   if has_function_privilege('authenticated', 'daily_totals_for_cycle(date)', 'execute')
      or has_function_privilege('authenticated', 'dashboard_user_days(uuid[],date,date,boolean)', 'execute')
      or has_function_privilege('authenticated', 'dashboard_settled_payments(uuid[],date,date,boolean)', 'execute')
-     or has_function_privilege('anon', 'admin_daily_timeseries(integer,uuid,uuid)', 'execute')
+     or has_function_privilege('anon', 'admin_daily_timeseries(integer,uuid)', 'execute')
      or has_function_privilege('anon', 'my_daily_summary(integer)', 'execute')
-     or not has_function_privilege('authenticated', 'admin_daily_timeseries(integer,uuid,uuid)', 'execute')
-     or not has_function_privilege('authenticated', 'reseller_team_daily_summary(integer)', 'execute')
+     or not has_function_privilege('authenticated', 'admin_daily_timeseries(integer,uuid)', 'execute')
+     or not has_function_privilege('authenticated', 'admin_daily_summary(integer,uuid)', 'execute')
+     or to_regprocedure('reseller_team_daily_summary(integer)') is not null
      or not has_function_privilege('authenticated', 'daily_link_breakdown(integer,uuid)', 'execute')
      or has_function_privilege('authenticated', 'link_usage_for(uuid)', 'execute')
      or has_function_privilege('anon', 'my_dashboard_profile()', 'execute') then

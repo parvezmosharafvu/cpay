@@ -13,6 +13,17 @@ const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 6 });
 const users = [];
 const RATE = 100_000; // USD per BTC, so $1 = 1000 sats
 
+// The reseller role (0101 self-withdraw switch, team fee, referred_by) is
+// removed by migration 20261005020000. CI also runs THIS file from main
+// against a branch's newer schema ("Previous payment service" step), so the
+// reseller tests skip themselves when the schema no longer has resellers
+// instead of failing on tables and columns that are gone. Everything else
+// still runs and still proves the old service works on the new schema.
+const RESELLER_SCHEMA = (await db.query(
+  "select to_regclass('public.reseller_settings') is not null and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'referred_by') as ok",
+)).rows[0].ok;
+const NEEDS_RESELLER = RESELLER_SCHEMA ? false : 'reseller role removed from this schema (20261005020000)';
+
 async function makeUser({ earned = 100, fee = 3, active = true, dailyLimit = null } = {}) {
   const id = randomUUID();
   users.push(id);
@@ -620,7 +631,7 @@ async function fee(userId) {
 }
 const ledgerOf = async (u) => ({ balance: await balance(u), rows: (await rows(u)).length });
 
-test('self-withdraw is off by default: the column defaults to false and a reseller with no row counts as off', async () => {
+test('self-withdraw is off by default: the column defaults to false and a reseller with no row counts as off', { skip: NEEDS_RESELLER }, async () => {
   const { rows: [col] } = await db.query(`
     select column_default, is_nullable from information_schema.columns
      where table_schema = 'public' and table_name = 'reseller_settings' and column_name = 'allow_freelancer_self_withdraw'`);
@@ -640,7 +651,7 @@ test('self-withdraw is off by default: the column defaults to false and a resell
   assert.equal(view.reseller, null);
 });
 
-test('freelancers with no reseller, resellers and admins can always withdraw from their own account', async () => {
+test('freelancers with no reseller, resellers and admins can always withdraw from their own account', { skip: NEEDS_RESELLER }, async () => {
   const solo = await makeFreelancer(null);
   const reseller = await makeReseller();
   const admin = await makeAdmin();
@@ -753,7 +764,7 @@ test.skip('the reseller still withdraws for a team member while self-withdraw is
   });
 });
 
-test('who can change the switch: the reseller for their own team and an admin for any reseller, nobody else', async () => {
+test('who can change the switch: the reseller for their own team and an admin for any reseller, nobody else', { skip: NEEDS_RESELLER }, async () => {
   const reseller = await makeReseller();
   const otherReseller = await makeReseller();
   const admin = await makeAdmin();
@@ -899,7 +910,7 @@ test.skip('fee hierarchy: global default, then the reseller team fee, then the a
   }
 });
 
-test('only an admin sets fees; a freelancer cannot change their own fee and a reseller cannot set a team fee', async () => {
+test('only an admin sets fees; a freelancer cannot change their own fee and a reseller cannot set a team fee', { skip: NEEDS_RESELLER }, async () => {
   const reseller = await makeReseller();
   const freelancer = await makeFreelancer(reseller);
   for (const who of [reseller, freelancer]) {
@@ -917,7 +928,7 @@ test('only an admin sets fees; a freelancer cannot change their own fee and a re
   });
 });
 
-test('the browser roles cannot call the fee and switch resolvers for other accounts', async () => {
+test('the browser roles cannot call the fee and switch resolvers for other accounts', { skip: NEEDS_RESELLER }, async () => {
   const { rows: r } = await db.query(`
     select p.proname, has_function_privilege('authenticated', p.oid, 'execute') as auth, has_function_privilege('anon', p.oid, 'execute') as anon,
            has_function_privilege('service_role', p.oid, 'execute') as service

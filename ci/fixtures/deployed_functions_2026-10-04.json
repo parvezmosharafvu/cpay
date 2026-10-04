@@ -1,0 +1,14 @@
+[
+  {"slug": "og-image", "status": "ACTIVE"},
+  {"slug": "daily-report", "status": "ACTIVE"},
+  {"slug": "user-withdraw", "status": "ACTIVE"},
+  {"slug": "ledger-backup", "status": "ACTIVE"},
+  {"slug": "create-invoice", "status": "ACTIVE"},
+  {"slug": "reconcile", "status": "ACTIVE", "version": 24, "verify_jwt": false, "entrypoint_path": "/app/supabase/functions/reconcile/index.ts"},
+  {"slug": "health", "status": "ACTIVE"},
+  {"slug": "telegram-report", "status": "ACTIVE", "version": 13, "verify_jwt": false, "entrypoint_path": "/Users/OWNER/Downloads/cpay-github/supabase/functions/telegram-report/index.ts"},
+  {"slug": "reseller-digest", "status": "ACTIVE", "version": 12, "verify_jwt": false, "entrypoint_path": "/app/supabase/functions/reseller-digest/index.ts"},
+  {"slug": "auth-settings", "status": "ACTIVE"},
+  {"slug": "admin-actions", "status": "ACTIVE"},
+  {"slug": "telegram-notify", "status": "ACTIVE"}
+]

@@ -7,7 +7,12 @@
 # Throwaway database only: it commits fixtures.
 #
 #   1. a payment stamped with commission (a freelancer who signed up with
-#      a reseller's code, 0092's default 8%)        -> abort
+#      a reseller's code, at the 8% default seeded by migration 0092)
+#                                                    -> abort
+#      The 8% is a historical test fixture: it is what a fresh CI database
+#      gets from 0092. It is not production. Production's default was 1.5%
+#      and Phase 0 (2026-10-05) set it to 0; no production payment carries
+#      commission.
 #   2. no payment commission, one profile override  -> abort
 #   3. nothing left                                  -> applies, and a
 #      second apply is a no-op

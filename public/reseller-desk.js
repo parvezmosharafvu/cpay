@@ -26,38 +26,32 @@ async function boot() {
 }
 
 async function renderHome() {
-  const [{ data: totals }, { data: bal }, { data: split }, { data: comm }] = await Promise.all([
+  const [{ data: totals }, { data: bal }, { data: split }] = await Promise.all([
     sb.rpc('my_team_totals'),
     sb.rpc('get_my_balance'),
     sb.rpc('my_earnings_split'),
-    sb.rpc('my_commission_totals'),
   ]);
   const t = Array.isArray(totals) ? totals[0] : totals || {};
   const b = Array.isArray(bal) ? bal[0] : bal || {};
   const s = Array.isArray(split) ? split[0] : split || {};
-  const c = Array.isArray(comm) ? comm[0] : comm || {};
   const origin = location.origin;
   const aff = me.affiliate_code || '';
   const kpis = `<div class="grid kpis">
-    <div class="card"><div class="kicker">Available</div><div class="kpi">${money(s.net ?? b.available)}</div><div class="faint">Your links plus commission</div></div>
-    <div class="card"><div class="kicker">Commission earned</div><div class="kpi">${money(c.commission_earned ?? s.reseller_commission_in)}</div><div class="faint">All time, ${Daily.pct(s.commission_percent || 0)} of team net after the platform fee</div></div>
+    <div class="card"><div class="kicker">Available</div><div class="kpi">${money(s.net ?? b.available)}</div><div class="faint">Your links, after the platform fee</div></div>
     <div class="card"><div class="kicker">Team accounts</div><div class="kpi">${Number(t.member_count || 0)}</div><div class="faint">Team available ${money(t.team_available)}</div></div>
   </div>
   <div class="card">
     <h3>Your sign-up link</h3>
-    <p class="muted">Freelancers who sign up with this link join your team and pay you commission. Accounts an admin assigns to you do not.</p>
+    <p class="muted">Freelancers who sign up with this link join your team.</p>
     <code>${escapeHtml(origin + '/register.html?role=freelancer&ref=' + aff)}</code>
-    <p class="faint" style="margin:14px 0 0">Link cost is added to what the payer pays. The platform fee is CPAY's cut. Commission is your cut of the freelancer's net. The admin can change all three.</p>
+    <p class="faint" style="margin:14px 0 0">Link cost is added to what the payer pays. The platform fee is CPAY's cut. The admin can change both.</p>
   </div>`;
   document.getElementById('home').innerHTML = '<div class="stack" id="dailySelf"><p class="muted">Loading…</p></div>';
-  await Daily.mountSelf(document.getElementById('dailySelf'), { between: kpis, commission: true });
+  await Daily.mountSelf(document.getElementById('dailySelf'), { between: kpis });
 }
 
 async function renderTeam() {
-  const [{ data, error }, { data: rowsComm }] = await Promise.all([
-    sb.rpc('my_team_members'),
-    sb.rpc('my_affiliate_commission_rows'),
-  ]);
+  const { data, error } = await sb.rpc('my_team_members');
   if (error) { document.getElementById('team').innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
   const rows = (data || []).map((m) => `<tr>
     <td>${escapeHtml(m.display_name || m.email)}</td>
@@ -68,18 +62,11 @@ async function renderTeam() {
       <button class="btn ghost sm" data-cost="${m.id}">Lock cost</button>` : '<span class="faint">View only</span>'}</td>
   </tr>`).join('');
 
-  const commRows = (rowsComm || []).map((r) => `<tr>
-    <td>${escapeHtml(r.freelancer_name || '')}</td>
-    <td>/${escapeHtml(r.link_slug || '')}</td>
-    <td class="num">${money(r.settled)}</td>
-    <td class="num">${money(r.platform_fee)}</td>
-    <td class="num">${money(r.commission)}</td>
-  </tr>`).join('');
   document.getElementById('team').innerHTML = `<div class="stack" id="teamDaily"><div class="card"><p class="muted">Loading team days…</p></div></div>
   ${selfWithdrawCard()}
   <div class="card">
     <h3>Team link cost</h3>
-    <p class="muted">Link cost is added to what the payer pays. It is separate from the platform fee and your commission. Lock or unlock applies only to freelancers who signed up with your link. Unlock does not change the rate they already have.</p>
+    <p class="muted">Link cost is added to what the payer pays. It is separate from the platform fee. Lock or unlock applies only to freelancers who signed up with your link. Unlock does not change the rate they already have.</p>
     <div class="field short"><label for="teamCost">Link cost %</label><input id="teamCost" type="number" min="0" step="0.1" value="${Number(me.team_cost_percent || me.cost_percent || 0)}"></div>
     <div class="row">
       <button class="btn primary" id="lockAll">Lock on sign-up freelancers</button>
@@ -90,11 +77,6 @@ async function renderTeam() {
     <h3>Team accounts</h3>
     <table class="table"><thead><tr><th>Name</th><th>Email</th><th>Joined by</th><th class="num">Available</th><th></th></tr></thead>
     <tbody>${rows || '<tr><td colspan="5" class="empty">No freelancers on your team yet. Share your sign-up link.</td></tr>'}</tbody></table>
-  </div>
-  <div class="card flush">
-    <h3>Commission</h3>
-    <table class="table"><thead><tr><th>Freelancer</th><th>Link</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Your cut</th></tr></thead>
-    <tbody>${commRows || '<tr><td colspan="5" class="empty">No commission yet</td></tr>'}</tbody></table>
   </div>`;
   Daily.mountTeam(document.getElementById('teamDaily'));
   bindSelfWithdraw();

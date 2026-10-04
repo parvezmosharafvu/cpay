@@ -98,19 +98,21 @@ declare
 begin
   select * into r_y from my_daily_summary(3) where business_day = v_y;
   select * into r_t from my_daily_summary(3) where business_day = v_y + 1;
-  -- Y: 100 (L1 at 5%) + 20 (L2 at profile 2%). Fee 3%, commission 8% of net.
+  -- Y: 100 (L1 at 5%) + 20 (L2 at profile 2%). Fee 3%. No reseller
+  -- commission since 20261005010000: earnings = settled - platform fee,
+  -- even for a freelancer who signed up with a reseller's code.
   if r_y.payment_count <> 2 or r_y.settled <> 120 or r_y.platform_fee <> 3.60
-     or r_y.reseller_commission <> 9.31 or r_y.earnings <> 107.09
+     or r_y.earnings <> 116.40
      or r_y.cost_rates <> array[2.000, 5.000]::numeric[] or r_y.link_count <> 2 or r_y.paid_link_count <> 2 then
     raise exception 'day Y wrong: %', row_to_json(r_y);
   end if;
   -- today: 50 on L1 after the rate moved to 8%.
   if r_t.payment_count <> 1 or r_t.settled <> 50 or r_t.cost_rates <> array[8.000]::numeric[]
-     or r_t.earnings <> 50 - 1.50 - 3.88 then
+     or r_t.earnings <> 50 - 1.50 then
     raise exception 'day Y+1 wrong: %', row_to_json(r_t);
   end if;
-  raise notice 'PASS freelancer day %: % payments, settled %, fee %, commission %, earnings %, rates %',
-    v_y, r_y.payment_count, r_y.settled, r_y.platform_fee, r_y.reseller_commission, r_y.earnings, r_y.cost_rates;
+  raise notice 'PASS freelancer day %: % payments, settled %, fee %, earnings %, rates %',
+    v_y, r_y.payment_count, r_y.settled, r_y.platform_fee, r_y.earnings, r_y.cost_rates;
   raise notice 'PASS freelancer day %: % payment, settled %, earnings %, rates %',
     v_y + 1, r_t.payment_count, r_t.settled, r_t.earnings, r_t.cost_rates;
 
@@ -128,7 +130,11 @@ begin
 
   -- my_earnings_split used to fail with "cost_percent is ambiguous".
   perform * from my_earnings_split();
-  if (select cost_percent from my_earnings_split()) <> 2 or (select commission_percent from my_earnings_split()) <> 8 then
+  if (select cost_percent from my_earnings_split()) <> 2
+     or (select settled from my_earnings_split()) <> 170
+     or (select platform_fee from my_earnings_split()) <> 5.10
+     or (select net from my_earnings_split()) <> (select available from get_balance_for(auth.uid()))
+     or (select net from my_earnings_split()) <> 170 - 5.10 then
     raise exception 'my_earnings_split wrong: %', (select row_to_json(x) from my_earnings_split() x);
   end if;
   raise notice 'PASS my_earnings_split: %', (select row_to_json(x) from my_earnings_split() x);
@@ -160,8 +166,8 @@ begin
     raise exception 'team is %', v_emails;
   end if;
   if (select sum(settled) from reseller_team_daily_summary(3)) <> 200
-     or (select sum(reseller_commission) from reseller_team_daily_summary(3) where affiliate) <> 13.19
-     or (select sum(reseller_commission) from reseller_team_daily_summary(3) where email like 'assigned%') <> 0
+     or (select sum(earnings) from reseller_team_daily_summary(3) where affiliate) <> 170 - 5.10
+     or exists (select 1 from reseller_team_daily_summary(3) where earnings <> settled - platform_fee)
      or (select count(*) from reseller_team_daily_summary(3) where is_self) <> 3 then
     raise exception 'team numbers wrong';
   end if;
@@ -169,7 +175,7 @@ begin
   begin perform * from daily_link_breakdown(3, 'c1000000-0000-0000-0000-000000000003');
         raise exception 'reseller read outsider links';
   exception when others then if sqlerrm <> 'Not authorized' then raise; end if; end;
-  raise notice 'PASS reseller team = %; settled 200 over 3 days; affiliate commission 13.19; assigned 0; outsider denied', v_emails;
+  raise notice 'PASS reseller team = %; settled 200 over 3 days; affiliate earnings 164.90 (settled - fee, no commission); outsider denied', v_emails;
 end $$;
 
 -- ---------------------------------------------------------------

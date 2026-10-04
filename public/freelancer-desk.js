@@ -48,7 +48,6 @@ async function renderHome() {
     <div class="card"><div class="kicker">Available</div><div class="kpi">${money(s.net ?? b.available)}</div><div class="faint">Ready to withdraw</div></div>
     <div class="card"><div class="kicker">Settled on your links</div><div class="kpi">${money(s.settled)}</div><div class="faint">All time, paid by customers</div></div>
     <div class="card"><div class="kicker">Platform fee</div><div class="kpi">${money(s.platform_fee)}</div><div class="faint">All time, CPAY's fee on settled payments</div></div>
-    <div class="card"><div class="kicker">Reseller commission</div><div class="kpi">${money(s.reseller_commission_out)}</div><div class="faint">${Daily.pct(s.commission_percent || 0)} of your net after the platform fee</div></div>
     <div class="card"><div class="kicker">Link cost</div><div class="kpi">${Daily.pct(s.cost_percent || 0)}</div><div class="faint">${s.cost_locked ? 'Set by your reseller' : 'Added to what the payer pays'}</div></div>
   </div>`;
   const home = document.getElementById('home');

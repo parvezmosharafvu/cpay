@@ -292,6 +292,27 @@ def check_provider_name_hidden() -> None:
         print(f"ok   provider name absent from {len(files)} non-admin public files")
 
 
+def check_reseller_commission_removed() -> None:
+    # 20261005010000 removed reseller commission: the RPCs and columns are
+    # gone, so a page that still asks for them would break, and the public
+    # site must not promise a commission that no longer exists.
+    files = [
+        p for p in sorted(glob.glob("public/**/*", recursive=True))
+        if os.path.isfile(p) and os.path.splitext(p)[1] in (".html", ".js")
+        and "/assets/" not in p
+    ]
+    hits = []
+    for path in files:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for n, line in enumerate(fh, 1):
+                if re.search(r"commission", line, re.I):
+                    hits.append(f"{path}:{n}")
+    if hits:
+        failures.append(f"reseller commission still referenced: {hits[:10]}")
+    else:
+        print(f"ok   reseller commission absent from {len(files)} public pages and scripts")
+
+
 check_js_syntax()
 check_dom_references()
 check_rpc_signatures()
@@ -300,6 +321,7 @@ check_payment_accessibility_and_qr()
 check_admin_release_gates()
 check_direct_upload_contract()
 check_provider_name_hidden()
+check_reseller_commission_removed()
 
 if failures:
     text = "\n".join(f"FAIL {f}" for f in failures)

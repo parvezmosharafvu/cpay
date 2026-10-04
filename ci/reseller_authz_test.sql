@@ -3,7 +3,7 @@
 -- ============================================================
 -- Exploit regression for M1 and the M2/M3 boundaries, plus proof that the
 -- access people legitimately use still works: signup referral, the
--- reseller's team list and commission, admin functions, and the public
+-- reseller's team list (commission removed in 20261005010000), admin functions, and the public
 -- invoice page. Runs on both CI databases (plain and Supabase default
 -- privileges) inside BEGIN/ROLLBACK; leaves nothing behind.
 -- ============================================================
@@ -86,8 +86,6 @@ begin
     'public.attach_freelancer_to_reseller(uuid, uuid)',
     'public.system_link_for_invoice(text)',
     'public.cpay_make_affiliate_code(uuid)',
-    'public.cpay_reseller_commission_percent(uuid)',
-    'public.cpay_reseller_for(uuid)',
     'public.account_is_active(uuid)',
     'public.cpay_platform_fee_percent(uuid)',
     'public.cpay_feature_enabled(uuid, text)',
@@ -247,7 +245,8 @@ reset role;
 -- ------------------------------------------------------------
 -- Data for the rest: B has a link and a settled payment; the plain
 -- freelancer has one too. Inserted 'new' then settled, like production,
--- so the settle trigger stamps fee and commission.
+-- so the settle trigger stamps the platform fee (commission was removed
+-- in 20261005010000).
 -- ------------------------------------------------------------
 do $$ begin perform pg_temp.act(null); end $$;
 insert into payment_links(id, user_id, slug) values
@@ -371,30 +370,35 @@ end $$;
 -- ------------------------------------------------------------
 -- 6. Legitimate access still works.
 -- ------------------------------------------------------------
--- 6a. Reseller C: team list, commission, own reseller id for B.
+-- 6a. Reseller C: team list. Commission was removed in 20261005010000:
+--     the commission functions and payment columns no longer exist, and
+--     B's settled payment carries only the platform fee.
 do $$ begin perform pg_temp.act('5a000000-0000-0000-0000-0000000000cc'); end $$;
 set local role authenticated;
 do $$
-declare
-  v_comm numeric;
-  v_rows int;
 begin
   if not exists (select 1 from public.my_team_members() where id = '5a000000-0000-0000-0000-0000000000bb' and affiliate) then
     raise exception 'reseller C lost freelancer B from my_team_members()';
   end if;
-  select commission_earned into v_comm from public.my_commission_totals();
-  select count(*) into v_rows from public.my_affiliate_commission_rows() where freelancer_id = '5a000000-0000-0000-0000-0000000000bb';
-  if coalesce(v_comm, 0) <= 0 or v_rows < 1 then
-    raise exception 'reseller C commission missing: total %, rows %', v_comm, v_rows;
-  end if;
-  raise notice 'ok: reseller team list and commission (earned %)', v_comm;
+  raise notice 'ok: reseller team list';
 end $$;
 reset role;
 do $$
 begin
-  if (select reseller_id from payments where id = '5a000000-0000-0000-0000-00000000022b') is distinct from '5a000000-0000-0000-0000-0000000000cc' then
-    raise exception 'commission attribution: B''s payment is not stamped to reseller C';
+  if to_regprocedure('public.my_commission_totals()') is not null
+     or to_regprocedure('public.my_affiliate_commission_rows()') is not null
+     or to_regprocedure('public.cpay_reseller_commission_percent(uuid)') is not null then
+    raise exception 'a commission function still exists';
   end if;
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'payments'
+               and column_name in ('reseller_id', 'reseller_commission_percent', 'reseller_commission_amount')) then
+    raise exception 'a commission column still exists on payments';
+  end if;
+  if (select platform_fee_amount from payments where id = '5a000000-0000-0000-0000-00000000022b') is null then
+    raise exception 'B''s settled payment has no platform fee stamped';
+  end if;
+  raise notice 'ok: no commission; platform fee still stamped';
 end $$;
 
 -- 6b. Freelancer B: own reseller, own payments, mark own payment.

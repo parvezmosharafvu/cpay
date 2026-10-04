@@ -103,6 +103,15 @@ jobs:
           # database below. BEGIN/ROLLBACK.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/reseller_authz_test.sql
 
+      - name: attach_freelancer_to_reseller under concurrency
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # Two sessions (the second over dblink) attach one freelancer to
+          # two resellers; the second waits on the first's row lock and must
+          # write nothing. Committed fixtures, removed at the end.
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/attach_concurrency_test.sql
+
       - name: Receipt log (F1 PR 1) records only, settlement unchanged
         env:
           PGPASSWORD: postgres
@@ -129,9 +138,15 @@ jobs:
           done
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/anon_rpc_allowlist.sql
           # The same database for the authenticated role: internal helpers
-          # are service-role only, and every SECURITY DEFINER function a
-          # signed-in user can call checks its caller or is allowlisted.
+          # are service-role only, and the SECURITY DEFINER functions a
+          # signed-in user can call must match the reviewed list in
+          # ci/authenticated_rpc_allowlist.sql exactly (plus a source-text
+          # tripwire, which is not an authorization proof).
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/authenticated_rpc_check.sql
+          # Behaviour: every listed function called by two non-owner
+          # signed-in users must refuse, or return none of the victim's data
+          # and leave the victim's rows unchanged.
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/authenticated_rpc_sweep_test.sql
           # The exploit regression again, with production's grants.
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/reseller_authz_test.sql
 

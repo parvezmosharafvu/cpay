@@ -6,60 +6,35 @@
 -- shipped callable by every signed-in user: its migration revoked PUBLIC
 -- and anon, and Supabase's default privileges left authenticated in place.
 --
--- Run against the database built with Supabase's default privileges, like
--- the anon check. Two rules:
+-- Run against the database built with Supabase's default privileges. Rules:
 --
---   1. Internal functions (signup trigger helpers, settlement and guard
---      helpers, service-role Edge Function lookups) must not be executable
---      by anon, authenticated or PUBLIC, and must stay executable by
---      service_role.
+--   1. Internal functions are not executable by anon, authenticated or
+--      PUBLIC, and stay executable by service_role.
+--   2. STRICT ALLOWLIST: the set of SECURITY DEFINER functions authenticated
+--      can execute must equal ci/authenticated_rpc_allowlist.sql exactly.
+--      New functions fail until reviewed; removed ones fail until the entry
+--      is deleted.
+--   3. TRIPWIRE (not an authorization proof): each entry's body, with
+--      comments stripped, must still mention the check its kind implies.
+--      A string literal or an unrelated use of the token would satisfy it;
+--      it only catches gross drift such as a guard being deleted.
 --
---   2. Every other SECURITY DEFINER function a signed-in user can execute
---      must check its caller (auth.uid(), is_admin(), is_reseller(),
---      is_moderator() or handles_creator()) or be listed below as safe for
---      any caller, with a reason.
---
--- Rule 2 is a tripwire, not a proof: it looks for those tokens in the
--- function source, so a token in a comment or an unrelated expression
--- satisfies it. It catches the M1 shape (a new function with no caller
--- reference at all). Behaviour is tested per function in
--- ci/reseller_authz_test.sql and the other runtime tests.
+-- Behaviour is tested by ci/authenticated_rpc_sweep_test.sql (every listed
+-- function called as a non-owner) and ci/reseller_authz_test.sql (M1-M3).
 -- ============================================================
 \set ON_ERROR_STOP on
-
-create temp table internal_only(signature text primary key, called_by text not null);
-insert into internal_only values
-  ('attach_freelancer_to_reseller(uuid, uuid)', 'handle_new_user() at signup'),
-  ('system_link_for_invoice(text)',             'create-invoice Edge Function (service role)'),
-  ('cpay_make_affiliate_code(uuid)',            'handle_new_user(), ensure_reseller_affiliate_code()'),
-  ('cpay_reseller_commission_percent(uuid)',    'stamp_payment_platform_fee(), my_earnings_split()'),
-  ('cpay_reseller_for(uuid)',                   'no current caller'),
-  ('account_is_active(uuid)',                   'account-status guard triggers, onchain_address_create(), reseller_request_withdrawal_for()'),
-  ('cpay_platform_fee_percent(uuid)',           'stamp_payment_platform_fee(), admin_list_business_profiles()'),
-  ('cpay_feature_enabled(uuid, text)',          'feature guard triggers, reserve_stablecoin_withdrawal()'),
-  ('hide_threshold_for(uuid)',                  'dashboard, balance and Telegram SECURITY DEFINER functions');
-
-create temp table authenticated_no_caller_check(signature text primary key, reason text not null);
-insert into authenticated_no_caller_check values
-  ('get_invoice_public(uuid)',       'public invoice page'),
-  ('get_link_preview(text)',         'public payment link page'),
-  ('get_public_store(uuid)',         'public creator store'),
-  ('lookup_payment_status(text)',    'public payment status lookup'),
-  ('public_settled_feed(integer)',   'public settled feed (admin toggle)'),
-  ('link_style_options(text)',       'slug suggestions: only reports whether a slug is taken'),
-  ('request_withdrawal(numeric, text, text)', 'retired: always raises'),
-  ('cpay_auto_approval_enabled(text)', 'pending review: returns a global signup setting; called by handle_new_user()');
+\ir authenticated_rpc_allowlist.sql
 
 do $$
 declare
   v_bad text;
 begin
-  select string_agg(i.signature || ' [' || r.rolname || ']', ', ' order by i.signature)
+  -- 1. Internal functions.
+  select string_agg(i.signature || ' [' || r.rolname || ']', ', ' order by i.signature, r.rolname)
     into v_bad
     from internal_only i
-    join pg_proc p on p.oid = ('public.' || i.signature)::regprocedure
     cross join (select rolname from pg_roles where rolname in ('anon', 'authenticated')) r
-   where has_function_privilege(r.rolname, p.oid, 'execute');
+   where has_function_privilege(r.rolname, ('public.' || i.signature)::regprocedure, 'execute');
   if v_bad is not null then
     raise exception 'internal function(s) executable by a client role: %. Revoke EXECUTE from public, anon, authenticated.', v_bad;
   end if;
@@ -81,42 +56,42 @@ begin
   if v_bad is not null then
     raise exception 'service_role lost EXECUTE on internal function(s): %', v_bad;
   end if;
-end $$;
 
-create temp view authenticated_unchecked as
-select p.proname || '(' || oidvectortypes(p.proargtypes) || ')' as signature
-  from pg_proc p
-  join pg_namespace n on n.oid = p.pronamespace
- where n.nspname = 'public'
-   and p.prosecdef
-   and p.prorettype <> 'trigger'::regtype
-   and has_function_privilege('authenticated', p.oid, 'execute')
-   and p.prosrc !~ '(auth\.uid\(\)|is_admin\(\)|is_reseller\(\)|is_moderator\(\)|handles_creator\()';
-
-\echo 'SECURITY DEFINER functions authenticated can execute with no caller check in the body:'
-select u.signature, coalesce(a.reason, '*** NOT ALLOWLISTED ***') as status
-  from authenticated_unchecked u
-  left join authenticated_no_caller_check a using (signature)
- order by (a.reason is null) desc, u.signature;
-
-do $$
-declare
-  v_unexpected text;
-  v_stale text;
-begin
-  select string_agg(signature, ', ' order by signature) into v_stale
-    from authenticated_no_caller_check
-   where signature not in (select signature from authenticated_unchecked);
-  if v_stale is not null then
-    raise notice 'Allowlist entries no longer matched: %', v_stale;
+  -- 2. Strict allowlist, both directions.
+  select string_agg(f.signature, ', ' order by f.signature)
+    into v_bad
+    from authenticated_definer_functions f
+   where f.signature not in (select signature from authenticated_rpc_allowlist);
+  if v_bad is not null then
+    raise exception 'authenticated can EXECUTE unreviewed SECURITY DEFINER function(s): %. Review each one, then add it to ci/authenticated_rpc_allowlist.sql with its kind and a reason, or revoke EXECUTE from authenticated.', v_bad;
   end if;
 
-  select string_agg(signature, ', ' order by signature) into v_unexpected
-    from authenticated_unchecked
-   where signature not in (select signature from authenticated_no_caller_check);
-  if v_unexpected is not null then
-    raise exception 'authenticated can EXECUTE SECURITY DEFINER function(s) with no caller check: %. Add an auth.uid()/is_admin() check, revoke EXECUTE from authenticated, or list it in ci/authenticated_rpc_check.sql with a reason.', v_unexpected;
+  select string_agg(a.signature, ', ' order by a.signature)
+    into v_bad
+    from authenticated_rpc_allowlist a
+   where a.signature not in (select signature from authenticated_definer_functions);
+  if v_bad is not null then
+    raise exception 'stale ci/authenticated_rpc_allowlist.sql entries (missing, not SECURITY DEFINER, or no longer executable by authenticated): %', v_bad;
+  end if;
+
+  -- 3. Tripwire.
+  select string_agg(a.signature || ' (' || a.kind || ')', ', ' order by a.signature)
+    into v_bad
+    from authenticated_rpc_allowlist a
+    join authenticated_definer_functions f using (signature)
+   where case a.kind
+           when 'admin'         then f.src !~ 'is_admin\(\)'
+           when 'self'          then f.src !~ 'auth\.uid\(\)'
+           when 'self_or_admin' then f.src !~ 'auth\.uid\(\)' or f.src !~ 'is_admin\(\)'
+           when 'reseller'      then f.src !~ '(is_reseller\(\)|is_moderator\(\)|reseller_owns\()'
+           else false
+         end;
+  if v_bad is not null then
+    raise exception 'tripwire: these bodies (comments stripped) no longer mention the caller check their kind implies: %. Re-review the function and fix it or its allowlist kind.', v_bad;
   end if;
 end $$;
 
-select 'authenticated RPC check passed' as result;
+\echo 'Reviewed SECURITY DEFINER functions executable by authenticated, by kind:'
+select kind, count(*) from authenticated_rpc_allowlist group by kind order by kind;
+
+select 'authenticated RPC allowlist check passed (strict list + tripwire; behaviour is tested separately)' as result;

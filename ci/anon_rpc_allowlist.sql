@@ -28,31 +28,17 @@ insert into anon_rpc_allowlist(signature, reason) values
   ('lookup_payment_status(text)',            'public payment status lookup'),
   ('is_admin()',                             'returns false for callers without a session'),
 
-  -- PENDING REVIEW: already present before this check existed. Each checks
-  -- is_admin() / auth.uid() inside, so anon gets an error or nothing, but
+  -- PENDING REVIEW: each uses auth.uid() inside, so anon gets nothing, but
   -- EXECUTE should still be revoked from anon in a follow-up.
-  ('admin_customer_directory()',                           'pending review: guarded by is_admin()'),
-  ('admin_list_payment_links()',                           'pending review: guarded by is_admin()'),
-  ('admin_list_payments(integer, integer, text)',          'pending review: guarded by is_admin()'),
-  ('admin_list_people()',                                  'pending review: guarded by is_admin()'),
-  ('admin_list_user_wallets()',                            'pending review: guarded by is_admin()'),
-  ('admin_live_payments()',                                'pending review: guarded by is_admin()'),
-  ('admin_set_user_usdt_wallet(uuid, text, text)',         'pending review: guarded by is_admin()'),
-  ('staff_list_payments(integer, integer, text, text, text)', 'pending review: guarded by is_admin()/moderator'),
-  ('create_link_variants(text, text[])',                   'pending review: uses auth.uid()'),
-  ('get_my_payments(integer, integer, text, text)',        'pending review: uses auth.uid()'),
-  ('my_reseller_id()',                                     'pending review: uses auth.uid()'),
+  -- 20261004010000 removed anon from the eleven internally guarded
+  -- admin_* / staff_list_payments / get_my_payments / create_link_variants /
+  -- my_reseller_id functions, and made system_link_for_invoice,
+  -- cpay_make_affiliate_code, cpay_reseller_commission_percent and
+  -- cpay_reseller_for service-role only (ci/authenticated_rpc_check.sql).
   ('my_payout_book()',                                     'pending review: uses auth.uid()'),
   ('set_my_payout_prefs(numeric, text, boolean)',          'pending review: uses auth.uid()'),
   ('set_my_usdt_wallet(text, text)',                       'pending review: uses auth.uid()'),
-  ('delete_my_usdt_wallet(text)',                          'pending review: uses auth.uid()'),
-
-  -- PENDING REVIEW, PRIORITY: no auth.uid()/is_admin() check visible in
-  -- the body. Look at what each returns or writes for an anon caller.
-  ('system_link_for_invoice(text)',          'pending review: no caller check (used by create-invoice via service role)'),
-  ('cpay_make_affiliate_code(uuid)',         'pending review: no caller check'),
-  ('cpay_reseller_commission_percent(uuid)', 'pending review: no caller check'),
-  ('cpay_reseller_for(uuid)',                'pending review: no caller check');
+  ('delete_my_usdt_wallet(text)',                          'pending review: uses auth.uid()');
 
 create temp view anon_definer_functions as
 select p.proname || '(' || oidvectortypes(p.proargtypes) || ')' as signature

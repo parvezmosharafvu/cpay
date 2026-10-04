@@ -3,7 +3,8 @@ begin;
 select '11111111-1111-1111-1111-111111111111'::uuid as admin_id \gset
 select '22222222-2222-2222-2222-222222222222'::uuid as creator_id \gset
 insert into auth.users(id, email) values (:'admin_id', 'admin@test.invalid'), (:'creator_id', 'creator@test.invalid');
-update profiles set email = 'admin@test.invalid', display_name = 'Test Admin', role = 'admin' where id = :'admin_id';
+-- Active: since 20261004010000 is_admin() requires account_status = 'active'.
+update profiles set email = 'admin@test.invalid', display_name = 'Test Admin', role = 'admin', account_status = 'active' where id = :'admin_id';
 update profiles set email = 'creator@test.invalid', display_name = 'Test Creator', role = 'creator' where id = :'creator_id';
 create or replace function auth.uid() returns uuid language sql stable as $$ select '11111111-1111-1111-1111-111111111111'::uuid $$;
 insert into payment_links(user_id, slug, display_name, is_active) values (:'creator_id', 'MixedCaseLink', 'Mixed Case Link', true);

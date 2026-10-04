@@ -23,22 +23,17 @@ insert into anon_rpc_allowlist(signature, reason) values
   -- Public by design (checkout, invoice page, store, link previews).
   ('get_invoice_public(uuid)',               'public invoice page'),
   ('get_link_preview(text)',                 'public payment link page / OG preview'),
-  ('get_public_store(uuid)',                 'public creator store'),
+  ('get_public_store(uuid)',                 'public creator store: active accounts, public fields only'),
   ('public_settled_feed(integer)',           'public settled feed (admin toggle)'),
   ('lookup_payment_status(text)',            'public payment status lookup'),
-  ('is_admin()',                             'returns false for callers without a session'),
+  ('is_admin()',                             'returns false for callers without a session');
 
-  -- PENDING REVIEW: each uses auth.uid() inside, so anon gets nothing, but
-  -- EXECUTE should still be revoked from anon in a follow-up.
   -- 20261004010000 removed anon from the eleven internally guarded
   -- admin_* / staff_list_payments / get_my_payments / create_link_variants /
-  -- my_reseller_id functions, and made system_link_for_invoice,
-  -- cpay_make_affiliate_code, cpay_reseller_commission_percent and
-  -- cpay_reseller_for service-role only (ci/authenticated_rpc_check.sql).
-  ('my_payout_book()',                                     'pending review: uses auth.uid()'),
-  ('set_my_payout_prefs(numeric, text, boolean)',          'pending review: uses auth.uid()'),
-  ('set_my_usdt_wallet(text, text)',                       'pending review: uses auth.uid()'),
-  ('delete_my_usdt_wallet(text)',                          'pending review: uses auth.uid()');
+  -- my_reseller_id functions. 20261004020000 removed anon (and PUBLIC) from
+  -- my_payout_book, set_my_payout_prefs, set_my_usdt_wallet,
+  -- delete_my_usdt_wallet, my_withdraw_settings and get_my_analytics, so
+  -- no "pending review" entries remain.
 
 create temp view anon_definer_functions as
 select p.proname || '(' || oidvectortypes(p.proargtypes) || ')' as signature

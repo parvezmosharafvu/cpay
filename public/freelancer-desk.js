@@ -241,7 +241,7 @@ async function renderProfile() {
       <div class="field"><label for="pName">Display name</label><input id="pName" value="${escapeHtml(me.display_name || '')}"></div>
       <div class="field"><label for="pBio">Bio</label><textarea id="pBio">${escapeHtml(me.bio || '')}</textarea></div>
       <div class="field"><label for="pSlug">Store address</label><input id="pSlug" value="${escapeHtml(me.public_slug || '')}"></div>
-      <div class="row"><button class="btn primary" id="saveProf">Save profile</button><a class="btn ghost" href="store.html">Open public store</a></div>
+      <div class="row"><button class="btn primary" id="saveProf">Save profile</button><a class="btn ghost" href="store.html?u=${encodeURIComponent(me.id)}">Open public store</a></div>
     </div>
     <div class="card">
       <h3>USDT payout</h3>

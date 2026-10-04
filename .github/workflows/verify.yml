@@ -112,6 +112,21 @@ jobs:
           # write nothing. Committed fixtures, removed at the end.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/attach_concurrency_test.sql
 
+      - name: Production drift fixes (20261004020000)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # Storefront (public fields, active accounts, anon), payout wallets
+          # (own-rows RLS, audited admin RPC, no anon), the D4 price lock
+          # (reseller prices only their own team; a freelancer cannot unlock
+          # or change a locked price by RPC, definer path or link PATCH),
+          # nobody changes their own role/status, get_my_analytics and
+          # telegram_context grants. Then the same checks after putting the
+          # database back into PRODUCTION's pre-migration shape and applying
+          # the migration twice. BEGIN/ROLLBACK.
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/production_drift_test.sql
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/production_drift_from_production_state_test.sql
+
       - name: Receipt log (F1 PR 1) records only, settlement unchanged
         env:
           PGPASSWORD: postgres
@@ -149,6 +164,9 @@ jobs:
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/authenticated_rpc_sweep_test.sql
           # The exploit regression again, with production's grants.
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/reseller_authz_test.sql
+          # The drift fixes with production's grants, from both starting states.
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/production_drift_test.sql
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/production_drift_from_production_state_test.sql
 
       - name: Runtime regression — overpayment cap and message soft-delete
         env:

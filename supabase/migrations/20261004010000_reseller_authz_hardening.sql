@@ -355,6 +355,8 @@ language plpgsql
 security definer
 set search_path to 'public'
 as $function$
+declare
+  v_referred_by uuid;  -- CHANGED
 begin
   -- CHANGED: only signup (no session), the service role, or an active admin.
   if auth.uid() is not null and not is_admin() then return false; end if;
@@ -363,13 +365,13 @@ begin
   if not exists (select 1 from profiles where id = p_reseller and role = 'moderator') then
     return false;
   end if;
-  -- CHANGED: never attach a freelancer who already belongs to another reseller.
-  if exists (
-    select 1 from profiles
-     where id = p_freelancer
-       and referred_by is not null
-       and referred_by <> p_reseller
-  ) then
+  -- CHANGED: never attach a freelancer who already belongs to another
+  -- reseller. The row lock makes the check and the writes below atomic, so
+  -- two concurrent calls cannot both see referred_by as null and leave the
+  -- freelancer assigned to two resellers.
+  select referred_by into v_referred_by from profiles where id = p_freelancer for update;
+  if not found then return false; end if;
+  if v_referred_by is not null and v_referred_by <> p_reseller then
     return false;
   end if;
   update profiles set referred_by = p_reseller where id = p_freelancer and referred_by is null;

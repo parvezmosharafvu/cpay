@@ -18,6 +18,12 @@
 --      must check its caller (auth.uid(), is_admin(), is_reseller(),
 --      is_moderator() or handles_creator()) or be listed below as safe for
 --      any caller, with a reason.
+--
+-- Rule 2 is a tripwire, not a proof: it looks for those tokens in the
+-- function source, so a token in a comment or an unrelated expression
+-- satisfies it. It catches the M1 shape (a new function with no caller
+-- reference at all). Behaviour is tested per function in
+-- ci/reseller_authz_test.sql and the other runtime tests.
 -- ============================================================
 \set ON_ERROR_STOP on
 

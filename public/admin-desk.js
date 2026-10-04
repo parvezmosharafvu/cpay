@@ -69,7 +69,6 @@ async function renderPeople() {
       ${links[p.id] ? `<button class="btn ghost sm" data-limit="${p.id}" data-cur="${links[p.id].link_limit}">Link limit</button>` : ''}
       <button class="btn ghost sm" data-fee="${p.id}">Platform fee</button>
       <button class="btn ghost sm" data-wfee="${p.id}" data-cur="${wfee[p.id]?.own_fee_percent ?? ''}">Withdraw fee</button>
-      ${p.role === 'moderator' ? `<button class="btn ghost sm" data-comm="${p.id}">Commission</button>` : ''}
       <button class="btn ghost sm" data-hide="${p.id}">Hide &lt;$10</button>
     </td>
   </tr>`).join('');
@@ -104,15 +103,6 @@ async function renderPeople() {
       const { error: e } = await sb.rpc('admin_update_creator_fee', { p_creator_id: btn.dataset.wfee, p_fee_percent: v });
       if (e) return toast(e.message);
       toast(v == null ? 'Override cleared' : 'Withdrawal fee saved', true); renderPeople();
-    };
-  });
-  document.querySelectorAll('[data-comm]').forEach((btn) => {
-    btn.onclick = async () => {
-      const raw = prompt('Reseller commission % on affiliate net (after platform fee, not link cost)');
-      if (raw == null) return;
-      const { error: e } = await sb.rpc('admin_set_reseller_commission', { p_reseller_id: btn.dataset.comm, p_percent: Number(raw) });
-      if (e) return toast(e.message);
-      toast('Commission saved', true); renderPeople();
     };
   });
   document.querySelectorAll('[data-wallet]').forEach((btn) => {
@@ -176,13 +166,12 @@ const FEE_SOURCE = { account: 'own', reseller: 'reseller', global: 'global', non
 
 async function renderFees() {
   const { data: settings } = await sb.from('app_settings').select('key, value').in('key', [
-    'default_withdrawal_fee_percent','default_platform_fee_percent','default_reseller_commission_percent','hide_small_payments_threshold','hide_small_payments_enabled'
+    'default_withdrawal_fee_percent','default_platform_fee_percent','hide_small_payments_threshold','hide_small_payments_enabled'
   ]);
   const byKey = Object.fromEntries((settings || []).map((r) => [r.key, r.value]));
   const pct = (v) => Number((v && typeof v === 'object' ? v.percent : v) ?? 0);
   const globalWfee = pct(byKey.default_withdrawal_fee_percent);
   const platformFee = pct(byKey.default_platform_fee_percent);
-  const commission = pct(byKey.default_reseller_commission_percent);
   const hideAmt = Number(byKey.hide_small_payments_threshold ?? 10);
   const hideOnNow = byKey.hide_small_payments_enabled === true || byKey.hide_small_payments_enabled === 'true';
   document.getElementById('fees').innerHTML = `<div class="card narrow">
@@ -194,13 +183,9 @@ async function renderFees() {
   <div class="card" id="resellerWithdraw"><p class="muted">Loading resellers…</p></div>
   <div class="card narrow">
     <h3>Defaults</h3>
-    <p class="muted">Platform fee is CPAY's cut of settled payments. Link cost is added to what the payer pays. Reseller commission is the reseller's cut of the net after the platform fee.</p>
+    <p class="muted">Platform fee is CPAY's cut of settled payments. Link cost is added to what the payer pays.</p>
     <div class="field short"><label for="defFee">Platform fee %</label><input id="defFee" type="number" min="0" max="90" step="0.1" value="${platformFee}"></div>
     <button class="btn primary" id="saveDefFee">Save platform fee</button>
-    <hr>
-    <div class="field short"><label for="defComm">Reseller commission %</label><input id="defComm" type="number" min="0" max="50" step="0.1" value="${commission}"></div>
-    <p class="hint">Applies to freelancers who joined through a reseller's link.</p>
-    <button class="btn primary" id="saveDefComm">Save commission</button>
   </div>
   <div class="card narrow">
     <h3>Hide small payments</h3>
@@ -222,11 +207,6 @@ async function renderFees() {
     const { error } = await sb.rpc('admin_set_default_platform_fee', { p_percent: Number(document.getElementById('defFee').value) });
     if (error) return toast(error.message);
     toast('Default fee saved', true);
-  };
-  document.getElementById('saveDefComm').onclick = async () => {
-    const { error } = await sb.rpc('admin_set_default_reseller_commission', { p_percent: Number(document.getElementById('defComm').value) });
-    if (error) return toast(error.message);
-    toast('Default commission saved', true);
   };
   document.getElementById('hideOn').onclick = () => setHide(true);
   document.getElementById('hideOff').onclick = () => setHide(false);

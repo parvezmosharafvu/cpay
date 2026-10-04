@@ -179,23 +179,56 @@ jobs:
           # just applied to, so it leaves nothing behind.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/cloudai_regression.sql
 
-      - name: Dashboard data layer and business day (0096 onward)
+      - name: Dashboard data layer and business day (re-apply from 20261005010000)
         env:
           PGPASSWORD: postgres
         run: |
-          # 0096 and every later migration must survive a second apply, then
-          # the RPCs are checked with seeded payments either side of the
-          # 17:00 Dhaka cutoff, the 10-link ceiling, who-sees-whom, the daily
-          # withdrawal limit and the profile card. BEGIN/ROLLBACK, like above.
-          # Re-applying through the newest file (not only 0096-0098) leaves
-          # the latest function bodies in place for the payment service
-          # tests below; 0101 replaces withdrawal functions 0097 defines.
+          # Every migration from 20261005010000 on must survive a second
+          # apply, then the RPCs are checked with seeded payments either side
+          # of the 17:00 Dhaka cutoff, the 10-link ceiling, who-sees-whom,
+          # the daily withdrawal limit and the profile card. BEGIN/ROLLBACK.
+          #
+          # This used to re-apply 0096 onward. 20261005010000 removed the
+          # reseller commission columns forward-only, and SQL-language
+          # function bodies in 0096, 0102 and 20261004010000 are checked
+          # against columns that no longer exist, so those historical files
+          # cannot run a second time on the current schema (they still apply
+          # in order to an empty database, which the step above proves). The
+          # re-apply now covers the cleanup migrations, which are written to
+          # be idempotent. Old files apply once, in order, as in production.
           for f in supabase/migrations/*.sql; do
-            n=$(basename "$f" | cut -c1-4)
-            [ $((10#$n)) -ge 96 ] || continue
+            n=$(basename "$f" | cut -d_ -f1)
+            [ ${#n} -eq 14 ] && [ "$n" -ge 20261005010000 ] || continue
+            echo "── re-apply $(basename "$f")"
             psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -f "$f"
           done
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/dashboards_test.sql
+
+      - name: Commission removal (20261005010000) keeps balances and aborts on commission data
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # Two throwaway databases migrated up to, not including,
+          # 20261005010000 (the files before it, in order).
+          for db in balcheck abortcheck; do
+            psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -c "create database $db"
+            psql -h localhost -U postgres -d $db -v ON_ERROR_STOP=1 -q -f ci/bootstrap.sql
+            for f in supabase/migrations/*.sql; do
+              n=$(basename "$f" | cut -d_ -f1)
+              [ ${#n} -eq 14 ] && [ "$n" -ge 20261005010000 ] && continue
+              psql -h localhost -U postgres -d $db -v ON_ERROR_STOP=1 -q -f "$f"
+            done
+          done
+          # Accounts without commission: every balance, dashboard day and
+          # stamped platform fee identical before and after the migration;
+          # a new settlement still pays the platform fee.
+          psql -h localhost -U postgres -d balcheck -v ON_ERROR_STOP=1 -f ci/commission_removal_before.sql
+          psql -h localhost -U postgres -d balcheck -v ON_ERROR_STOP=1 -q -f supabase/migrations/20261005010000_remove_reseller_commission.sql
+          psql -h localhost -U postgres -d balcheck -v ON_ERROR_STOP=1 -f ci/commission_removal_after.sql
+          # Commission present (a stamped payment, then a profile override):
+          # the migration aborts and changes nothing; once none is left it
+          # applies, twice.
+          ci/commission_removal_abort_test.sh abortcheck
 
       - name: Telegram messages (0106)
         env:

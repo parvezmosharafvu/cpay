@@ -104,7 +104,6 @@ const Daily = (() => {
   /* ---------- daily summary table ---------- */
   function summaryTable(rows, opts = {}) {
     const today = rows[0] && rows[0].business_day;
-    const showCut = rows.some((r) => num(r.reseller_commission) > 0) || opts.showCut;
     const body = rows.map((r) => `<tr data-day="${r.business_day}" class="pick${r.business_day === opts.selected ? ' sel' : ''}" tabindex="0">
       <td><div class="day">${escapeHtml(dayRange(r))}${r.business_day === today ? ' <span class="tag">Today</span>' : ''}</div><div class="faint">5:00 PM to 5:00 PM</div></td>
       <td class="num">${num(r.link_count)}<div class="faint">${num(r.paid_link_count)} paid</div></td>
@@ -112,16 +111,13 @@ const Daily = (() => {
       <td class="num">${num(r.payment_count)}</td>
       <td class="num">${money(r.settled)}</td>
       <td class="num">${money(r.platform_fee)}</td>
-      ${showCut ? `<td class="num">${money(r.reseller_commission)}</td>` : ''}
       <td class="num strong">${money(r.earnings)}</td>
-      ${opts.commission ? `<td class="num">${money(r.commission_earned)}</td>` : ''}
     </tr>`).join('');
     const foot = rows.length ? `<tr class="total"><td>${rows.length} days</td><td></td><td></td>
       <td class="num">${sum(rows, 'payment_count')}</td><td class="num">${money(sum(rows, 'settled'))}</td><td class="num">${money(sum(rows, 'platform_fee'))}</td>
-      ${showCut ? `<td class="num">${money(sum(rows, 'reseller_commission'))}</td>` : ''}<td class="num strong">${money(sum(rows, 'earnings'))}</td>
-      ${opts.commission ? `<td class="num">${money(sum(rows, 'commission_earned'))}</td>` : ''}</tr>` : '';
-    return `<table class="table daily"><thead><tr><th>Business day</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th>${showCut ? '<th class="num">Reseller cut</th>' : ''}<th class="num">Earnings</th>${opts.commission ? '<th class="num">Your commission</th>' : ''}</tr></thead>
-      <tbody>${body || '<tr><td colspan="9" class="empty">No days yet</td></tr>'}</tbody><tfoot>${foot}</tfoot></table>`;
+      <td class="num strong">${money(sum(rows, 'earnings'))}</td></tr>` : '';
+    return `<table class="table daily"><thead><tr><th>Business day</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Earnings</th></tr></thead>
+      <tbody>${body || '<tr><td colspan="7" class="empty">No days yet</td></tr>'}</tbody><tfoot>${foot}</tfoot></table>`;
   }
 
   /* ---------- per-link breakdown ---------- */
@@ -168,10 +164,9 @@ const Daily = (() => {
     if (sumRes.error) { el.innerHTML = card + (opts.between || '') + errorCard('Daily summary', sumRes.error); return; }
     const rows = sumRes.data || [];
     const links = linkRes.error ? [] : linkRes.data || [];
-    const commission = !!opts.commission;
     el.innerHTML = `<div class="grid split">${card}${bizDayCard(rows[0])}</div>${opts.between || ''}
       <div class="card flush"><div class="card-head"><div><h3>Last ${days} business days</h3><div class="faint">Select a day to see each link.</div></div></div>
-        <div class="scroll" id="dailySelfTable">${summaryTable(rows, { selected: rows[0] && rows[0].business_day, commission })}</div></div>
+        <div class="scroll" id="dailySelfTable">${summaryTable(rows, { selected: rows[0] && rows[0].business_day })}</div></div>
       <div id="dailySelfLinks"></div>`;
     const drill = el.querySelector('#dailySelfLinks');
     const show = (day) => {
@@ -222,12 +217,12 @@ const Daily = (() => {
         <td>${rates(r.cost_rates)}</td>
         <td class="num">${num(r.payment_count)}</td>
         <td class="num">${money(r.settled)}</td>
-        <td class="num">${money(r.reseller_commission)}</td>
+        <td class="num">${money(r.platform_fee)}</td>
         <td class="num strong">${money(r.earnings)}</td>
       </tr>`).join('');
       const foot = list.length ? `<tr class="total"><td>${list.length} accounts</td><td></td><td class="num">${sum(list, 'link_count')}</td><td></td>
-        <td class="num">${sum(list, 'payment_count')}</td><td class="num">${money(sum(list, 'settled'))}</td><td class="num">${money(sum(list, 'reseller_commission'))}</td><td class="num strong">${money(sum(list, 'earnings'))}</td></tr>` : '';
-      tableEl.innerHTML = `<table class="table"><thead><tr><th>Freelancer</th><th>Joined by</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Your cut</th><th class="num">Their earnings</th></tr></thead>
+        <td class="num">${sum(list, 'payment_count')}</td><td class="num">${money(sum(list, 'settled'))}</td><td class="num">${money(sum(list, 'platform_fee'))}</td><td class="num strong">${money(sum(list, 'earnings'))}</td></tr>` : '';
+      tableEl.innerHTML = `<table class="table"><thead><tr><th>Freelancer</th><th>Joined by</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Their earnings</th></tr></thead>
         <tbody>${body || '<tr><td colspan="8" class="empty">No team activity that day</td></tr>'}</tbody><tfoot>${foot}</tfoot></table>`;
       bindRows(tableEl, 'user', openMember);
       drill.innerHTML = '';
@@ -338,13 +333,12 @@ Withdrawal fee revenue ${money(r.withdrawal_fee_revenue)}</title></rect>`).join(
         <td class="num">${num(r.payment_count)}</td>
         <td class="num">${money(r.settled)}</td>
         <td class="num">${money(r.platform_fee)}</td>
-        <td class="num">${money(r.reseller_commission)}</td>
         <td class="num strong">${money(r.earnings)}</td>
       </tr>`).join('');
       const foot = list.length ? `<tr class="total"><td>${list.length} people</td><td></td><td class="num">${sum(list, 'link_count')}</td><td></td><td class="num">${sum(list, 'payment_count')}</td>
-        <td class="num">${money(sum(list, 'settled'))}</td><td class="num">${money(sum(list, 'platform_fee'))}</td><td class="num">${money(sum(list, 'reseller_commission'))}</td><td class="num strong">${money(sum(list, 'earnings'))}</td></tr>` : '';
-      $$('#dTable').innerHTML = `<table class="table"><thead><tr><th>Freelancer</th><th>Reseller</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Reseller cut</th><th class="num">Earnings</th></tr></thead>
-        <tbody>${body || '<tr><td colspan="9" class="empty">Nobody had links or payments that day</td></tr>'}</tbody><tfoot>${foot}</tfoot></table>`;
+        <td class="num">${money(sum(list, 'settled'))}</td><td class="num">${money(sum(list, 'platform_fee'))}</td><td class="num strong">${money(sum(list, 'earnings'))}</td></tr>` : '';
+      $$('#dTable').innerHTML = `<table class="table"><thead><tr><th>Freelancer</th><th>Reseller</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Earnings</th></tr></thead>
+        <tbody>${body || '<tr><td colspan="8" class="empty">Nobody had links or payments that day</td></tr>'}</tbody><tfoot>${foot}</tfoot></table>`;
       bindRows($$('#dTable'), 'user', openLinks);
       $$('#dLinks').innerHTML = '';
     }

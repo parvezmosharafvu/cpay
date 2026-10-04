@@ -98,6 +98,5 @@ document.getElementById('settings')?.addEventListener('click', async (e) => {
     toast(ok, true);
   }
   if (id === 'saveDefFee') return save('admin_set_default_platform_fee', { p_percent: Number(document.getElementById('defFee').value) }, 'Default fee saved');
-  if (id === 'saveDefComm') return save('admin_set_default_reseller_commission', { p_percent: Number(document.getElementById('defComm').value) }, 'Default commission saved');
   if (id === 'saveDefWfee') return save('admin_set_default_withdrawal_fee', { p_percent: Number(document.getElementById('defWfee').value) }, 'Default withdrawal fee saved');
 });

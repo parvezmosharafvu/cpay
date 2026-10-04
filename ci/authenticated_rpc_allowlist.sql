@@ -30,7 +30,7 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('cpay_auto_approval_enabled(text)',                                        'public',        'returns the global auto-approve flag for a signup role; no per-user data. Pending review: could be service-role only'),
   ('get_invoice_public(uuid)',                                                'public',        'public invoice page; needs the unguessable payment uuid; presentation fields only'),
   ('get_link_preview(text)',                                                  'public',        'public payment-link page / OG preview by slug'),
-  ('get_public_store(uuid)',                                                  'public',        'public creator storefront by user uuid'),
+  ('get_public_store(uuid)',                                                  'public',        'public creator storefront by user uuid; active accounts only, public fields only'),
   ('link_style_options(text)',                                                'public',        'slug suggestions for a name; only says whether a slug is taken'),
   ('lookup_payment_status(text)',                                             'public',        'public status lookup by full invoice ref or Lightning invoice'),
   ('public_settled_feed(integer)',                                            'public',        'public settled feed, admin toggle; no ids or emails'),
@@ -162,7 +162,8 @@ insert into internal_only values
   ('account_is_active(uuid)',                   'account-status guard triggers, onchain_address_create(), reseller_request_withdrawal_for()'),
   ('cpay_platform_fee_percent(uuid)',           'stamp_payment_platform_fee(), admin_list_business_profiles()'),
   ('cpay_feature_enabled(uuid, text)',          'feature guard triggers, reserve_stablecoin_withdrawal()'),
-  ('hide_threshold_for(uuid)',                  'dashboard, balance and Telegram SECURITY DEFINER functions');
+  ('hide_threshold_for(uuid)',                  'dashboard, balance and Telegram SECURITY DEFINER functions'),
+  ('telegram_context(text, integer)',           'telegram-report Edge Function (service role; deployed outside this repo)');
 
 -- The SECURITY DEFINER functions authenticated can execute right now, with
 -- comments stripped from the source for the tripwire.

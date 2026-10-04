@@ -79,3 +79,44 @@ test('admin payment rows render user-controlled values as DOM text', async () =>
   assert.equal(elements.some((element) => element.text === payload), true);
   assert.equal(elements.some((element) => element.dataset.pay === `"><${payload}`), true);
 });
+
+// The admin-actions root has no handler (404); the wallet must go straight
+// to the /admin-wallet route, once, with no root probe or fallback.
+async function loadWalletRoute(responder) {
+  const calls = [];
+  const ctx = vm.createContext({
+    window: {
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_ANON_KEY: 'anon',
+      supabaseClient: { auth: { getSession: async () => ({ data: { session: { access_token: 't' } } }) } },
+    },
+    fetch: async (url, init) => { calls.push({ url, init }); return responder(url); },
+  });
+  vm.runInContext(readFileSync(new URL('../../public/admin-wallet-route.js', import.meta.url), 'utf8'), ctx);
+  return { ctx, calls };
+}
+
+test('walletCall posts to admin-actions/admin-wallet directly', async () => {
+  const { ctx, calls } = await loadWalletRoute(() => ({ ok: true, status: 200, json: async () => ({ balanceSats: 5 }) }));
+  const data = await ctx.walletCall('info', { page: 2 });
+  assert.equal(data.balanceSats, 5);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'https://example.supabase.co/functions/v1/admin-actions/admin-wallet');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0].init.body), { action: 'info', page: 2 });
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer t');
+});
+
+test('walletCall surfaces an error without retrying another path', async () => {
+  const { ctx, calls } = await loadWalletRoute(() => ({ ok: false, status: 404, json: async () => ({ error: 'Not found' }) }));
+  await assert.rejects(ctx.walletCall('info'), (e) => e.status === 404 && /Not found/.test(e.message));
+  assert.equal(calls.length, 1);
+});
+
+test('no page script calls the bare admin-actions root', () => {
+  for (const name of ['admin-wallet.js', 'admin-wallet-route.js', 'admin-unify.js', 'admin-home-live.js', 'app.js']) {
+    const src = readFileSync(new URL(`../../public/${name}`, import.meta.url), 'utf8');
+    assert.doesNotMatch(src, /['"`]admin-actions['"`]/, `${name} names the admin-actions root`);
+    assert.doesNotMatch(src, /functions\/v1\/admin-actions['"`]/, `${name} fetches the admin-actions root`);
+  }
+});

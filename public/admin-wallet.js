@@ -25,9 +25,9 @@ function fiatValue(satAmount, cur) {
 function walletShell() {
   return `<div class="grid kpis wallet-kpis">
       <div class="card"><div class="kicker">Wallet balance</div><div class="kpi" id="wbSats">-</div><div class="faint" id="wbUsd">Loading…</div></div>
-      <div class="card"><div class="kicker">Owed to creators</div><div class="kpi" id="wbOwed">-</div><div class="faint" id="wbOwedSats"></div></div>
-      <div class="card"><div class="kicker">Spendable</div><div class="kpi" id="wbSpend">-</div><div class="faint">Balance minus what creators are owed</div></div>
-      <div class="card"><div class="kicker">Breez rate</div><div class="kpi" id="wbRate">-</div>
+      <div class="card"><div class="kicker">Owed to freelancers</div><div class="kpi" id="wbOwed">-</div><div class="faint" id="wbOwedSats"></div></div>
+      <div class="card"><div class="kicker">Spendable</div><div class="kpi" id="wbSpend">-</div><div class="faint">Balance minus what freelancers are owed</div></div>
+      <div class="card"><div class="kicker">Wallet rate</div><div class="kpi" id="wbRate">-</div>
         <div class="row"><select id="wbCur" class="input sm-select" aria-label="Currency"></select><span class="faint" id="wbCurBal"></span></div></div>
     </div>
     <div class="grid split">
@@ -54,7 +54,7 @@ function walletShell() {
           <dl>
             <div><dt>Type</dt><dd id="wsKind"></dd></div>
             <div><dt>Amount</dt><dd id="wsAmount"></dd></div>
-            <div><dt>Breez fee</dt><dd id="wsFee"></dd></div>
+            <div><dt>Route fee</dt><dd id="wsFee"></dd></div>
             <div class="total"><dt>Total</dt><dd id="wsTotal"></dd></div>
           </dl>
           <p class="faint" id="wsNote"></p>
@@ -68,7 +68,7 @@ function walletShell() {
         <div class="field"><label for="wqNet">Coin and network</label><select id="wqNet"><option value="">Loading networks…</option></select></div>
         <div class="field"><label for="wqAddr">Destination address</label><input id="wqAddr" autocomplete="off" placeholder="Address"></div>
         <div class="field short"><label for="wqAmt">Amount (USD)</label><input id="wqAmt" type="number" min="1" step="0.01" inputmode="decimal" placeholder="0.00"></div>
-        <p class="hint">Paid from the platform wallet through the same Breez route and quote as creator withdrawals. No creator balance changes.</p>
+        <p class="hint">Paid from the platform wallet through the same payout route and quote as freelancer withdrawals. No freelancer balance changes.</p>
         <button class="btn ghost" id="wqBtn">Get quote</button>
       </div>
       <div class="card summary">
@@ -76,7 +76,7 @@ function walletShell() {
         <dl>
           <div><dt>Route</dt><dd id="wqRoute">-</dd></div>
           <div><dt>You send</dt><dd id="wqSend">-</dd></div>
-          <div><dt>Breez and network fee</dt><dd id="wqFee">-</dd></div>
+          <div><dt>Route and network fee</dt><dd id="wqFee">-</dd></div>
           <div><dt>Provider fee</dt><dd id="wqProv">-</dd></div>
           <div><dt>At least (1% slippage)</dt><dd id="wqMin">-</dd></div>
           <div class="total"><dt>Arrives</dt><dd id="wqGet">-</dd></div>
@@ -97,9 +97,9 @@ function renderBalance() {
   if (!i) return;
   const cur = walletState.fiat.find((c) => c.id === walletState.currency);
   $w('wbSats').textContent = sats(i.balanceSats);
-  $w('wbUsd').textContent = i.balanceUsd != null ? `${money(i.balanceUsd)} at the Breez rate` : (i.rateError || 'No rate');
+  $w('wbUsd').textContent = i.balanceUsd != null ? `${money(i.balanceUsd)} at the wallet rate` : (i.rateError || 'No rate');
   $w('wbOwed').textContent = money(i.owedToCreatorsUsd);
-  $w('wbOwedSats').textContent = i.owedToCreatorsSat != null ? `${sats(i.owedToCreatorsSat)} held for creators` : '';
+  $w('wbOwedSats').textContent = i.owedToCreatorsSat != null ? `${sats(i.owedToCreatorsSat)} held for freelancers` : '';
   $w('wbSpend').textContent = sats(i.spendableSat);
   $w('wbRate').textContent = cur?.btcRate ? `${fiatValue(1e8, cur)}` : (i.btcUsdRate ? `$${Number(i.btcUsdRate).toLocaleString('en-US')}` : '-');
   $w('wbCurBal').textContent = cur ? `per BTC · balance ${fiatValue(i.balanceSats, cur) ?? 'no rate'}` : 'per BTC';
@@ -218,14 +218,14 @@ async function loadRoutes() {
     $w('wqNet').innerHTML = routes.length
       ? routes.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.asset)} · ${escapeHtml(chainLabel(r.chain))}</option>`).join('')
       : '<option value="">No networks available right now</option>';
-    if (!routes.length) clearQuote('Breez lists no stablecoin networks right now. They exist on mainnet only.');
+    if (!routes.length) clearQuote('The wallet lists no stablecoin networks right now. They exist on mainnet only.');
   } catch (e) { clearQuote(e.message); }
 }
 
 async function getQuote() {
   const btn = $w('wqBtn');
   btn.disabled = true;
-  clearQuote('Getting a quote from Breez…');
+  clearQuote('Getting a quote…');
   try {
     const q = await walletCall('stable-quote', { routeId: $w('wqNet').value, address: $w('wqAddr').value.trim(), amountUsd: $w('wqAmt').value.trim() });
     walletState.quote = q;

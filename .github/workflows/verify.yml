@@ -285,6 +285,10 @@ jobs:
         run: npm run build
       - name: Static checks
         run: python3 ci/check_frontend.py
+      - name: Public copy (README, SECURITY, docs, pages)
+        # No payment-processor name, no bKash/Nagad/Binance/bank, no
+        # "any Lightning wallet" promise. See ci/check_public_copy.py.
+        run: python3 ci/check_public_copy.py
       - name: Frontend HTML escaping regression tests
         run: node --test tests/frontend/app.test.mjs
 

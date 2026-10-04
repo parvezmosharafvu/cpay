@@ -91,6 +91,18 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/revenue_desk_access_test.sql
 
+      - name: Reseller and staff authorization (20261004010000)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # M1 exploit regression (a reseller or any signed-in user cannot
+          # attach a freelancer), staff/admin functions admin-only, suspended
+          # accounts lose role powers, and the legitimate paths still work:
+          # signup referral, reseller team list and commission, admin
+          # functions, the invoice page. Runs again on the default-privileges
+          # database below. BEGIN/ROLLBACK.
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/reseller_authz_test.sql
+
       - name: Receipt log (F1 PR 1) records only, settlement unchanged
         env:
           PGPASSWORD: postgres
@@ -102,7 +114,7 @@ jobs:
           # BEGIN/ROLLBACK.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/lightning_receipt_log_test.sql
 
-      - name: anon can only execute allowlisted SECURITY DEFINER functions
+      - name: anon and authenticated can only execute allowlisted SECURITY DEFINER functions
         env:
           PGPASSWORD: postgres
         run: |
@@ -116,6 +128,12 @@ jobs:
             psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -q -f "$f"
           done
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/anon_rpc_allowlist.sql
+          # The same database for the authenticated role: internal helpers
+          # are service-role only, and every SECURITY DEFINER function a
+          # signed-in user can call checks its caller or is allowlisted.
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/authenticated_rpc_check.sql
+          # The exploit regression again, with production's grants.
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/reseller_authz_test.sql
 
       - name: Runtime regression — overpayment cap and message soft-delete
         env:

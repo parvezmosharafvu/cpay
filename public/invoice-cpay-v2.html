@@ -73,7 +73,7 @@
     <button id="otherWalletsBtn" class="pill-btn btn-copy" type="button" aria-haspopup="dialog" aria-controls="walletSheet">Other wallets</button>
   </div>
 
-  <div class="or-rule" aria-hidden="true"><span>or scan with any Lightning wallet</span></div>
+  <div class="or-rule" aria-hidden="true"><span>or scan the code with your wallet</span></div>
 
   <button id="qrLink" class="qr-link-button" type="button" aria-label="Payment QR code. Tap to open it in a Lightning wallet on this device">
     <div class="qr-frame" id="chargeRing">
@@ -622,7 +622,7 @@ function renderWallets(){
   // handoff (or copy), never with an app-specific link.
   const other = usable.filter((w) => !featured.includes(w)).map((w) =>
     w.verification?.status === 'verified' ? w : { ...w, handoff: w.handoff === 'copy' ? 'copy' : 'lightning' });
-  const any = { id: 'any', displayName: 'Any Lightning wallet', platforms: ['ios', 'android'], handoff: 'lightning' };
+  const any = { id: 'any', displayName: 'Open in my Lightning wallet', platforms: ['ios', 'android'], handoff: 'lightning' };
   el('walletListFeatured').replaceChildren(...featured.map(walletRow));
   el('walletListOther').replaceChildren(walletRow(any), ...other.map(walletRow));
 }

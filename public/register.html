@@ -15,18 +15,11 @@
     <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
     <div class="card">
       <h1>Open a CPAY account</h1>
-      <p class="sub" id="affNote">Freelancers who join with a reseller's code stay on that reseller's team.</p>
+      <p class="sub">A freelancer account: payment links, a storefront, and USDT payouts.</p>
       <div class="field"><label for="displayName">Display name</label><input id="displayName" autocomplete="name"></div>
-      <div class="field"><label for="requestedRole">Account type</label>
-        <select id="requestedRole">
-          <option value="freelancer">Freelancer</option>
-          <option value="reseller">Reseller</option>
-        </select>
-      </div>
       <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email"></div>
       <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="new-password" aria-describedby="passwordHint" placeholder="At least 8 characters"></div>
       <p class="faint" id="passwordHint">At least 8 characters.</p>
-      <div class="field" id="affField"><label for="affiliate">Reseller code</label><input id="affiliate" placeholder="Optional"></div>
       <button class="btn primary block lg" id="submitBtn" type="button">Create account</button>
       <p class="err" id="errorMsg" role="alert" style="display:none;margin-top:12px"></p>
       <p class="ok" id="successMsg" role="status" style="display:none;margin-top:12px"></p>
@@ -34,19 +27,10 @@
     <p class="foot">Already have an account? <a href="login.html">Log in</a></p>
   </main>
 <script>
-const params = new URLSearchParams(location.search);
-if (params.get('role') === 'reseller') document.getElementById('requestedRole').value = 'reseller';
-if (params.get('ref')) document.getElementById('affiliate').value = params.get('ref');
-document.getElementById('requestedRole').addEventListener('change', () => {
-  document.getElementById('affField').style.display = document.getElementById('requestedRole').value === 'freelancer' ? 'flex' : 'none';
-});
-document.getElementById('affField').style.display = document.getElementById('requestedRole').value === 'freelancer' ? 'flex' : 'none';
 document.getElementById('submitBtn').onclick = async () => {
   const displayName = document.getElementById('displayName').value.trim();
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
-  const requestedRole = document.getElementById('requestedRole').value;
-  const affiliate = document.getElementById('affiliate').value.trim();
   const err = document.getElementById('errorMsg'); const ok = document.getElementById('successMsg');
   err.style.display=ok.style.display='none';
   if (!email || !password){ err.textContent='Email and password required.'; err.style.display='block'; return; }
@@ -58,13 +42,13 @@ document.getElementById('submitBtn').onclick = async () => {
   try {
     ({ data, error } = await window.supabaseClient.auth.signUp({
       email, password,
-      options: { data: { display_name: displayName || undefined, requested_role: requestedRole, affiliate_code: affiliate || undefined } }
+      options: { data: { display_name: displayName || undefined, requested_role: 'freelancer' } }
     }));
   } catch (e) {
     error = { message: 'Could not reach the server. Check your connection and try again.' };
   }
   if (error){ err.textContent=error.message; err.style.display='block'; btn.disabled=false; return; }
-  if (data.session){ location.href = requestedRole === 'reseller' ? 'reseller.html' : 'dashboard.html'; return; }
+  if (data.session){ location.href = 'dashboard.html'; return; }
   ok.textContent = 'Application received. Confirm your email. An admin then approves the account, unless auto-approval is on.';
   ok.style.display='block';
 };

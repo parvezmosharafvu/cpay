@@ -18,7 +18,7 @@ async function renderHomeLive() {
   const books = (peopleRes.data || []).reduce((n, p) => n + Number(p.available || 0), 0);
   const walletUsdt = usdt && usdt.balanceUsd != null ? Number(usdt.balanceUsd) : null;
   const owed = books;
-  const usdtCard = `<div class="card"><div class="kicker">USDT balance</div><div class="kpi">${walletUsdt == null ? '-' : money(walletUsdt)}</div><div class="faint">${usdt && usdt.balanceSats != null ? Number(usdt.balanceSats).toLocaleString('en-US') + ' sats × Breez rate' : escapeHtml(usdtErr || 'Platform wallet')}</div><div class="faint"><a href="#wallet">Wallet link</a></div></div>
+  const usdtCard = `<div class="card"><div class="kicker">USDT balance</div><div class="kpi">${walletUsdt == null ? '-' : money(walletUsdt)}</div><div class="faint">${usdt && usdt.balanceSats != null ? Number(usdt.balanceSats).toLocaleString('en-US') + ' sats × wallet rate' : escapeHtml(usdtErr || 'Platform wallet')}</div><div class="faint"><a href="#wallet">Wallet link</a></div></div>
        <div class="card"><div class="kicker">Owed to freelancers</div><div class="kpi">${money(owed)}</div><div class="faint">Sum of freelancer available balances.</div></div>
        <div class="card"><div class="kicker">Spendable</div><div class="kpi">${usdt && usdt.spendableSat != null ? Number(usdt.spendableSat).toLocaleString('en-US') + ' sats' : '-'}</div><div class="faint">Wallet sats minus freelancer books</div></div>`;
   const byWallet = {};

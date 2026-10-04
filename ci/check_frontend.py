@@ -14,8 +14,8 @@ Checks, in order of how often each has actually caught something here:
   5. payment surfaces keep accessible controls and QR ownership guards
   6. admin release gates stay server-backed and audited
   7. the payment processor is not named on any non-admin page
-  8. no traditional payment method (bKash, Nagad, Binance Pay, bank
-     transfer) is named anywhere in public/
+  8. no traditional payment method (bKash, Nagad, Binance Pay, bank) is
+     named anywhere in public/; plain "bank" is a word match
   9. wallets-config.js entries are well formed: verified entries cite a
      source and date, and handoff links use an allowed scheme
 """
@@ -306,7 +306,7 @@ def check_no_traditional_payment_terms() -> None:
         if os.path.isfile(p)
         and os.path.splitext(p)[1] in (".html", ".js", ".css", ".json", ".svg", ".txt", ".xml", ".webmanifest")
     ]
-    pat = re.compile(r"bkash|nagad|binance|bank[ -]?transfer|bank account|wire transfer", re.I)
+    pat = re.compile(r"bkash|nagad|binance|\bbank(s|ing)?\b|wire transfer", re.I)
     hits = []
     for path in files:
         with open(path, encoding="utf-8", errors="replace") as fh:

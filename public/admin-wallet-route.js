@@ -37,7 +37,7 @@ function walletShell() {
       <div class="card"><div class="kicker">Wallet balance</div><div class="kpi" id="wbSats">-</div><div class="faint" id="wbUsd">Loading…</div></div>
       <div class="card"><div class="kicker">Owed to freelancers</div><div class="kpi" id="wbOwed">-</div><div class="faint" id="wbOwedSats"></div></div>
       <div class="card"><div class="kicker">Spendable</div><div class="kpi" id="wbSpend">-</div><div class="faint">Balance minus what freelancers are owed</div></div>
-      <div class="card"><div class="kicker">Breez rate</div><div class="kpi" id="wbRate">-</div>
+      <div class="card"><div class="kicker">Wallet rate</div><div class="kpi" id="wbRate">-</div>
         <div class="row"><select id="wbCur" class="input sm-select" aria-label="Currency"></select><span class="faint" id="wbCurBal"></span></div></div>
     </div>
     <div class="withdraw">
@@ -46,7 +46,7 @@ function walletShell() {
         <div class="field"><label for="wqNet">Coin and network</label><select id="wqNet"><option value="">Loading networks…</option></select></div>
         <div class="field"><label for="wqAddr">Destination address</label><input id="wqAddr" autocomplete="off" placeholder="Address"></div>
         <div class="field short"><label for="wqAmt">Amount (USD)</label><input id="wqAmt" type="number" min="1" step="0.01" inputmode="decimal" placeholder="0.00"></div>
-        <p class="hint">Pays from the platform Breez wallet. Does not change a freelancer balance.</p>
+        <p class="hint">Pays from the platform wallet. Does not change a freelancer balance.</p>
         <button class="btn ghost" id="wqBtn">Get quote</button>
       </div>
       <div class="card summary">
@@ -54,7 +54,7 @@ function walletShell() {
         <dl>
           <div><dt>Route</dt><dd id="wqRoute">-</dd></div>
           <div><dt>You send</dt><dd id="wqSend">-</dd></div>
-          <div><dt>Breez and network fee</dt><dd id="wqFee">-</dd></div>
+          <div><dt>Route and network fee</dt><dd id="wqFee">-</dd></div>
           <div><dt>Provider fee</dt><dd id="wqProv">-</dd></div>
           <div><dt>At least (1% slippage)</dt><dd id="wqMin">-</dd></div>
           <div class="total"><dt>Arrives</dt><dd id="wqGet">-</dd></div>

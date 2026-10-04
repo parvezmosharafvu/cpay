@@ -8,10 +8,10 @@ This file records why each one is there, how it was checked, and what still need
 
 | Button | What it does |
 |---|---|
-| **Pay with Lightning** (primary) | Opens `lightning:<bolt11>`. The phone opens whichever Lightning wallet is set up for that link. This is the safe default and works with almost every wallet. |
+| **Pay with Lightning** (primary) | Opens `lightning:<bolt11>`. The phone opens whichever Lightning wallet is set up for that link. This is the safe default for wallets that handle `lightning:` links. |
 | **Pay with Cash App** | Opens Cash App's Lightning launch link (`https://cash.app/launch/lightning/<bolt11>`, the `cashAppUrl` from create-invoice). With `?wallet=cashapp` it becomes the primary button. |
 | **Other wallets** | Bottom sheet built from `wallets-config.js`. Each entry has its own handoff: `universal`, `deeplink`, `lightning` or `copy`. |
-| **Scan QR / Copy payment request** | Works with any wallet, on any device. The raw request sits in a collapsed "Show payment request" section. |
+| **Scan QR / Copy payment request** | Works with wallets that can scan or paste a standard (BOLT11) invoice. The raw request sits in a collapsed "Show payment request" section. |
 
 ## Rules
 
@@ -44,8 +44,8 @@ This file records why each one is there, how it was checked, and what still need
 | NDAX | disabled | yes | no (Canada) | both | n/a | [NDAX blog](https://ndax.io/en/blog/article/what-is-btc-lightning-a-beginners-guide) |
 | BlueWallet | disabled | needs own server | n/a | both | n/a | [Hosted Lightning sunset](https://bluewallet.io/sunsetting-lndhub/) |
 
-**Excluded:** the Breez mobile wallet. It supports Lightning, but its brand name matches the
-platform's payment provider, and that name must not appear on customer pages. Owner decision needed
+**Excluded:** one wallet whose brand name matches the platform's payment provider, a name that
+must not appear on customer pages. Owner decision needed
 before it is listed.
 
 ## Still to verify on real devices

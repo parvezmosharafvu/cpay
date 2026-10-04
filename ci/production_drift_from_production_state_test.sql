@@ -106,6 +106,20 @@ begin
 end;
 $function$;
 
+-- No lock-clear trigger in production; the account-status guard as it is there.
+drop trigger if exists trg_clear_link_costs_on_lock on public.profiles;
+drop function if exists public.clear_link_costs_on_lock();
+create or replace function public.guard_payment_link_account_status()
+returns trigger language plpgsql security definer set search_path to 'public' as $function$
+begin
+  if not is_admin() and not account_is_active(new.user_id) then
+    raise exception 'Account approval is required before creating payment links';
+  end if;
+  return new;
+end;
+$function$;
+drop function if exists public.link_update_is_lock_clear(public.payment_links, public.payment_links, text);
+
 -- 5. get_my_analytics() open to PUBLIC and anon in production.
 grant execute on function public.get_my_analytics() to public, anon;
 
@@ -118,7 +132,8 @@ do $$ begin
   if to_regprocedure('public.get_public_store(uuid)') is not null
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name like 'store\_%')
      or (select qual from pg_policies where tablename = 'usdt_wallets' and policyname = 'usdt_wallets_own') not like '%is_admin()%'
-     or not has_function_privilege('anon', 'public.get_my_analytics()', 'execute') then
+     or not has_function_privilege('anon', 'public.get_my_analytics()', 'execute')
+     or exists (select 1 from pg_trigger where tgname = 'trg_clear_link_costs_on_lock') then
     raise exception 'production state simulation did not take';
   end if;
 end $$;

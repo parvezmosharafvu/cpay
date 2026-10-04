@@ -269,6 +269,12 @@ revoke all on function public.guard_profile_updates() from anon, authenticated;
 
 -- Link-level cost overrides the profile rate (coalesce(link, profile)), so
 -- a locked owner must not set it directly through REST either.
+--
+-- One update is always allowed, whoever makes it: clearing a link's
+-- cost_percent to NULL, with nothing else changed, on a link whose owner is
+-- locked. It can only move the price to the locked profile rate. This is
+-- what clear_link_costs_on_lock() does from inside a reseller's or admin's
+-- lock; RLS still limits direct REST to the caller's own links.
 create or replace function public.guard_link_updates()
 returns trigger
 language plpgsql
@@ -279,6 +285,10 @@ declare
   v_locked boolean;
 begin
   if auth.uid() is null or is_admin() then
+    return new;
+  end if;
+
+  if public.link_update_is_lock_clear(old, new, tg_op) then
     return new;
   end if;
 
@@ -313,6 +323,92 @@ begin
 end;
 $$;
 revoke all on function public.guard_link_updates() from anon, authenticated;
+
+-- ------------------------------------------------------------
+-- 3b. Applying a lock clears that freelancer's link-level overrides
+-- ------------------------------------------------------------
+-- Whenever an UPDATE sets profiles.cost_locked = true (the column is in the
+-- SET list and the new value is true: reseller_set_freelancer_cost(),
+-- reseller_lock_team_cost(), the admin path through the same functions, or
+-- any future lock path), the same statement clears cost_percent on every
+-- non-deleted link of that freelancer, active or paused (a paused link
+-- can be switched back on). The effective rate is then the profile rate.
+-- The old values go to audit_log. Unlocking restores nothing.
+-- Runs in the lock's own statement and transaction: if the lock fails or
+-- rolls back, the links are untouched. Nothing runs at migration time.
+create or replace function public.link_update_is_lock_clear(p_old public.payment_links, p_new public.payment_links, p_op text)
+returns boolean
+language sql
+stable
+set search_path = public
+as $$
+  select p_op = 'UPDATE'
+     and p_new.cost_percent is null
+     and p_old.cost_percent is not null
+     and (to_jsonb(p_new) - 'cost_percent') = (to_jsonb(p_old) - 'cost_percent')
+     and coalesce((select cost_locked from profiles where id = p_new.user_id), false);
+$$;
+revoke all on function public.link_update_is_lock_clear(public.payment_links, public.payment_links, text) from public, anon, authenticated;
+
+-- The account-status guard would refuse the clear for a suspended or
+-- pending team member and so block the whole lock; the clear is exempt.
+create or replace function public.guard_payment_link_account_status()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.link_update_is_lock_clear(old, new, tg_op) then
+    return new;
+  end if;
+  if not is_admin() and not account_is_active(new.user_id) then
+    raise exception 'Account approval is required before creating payment links';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.guard_payment_link_account_status() from anon, authenticated;
+
+create or replace function public.clear_link_costs_on_lock()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_old jsonb;
+begin
+  select jsonb_agg(jsonb_build_object('link_id', l.id, 'slug', l.slug, 'cost_percent', l.cost_percent) order by l.slug)
+    into v_old
+    from payment_links l
+   where l.user_id = new.id
+     and l.deleted_at is null
+     and l.cost_percent is not null;
+  if v_old is null then
+    return null;
+  end if;
+  update payment_links
+     set cost_percent = null
+   where user_id = new.id
+     and deleted_at is null
+     and cost_percent is not null;
+  perform public.record_audit(
+    'link.cost_cleared_by_lock', 'profile', new.id::text,
+    jsonb_build_object('links', v_old),
+    jsonb_build_object('profile_cost_percent', new.cost_percent, 'link_cost_percent', null)
+  );
+  return null;
+end;
+$$;
+revoke all on function public.clear_link_costs_on_lock() from public, anon, authenticated;
+
+drop trigger if exists trg_clear_link_costs_on_lock on public.profiles;
+create trigger trg_clear_link_costs_on_lock
+  after update of cost_locked on public.profiles
+  for each row
+  when (new.cost_locked)
+  execute function public.clear_link_costs_on_lock();
 
 -- ------------------------------------------------------------
 -- 5. get_my_analytics(): signed-in callers only, as in the repo

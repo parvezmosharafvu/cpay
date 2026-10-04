@@ -81,6 +81,8 @@ insert into payment_links(user_id, slug, display_name, is_active) values
   ('d1000000-0000-0000-0000-0000000000fb', 'drift-b-gone', 'B gone', true),
   ('d1000000-0000-0000-0000-0000000000fd', 'drift-p-live', 'P live', true);
 update payment_links set deleted_at = now() where slug = 'drift-b-gone';
+-- Link ids for callers that cannot read the link through RLS.
+select set_config('drift.b_live', (select id::text from payment_links where slug = 'drift-b-live'), true);
 update profiles set account_status = 'pending' where id = 'd1000000-0000-0000-0000-0000000000fd';
 
 -- ============================================================
@@ -306,7 +308,7 @@ do $$ declare v text; begin
   v := pg_temp.must_fail($q$update profiles set cost_locked = false where id = auth.uid()$q$, 'B PATCH cost_locked');
   v := pg_temp.must_fail($q$update profiles set cost_percent = 0 where id = auth.uid()$q$, 'B PATCH cost_percent');
   v := pg_temp.must_fail($q$select public.set_my_cost_percent(0)$q$, 'B set_my_cost_percent while locked');
-  v := pg_temp.must_fail($q$select public.set_link_cost_percent((select id from payment_links where slug = 'drift-b-live'), 0)$q$, 'B set_link_cost_percent while locked');
+  v := pg_temp.must_fail($q$select public.set_link_cost_percent(current_setting('drift.b_live')::uuid, 0)$q$, 'B set_link_cost_percent while locked');
   v := pg_temp.must_fail($q$update payment_links set cost_percent = 0 where slug = 'drift-b-live'$q$, 'B PATCH link cost while locked');
   if v not like '%locked%' then raise exception 'link PATCH refused for the wrong reason: %', v; end if;
   v := pg_temp.must_fail($q$insert into payment_links(user_id, slug, display_name, cost_percent) values (auth.uid(), 'drift-b-cheap', 'cheap', 0)$q$, 'B insert link with cost while locked');
@@ -361,7 +363,7 @@ do $$ begin perform pg_temp.act('d1000000-0000-0000-0000-0000000000fb'); end $$;
 set local role authenticated;
 do $$ begin
   perform public.set_my_cost_percent(2);
-  perform public.set_link_cost_percent((select id from payment_links where slug = 'drift-b-live'), 1.5);
+  perform public.set_link_cost_percent(current_setting('drift.b_live')::uuid, 1.5);
   update payment_links set cost_percent = 1.25 where slug = 'drift-b-live';
 end $$;
 reset role;
@@ -446,6 +448,186 @@ end $$;
 -- No session (service role, signup trigger) is unaffected.
 do $$ begin perform pg_temp.act(null); end $$;
 update profiles set account_status = 'active' where id = 'd1000000-0000-0000-0000-0000000000a2';
+
+-- ============================================================
+-- 3b. Applying a lock clears the freelancer's link-level overrides
+-- ============================================================
+-- State here: B unlocked, profile cost 2, link drift-b-live cost 1.25.
+do $$ begin perform pg_temp.act(null); end $$;
+insert into payment_links(user_id, slug, display_name, is_active, cost_percent) values
+  ('d1000000-0000-0000-0000-0000000000fb', 'drift-b-paused', 'B paused', false, 2.5);
+update payment_links set cost_percent = 9 where slug = 'drift-b-gone';  -- deleted link
+select set_config('drift.b_paused', (select id::text from payment_links where slug = 'drift-b-paused'), true);
+create or replace function pg_temp.link_costs() returns text language sql as $$
+  select string_agg(slug || '=' || coalesce(cost_percent::text, 'null'), ',' order by slug)
+    from payment_links where user_id = 'd1000000-0000-0000-0000-0000000000fb'
+$$;
+grant execute on function pg_temp.link_costs() to anon, authenticated, service_role;
+do $$ begin
+  if pg_temp.link_costs() <> 'drift-b-gone=9.000,drift-b-live=1.250,drift-b-off=null,drift-b-paused=2.500' then
+    raise exception 'fixture: unexpected link costs %', pg_temp.link_costs();
+  end if;
+end $$;
+
+-- Atomic: the clear happens inside the lock statement and rolls back with it.
+do $$ begin perform pg_temp.act('d1000000-0000-0000-0000-0000000000cc'); end $$;
+set local role authenticated;
+do $$
+declare v_inside text;
+begin
+  begin
+    perform public.reseller_set_freelancer_cost('d1000000-0000-0000-0000-0000000000fb', 3, true);
+    v_inside := pg_temp.link_costs();
+    raise exception 'drift-test-abort';
+  exception when raise_exception then
+    if sqlerrm <> 'drift-test-abort' then raise; end if;
+  end;
+  if v_inside <> 'drift-b-gone=9.000,drift-b-live=null,drift-b-off=null,drift-b-paused=null' then
+    raise exception 'lock did not clear link overrides in the same statement: %', v_inside;
+  end if;
+  if pg_temp.link_costs() <> 'drift-b-gone=9.000,drift-b-live=1.250,drift-b-off=null,drift-b-paused=2.500' then
+    raise exception 'rolled-back lock left links changed: %', pg_temp.link_costs();
+  end if;
+  if (select cost_locked from profiles where id = 'd1000000-0000-0000-0000-0000000000fb') then
+    raise exception 'rolled-back lock left the profile locked';
+  end if;
+  raise notice 'ok: lock and link clear commit or roll back together';
+end $$;
+reset role;
+
+-- A reseller outside B's team cannot lock B, so cannot trigger the clear,
+-- and cannot clear B's links any other way.
+do $$ begin perform pg_temp.act('d1000000-0000-0000-0000-0000000000aa'); end $$;
+set local role authenticated;
+do $$ declare v text; v_n int; begin
+  v := pg_temp.must_fail($q$select public.reseller_set_freelancer_cost('d1000000-0000-0000-0000-0000000000fb', 3, true)$q$, 'non-team reseller lock');
+  v := pg_temp.must_fail($q$select public.set_link_cost_percent(current_setting('drift.b_live')::uuid, null)$q$, 'non-team reseller link clear');
+  if v <> 'Not authorized' then raise exception 'non-team clear refused for the wrong reason: %', v; end if;
+  update payment_links set cost_percent = null where user_id = 'd1000000-0000-0000-0000-0000000000fb';
+  get diagnostics v_n = row_count;
+  if v_n <> 0 then raise exception 'non-team reseller changed B''s links through REST'; end if;
+  perform public.reseller_lock_team_cost(1, true);  -- A's own (empty) team
+end $$;
+reset role;
+do $$ declare v text; begin
+  v := pg_temp.must_fail($q$update profiles set cost_locked = true where id = 'd1000000-0000-0000-0000-0000000000fb'$q$, 'non-team reseller definer lock');
+  if pg_temp.link_costs() <> 'drift-b-gone=9.000,drift-b-live=1.250,drift-b-off=null,drift-b-paused=2.500'
+     or (select cost_locked from profiles where id = 'd1000000-0000-0000-0000-0000000000fb') then
+    raise exception 'non-team reseller changed B''s lock or links: %', pg_temp.link_costs();
+  end if;
+  raise notice 'ok: a reseller outside the team cannot trigger or perform the clear';
+end $$;
+
+-- B's own reseller locks B: overrides cleared, effective cost = profile rate.
+do $$ begin perform pg_temp.act('d1000000-0000-0000-0000-0000000000cc'); end $$;
+set local role authenticated;
+do $$ begin perform public.reseller_set_freelancer_cost('d1000000-0000-0000-0000-0000000000fb', 3, true); end $$;
+reset role;
+do $$ declare v_old jsonb; v_actor uuid; begin
+  if pg_temp.link_costs() <> 'drift-b-gone=9.000,drift-b-live=null,drift-b-off=null,drift-b-paused=null' then
+    raise exception 'lock did not clear the non-deleted link overrides: %', pg_temp.link_costs();
+  end if;
+  if (select cost_percent from public.get_link_preview('drift-b-live')) <> 3 then
+    raise exception 'effective cost after lock is not the profile rate: %', (select cost_percent from public.get_link_preview('drift-b-live'));
+  end if;
+  select old_value, actor_id into v_old, v_actor from audit_log
+   where action = 'link.cost_cleared_by_lock' and subject_id = 'd1000000-0000-0000-0000-0000000000fb';
+  if v_actor is distinct from 'd1000000-0000-0000-0000-0000000000cc'
+     or jsonb_array_length(v_old->'links') <> 2
+     or v_old::text not like '%drift-b-live%1.25%' or v_old::text not like '%drift-b-paused%2.5%' then
+    raise exception 'lock clear audit missing or wrong: % %', v_actor, v_old;
+  end if;
+  raise notice 'ok: lock clears link overrides (active and paused, not deleted), effective cost = profile rate, old values audited';
+end $$;
+
+-- The link guard still refuses a locked owner (and the reseller) a link cost.
+do $$ begin perform pg_temp.act('d1000000-0000-0000-0000-0000000000fb'); end $$;
+set local role authenticated;
+do $$ declare v text; begin
+  v := pg_temp.must_fail($q$update payment_links set cost_percent = 0.5 where slug = 'drift-b-live'$q$, 'locked owner PATCH link cost after clear');
+  if v not like '%locked%' then raise exception 'wrong refusal: %', v; end if;
+  v := pg_temp.must_fail($q$select public.set_link_cost_percent(current_setting('drift.b_paused')::uuid, 0.5)$q$, 'locked owner RPC link cost');
+  v := pg_temp.must_fail($q$insert into payment_links(user_id, slug, display_name, cost_percent) values (auth.uid(), 'drift-b-new', 'new', 0.5)$q$, 'locked owner insert with cost');
+end $$;
+reset role;
+do $$ begin perform pg_temp.act('d1000000-0000-0000-0000-0000000000cc'); end $$;
+set local role authenticated;
+do $$ declare v text; begin
+  v := pg_temp.must_fail($q$select public.set_link_cost_percent(current_setting('drift.b_live')::uuid, 0.5)$q$, 'reseller per-link price');
+  if v not like '%another user%' then raise exception 'reseller per-link price refused for the wrong reason: %', v; end if;
+  raise notice 'ok: link guard still blocks a locked owner, and reseller per-link pricing stays blocked';
+end $$;
+-- Unlock restores nothing.
+do $$ begin perform public.reseller_lock_team_cost(3, false); end $$;
+reset role;
+do $$ begin
+  if (select cost_locked from profiles where id = 'd1000000-0000-0000-0000-0000000000fb')
+     or pg_temp.link_costs() <> 'drift-b-gone=9.000,drift-b-live=null,drift-b-off=null,drift-b-paused=null' then
+    raise exception 'unlock restored link overrides or did not unlock: %', pg_temp.link_costs();
+  end if;
+  raise notice 'ok: unlocking does not restore old link overrides';
+end $$;
+
+-- Team lock clears too, including for a suspended team member.
+do $$ begin perform pg_temp.act('d1000000-0000-0000-0000-0000000000fb'); end $$;
+set local role authenticated;
+do $$ begin perform public.set_link_cost_percent(current_setting('drift.b_live')::uuid, 1.75); end $$;
+reset role;
+-- The clear exemption is for locked owners only: B is unlocked here, so
+-- B's reseller still cannot clear (or price) B's link.
+do $$ begin perform pg_temp.act('d1000000-0000-0000-0000-0000000000cc'); end $$;
+set local role authenticated;
+do $$ declare v text; begin
+  v := pg_temp.must_fail($q$select public.set_link_cost_percent(current_setting('drift.b_live')::uuid, null)$q$, 'reseller clears an unlocked member''s link');
+  if v not like '%another user%' then raise exception 'refused for the wrong reason: %', v; end if;
+  raise notice 'ok: no clear exemption for an unlocked owner''s link';
+end $$;
+reset role;
+do $$ begin perform pg_temp.act(null); end $$;
+update profiles set account_status = 'suspended' where id = 'd1000000-0000-0000-0000-0000000000fb';
+do $$ begin perform pg_temp.act('d1000000-0000-0000-0000-0000000000cc'); end $$;
+set local role authenticated;
+do $$ begin perform public.reseller_lock_team_cost(4, true); end $$;
+reset role;
+do $$ begin perform pg_temp.act(null); end $$;
+update profiles set account_status = 'active' where id = 'd1000000-0000-0000-0000-0000000000fb';
+do $$ begin
+  if pg_temp.link_costs() <> 'drift-b-gone=9.000,drift-b-live=null,drift-b-off=null,drift-b-paused=null'
+     or (select cost_percent from public.get_link_preview('drift-b-live')) <> 4 then
+    raise exception 'team lock did not clear (suspended member): % / %', pg_temp.link_costs(), (select cost_percent from public.get_link_preview('drift-b-live'));
+  end if;
+  raise notice 'ok: team lock clears overrides, also for a suspended member; effective cost = team rate';
+end $$;
+
+-- Admin lock path clears too.
+do $$ begin perform pg_temp.act(null); end $$;
+insert into payment_links(user_id, slug, display_name, is_active, cost_percent) values
+  ('d1000000-0000-0000-0000-0000000000f0', 'drift-o-live', 'O live', true, 2);
+do $$ begin perform pg_temp.act('d1000000-0000-0000-0000-0000000000ad'); end $$;
+set local role authenticated;
+do $$ begin perform public.reseller_set_freelancer_cost('d1000000-0000-0000-0000-0000000000f0', 6, true); end $$;
+reset role;
+do $$ begin
+  if (select cost_percent from payment_links where slug = 'drift-o-live') is not null
+     or (select cost_percent from public.get_link_preview('drift-o-live')) <> 6 then
+    raise exception 'admin lock did not clear the link override';
+  end if;
+  raise notice 'ok: admin lock path clears link overrides';
+end $$;
+-- The exemption covers a pure clear only: with O locked and an admin-set
+-- override, another user's definer path cannot clear AND change the link.
+do $$ begin perform pg_temp.act('d1000000-0000-0000-0000-0000000000ad'); end $$;
+set local role authenticated;
+do $$ begin perform public.set_link_cost_percent((select id from payment_links where slug = 'drift-o-live'), 2); end $$;
+reset role;
+do $$ begin perform pg_temp.act('d1000000-0000-0000-0000-0000000000cc'); end $$;
+do $$ declare v text; begin
+  v := pg_temp.must_fail($q$update payment_links set cost_percent = null, display_name = 'taken over' where slug = 'drift-o-live'$q$, 'clear plus another change');
+  if (select display_name || cost_percent::text from payment_links where slug = 'drift-o-live') <> 'O live2.000' then
+    raise exception 'O''s link changed';
+  end if;
+  raise notice 'ok: the clear exemption allows nothing but clearing cost_percent';
+end $$;
 
 -- ============================================================
 -- 5. get_my_analytics(): signed-in only

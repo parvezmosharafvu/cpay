@@ -4,7 +4,7 @@
 // in-memory outbox with telegram_claim/telegram_finish's rules. No real
 // Telegram, no real token.
 import { createHandler, type OutboxRow } from "./handler.ts";
-import { dhakaTime, escapeHtml, MAX_MESSAGE, renderDaily, renderSettled, sats, usd } from "./render.ts";
+import { dhakaTime, escapeHtml, renderSettled, sats, usd } from "./render.ts";
 
 const TOKEN = "123456:fake-token-for-tests";
 const SECRET = "cron-secret-for-tests";
@@ -56,17 +56,6 @@ const settled = {
   link_name: "Logo <design>", link_slug: "tg-logo", owner_name: "Karim & Sons", show_owner: true,
   amount_usd: 1234.5, amount_sat: 1234500, fee_usd: 37.04, net_usd: 1197.46, settled_at: "2026-09-27T10:59:00+00:00",
 };
-const daily = {
-  reseller_name: "Rahim <Team> & Co", business_day: "2026-09-26",
-  day_start: "2026-09-26T11:00:00+00:00", day_end: "2026-09-27T11:00:00+00:00",
-  links: [
-    { link_name: "Logo <design>", link_slug: "tg-logo", owner_name: "Karim", show_owner: true, payments: 2, gross_usd: 133.33, fee_usd: 4, net_usd: 129.33 },
-    { link_name: "Reseller own", link_slug: "tg-own", owner_name: "Rahim", show_owner: false, payments: 1, gross_usd: 40, fee_usd: 1.2, net_usd: 38.8 },
-    { link_name: "tg-promo", link_slug: "tg-promo", owner_name: "Karim", show_owner: true, payments: 1, gross_usd: 20, fee_usd: 0.6, net_usd: 19.4 },
-  ],
-  totals: { payments: 4, gross_usd: 193.33, fee_usd: 5.8, net_usd: 187.53 },
-};
-
 Deno.test("formatting helpers", () => {
   eq(escapeHtml(`<b>"Tom" & Jerry</b>`), `&lt;b&gt;"Tom" &amp; Jerry&lt;/b&gt;`, "escape");
   eq(usd(1234567.5), "$1,234,567.50", "usd");
@@ -87,35 +76,14 @@ Deno.test("settled payment message, exact text", () => {
     "Time: 27 Sep 2026, 4:59 PM (Dhaka)",
   ].join("\n"), "settled");
   const own = renderSettled({ ...settled, show_owner: false, amount_sat: null });
-  eq(own.includes("Freelancer"), false, "no freelancer line on the reseller's own link");
+  eq(own.includes("Freelancer"), false, "no freelancer line when show_owner is false");
   eq(own.includes("Amount: <b>$1,234.50</b>\n"), true, "no sats for a manual settle");
-});
-
-Deno.test("daily close message, exact text", () => {
-  eq(renderDaily(daily), [
-    "<b>Daily close: Rahim &lt;Team&gt; &amp; Co</b>\n26 Sep 2026, 5:00 PM to 27 Sep 2026, 5:00 PM (Dhaka)",
-    "<b>Logo &lt;design&gt;</b> (/tg-logo), Karim\n2 payments, $133.33, 69.0% of the day\nFee $4.00, net $129.33",
-    "<b>Reseller own</b> (/tg-own)\n1 payment, $40.00, 20.7% of the day\nFee $1.20, net $38.80",
-    "<b>tg-promo</b>, Karim\n1 payment, $20.00, 10.3% of the day\nFee $0.60, net $19.40",
-    "<b>Totals</b>\nPayments: 4\nGross, with fee: $193.33\nFees: $5.80\nNet, without fee: <b>$187.53</b>",
-  ].join("\n\n"), "daily");
-  const empty = renderDaily({ ...daily, links: [], totals: { payments: 0, gross_usd: 0, fee_usd: 0, net_usd: 0 } });
-  eq(empty.includes("No settled payments in this business day."), true, "empty day");
-});
-
-Deno.test("a day with hundreds of links stays under Telegram's limit and keeps the totals", () => {
-  const links = Array.from({ length: 400 }, (_, i) => ({ ...daily.links[0], link_name: `Link number ${i}`, link_slug: `link-${i}` }));
-  const text = renderDaily({ ...daily, links });
-  eq(text.length <= MAX_MESSAGE, true, `length ${text.length}`);
-  eq(/And \d+ more links, included in the totals\./.test(text), true, "says how many were left out");
-  eq(text.endsWith("Net, without fee: <b>$187.53</b>"), true, "totals kept");
 });
 
 Deno.test("each row gets one outcome: sent, retry on 429/5xx, failed on 4xx or no answer, skipped without a target", async () => {
   sent.length = 0;
   const box = outbox([
     { id: 1, kind: "payment_settled", chat: "-1001111111111", payload: settled, attempts: 0, status: "pending" },
-    { id: 2, kind: "daily_close", chat: "-1001111111111", payload: daily, attempts: 0, status: "pending" },
     { id: 3, kind: "payment_settled", chat: "admin", payload: settled, attempts: 0, status: "pending" },
     { id: 4, kind: "payment_settled", chat: "-100429", payload: settled, attempts: 0, status: "pending" },
     { id: 5, kind: "payment_settled", chat: "-100403", payload: settled, attempts: 0, status: "pending" },
@@ -129,10 +97,10 @@ Deno.test("each row gets one outcome: sent, retry on 429/5xx, failed on 4xx or n
   });
   const res = await handler(new Request("http://x/", { method: "POST", headers: { "x-cron-secret": SECRET } }));
   const body = await res.json();
-  eq(body, { ok: true, sent: 3, retry: 2, failed: 2, skipped: 0 }, "counts");
-  eq(box.rows.map((r) => r.status), ["sent", "sent", "sent", "retry-later", "failed", "retry-later", "failed"], "statuses");
-  eq(box.rows[3].retryAfterSecs, 7, "retry_after passed on");
-  eq(sent.map((s) => s.chat_id), ["-1001111111111", "-1001111111111", "-1009999999999"], "chats");
+  eq(body, { ok: true, sent: 2, retry: 2, failed: 2, skipped: 0 }, "counts");
+  eq(box.rows.map((r) => r.status), ["sent", "sent", "retry-later", "failed", "retry-later", "failed"], "statuses");
+  eq(box.rows[2].retryAfterSecs, 7, "retry_after passed on");
+  eq(sent.map((s) => s.chat_id), ["-1001111111111", "-1009999999999"], "chats");
   eq(sent.every((s) => s.parse_mode === "HTML" && s.token === TOKEN), true, "HTML mode, bot token in the path only");
   eq(box.rows[0].messageId, 1001, "message id stored");
   eq(JSON.stringify(box.rows).includes(TOKEN) || logs.join("").includes(TOKEN) || JSON.stringify(body).includes(TOKEN), false, "token nowhere");
@@ -140,15 +108,15 @@ Deno.test("each row gets one outcome: sent, retry on 429/5xx, failed on 4xx or n
   // A second run finds nothing due and sends nothing.
   const again = await (await handler(new Request("http://x/", { method: "POST", headers: { "x-cron-secret": SECRET } }))).json();
   eq(again, { ok: true, sent: 0, retry: 0, failed: 0, skipped: 0 }, "second run");
-  eq(sent.length, 3, "nothing sent twice");
+  eq(sent.length, 2, "nothing sent twice");
 });
 
-Deno.test("admin rows are skipped without an admin group or with ALERT_ON_SETTLED=false; the daily close to a reseller is not", async () => {
+Deno.test("admin rows are skipped without an admin group or with ALERT_ON_SETTLED=false; a row with an explicit chat is not", async () => {
   sent.length = 0;
   for (const [adminChatId, settledToAdmin, reason] of [["", true, "ALERT_TELEGRAM_CHAT_ID is not set"], ["-1009999999999", false, "ALERT_ON_SETTLED is false"]] as const) {
     const box = outbox([
       { id: 1, kind: "payment_settled", chat: "admin", payload: settled, attempts: 0, status: "pending" },
-      { id: 2, kind: "daily_close", chat: "-1001111111111", payload: daily, attempts: 0, status: "pending" },
+      { id: 2, kind: "payment_settled", chat: "-1001111111111", payload: settled, attempts: 0, status: "pending" },
     ]);
     const handler = createHandler({ cronSecret: SECRET, botToken: TOKEN, adminChatId, settledToAdmin, telegramApi: API, outbox: box, log: () => {} });
     await handler(new Request("http://x/", { method: "POST", headers: { "x-cron-secret": SECRET } }));

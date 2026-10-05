@@ -150,15 +150,9 @@ test('the service secret is compared exactly', () => {
 test('every wallet action is refused with 403 unless adminId is an admin', async () => {
   const { route, breez } = setup();
   const creator = await makeUser({ role: 'creator' });
-  // The reseller (moderator) role is removed by 20261005020000; on that
-  // schema the role no longer exists, so only the other non-admins are tried.
-  const hasModerator = (await db.query(
-    "select pg_get_constraintdef(oid) ~ 'moderator' as ok from pg_constraint where conname = 'profiles_role_check'",
-  )).rows[0]?.ok ?? false;
-  const reseller = hasModerator ? await makeUser({ role: 'moderator' }) : undefined;
   const actions = ['info', 'payments', 'receive', 'addresses', 'send-prepare', 'send-confirm', 'stable-routes', 'stable-quote', 'stable-confirm', 'fiat'];
   for (const action of actions) {
-    for (const adminId of [creator, ...(reseller ? [reseller] : []), randomUUID(), 'not-a-uuid', undefined]) {
+    for (const adminId of [creator, randomUUID(), 'not-a-uuid', undefined]) {
       const [status, body] = await route('POST', `/admin/wallet/${action}`, { adminId, amountSat: 1000, destination: BOLT11 });
       assert.equal(status, 403, `${action} as ${adminId}`);
       assert.deepEqual(body, { error: 'admin only' });

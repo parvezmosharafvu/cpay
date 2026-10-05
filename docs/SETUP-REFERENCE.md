@@ -43,7 +43,7 @@ Dashboard → Edge Functions → Secrets
 | `GITHUB_TOKEN` | for backups | Repo-scoped PAT |
 | `GITHUB_OWNER` / `GITHUB_REPO` | for backups | Where ledger snapshots go |
 | `ALERT_WEBHOOK_URL` | optional | Discord/Slack incoming webhook |
-| `ALERT_TELEGRAM_BOT_TOKEN` | for Telegram | From @BotFather. Sends ops alerts, reseller group messages and daily closes |
+| `ALERT_TELEGRAM_BOT_TOKEN` | for Telegram | From @BotFather. Sends ops alerts and settled-payment messages to the admin group |
 | `ALERT_TELEGRAM_CHAT_ID` | optional | Admin group, a negative number |
 | `ALERT_ON_SETTLED` | optional | `false` stops settled-payment copies to the admin group |
 | `PAYMENT_SERVICE_URL` | yes | Base URL of the payment service |
@@ -275,7 +275,7 @@ Easy to confuse, completely different:
 
 | Setting | Where | Who pays it | Who sets it | Limit |
 |---|---|---|---|---|
-| `cost_percent` | CPAY profile | The payer | The freelancer/reseller themselves | None (1000% typo guard) |
+| `cost_percent` | CPAY profile | The payer | The freelancer themselves, or an admin | None (1000% typo guard) |
 | `withdrawal_fee_percent` | CPAY profile | The user | Admin, per profile | None (100% — beyond that payout goes negative) |
 
 **These are not the same thing and never affect each other.** The cost

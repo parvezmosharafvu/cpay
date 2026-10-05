@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CPAY · Lightning payments for freelancers and resellers</title>
+  <title>CPAY · Lightning payments for freelancers</title>
   <meta name="description" content="CPAY receives Lightning payments from Cash App and every other Lightning wallet. Withdraw to USDT.">
   <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
@@ -26,8 +26,7 @@
       <h1>Get paid from Cash App and any Lightning wallet.</h1>
       <p>Share a payment link. Your customer pays from Cash App or any Lightning wallet. Your balance is kept in US dollars, and you withdraw USDT to an address you save.</p>
       <div class="row">
-        <a class="btn primary lg" href="register.html?role=freelancer">Join as a freelancer</a>
-        <a class="btn ghost lg" href="register.html?role=reseller">Join as a reseller</a>
+        <a class="btn primary lg" href="register.html">Join as a freelancer</a>
       </div>
     </section>
     <section class="features">
@@ -38,8 +37,8 @@
       </div>
       <div class="card">
         <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/></svg></div>
-        <h3>Reseller teams</h3>
-        <p>Freelancers who sign up with a reseller's link join that reseller's team.</p>
+        <h3>Your own dashboard</h3>
+        <p>See every payment, your balance and your withdrawals in one place, in US dollars.</p>
       </div>
       <div class="card">
         <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div>
@@ -54,7 +53,7 @@
       const { data: { session } } = await window.supabaseClient.auth.getSession();
       if (!session) return;
       const { data } = await window.supabaseClient.from('profiles').select('role,account_status').eq('id', session.user.id).single();
-      if (data?.account_status === 'active') location.href = data.role === 'admin' ? 'admin.html' : data.role === 'moderator' ? 'reseller.html' : 'dashboard.html';
+      if (data?.account_status === 'active') location.href = data.role === 'admin' ? 'admin.html' : 'dashboard.html';
     });
   </script>
 </body>

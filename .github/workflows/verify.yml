@@ -91,41 +91,53 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/revenue_desk_access_test.sql
 
-      - name: Reseller and staff authorization (20261004010000)
+      - name: Two account types, freelancer and admin (20261005020000)
         env:
           PGPASSWORD: postgres
         run: |
-          # M1 exploit regression (a reseller or any signed-in user cannot
-          # attach a freelancer), staff/admin functions admin-only, suspended
-          # accounts lose role powers, and the legitimate paths still work:
-          # signup referral, reseller team list and commission, admin
-          # functions, the invoice page. Runs again on the default-privileges
-          # database below. BEGIN/ROLLBACK.
-          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/reseller_authz_test.sql
+          # No reseller role, tables, columns, triggers, functions or
+          # settings left; sign-up, approval and role changes only make
+          # freelancers and admins; link pricing has no lock and no team
+          # price; withdrawal fee = own override, else the global default;
+          # admin_request_withdrawal_for is admin-only and keeps every
+          # withdrawal check; own payments and marks, admin tools, lockout
+          # guards and the invoice page still work. Runs again on the
+          # default-privileges database below. BEGIN/ROLLBACK.
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/role_removal_test.sql
+          # A pending application approved by an active admin is exactly an
+          # active freelancer (no reseller code, no extra privilege); a
+          # suspended admin or a freelancer cannot decide one.
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/account_approval_test.sql
 
-      - name: attach_freelancer_to_reseller under concurrency
-        env:
-          PGPASSWORD: postgres
-        run: |
-          # Two sessions (the second over dblink) attach one freelancer to
-          # two resellers; the second waits on the first's row lock and must
-          # write nothing. Committed fixtures, removed at the end.
-          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/attach_concurrency_test.sql
-
-      - name: Production drift fixes (20261004020000)
+      - name: Production drift fixes (20261004020000), on the schema before the reseller removal
         env:
           PGPASSWORD: postgres
         run: |
           # Storefront (public fields, active accounts, anon), payout wallets
-          # (own-rows RLS, audited admin RPC, no anon), the D4 price lock
-          # (reseller prices only their own team; a freelancer cannot unlock
-          # or change a locked price by RPC, definer path or link PATCH),
+          # (own-rows RLS, audited admin RPC, no anon), the D4 price lock,
           # nobody changes their own role/status, get_my_analytics and
           # telegram_context grants. Then the same checks after putting the
           # database back into PRODUCTION's pre-migration shape and applying
           # the migration twice. BEGIN/ROLLBACK.
-          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/production_drift_test.sql
-          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/production_drift_from_production_state_test.sql
+          #
+          # These test the historical migration 20261004020000, which
+          # re-applies itself and seeds resellers and the price lock, so
+          # they run on databases migrated up to, not including,
+          # 20261005020000 (the reseller removal); production passes through
+          # that state too. The final schema is covered by
+          # ci/role_removal_test.sql.
+          for db in driftcheck driftpriv; do
+            psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -c "create database $db"
+            psql -h localhost -U postgres -d $db -v ON_ERROR_STOP=1 -q -f ci/bootstrap.sql
+            [ $db = driftpriv ] && psql -h localhost -U postgres -d $db -v ON_ERROR_STOP=1 -q -f ci/supabase_default_privileges.sql
+            for f in supabase/migrations/*.sql; do
+              n=$(basename "$f" | cut -d_ -f1)
+              [ ${#n} -eq 14 ] && [ "$n" -ge 20261005020000 ] && continue
+              psql -h localhost -U postgres -d $db -v ON_ERROR_STOP=1 -q -f "$f"
+            done
+            psql -h localhost -U postgres -d $db -v ON_ERROR_STOP=1 -f ci/production_drift_test.sql
+            psql -h localhost -U postgres -d $db -v ON_ERROR_STOP=1 -f ci/production_drift_from_production_state_test.sql
+          done
 
       - name: Receipt log (F1 PR 1) records only, settlement unchanged
         env:
@@ -162,11 +174,24 @@ jobs:
           # signed-in users must refuse, or return none of the victim's data
           # and leave the victim's rows unchanged.
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/authenticated_rpc_sweep_test.sql
-          # The exploit regression again, with production's grants.
-          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/reseller_authz_test.sql
-          # The drift fixes with production's grants, from both starting states.
-          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/production_drift_test.sql
-          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/production_drift_from_production_state_test.sql
+          # The account-type checks again, with production's grants. (The
+          # drift fixes with production's grants run in the drift step above.)
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/role_removal_test.sql
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/account_approval_test.sql
+          # A suspended admin, with production's grants, before and after
+          # 20261005020000: every withdrawal, fee, wallet and account probe
+          # (including the new admin_request_withdrawal_for) is refused
+          # after, nothing is allowed after that was refused before, and an
+          # active admin is allowed the admin probes (positive control).
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -c 'create database suspcheck'
+          psql -h localhost -U postgres -d suspcheck -v ON_ERROR_STOP=1 -q -f ci/bootstrap.sql
+          psql -h localhost -U postgres -d suspcheck -v ON_ERROR_STOP=1 -q -f ci/supabase_default_privileges.sql
+          for f in supabase/migrations/*.sql; do
+            n=$(basename "$f" | cut -d_ -f1)
+            [ ${#n} -eq 14 ] && [ "$n" -ge 20261005020000 ] && continue
+            psql -h localhost -U postgres -d suspcheck -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+          ci/suspended_admin_compare.sh suspcheck privcheck
 
       - name: Runtime regression — overpayment cap and message soft-delete
         env:
@@ -230,14 +255,44 @@ jobs:
           # applies, twice.
           ci/commission_removal_abort_test.sh abortcheck
 
+      - name: Reseller role removal (20261005020000) keeps balances and aborts on reseller data
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # Two throwaway databases migrated up to, not including,
+          # 20261005020000.
+          for db in rolecheck roleabort; do
+            psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -c "create database $db"
+            psql -h localhost -U postgres -d $db -v ON_ERROR_STOP=1 -q -f ci/bootstrap.sql
+            for f in supabase/migrations/*.sql; do
+              n=$(basename "$f" | cut -d_ -f1)
+              [ ${#n} -eq 14 ] && [ "$n" -ge 20261005020000 ] && continue
+              psql -h localhost -U postgres -d $db -v ON_ERROR_STOP=1 -q -f "$f"
+            done
+          done
+          # A reseller account with its own links, payments, wallet and
+          # withdrawals, and freelancers with and without their own fee:
+          # every balance, dashboard day, payment, withdrawal, link cost,
+          # profile setting and resolved withdrawal fee identical after the
+          # migration; the reseller is a freelancer, withdraws by itself,
+          # an admin can withdraw for it, and it still gets paid.
+          psql -h localhost -U postgres -d rolecheck -v ON_ERROR_STOP=1 -f ci/role_removal_before.sql
+          psql -h localhost -U postgres -d rolecheck -v ON_ERROR_STOP=1 -q -f supabase/migrations/20261005020000_remove_reseller_role.sql
+          psql -h localhost -U postgres -d rolecheck -v ON_ERROR_STOP=1 -f ci/role_removal_after.sql
+          # Each precondition on its own (team member, affiliate code, lock,
+          # team cost, assignment, notice, team message, Telegram group, team
+          # fee, self-withdraw switch, pending reseller application, owned
+          # domain): the migration aborts and changes nothing; once none is
+          # left it applies, twice.
+          ci/role_removal_abort_test.sh roleabort
+
       - name: Telegram messages (0106)
         env:
           PGPASSWORD: postgres
         run: |
-          # Where each reseller's group is set, one settled-payment message
-          # per payment and group, the 17:00 Dhaka daily close numbers,
-          # re-runs that queue nothing, and the sender's claim/finish rules.
-          # BEGIN/ROLLBACK, like above.
+          # One settled-payment message per payment to the admin group, no
+          # reseller groups or reseller daily close left, re-runs that queue
+          # nothing, and the sender's claim/finish rules. BEGIN/ROLLBACK.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/telegram_test.sql
 
       - uses: actions/setup-node@v4

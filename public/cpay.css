@@ -315,6 +315,58 @@ body.checkout .brand .mark,body.store .brand .mark,.theme-stage .brand .mark{bac
 .modal-inner li{margin-bottom:4px}
 .float-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;font-weight:500;z-index:300;display:none;max-width:90%;text-align:center;box-shadow:var(--shadow-lg)}
 
+/* invoice: checkout actions, states and the wallet sheet (checkout v3).
+   Everything reads design tokens, so each checkout design below restyles it. */
+.amount-ccy{font-size:.4em;font-weight:600;color:var(--faint);letter-spacing:.04em;vertical-align:.4em}
+.ref-chip{display:inline-flex;align-items:center;gap:6px;margin:8px auto 0;padding:4px 10px;min-height:32px;border:1px dashed var(--line-strong);border-radius:999px;background:transparent;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer}
+.ref-chip .mono{font-size:12px;color:var(--text)}
+.status-row{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.status-chip[data-state="detected"]{color:var(--info);background:var(--info-soft);border-color:color-mix(in srgb,var(--info) 35%,transparent)}
+.pay-actions{display:grid;gap:10px;margin-top:22px}
+.pay-actions .pill-btn{display:flex;align-items:center;justify-content:center;gap:10px;min-height:52px;font-size:16px}
+.pay-actions .btn-pay{min-height:56px;font-size:17px;box-shadow:0 8px 20px color-mix(in srgb,var(--btn-bg,var(--accent)) 26%,transparent)}
+.pill-btn:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
+.btn-ico{width:20px;height:20px;flex:0 0 auto}
+.btn-alt{background:var(--text);color:#fff;border-color:transparent}
+[data-layout="focus"] .btn-alt,[data-layout="aurora"] .btn-alt{color:var(--bg)}
+.btn-alt:hover:not(:disabled){background:color-mix(in srgb,var(--text) 86%,var(--surface))}
+.ico-cash{display:inline-grid;place-items:center;border-radius:6px;border:1.5px solid currentColor;font-size:13px;font-weight:800;line-height:1}
+.or-rule{display:flex;align-items:center;gap:12px;margin:24px 0 2px;color:var(--faint);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.or-rule::before,.or-rule::after{content:"";flex:1;height:1px;background:var(--line)}
+body.invoice #qrcode{width:min(264px,66vw);height:min(264px,66vw)}
+body.invoice #qrcode img,body.invoice #qrcode canvas{width:100%;height:100%}
+.qr-fallback{padding:12px;font:10px/1.35 var(--mono);color:#000;word-break:break-all;max-height:100%;overflow:hidden}
+.action-footer.single{grid-template-columns:1fr;margin-top:16px}
+.raw-request{margin-top:6px;text-align:center}
+.raw-request summary{display:inline-block;cursor:pointer;color:var(--accent-text,var(--accent));font-size:13px;font-weight:600;list-style:none;padding:8px 10px;border-radius:6px}
+.raw-request summary::-webkit-details-marker{display:none}
+.raw-request summary:hover{background:var(--accent-soft)}
+.raw-request .invoice-text{display:block;max-width:100%;margin:6px 0 0;padding:10px 12px;white-space:normal;word-break:break-all;text-overflow:clip;text-align:left;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;max-height:120px;overflow:auto;-webkit-user-select:all;user-select:all;color:var(--muted)}
+.state-actions{display:grid;gap:8px;width:100%;max-width:320px;margin-top:6px}
+.state-actions:not(:has(button:not([hidden]))){display:none}
+.state-icon{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:24px;font-weight:700;background:var(--warn-soft);color:var(--warn)}
+.state-panel[data-kind="failed"] .state-icon,.state-panel[data-kind="error"] .state-icon,.state-panel[data-kind="gone"] .state-icon{background:var(--danger-soft);color:var(--danger)}
+.sheet{display:none;position:fixed;inset:0;z-index:210;background:rgba(16,24,40,.5);align-items:flex-end;justify-content:center}
+.sheet.open{display:flex}
+.sheet-inner{width:100%;max-width:480px;max-height:86dvh;overflow:auto;background:var(--modal-bg,var(--surface));color:var(--text);border-radius:22px 22px 0 0;padding:10px 20px calc(22px + env(safe-area-inset-bottom));box-shadow:var(--shadow-lg);animation:sheet-up .22s ease-out}
+@keyframes sheet-up{from{transform:translateY(28px);opacity:.6}}
+@media (prefers-reduced-motion:reduce){.sheet-inner{animation:none}.status-chip::before{animation:none}}
+@media (min-width:640px){.sheet{align-items:center;padding:20px}.sheet-inner{border-radius:18px}}
+.sheet-grip{width:40px;height:4px;border-radius:2px;background:var(--line-strong);margin:4px auto 12px}
+.sheet-sub{font-size:14px;margin-bottom:14px}
+.wallet-list{display:grid;gap:8px}
+.wallet-group-label{margin:18px 0 8px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.wallet-row{display:flex;align-items:center;gap:12px;width:100%;min-height:58px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--modal-bg,var(--surface));color:var(--text);cursor:pointer;text-align:left}
+.wallet-row:hover{background:var(--surface-2)}
+.wallet-badge{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-weight:700;font-size:16px;background:var(--accent-soft);color:var(--accent-text,var(--accent));flex:0 0 auto}
+.wallet-text{flex:1;min-width:0;display:flex;flex-direction:column}
+.wallet-name{font-weight:600;font-size:15px}
+.wallet-meta{font-size:12px;color:var(--faint)}
+.wallet-go{font-size:13px;font-weight:600;color:var(--accent-text,var(--accent))}
+
+/* Headings focused by script (announced to screen readers) don't need a ring. */
+.state-title[tabindex="-1"]:focus{outline:none}
+
 /* ---------- storefront ---------- */
 .store-hero{text-align:center;padding:40px 0 28px}
 .store-hero h1{font-family:var(--ck-display,inherit)}
@@ -385,15 +437,18 @@ body.store footer.site{color:var(--page-muted,var(--faint));border-color:var(--l
 @media (min-width:860px){
   [data-layout="ledger"] body.invoice{--ck-width:800px}
   [data-layout="ledger"] body.invoice #step3{max-width:440px}
-  [data-layout="ledger"] body.invoice #step2{display:grid;grid-template-columns:minmax(0,1fr) 300px;column-gap:40px;align-items:start;grid-template-areas:"top top" "div div" "amt qr" "hint qr" "quick qr" ". txt" ". act"}
+  [data-layout="ledger"] body.invoice #step2{display:grid;grid-template-columns:minmax(0,1fr) 300px;column-gap:40px;align-items:start;grid-template-areas:"top top" "div div" "amt qr" "pay qr" "hint copy" "quick raw"}
   [data-layout="ledger"] body.invoice .invoice-top{grid-area:top}
   [data-layout="ledger"] body.invoice #step2 > .divider{grid-area:div}
   [data-layout="ledger"] body.invoice .amount-due{grid-area:amt;text-align:left}
   [data-layout="ledger"] body.invoice .amount-due .row{justify-content:flex-start!important}
+  [data-layout="ledger"] body.invoice .ref-chip{margin-left:0}
   [data-layout="ledger"] body.invoice .amount-value{font-size:48px}
+  [data-layout="ledger"] body.invoice .pay-actions{grid-area:pay}
+  [data-layout="ledger"] body.invoice .or-rule{display:none}
   [data-layout="ledger"] body.invoice #qrLink{grid-area:qr;margin:0}
-  [data-layout="ledger"] body.invoice #invoiceText{grid-area:txt}
-  [data-layout="ledger"] body.invoice .action-footer{grid-area:act}
+  [data-layout="ledger"] body.invoice #rawRequest{grid-area:raw}
+  [data-layout="ledger"] body.invoice .action-footer{grid-area:copy}
   [data-layout="ledger"] body.invoice .pay-hint{grid-area:hint;text-align:left;margin-top:20px;max-width:340px}
   [data-layout="ledger"] body.invoice .quick-actions{grid-area:quick;justify-content:flex-start;margin-left:-10px}
   [data-layout="ledger"] body.invoice .qr-frame{display:flex;justify-content:center}

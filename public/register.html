@@ -15,7 +15,7 @@
     <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
     <div class="card">
       <h1>Open a CPAY account</h1>
-      <p class="sub">A freelancer account: payment links, a dashboard and USDT withdrawals.</p>
+      <p class="sub">A freelancer account: payment links, a storefront, and USDT payouts.</p>
       <div class="field"><label for="displayName">Display name</label><input id="displayName" autocomplete="name"></div>
       <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email"></div>
       <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="new-password" aria-describedby="passwordHint" placeholder="At least 8 characters"></div>
@@ -35,11 +35,18 @@ document.getElementById('submitBtn').onclick = async () => {
   err.style.display=ok.style.display='none';
   if (!email || !password){ err.textContent='Email and password required.'; err.style.display='block'; return; }
   if (password.length < 8){ err.textContent='Use at least 8 characters.'; err.style.display='block'; return; }
-  const btn = document.getElementById('submitBtn'); btn.disabled = true;
-  const { data, error } = await window.supabaseClient.auth.signUp({
-    email, password,
-    options: { data: { display_name: displayName || undefined, requested_role: 'freelancer' } }
-  });
+  const btn = document.getElementById('submitBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  let data, error;
+  try {
+    ({ data, error } = await window.supabaseClient.auth.signUp({
+      email, password,
+      options: { data: { display_name: displayName || undefined, requested_role: 'freelancer' } }
+    }));
+  } catch (e) {
+    error = { message: 'Could not reach the server. Check your connection and try again.' };
+  }
   if (error){ err.textContent=error.message; err.style.display='block'; btn.disabled=false; return; }
   if (data.session){ location.href = 'dashboard.html'; return; }
   ok.textContent = 'Application received. Confirm your email. An admin then approves the account, unless auto-approval is on.';

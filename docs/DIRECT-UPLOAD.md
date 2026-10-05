@@ -29,7 +29,7 @@ new CPAY Cloudflare Pages/Workers project using the direct-upload flow.
 The bundle includes:
 
 - public landing, login, registration and dashboard pages
-- admin and Reseller/Freelancer panels
+- admin and Freelancer panels
 - payment and invoice surfaces
 - five payment themes
 - separate site and payment favicons

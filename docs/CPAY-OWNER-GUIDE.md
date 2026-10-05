@@ -16,13 +16,11 @@
 ## Phase 1 delivered locally
 
 - CPAY branding and separate site/payment favicons
-- Freelancer/Reseller application choice at signup
+- Freelancer application at signup (one account type; the reseller role was removed in 20261005020000)
 - Pending-account gate until admin approval
 - Admin application queue with approve, reject and suspend actions
-- Per-role auto-approval switches in the admin panel
-- Backward-compatible role mapping:
-  - database `creator` → user-facing **Freelancer**
-  - database `moderator` → user-facing **Reseller**
+- Auto-approval switch for freelancer applications in the admin panel
+- Role mapping: database `creator` → user-facing **Freelancer**; `admin` is the operator
 - Checkout themes for the payment page and the invoice page only. A domain does not pick a theme.
 - Payer-facing final-price disclosure for link markup
 - Admin 360° profile workspace snapshot with payment, withdrawal, domain and audit timeline
@@ -79,9 +77,7 @@ Use a separate test email, not a real customer:
 2. Confirm the account is pending.
 3. In Admin → Applications, approve it.
 4. Log in again and create a payment link.
-5. Register a second test account as **Reseller**.
-6. Approve it and verify the user-facing label is Reseller.
-7. Confirm a pending account cannot create links or request withdrawals.
+5. Confirm a pending account cannot create links or request withdrawals.
 
 ## Deploy the frontend
 
@@ -100,15 +96,16 @@ npm run build
 
 ## Payments
 
-Payments run on Breez SDK Spark through `payment-service/` (see
+Payments run on a Lightning/Spark wallet SDK through `payment-service/` (see
 `docs/ARCHITECTURE.md` and `docs/SIMPLE-MODEL.md`).
 
-- Receive: Lightning invoice. Cash App or any Lightning wallet. Proven on mainnet
+- Receive: a standard Lightning invoice (BOLT11), paid from a wallet that
+  supports it. Cash App is tested; not every wallet can pay every invoice. Proven on mainnet
   (a settled `cpay payment` credits the platform wallet and the ledger).
 - Payout: USDT to a saved address, quote then confirm. USDC only if that route
   is offered. Sats stay in the wallet until confirm (no Stable Balance).
-- Not offered: bKash, Nagad, Binance Pay, bank, or a Lightning payout.
-  Do not mark those paid by hand; they are not a product path.
+- Not offered: any payout other than USDT/USDC, including a Lightning payout.
+  Do not mark anything else paid by hand; it is not a product path.
 
 Test invoice creation, settlement and a small USDT quote in staging before
 larger payouts. Do not run the same seed on two hosts.

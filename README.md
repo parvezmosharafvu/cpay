@@ -3,10 +3,10 @@
 Lightning Network payment links for freelancers and online shop owners.
 Generate a payment link, share it, get paid in Lightning. Balance is kept in
 US dollars. Withdraw only as USDT (or USDC where a route exists) to a saved
-address on a network Breez can route to.
+address on a supported network.
 
-There is no bKash, Nagad, Binance Pay, bank, or Lightning payout. Those
-methods are not offered. See `docs/SIMPLE-MODEL.md`.
+Payouts are USDT/USDC only. There is no Lightning payout. See
+`docs/SIMPLE-MODEL.md`.
 
 Checkout loading, amount chips, focus, and what is intentionally not
 restructured are in `docs/UI.md`.
@@ -15,9 +15,10 @@ restructured are in `docs/UI.md`.
 
 - **Frontend:** Vanilla HTML/CSS/JS + Supabase JS v2 (no build step)
 - **Backend:** Supabase — Postgres, Row Level Security, Edge Functions
-- **Payments:** Breez SDK Spark, through `payment-service/` (a small
-  Node 22 process holding the cpay wallet). Customers pay a Lightning
-  invoice (Cash App or any Lightning wallet). Payouts are cross-chain
+- **Payments:** a Lightning/Spark wallet SDK, through `payment-service/`
+  (a small Node 22 process holding the cpay wallet). Customers pay a
+  standard Lightning invoice (BOLT11) from a wallet that supports it; Cash
+  App is tested. Not every wallet can pay every invoice. Payouts are cross-chain
   USDT/USDC sends from that wallet (mainnet only). Stable Balance is not
   used: sats stay in the wallet until a USDT quote is confirmed.
 - **Edge routing:** Cloudflare Worker — renders correct link-preview
@@ -58,7 +59,7 @@ migrations against the previous production project.
 ## How the money model works
 
 ```
-available = sum(settled payments) − sum(withdrawals that are not rejected or failed)
+available = sum(settled payment − platform fee) − sum(withdrawals that are not rejected or failed)
 ```
 
 `get_balance_for()` computes it. Payout is USDT only, to an address in
@@ -67,7 +68,7 @@ closed.
 
 ## What is deliberately not built
 
-**bKash, Nagad, Binance Pay, bank and Lightning payouts.** Not offered.
+**Lightning payouts and any payout method other than USDT/USDC.** Not offered.
 
 **A pages/ folder and a split design system.** Slug routing needs
 `404.html` at the site root. Themes stay on the payment and invoice pages.

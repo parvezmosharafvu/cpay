@@ -20,7 +20,7 @@
 --      it only catches gross drift such as a guard being deleted.
 --
 -- Behaviour is tested by ci/authenticated_rpc_sweep_test.sql (every listed
--- function called as a non-owner) and ci/reseller_authz_test.sql (M1-M3).
+-- function called as a non-owner) and ci/role_removal_test.sql.
 -- ============================================================
 \set ON_ERROR_STOP on
 \ir authenticated_rpc_allowlist.sql
@@ -83,7 +83,6 @@ begin
            when 'admin'         then f.src !~ 'is_admin\(\)'
            when 'self'          then f.src !~ 'auth\.uid\(\)'
            when 'self_or_admin' then f.src !~ 'auth\.uid\(\)' or f.src !~ 'is_admin\(\)'
-           when 'reseller'      then f.src !~ '(is_reseller\(\)|is_moderator\(\)|reseller_owns\()'
            else false
          end;
   if v_bad is not null then

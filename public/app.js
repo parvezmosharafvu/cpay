@@ -40,7 +40,6 @@ async function loadProfile(){
 }
 function roleHome(role){
   if (role === 'admin') return 'admin.html';
-  if (role === 'moderator') return 'reseller.html';
   return 'dashboard.html';
 }
 async function signOut(){
@@ -68,7 +67,7 @@ function layoutPicker(selected, wallet, invoice){
     <div class="field"><label>Who can pay</label>
       <div class="row">
         <button type="button" class="pill ${wallet==='cashapp'?'active':''}" data-wallet="cashapp">Cash App only</button>
-        <button type="button" class="pill ${wallet!=='cashapp'?'active':''}" data-wallet="all_wallets">Cash App and any Lightning wallet</button>
+        <button type="button" class="pill ${wallet!=='cashapp'?'active':''}" data-wallet="all_wallets">Cash App and other Lightning wallets</button>
       </div>
     </div>`;
 }
@@ -168,7 +167,7 @@ async function loadWithdrawRoutes(){
   return withdrawRoutes;
 }
 function shortAddress(a){ return a && a.length > 16 ? `${a.slice(0, 8)}...${a.slice(-6)}` : (a || ''); }
-function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, teamPayout = () => false, onDone = () => {}, blocked = null } = {}){
+function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, onDone = () => {}, blocked = null } = {}){
   let routes = { routes: [], error: null, loading: true };
   let quote = null;
   let busy = false;

@@ -1,8 +1,10 @@
 // Admin Wallet tab: the platform's own Breez Spark wallet. Every call goes
-// through admin-actions, which checks the caller is an admin
+// through admin-actions/admin-wallet, which checks the caller is an admin
 // and forwards to the payment service. Sends only spend what the wallet
 // holds beyond what is owed to creators; the service enforces that.
-const WALLET_FN = 'admin-actions';
+// The route, not the bare admin-actions root (that answers 404).
+// admin-wallet-route.js, loaded after this file, replaces walletCall.
+const WALLET_FN = 'admin-actions/admin-wallet';
 const walletState = { info: null, fiat: [], currency: 'USD', page: 0, pageSize: 10, prepared: null, quote: null, routes: [] };
 
 const $w = (id) => document.getElementById(id);

@@ -39,9 +39,6 @@ const FLAG_ROWS = [
   ['emergency_payments_stop', 'Emergency: stop new customer payments'],
   ['emergency_withdrawals_stop', 'Emergency: stop withdrawals'],
   ['manual_withdrawals_enabled', 'Manual withdrawals enabled'],
-  ['feature_affiliate_enabled', 'Reseller affiliate attach'],
-  ['feature_reseller_team_withdraw', 'Reseller can cash out team books'],
-  ['feature_reseller_notices', 'Reseller notices'],
   ['hide_small_payments_enabled', 'Global hide-small-payments'],
 ];
 async function renderFlagsLive() {
@@ -98,6 +95,5 @@ document.getElementById('settings')?.addEventListener('click', async (e) => {
     toast(ok, true);
   }
   if (id === 'saveDefFee') return save('admin_set_default_platform_fee', { p_percent: Number(document.getElementById('defFee').value) }, 'Default fee saved');
-  if (id === 'saveDefComm') return save('admin_set_default_reseller_commission', { p_percent: Number(document.getElementById('defComm').value) }, 'Default commission saved');
   if (id === 'saveDefWfee') return save('admin_set_default_withdrawal_fee', { p_percent: Number(document.getElementById('defWfee').value) }, 'Default withdrawal fee saved');
 });

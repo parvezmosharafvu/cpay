@@ -54,7 +54,7 @@ All of the above belong in Supabase Edge Function secrets. See `docs/ENV_VARS.md
 - **Instant stablecoin withdrawals send before anyone looks at them.** The
   payment service reserves the balance with `reserve_stablecoin_withdrawal()`
   (same checks as `request_withdrawal()`, plus the quoted fee must still be
-  the profile's fee), then calls Breez `sendPayment` with the withdrawal id as
+  the profile's fee), then calls the wallet SDK's `sendPayment` with the withdrawal id as
   the idempotency key, so a repeated confirm or a restart cannot pay twice.
   `finalize_stablecoin_withdrawal()` only moves `sending` rows, so a refund
   happens once. Both functions are service-role only. The controls that
@@ -69,7 +69,7 @@ All of the above belong in Supabase Edge Function secrets. See `docs/ENV_VARS.md
   every one of them before rendering. If you add a new field to that panel,
   escape it.
 - **Payment events must stay idempotent.** `payments.invoice_ref` is
-  UNIQUE and every received Breez payment goes through
+  UNIQUE and every received wallet payment goes through
   `settle_breez_payment()` (0094), which logs it to
   `webhook_events.delivery_id` first and settles only a row that is not
   settled yet. Replays and the payment service's catch-up credit nothing

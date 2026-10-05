@@ -56,10 +56,9 @@ async function renderPeople() {
   people = data || [];
   const rows = people.map((p) => `<tr>
     <td>${escapeHtml(p.display_name || '')}<div class="faint">${escapeHtml(p.email)}</div></td>
-    <td>${p.role === 'moderator' ? 'Reseller' : p.role === 'creator' ? 'Freelancer' : p.role}</td>
+    <td>${p.role === 'creator' ? 'Freelancer' : escapeHtml(p.role || '')}</td>
     <td>${badge(p.account_status)}</td>
     <td class="num nowrap">${links[p.id] ? `${links[p.id].links_used} / ${links[p.id].link_limit}` : '-'}</td>
-    <td>${escapeHtml(p.reseller_name || '-')}</td>
     <td class="num">${Number(p.platform_fee_percent || 0).toFixed(2)}%</td>
     <td class="num nowrap">${wfee[p.id] ? `${Number(wfee[p.id].fee_percent).toFixed(2)}%<div class="faint">${FEE_SOURCE[wfee[p.id].source] || ''}</div>` : '-'}</td>
     <td>${escapeHtml(p.hide_small_payments_mode)}</td>
@@ -69,13 +68,12 @@ async function renderPeople() {
       ${links[p.id] ? `<button class="btn ghost sm" data-limit="${p.id}" data-cur="${links[p.id].link_limit}">Link limit</button>` : ''}
       <button class="btn ghost sm" data-fee="${p.id}">Platform fee</button>
       <button class="btn ghost sm" data-wfee="${p.id}" data-cur="${wfee[p.id]?.own_fee_percent ?? ''}">Withdraw fee</button>
-      ${p.role === 'moderator' ? `<button class="btn ghost sm" data-comm="${p.id}">Commission</button>` : ''}
       <button class="btn ghost sm" data-hide="${p.id}">Hide &lt;$10</button>
     </td>
   </tr>`).join('');
   document.getElementById('people').innerHTML = `<div class="card flush">
-    <table class="table"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th class="num">Links</th><th>Reseller</th><th class="num">Platform fee</th><th class="num">Withdraw fee</th><th>Small payments</th><th>Wallet</th><th class="num">Available</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="11" class="empty">No accounts</td></tr>'}</tbody></table>
+    <table class="table"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th class="num">Links</th><th class="num">Platform fee</th><th class="num">Withdraw fee</th><th>Small payments</th><th>Wallet</th><th class="num">Available</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="10" class="empty">No accounts</td></tr>'}</tbody></table>
   </div>`;
   document.querySelectorAll('[data-limit]').forEach((btn) => {
     btn.onclick = async () => {
@@ -97,22 +95,13 @@ async function renderPeople() {
   });
   document.querySelectorAll('[data-wfee]').forEach((btn) => {
     btn.onclick = async () => {
-      const raw = prompt('Withdrawal fee % for this account only. Leave empty to inherit (reseller team fee, then the global default).', btn.dataset.cur);
+      const raw = prompt('Withdrawal fee % for this account only. Leave empty to use the global default.', btn.dataset.cur);
       if (raw == null) return;
       const v = raw.trim() === '' ? null : Number(raw);
       if (v != null && !(v >= 0 && v <= 100)) return toast('Enter 0 to 100, or leave empty');
       const { error: e } = await sb.rpc('admin_update_creator_fee', { p_creator_id: btn.dataset.wfee, p_fee_percent: v });
       if (e) return toast(e.message);
       toast(v == null ? 'Override cleared' : 'Withdrawal fee saved', true); renderPeople();
-    };
-  });
-  document.querySelectorAll('[data-comm]').forEach((btn) => {
-    btn.onclick = async () => {
-      const raw = prompt('Reseller commission % on affiliate net (after platform fee, not link cost)');
-      if (raw == null) return;
-      const { error: e } = await sb.rpc('admin_set_reseller_commission', { p_reseller_id: btn.dataset.comm, p_percent: Number(raw) });
-      if (e) return toast(e.message);
-      toast('Commission saved', true); renderPeople();
     };
   });
   document.querySelectorAll('[data-wallet]').forEach((btn) => {
@@ -172,35 +161,29 @@ async function review(id, status) {
   toast('Updated', true); renderApps(); renderPeople();
 }
 
-const FEE_SOURCE = { account: 'own', reseller: 'reseller', global: 'global', none: 'global' };
+const FEE_SOURCE = { account: 'own', global: 'global', none: 'global' };
 
 async function renderFees() {
   const { data: settings } = await sb.from('app_settings').select('key, value').in('key', [
-    'default_withdrawal_fee_percent','default_platform_fee_percent','default_reseller_commission_percent','hide_small_payments_threshold','hide_small_payments_enabled'
+    'default_withdrawal_fee_percent','default_platform_fee_percent','hide_small_payments_threshold','hide_small_payments_enabled'
   ]);
   const byKey = Object.fromEntries((settings || []).map((r) => [r.key, r.value]));
   const pct = (v) => Number((v && typeof v === 'object' ? v.percent : v) ?? 0);
   const globalWfee = pct(byKey.default_withdrawal_fee_percent);
   const platformFee = pct(byKey.default_platform_fee_percent);
-  const commission = pct(byKey.default_reseller_commission_percent);
   const hideAmt = Number(byKey.hide_small_payments_threshold ?? 10);
   const hideOnNow = byKey.hide_small_payments_enabled === true || byKey.hide_small_payments_enabled === 'true';
   document.getElementById('fees').innerHTML = `<div class="card narrow">
     <h3>Withdrawal fee</h3>
-    <p class="muted">The platform fee on a withdrawal. Each account uses its own fee if one is set, else its reseller's team fee, else this default. 0 means no platform fee; users then see only the network fee.</p>
+    <p class="muted">The platform fee on a withdrawal. Each account uses its own fee if one is set, else this default. 0 means no platform fee; users then see only the network fee.</p>
     <div class="field short"><label for="defWfee">Default withdrawal fee %</label><input id="defWfee" type="number" min="0" max="100" step="0.1" value="${globalWfee}"></div>
     <button class="btn primary" id="saveDefWfee">Save withdrawal fee</button>
   </div>
-  <div class="card" id="resellerWithdraw"><p class="muted">Loading resellers…</p></div>
   <div class="card narrow">
     <h3>Defaults</h3>
-    <p class="muted">Platform fee is CPAY's cut of settled payments. Link cost is added to what the payer pays. Reseller commission is the reseller's cut of the net after the platform fee.</p>
+    <p class="muted">Platform fee is CPAY's cut of settled payments. Link cost is added to what the payer pays.</p>
     <div class="field short"><label for="defFee">Platform fee %</label><input id="defFee" type="number" min="0" max="90" step="0.1" value="${platformFee}"></div>
     <button class="btn primary" id="saveDefFee">Save platform fee</button>
-    <hr>
-    <div class="field short"><label for="defComm">Reseller commission %</label><input id="defComm" type="number" min="0" max="50" step="0.1" value="${commission}"></div>
-    <p class="hint">Applies to freelancers who joined through a reseller's link.</p>
-    <button class="btn primary" id="saveDefComm">Save commission</button>
   </div>
   <div class="card narrow">
     <h3>Hide small payments</h3>
@@ -215,65 +198,16 @@ async function renderFees() {
   document.getElementById('saveDefWfee').onclick = async () => {
     const { error } = await sb.rpc('admin_set_default_withdrawal_fee', { p_percent: Number(document.getElementById('defWfee').value) });
     if (error) return toast(error.message);
-    toast('Default withdrawal fee saved', true); renderPeople(); renderResellerWithdraw();
+    toast('Default withdrawal fee saved', true); renderPeople();
   };
-  await renderResellerWithdraw();
   document.getElementById('saveDefFee').onclick = async () => {
     const { error } = await sb.rpc('admin_set_default_platform_fee', { p_percent: Number(document.getElementById('defFee').value) });
     if (error) return toast(error.message);
     toast('Default fee saved', true);
   };
-  document.getElementById('saveDefComm').onclick = async () => {
-    const { error } = await sb.rpc('admin_set_default_reseller_commission', { p_percent: Number(document.getElementById('defComm').value) });
-    if (error) return toast(error.message);
-    toast('Default commission saved', true);
-  };
   document.getElementById('hideOn').onclick = () => setHide(true);
   document.getElementById('hideOff').onclick = () => setHide(false);
 }
-// Per reseller: may their freelancers withdraw by themselves (off by
-// default), and the team withdrawal fee (empty = global default). The
-// reseller can flip the same switch from their own desk.
-async function renderResellerWithdraw() {
-  const el = document.getElementById('resellerWithdraw');
-  if (!el) return;
-  const { data, error } = await sb.rpc('admin_list_reseller_settings');
-  if (error) { el.innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
-  const rows = (data || []).map((r) => `<tr>
-    <td>${escapeHtml(r.display_name || r.email)}<div class="faint">${escapeHtml(r.email)}</div></td>
-    <td class="num">${Number(r.team_size || 0)}</td>
-    <td><label class="switch"><input type="checkbox" data-selfw="${r.reseller_id}" ${r.allow_freelancer_self_withdraw ? 'checked' : ''} aria-label="Freelancers can withdraw by themselves"> <span>${r.allow_freelancer_self_withdraw ? 'On' : 'Off'}</span></label></td>
-    <td class="nowrap"><input class="input" style="width:90px" type="number" min="0" max="100" step="0.1" data-tfee="${r.reseller_id}" value="${r.team_withdrawal_fee_percent ?? ''}" placeholder="Default" aria-label="Team withdrawal fee %">
-      <button class="btn ghost sm" data-tfee-save="${r.reseller_id}">Save</button></td>
-  </tr>`).join('');
-  el.classList.add('flush');
-  el.innerHTML = `<h3>Reseller withdrawals</h3>
-    <p class="muted" style="padding:0 20px">Self-withdraw off: the reseller's freelancers see their balance but cannot withdraw; the reseller withdraws for them. Team fee applies to the reseller's freelancers who have no fee of their own. Leave it empty for the default.</p>
-    <table class="table"><thead><tr><th>Reseller</th><th class="num">Team</th><th>Freelancers self-withdraw</th><th>Team withdrawal fee %</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="4" class="empty">No resellers</td></tr>'}</tbody></table>`;
-  el.querySelectorAll('[data-selfw]').forEach((box) => {
-    box.onchange = async () => {
-      box.disabled = true;
-      const { error: e } = await sb.rpc('admin_set_reseller_self_withdraw', { p_reseller_id: box.dataset.selfw, p_allowed: box.checked });
-      box.disabled = false;
-      if (e) { box.checked = !box.checked; return toast(e.message); }
-      box.nextElementSibling.textContent = box.checked ? 'On' : 'Off';
-      toast(box.checked ? 'Freelancers can withdraw by themselves' : 'Reseller handles withdrawals', true);
-      renderPeople();
-    };
-  });
-  el.querySelectorAll('[data-tfee-save]').forEach((btn) => {
-    btn.onclick = async () => {
-      const raw = el.querySelector(`[data-tfee="${btn.dataset.tfeeSave}"]`).value.trim();
-      const v = raw === '' ? null : Number(raw);
-      if (v != null && !(v >= 0 && v <= 100)) return toast('Enter 0 to 100, or leave empty');
-      const { error: e } = await sb.rpc('admin_set_reseller_withdrawal_fee', { p_reseller_id: btn.dataset.tfeeSave, p_fee_percent: v });
-      if (e) return toast(e.message);
-      toast(v == null ? 'Team fee cleared' : 'Team fee saved', true); renderPeople();
-    };
-  });
-}
-
 async function setHide(on) {
   const { error } = await sb.rpc('admin_set_hide_small_payments', { p_enabled: on, p_threshold: Number(document.getElementById('hideAmt').value) || 10 });
   if (error) return toast(error.message);
@@ -286,9 +220,6 @@ async function renderFlags() {
     ['emergency_withdrawals_stop', 'Emergency: stop withdrawals'],
     ['manual_withdrawals_enabled', 'Manual withdrawals enabled'],
     ['auto_withdraw_enabled', 'Auto-queue USDT payouts when a threshold is set'],
-    ['feature_affiliate_enabled', 'Reseller affiliate attach'],
-    ['feature_reseller_team_withdraw', 'Reseller can cash out team books'],
-    ['feature_reseller_notices', 'Reseller notices'],
     ['hide_small_payments_enabled', 'Global hide-small-payments'],
   ];
   const { data, error } = await sb.from('app_settings').select('key, value').in('key', keys.map((r) => r[0]));
@@ -320,45 +251,16 @@ async function renderFlags() {
   });
 }
 
-async function renderAlerts() {
-  const resellers = people.filter((p) => p.role === 'moderator');
-  const { data: channels, error } = await sb.from('reseller_alert_channels').select('reseller_id, telegram_chat_id, enabled');
-  if (error) { document.getElementById('alerts').innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
-  const byId = new Map((channels || []).map((c) => [c.reseller_id, c]));
-  const name = (p) => escapeHtml(p.display_name || p.email);
-  const opts = resellers.map((p) => `<option value="${p.id}">${name(p)}</option>`).join('');
-  const rows = resellers.map((p) => {
-    const c = byId.get(p.id);
-    return `<tr><td>${name(p)}</td><td class="mono">${c?.telegram_chat_id ? escapeHtml(c.telegram_chat_id) : '<span class="faint">Not set</span>'}</td><td>${c?.telegram_chat_id ? (c.enabled ? 'On' : 'Paused') : '-'}</td></tr>`;
-  }).join('');
-  document.getElementById('alerts').innerHTML = `<div class="card narrow">
-    <h3>Reseller Telegram groups</h3>
-    <p class="muted">Each reseller's group gets a message for every settled payment on their team's links, and a daily close at 5:00 PM Dhaka time with each link's payments, share, fee and net. Add the cpay bot to the group first. Resellers can set their own group in their desk.</p>
-    <div class="field"><label for="alWho">Reseller</label><select id="alWho">${opts}</select></div>
-    <div class="field"><label for="alChat">Group chat ID</label><input id="alChat" placeholder="-1001234567890"></div>
-    <div class="field"><label><input type="checkbox" id="alOn" checked> Send messages to this group</label></div>
-    <button class="btn primary" id="alSave">Save group</button>
-  </div>
-  <div class="card flush"><table class="table"><thead><tr><th>Reseller</th><th>Group chat ID</th><th>Messages</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="3" class="empty">No resellers</td></tr>'}</tbody></table></div>`;
-  const who = document.getElementById('alWho');
-  const fill = () => {
-    const c = byId.get(who.value);
-    document.getElementById('alChat').value = c?.telegram_chat_id || '';
-    document.getElementById('alOn').checked = c ? c.enabled : true;
-  };
-  who.onchange = fill;
-  fill();
-  document.getElementById('alSave').onclick = async () => {
-    const { error: saveErr } = await sb.rpc('set_reseller_telegram', {
-      p_reseller_id: who.value,
-      p_chat_id: document.getElementById('alChat').value,
-      p_enabled: document.getElementById('alOn').checked,
-    });
-    if (saveErr) return toast(saveErr.message);
-    toast('Telegram group saved', true);
-    renderAlerts();
-  };
+// Payment messages go to the admin Telegram group only
+// (ALERT_TELEGRAM_CHAT_ID on the telegram-notify function). Per-team
+// groups and the daily close were removed in 20261005020000.
+function renderAlerts() {
+  const el = document.getElementById('alerts');
+  if (!el) return;
+  el.innerHTML = `<div class="card narrow">
+    <h3>Telegram</h3>
+    <p class="muted">Every settled payment is posted to the admin Telegram group. Set the group with ALERT_TELEGRAM_CHAT_ID on the telegram-notify function, and stop the messages with ALERT_ON_SETTLED=false.</p>
+  </div>`;
 }
 
 async function renderPayouts() {

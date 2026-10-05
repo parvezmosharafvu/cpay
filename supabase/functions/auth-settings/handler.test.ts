@@ -8,6 +8,12 @@ import { createHandler, projectRefFromUrl, type AuthSettingsConfig } from "./han
 
 const ADMIN = { id: "00000000-0000-4000-8000-00000000000a", email: "admin@example.test" };
 const CREATOR = { id: "00000000-0000-4000-8000-00000000000c", email: "creator@example.test" };
+// Admins whose account is not active: refused like a non-admin.
+const INACTIVE_ADMINS: Record<string, { id: string; email: string; status: string }> = {
+    "suspended-admin-jwt": { id: "00000000-0000-4000-8000-0000000000a2", email: "suspended-admin@example.test", status: "suspended" },
+    "pending-admin-jwt": { id: "00000000-0000-4000-8000-0000000000a3", email: "pending-admin@example.test", status: "pending" },
+    "rejected-admin-jwt": { id: "00000000-0000-4000-8000-0000000000a4", email: "rejected-admin@example.test", status: "rejected" },
+};
 const FAKE_PAT = "fake-pat-for-tests-only";
 const REF = "abcdefghijklmnopqrst";
 const ALLOWED = "https://admin.example.test";
@@ -28,14 +34,16 @@ const sb = Deno.serve({ hostname: "127.0.0.1", port: 0, onListen() {} }, async (
     const url = new URL(req.url);
     const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer /, "");
     if (url.pathname === "/auth/v1/user") {
-        const user = bearer === "admin-jwt" ? ADMIN : bearer === "creator-jwt" ? CREATOR : null;
+        const user = bearer === "admin-jwt" ? ADMIN : bearer === "creator-jwt" ? CREATOR : INACTIVE_ADMINS[bearer] ?? null;
         if (!user) return Response.json({ code: 401, msg: "invalid JWT" }, { status: 401 });
         return Response.json({ ...user, aud: "authenticated", role: "authenticated" });
     }
     if (url.pathname === "/rest/v1/profiles") {
         const id = (url.searchParams.get("id") ?? "").replace(/^eq\./, "");
-        const row = id === ADMIN.id ? { role: "admin", email: ADMIN.email }
-            : id === CREATOR.id ? { role: "creator", email: CREATOR.email } : null;
+        const inactive = Object.values(INACTIVE_ADMINS).find((a) => a.id === id);
+        const row = id === ADMIN.id ? { role: "admin", account_status: "active", email: ADMIN.email }
+            : id === CREATOR.id ? { role: "creator", account_status: "active", email: CREATOR.email }
+            : inactive ? { role: "admin", account_status: inactive.status, email: inactive.email } : null;
         if (!row) return Response.json({ code: "PGRST116", message: "no rows" }, { status: 406 });
         return Response.json(row);
     }
@@ -193,6 +201,21 @@ Deno.test({
             eq(mgmtCalls.length, 0, "management API never called");
             eq(mgmtState.mailer_autoconfirm, false, "setting unchanged");
             eq(auditRows.length, 0, "nothing audited");
+        });
+
+        await t.step("suspended, pending and rejected admins are refused for GET and POST before any management call", async () => {
+            for (const jwt of Object.keys(INACTIVE_ADMINS)) {
+                resetMgmt(false);
+                auditRows.length = 0;
+                const g = await call(handler, "GET", jwt);
+                eq(g.status, 403, `${jwt} GET status`);
+                eq(g.json, { error: "Admins only" }, `${jwt} GET body`);
+                const p = await call(handler, "POST", jwt, { email_confirmation_required: false });
+                eq(p.status, 403, `${jwt} POST status`);
+                eq(mgmtCalls.length, 0, `${jwt}: management API never called`);
+                eq(mgmtState.mailer_autoconfirm, false, `${jwt}: setting unchanged`);
+                eq(auditRows.length, 0, `${jwt}: nothing audited`);
+            }
         });
 
         await t.step("no Authorization header or a bad JWT is 401", async () => {

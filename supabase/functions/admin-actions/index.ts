@@ -1,6 +1,7 @@
 // The Supabase Edge Runtime resolves this remote Deno import at deployment time.
 // @ts-ignore The local TypeScript server cannot resolve URL imports without Deno's resolver.
-import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createAdminVerifier } from "./admin-auth.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -100,21 +101,10 @@ const WALLET_ACTIONS: Record<string, string[]> = {
     "fiat": [],
 };
 
-async function verifyAdminCaller(
-    req: Request,
-): Promise<{ ok: boolean; userId?: string; callerClient?: SupabaseClient }> {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return { ok: false };
-    const callerClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error } = await callerClient.auth.getUser();
-    if (error || !user) return { ok: false };
-    const { data: profile } = await supabaseAdmin
-        .from("profiles").select("role").eq("id", user.id).single();
-    if (profile?.role !== "admin") return { ok: false };
-    return { ok: true, userId: user.id, callerClient };
-}
+// role = 'admin' AND account_status = 'active'; see admin-auth.ts.
+const verifyAdminCaller = createAdminVerifier({
+    supabaseUrl: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY, supabaseAdmin,
+});
 Deno.serve(async (req) => {
     const cors = await corsHeaders(req);
     if (req.method === "OPTIONS") return new Response(null, { headers: cors });

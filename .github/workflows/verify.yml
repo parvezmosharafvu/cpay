@@ -351,6 +351,12 @@ jobs:
         # row, and that neither the token nor the auth config's secrets
         # ever reach a response.
         run: deno test --allow-net=127.0.0.1 --allow-env supabase/functions/auth-settings/
+      - name: admin-actions admin gate against a mock Supabase
+        # Local mock server only. Active admin allowed; suspended, pending
+        # and rejected admin refused; creator, no or bad JWT refused; every
+        # route (/admin-mark-settled, /process-withdrawal, /admin-wallet)
+        # goes through the gate before any work.
+        run: deno test --allow-net=127.0.0.1 --allow-read=supabase/functions/admin-actions supabase/functions/admin-actions/
       - name: telegram-notify against a mock Telegram API
         # Local mock server only: no message reaches Telegram. Covers the
         # cron secret, message wording and escaping, retry and failure

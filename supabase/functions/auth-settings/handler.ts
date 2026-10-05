@@ -116,7 +116,10 @@ export function createHandler(cfg: AuthSettingsConfig): (req: Request) => Promis
     }
 
     // The same admin check as admin-actions' verifyAdminCaller(): the caller's
-    // JWT must resolve to a user, and that user's profile role must be admin.
+    // JWT must resolve to a user whose profile is role = 'admin' AND
+    // account_status = 'active' (the database's is_admin() rule). A
+    // suspended, pending or rejected admin is refused before any
+    // Management API call.
     async function verifyAdminCaller(req: Request): Promise<
         { ok: true; userId: string; email: string | null } | { ok: false; status: number; error: string }
     > {
@@ -129,8 +132,10 @@ export function createHandler(cfg: AuthSettingsConfig): (req: Request) => Promis
         const { data: { user }, error } = await callerClient.auth.getUser();
         if (error || !user) return { ok: false, status: 401, error: "Unauthorized" };
         const { data: profile } = await supabaseAdmin
-            .from("profiles").select("role, email").eq("id", user.id).single();
-        if (profile?.role !== "admin") return { ok: false, status: 403, error: "Admins only" };
+            .from("profiles").select("role, account_status, email").eq("id", user.id).single();
+        if (profile?.role !== "admin" || profile?.account_status !== "active") {
+            return { ok: false, status: 403, error: "Admins only" };
+        }
         return { ok: true, userId: user.id, email: profile?.email ?? user.email ?? null };
     }
 

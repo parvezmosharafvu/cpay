@@ -60,10 +60,13 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
   const prepared = new Map();
   const inflight = new Map();
 
+  // role = 'admin' AND account_status = 'active', the database's is_admin()
+  // rule. Checked on every /admin/wallet call, so a suspended, pending or
+  // rejected admin can neither start nor confirm a send.
   async function isAdmin(adminId) {
     if (!UUID.test(String(adminId))) return false;
-    const { rows } = await db.query(`select role from profiles where id = $1`, [adminId]);
-    return rows[0]?.role === 'admin';
+    const { rows } = await db.query(`select role, account_status from profiles where id = $1`, [adminId]);
+    return rows[0]?.role === 'admin' && rows[0]?.account_status === 'active';
   }
 
   // Sats the platform may spend without touching money owed to creators.

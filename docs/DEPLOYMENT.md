@@ -51,9 +51,9 @@
 - [ ] Run the payment service (`payment-service/README.md`) on a host with
       a persistent disk, and set `PAYMENT_SERVICE_URL` and
       `PAYMENT_SERVICE_SECRET` as Edge Function secrets.
-- [ ] Mainnet needs a Breez API key. cpay holds creators' money in that one
-      wallet. Payout is USDT to a saved address (quote, then confirm).
-      bKash, Nagad, Binance Pay, bank and Lightning payouts are not offered.
+- [ ] Mainnet needs the wallet SDK API key (`BREEZ_API_KEY`). cpay holds
+      freelancers' money in that one wallet. Payout is USDT to a saved address
+      (quote, then confirm). No other payout method is offered.
 
 ## 3. Frontend hosting (Cloudflare Pages direct upload or GitHub Pages)
 
@@ -91,8 +91,7 @@
 - [ ] Confirm the creator dashboard's "available" figure matches
       `select * from get_balance_for('<user-id>')`
 - [ ] Save a USDT address and request a quote. Confirm only a small amount.
-      Do not test bKash, Nagad, Binance Pay or a bank payout — those paths
-      are not part of the product.
+      USDT/USDC to a saved address is the only payout path.
 - [ ] Paste a payment link into WhatsApp and confirm the link preview renders
 
 ## 5b. This update's new pieces (migration 0033 + headers + alerts)

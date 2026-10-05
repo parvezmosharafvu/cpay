@@ -67,7 +67,7 @@ function layoutPicker(selected, wallet, invoice){
     <div class="field"><label>Who can pay</label>
       <div class="row">
         <button type="button" class="pill ${wallet==='cashapp'?'active':''}" data-wallet="cashapp">Cash App only</button>
-        <button type="button" class="pill ${wallet!=='cashapp'?'active':''}" data-wallet="all_wallets">Cash App and any Lightning wallet</button>
+        <button type="button" class="pill ${wallet!=='cashapp'?'active':''}" data-wallet="all_wallets">Cash App and other Lightning wallets</button>
       </div>
     </div>`;
 }

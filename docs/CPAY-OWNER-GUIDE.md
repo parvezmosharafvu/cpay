@@ -96,15 +96,16 @@ npm run build
 
 ## Payments
 
-Payments run on Breez SDK Spark through `payment-service/` (see
+Payments run on a Lightning/Spark wallet SDK through `payment-service/` (see
 `docs/ARCHITECTURE.md` and `docs/SIMPLE-MODEL.md`).
 
-- Receive: Lightning invoice. Cash App or any Lightning wallet. Proven on mainnet
+- Receive: a standard Lightning invoice (BOLT11), paid from a wallet that
+  supports it. Cash App is tested; not every wallet can pay every invoice. Proven on mainnet
   (a settled `cpay payment` credits the platform wallet and the ledger).
 - Payout: USDT to a saved address, quote then confirm. USDC only if that route
   is offered. Sats stay in the wallet until confirm (no Stable Balance).
-- Not offered: bKash, Nagad, Binance Pay, bank, or a Lightning payout.
-  Do not mark those paid by hand; they are not a product path.
+- Not offered: any payout other than USDT/USDC, including a Lightning payout.
+  Do not mark anything else paid by hand; it is not a product path.
 
 Test invoice creation, settlement and a small USDT quote in staging before
 larger payouts. Do not run the same seed on two hosts.

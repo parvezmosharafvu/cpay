@@ -1,10 +1,10 @@
 # cpay architecture
 
-Internal document. It names the payment processor (Breez SDK Spark); the
-freelancer and customer pages never do (see "What users see").
+Internal document. The payment processor is a Lightning/Spark wallet SDK;
+no user-facing page names it (see "What users see").
 
 Product payout is USDT to a saved address (USDC only if a route exists).
-bKash, Nagad, Binance Pay, bank and Lightning payouts are not offered.
+No other payout method, including Lightning payouts, is offered.
 `request_withdrawal` is closed. See `docs/SIMPLE-MODEL.md`.
 
 Themes apply to the payment page and the invoice page only. A domain does
@@ -24,7 +24,7 @@ browser ──► public/ (static, Cloudflare Workers assets)
    │           │                    telegram-notify, auth-settings
    │           ▼  Bearer PAYMENT_SERVICE_SECRET
    └──────► payment-service/ (Node 22, one long-running process)
-               holds the one platform wallet (Breez SDK Spark)
+               holds the one platform wallet (Lightning/Spark SDK)
                writes the ledger through DATABASE_URL (service role)
 ```
 

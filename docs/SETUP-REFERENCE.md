@@ -22,7 +22,7 @@ searched when something specific breaks later.
 
 ## 1. Payment provider
 
-Breez SDK Spark, run by the payment service in `payment-service/` (see
+A Lightning/Spark wallet SDK, run by the payment service in `payment-service/` (see
 its README). It needs `PAYMENT_SERVICE_URL` and `PAYMENT_SERVICE_SECRET`
 as Edge Function secrets (§2.1). Withdrawals are still paid by hand.
 
@@ -254,8 +254,8 @@ With a user's `cost_percent` at 3:
 
 ### Lightning payouts
 
-Instant payouts are stubbed until the Breez integration lands
-(TODO(breez)); every request currently queues for an admin. Once it
+Instant payouts are stubbed until the wallet SDK integration lands;
+every request currently queues for an admin. Once it
 exists:
 
 1. Save a Lightning Address in the dashboard (`you@wallet.com`)

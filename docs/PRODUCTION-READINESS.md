@@ -25,7 +25,7 @@ change to the previous production project.
 
 ## Payment provider and events
 
-- [ ] CPAY has its own mainnet Breez wallet (mnemonic stored offline) and
+- [ ] CPAY has its own mainnet platform wallet (mnemonic stored offline) and
   API key, and the custody decision is made.
 - [ ] Invoice creation, settlement, expiry and duplicate event delivery
   passed in staging.

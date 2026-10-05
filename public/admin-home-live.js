@@ -18,9 +18,9 @@ async function renderHomeLive() {
   const books = (peopleRes.data || []).reduce((n, p) => n + Number(p.available || 0), 0);
   const walletUsdt = usdt && usdt.balanceUsd != null ? Number(usdt.balanceUsd) : null;
   const owed = books;
-  const usdtCard = `<div class="card"><div class="kicker">USDT balance</div><div class="kpi">${walletUsdt == null ? '-' : money(walletUsdt)}</div><div class="faint">${usdt && usdt.balanceSats != null ? Number(usdt.balanceSats).toLocaleString('en-US') + ' sats × Breez rate' : escapeHtml(usdtErr || 'Platform wallet')}</div><div class="faint"><a href="#wallet">Wallet link</a></div></div>
-       <div class="card"><div class="kicker">Owed to creators</div><div class="kpi">${money(owed)}</div><div class="faint">Sum of creator available balances.</div></div>
-       <div class="card"><div class="kicker">Spendable</div><div class="kpi">${usdt && usdt.spendableSat != null ? Number(usdt.spendableSat).toLocaleString('en-US') + ' sats' : '-'}</div><div class="faint">Wallet sats minus creator books</div></div>`;
+  const usdtCard = `<div class="card"><div class="kicker">USDT balance</div><div class="kpi">${walletUsdt == null ? '-' : money(walletUsdt)}</div><div class="faint">${usdt && usdt.balanceSats != null ? Number(usdt.balanceSats).toLocaleString('en-US') + ' sats × wallet rate' : escapeHtml(usdtErr || 'Platform wallet')}</div><div class="faint"><a href="#wallet">Wallet link</a></div></div>
+       <div class="card"><div class="kicker">Owed to freelancers</div><div class="kpi">${money(owed)}</div><div class="faint">Sum of freelancer available balances.</div></div>
+       <div class="card"><div class="kicker">Spendable</div><div class="kpi">${usdt && usdt.spendableSat != null ? Number(usdt.spendableSat).toLocaleString('en-US') + ' sats' : '-'}</div><div class="faint">Wallet sats minus freelancer books</div></div>`;
   const byWallet = {};
   for (const w of walletsRes.data || []) (byWallet[w.user_id] ||= []).push(w);
   const EXPLORER = { tron:'https://tronscan.org/#/address/', bsc:'https://bscscan.com/address/', ethereum:'https://etherscan.io/address/', polygon:'https://polygonscan.com/address/', arbitrum:'https://arbiscan.io/address/', base:'https://basescan.org/address/', optimism:'https://optimistic.etherscan.io/address/', avalanche:'https://snowtrace.io/address/', solana:'https://solscan.io/account/' };

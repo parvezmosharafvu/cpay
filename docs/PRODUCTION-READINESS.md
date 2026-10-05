@@ -55,9 +55,10 @@ change to the previous production project.
   account's override. Check the Withdraw fee column in the admin Accounts
   tab and clear or set overrides as intended.
 - [ ] Withdrawals: every account withdraws by itself; the fee is the
-  account's override, else the global default (20261005020000). An admin
-  can also queue a USDT withdrawal for an account (Accounts → Withdraw for),
-  always to the address saved on that account.
+  account's override, else the global default (20261005020000). The
+  admin-only `admin_request_withdrawal_for()` RPC replaces the reseller's
+  withdraw-on-behalf; it always pays to the address saved on the account.
+  (No admin page calls it yet.)
 
 ## Cloudflare and public site
 

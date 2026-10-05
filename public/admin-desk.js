@@ -69,7 +69,6 @@ async function renderPeople() {
       <button class="btn ghost sm" data-fee="${p.id}">Platform fee</button>
       <button class="btn ghost sm" data-wfee="${p.id}" data-cur="${wfee[p.id]?.own_fee_percent ?? ''}">Withdraw fee</button>
       <button class="btn ghost sm" data-hide="${p.id}">Hide &lt;$10</button>
-      ${p.role !== 'admin' ? `<button class="btn ghost sm" data-wfor="${p.id}" data-name="${escapeHtml(p.display_name || p.email || '')}">Withdraw for</button>` : ''}
     </td>
   </tr>`).join('');
   document.getElementById('people').innerHTML = `<div class="card flush">
@@ -103,21 +102,6 @@ async function renderPeople() {
       const { error: e } = await sb.rpc('admin_update_creator_fee', { p_creator_id: btn.dataset.wfee, p_fee_percent: v });
       if (e) return toast(e.message);
       toast(v == null ? 'Override cleared' : 'Withdrawal fee saved', true); renderPeople();
-    };
-  });
-  // A USDT withdrawal on the account's behalf, to the USDT address saved on
-  // the account (never a typed one), at the account's fee. It joins the
-  // payout queue as pending.
-  document.querySelectorAll('[data-wfor]').forEach((btn) => {
-    btn.onclick = async () => {
-      const raw = prompt(`USDT withdrawal for ${btn.dataset.name}, in US dollars (minimum $5). It goes to the USDT address saved on the account.`);
-      if (raw == null || raw.trim() === '') return;
-      const amount = Number(raw);
-      if (!(amount >= 5)) return toast('Enter at least 5');
-      const { data: w, error: e } = await sb.rpc('admin_request_withdrawal_for', { p_user_id: btn.dataset.wfor, p_amount: amount, p_method: 'stablecoin', p_destination: '' });
-      if (e) return toast(e.message);
-      toast(`Withdrawal queued: ${money(w?.amount_after_fee)} after the ${Number(w?.fee_percent || 0)}% fee`, true);
-      renderPeople(); renderPayouts();
     };
   });
   document.querySelectorAll('[data-wallet]').forEach((btn) => {

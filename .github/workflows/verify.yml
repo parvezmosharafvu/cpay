@@ -104,6 +104,10 @@ jobs:
           # guards and the invoice page still work. Runs again on the
           # default-privileges database below. BEGIN/ROLLBACK.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/role_removal_test.sql
+          # A pending application approved by an active admin is exactly an
+          # active freelancer (no reseller code, no extra privilege); a
+          # suspended admin or a freelancer cannot decide one.
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/account_approval_test.sql
 
       - name: Production drift fixes (20261004020000), on the schema before the reseller removal
         env:
@@ -173,6 +177,21 @@ jobs:
           # The account-type checks again, with production's grants. (The
           # drift fixes with production's grants run in the drift step above.)
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/role_removal_test.sql
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/account_approval_test.sql
+          # A suspended admin, with production's grants, before and after
+          # 20261005020000: every withdrawal, fee, wallet and account probe
+          # (including the new admin_request_withdrawal_for) is refused
+          # after, nothing is allowed after that was refused before, and an
+          # active admin is allowed the admin probes (positive control).
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -c 'create database suspcheck'
+          psql -h localhost -U postgres -d suspcheck -v ON_ERROR_STOP=1 -q -f ci/bootstrap.sql
+          psql -h localhost -U postgres -d suspcheck -v ON_ERROR_STOP=1 -q -f ci/supabase_default_privileges.sql
+          for f in supabase/migrations/*.sql; do
+            n=$(basename "$f" | cut -d_ -f1)
+            [ ${#n} -eq 14 ] && [ "$n" -ge 20261005020000 ] && continue
+            psql -h localhost -U postgres -d suspcheck -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+          ci/suspended_admin_compare.sh suspcheck privcheck
 
       - name: Runtime regression — overpayment cap and message soft-delete
         env:

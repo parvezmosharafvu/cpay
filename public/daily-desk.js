@@ -1,4 +1,4 @@
-/* Daily accounting views shared by the freelancer, reseller and admin desks.
+/* Daily accounting views shared by the freelancer and admin desks.
    A business day is the database's (migration 0096): 5:00 PM to 5:00 PM
    Asia/Dhaka, keyed by the date it starts on. Every figure here comes from
    the RPCs; nothing is re-added in the browser except column totals. */
@@ -40,7 +40,7 @@ const Daily = (() => {
     return `$${v.toFixed(v < 10 && v % 1 ? 2 : 0)}`;
   }
   function roleName(role) {
-    return role === 'moderator' ? 'Reseller' : role === 'creator' ? 'Freelancer' : role === 'admin' ? 'Admin' : role || '-';
+    return role === 'creator' ? 'Freelancer' : role === 'admin' ? 'Admin' : role || '-';
   }
   function person(name, email) {
     return `<div class="who"><strong>${escapeHtml(name || email || '-')}</strong><span class="faint">${escapeHtml(email || '')}</span></div>`;
@@ -70,17 +70,13 @@ const Daily = (() => {
     const { data, error } = await sb().rpc('my_dashboard_profile');
     if (error) return errorCard('Profile', error);
     const p = one(data) || {};
-    const reseller = p.reseller_id
-      ? `${escapeHtml(p.reseller_name || p.reseller_email)}<div class="faint">${escapeHtml(p.reseller_email || '')} · ${p.reseller_via === 'signup' ? 'joined by sign-up link' : 'assigned by admin'}</div>`
-      : '<span class="faint">None</span>';
     return `<div class="card profile-card">
       <div class="pc-head"><span class="avatar" aria-hidden="true">${escapeHtml((p.display_name || p.email || '?').trim().charAt(0))}</span>
         <div><h3>${escapeHtml(p.display_name || '')}</h3><div class="muted">${escapeHtml(p.email || '')}</div></div></div>
       <dl class="facts">
         <div><dt>Role</dt><dd>${roleName(p.role)}</dd></div>
-        ${p.role === 'moderator' ? '' : `<div><dt>Reseller</dt><dd>${reseller}</dd></div>`}
         <div><dt>Payment links</dt><dd>${usageBar(p.links_used, p.link_limit)}</dd></div>
-        <div><dt>Default cost rate</dt><dd>${pct(p.cost_percent || 0)}${p.cost_locked ? ' <span class="faint">set by your reseller</span>' : ''}</dd></div>
+        <div><dt>Default cost rate</dt><dd>${pct(p.cost_percent || 0)}</dd></div>
       </dl>
     </div>`;
   }
@@ -104,7 +100,6 @@ const Daily = (() => {
   /* ---------- daily summary table ---------- */
   function summaryTable(rows, opts = {}) {
     const today = rows[0] && rows[0].business_day;
-    const showCut = rows.some((r) => num(r.reseller_commission) > 0) || opts.showCut;
     const body = rows.map((r) => `<tr data-day="${r.business_day}" class="pick${r.business_day === opts.selected ? ' sel' : ''}" tabindex="0">
       <td><div class="day">${escapeHtml(dayRange(r))}${r.business_day === today ? ' <span class="tag">Today</span>' : ''}</div><div class="faint">5:00 PM to 5:00 PM</div></td>
       <td class="num">${num(r.link_count)}<div class="faint">${num(r.paid_link_count)} paid</div></td>
@@ -112,16 +107,13 @@ const Daily = (() => {
       <td class="num">${num(r.payment_count)}</td>
       <td class="num">${money(r.settled)}</td>
       <td class="num">${money(r.platform_fee)}</td>
-      ${showCut ? `<td class="num">${money(r.reseller_commission)}</td>` : ''}
       <td class="num strong">${money(r.earnings)}</td>
-      ${opts.commission ? `<td class="num">${money(r.commission_earned)}</td>` : ''}
     </tr>`).join('');
     const foot = rows.length ? `<tr class="total"><td>${rows.length} days</td><td></td><td></td>
       <td class="num">${sum(rows, 'payment_count')}</td><td class="num">${money(sum(rows, 'settled'))}</td><td class="num">${money(sum(rows, 'platform_fee'))}</td>
-      ${showCut ? `<td class="num">${money(sum(rows, 'reseller_commission'))}</td>` : ''}<td class="num strong">${money(sum(rows, 'earnings'))}</td>
-      ${opts.commission ? `<td class="num">${money(sum(rows, 'commission_earned'))}</td>` : ''}</tr>` : '';
-    return `<table class="table daily"><thead><tr><th>Business day</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th>${showCut ? '<th class="num">Reseller cut</th>' : ''}<th class="num">Earnings</th>${opts.commission ? '<th class="num">Your commission</th>' : ''}</tr></thead>
-      <tbody>${body || '<tr><td colspan="9" class="empty">No days yet</td></tr>'}</tbody><tfoot>${foot}</tfoot></table>`;
+      <td class="num strong">${money(sum(rows, 'earnings'))}</td></tr>` : '';
+    return `<table class="table daily"><thead><tr><th>Business day</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Earnings</th></tr></thead>
+      <tbody>${body || '<tr><td colspan="7" class="empty">No days yet</td></tr>'}</tbody><tfoot>${foot}</tfoot></table>`;
   }
 
   /* ---------- per-link breakdown ---------- */
@@ -157,7 +149,7 @@ const Daily = (() => {
     root.querySelectorAll(`tr[data-${attr}]`).forEach((tr) => tr.classList.toggle('sel', tr.dataset[attr] === value));
   }
 
-  /* ---------- the caller's own book (freelancer, reseller) ---------- */
+  /* ---------- the caller's own book (freelancer) ---------- */
   async function mountSelf(el, opts = {}) {
     const days = 14;
     const [card, sumRes, linkRes] = await Promise.all([
@@ -168,10 +160,9 @@ const Daily = (() => {
     if (sumRes.error) { el.innerHTML = card + (opts.between || '') + errorCard('Daily summary', sumRes.error); return; }
     const rows = sumRes.data || [];
     const links = linkRes.error ? [] : linkRes.data || [];
-    const commission = !!opts.commission;
     el.innerHTML = `<div class="grid split">${card}${bizDayCard(rows[0])}</div>${opts.between || ''}
       <div class="card flush"><div class="card-head"><div><h3>Last ${days} business days</h3><div class="faint">Select a day to see each link.</div></div></div>
-        <div class="scroll" id="dailySelfTable">${summaryTable(rows, { selected: rows[0] && rows[0].business_day, commission })}</div></div>
+        <div class="scroll" id="dailySelfTable">${summaryTable(rows, { selected: rows[0] && rows[0].business_day })}</div></div>
       <div id="dailySelfLinks"></div>`;
     const drill = el.querySelector('#dailySelfLinks');
     const show = (day) => {
@@ -183,57 +174,6 @@ const Daily = (() => {
     };
     bindRows(el, 'day', (day) => { show(day); drill.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); });
     if (rows[0]) show(rows[0].business_day);
-  }
-
-  /* ---------- reseller: team by day ---------- */
-  async function mountTeam(el) {
-    const days = 14;
-    const { data, error } = await sb().rpc('reseller_team_daily_summary', { p_days: days });
-    if (error) { el.innerHTML = errorCard('Team by day', error); return; }
-    const rows = data || [];
-    const dayList = [...new Map(rows.map((r) => [r.business_day, r])).values()];
-    let day = dayList[0] && dayList[0].business_day;
-    const cache = {};
-    el.innerHTML = `<div class="card flush"><div class="card-head">
-        <div><h3>Team by business day</h3><div class="faint">5:00 PM to 5:00 PM Dhaka time. Select a freelancer to see their links.</div></div>
-        <div class="field inline"><label for="teamDay">Day</label><select id="teamDay">${dayList.map((r, i) => `<option value="${r.business_day}">${escapeHtml(dayRange(r))}${i === 0 ? ' (today)' : ''}</option>`).join('')}</select></div>
-      </div><div class="scroll" id="teamDayTable"></div></div><div id="teamLinks"></div>`;
-    const tableEl = el.querySelector('#teamDayTable');
-    const drill = el.querySelector('#teamLinks');
-    async function openMember(uid) {
-      markSelected(tableEl, 'user', uid);
-      const m = rows.find((r) => r.user_id === uid && r.business_day === day) || {};
-      drill.innerHTML = '<div class="card"><p class="muted">Loading links…</p></div>';
-      if (!cache[uid]) {
-        const res = await sb().rpc('daily_link_breakdown', { p_days: days, p_user_id: uid });
-        if (res.error) { drill.innerHTML = errorCard('Links', res.error); return; }
-        cache[uid] = res.data || [];
-      }
-      drill.innerHTML = linkCard(`${escapeHtml(m.display_name || m.email || '')} · links on ${escapeHtml(dayRange(m))}`, escapeHtml(m.email || ''),
-        cache[uid].filter((l) => l.business_day === day));
-      drill.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
-    function draw() {
-      const list = rows.filter((r) => r.business_day === day);
-      const body = list.map((r) => `<tr data-user="${r.user_id}" class="pick" tabindex="0">
-        <td>${person(r.display_name, r.email)}</td>
-        <td>${r.is_self ? '<span class="tag">You</span>' : r.affiliate ? 'Sign-up link' : 'Assigned'}</td>
-        <td class="num">${num(r.link_count)}</td>
-        <td>${rates(r.cost_rates)}</td>
-        <td class="num">${num(r.payment_count)}</td>
-        <td class="num">${money(r.settled)}</td>
-        <td class="num">${money(r.reseller_commission)}</td>
-        <td class="num strong">${money(r.earnings)}</td>
-      </tr>`).join('');
-      const foot = list.length ? `<tr class="total"><td>${list.length} accounts</td><td></td><td class="num">${sum(list, 'link_count')}</td><td></td>
-        <td class="num">${sum(list, 'payment_count')}</td><td class="num">${money(sum(list, 'settled'))}</td><td class="num">${money(sum(list, 'reseller_commission'))}</td><td class="num strong">${money(sum(list, 'earnings'))}</td></tr>` : '';
-      tableEl.innerHTML = `<table class="table"><thead><tr><th>Freelancer</th><th>Joined by</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Your cut</th><th class="num">Their earnings</th></tr></thead>
-        <tbody>${body || '<tr><td colspan="8" class="empty">No team activity that day</td></tr>'}</tbody><tfoot>${foot}</tfoot></table>`;
-      bindRows(tableEl, 'user', openMember);
-      drill.innerHTML = '';
-    }
-    el.querySelector('#teamDay').onchange = (e) => { day = e.target.value; draw(); };
-    draw();
   }
 
   /* ---------- admin: graph ---------- */
@@ -273,9 +213,8 @@ Withdrawal fee revenue ${money(r.withdrawal_fee_revenue)}</title></rect>`).join(
 
   /* ---------- admin: graph + per-freelancer table + link drill-down ---------- */
   async function mountAdmin(el, people) {
-    const state = { range: 30, user: '', reseller: '', day: null };
+    const state = { range: 30, user: '', day: null };
     const freelancers = (people || []).filter((p) => p.role !== 'admin');
-    const resellers = (people || []).filter((p) => p.role === 'moderator');
     const opt = (p) => `<option value="${p.id}">${escapeHtml(p.display_name || p.email)} · ${escapeHtml(p.email)}</option>`;
     el.innerHTML = `<div class="card">
         <div class="card-head wrap">
@@ -284,7 +223,6 @@ Withdrawal fee revenue ${money(r.withdrawal_fee_revenue)}</title></rect>`).join(
         </div>
         <div class="filters">
           <div class="field"><label for="dFreelancer">Freelancer</label><select id="dFreelancer"><option value="">Everyone</option>${freelancers.map(opt).join('')}</select></div>
-          <div class="field"><label for="dReseller">Reseller team</label><select id="dReseller"><option value="">All teams</option>${resellers.map(opt).join('')}</select></div>
         </div>
         <div id="dTotals" class="totals"></div>
         <div id="dChart" class="chart-wrap"></div>
@@ -302,7 +240,7 @@ Withdrawal fee revenue ${money(r.withdrawal_fee_revenue)}</title></rect>`).join(
     window.addEventListener('resize', () => { if (redraw) redraw(); });
 
     async function load() {
-      const args = { p_days: state.range, p_user_id: state.user || null, p_reseller_id: state.reseller || null };
+      const args = { p_days: state.range, p_user_id: state.user || null };
       $$('#dChart').innerHTML = '<p class="muted">Loading…</p>';
       const [ts, sm] = await Promise.all([
         sb().rpc('admin_daily_timeseries', args),
@@ -332,19 +270,17 @@ Withdrawal fee revenue ${money(r.withdrawal_fee_revenue)}</title></rect>`).join(
       const list = summary.filter((r) => r.business_day === state.day);
       const body = list.map((r) => `<tr data-user="${r.user_id}" class="pick" tabindex="0">
         <td>${person(r.display_name, r.email)}<div class="faint">${roleName(r.role)}${r.account_status !== 'active' ? ` · ${escapeHtml(r.account_status)}` : ''}</div></td>
-        <td>${r.reseller_id ? person(r.reseller_name, r.reseller_email) : '<span class="faint">None</span>'}</td>
         <td class="num">${num(r.link_count)}<div class="faint">limit ${r.max_payment_links ?? '-'}</div></td>
         <td>${rates(r.cost_rates)}</td>
         <td class="num">${num(r.payment_count)}</td>
         <td class="num">${money(r.settled)}</td>
         <td class="num">${money(r.platform_fee)}</td>
-        <td class="num">${money(r.reseller_commission)}</td>
         <td class="num strong">${money(r.earnings)}</td>
       </tr>`).join('');
-      const foot = list.length ? `<tr class="total"><td>${list.length} people</td><td></td><td class="num">${sum(list, 'link_count')}</td><td></td><td class="num">${sum(list, 'payment_count')}</td>
-        <td class="num">${money(sum(list, 'settled'))}</td><td class="num">${money(sum(list, 'platform_fee'))}</td><td class="num">${money(sum(list, 'reseller_commission'))}</td><td class="num strong">${money(sum(list, 'earnings'))}</td></tr>` : '';
-      $$('#dTable').innerHTML = `<table class="table"><thead><tr><th>Freelancer</th><th>Reseller</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Reseller cut</th><th class="num">Earnings</th></tr></thead>
-        <tbody>${body || '<tr><td colspan="9" class="empty">Nobody had links or payments that day</td></tr>'}</tbody><tfoot>${foot}</tfoot></table>`;
+      const foot = list.length ? `<tr class="total"><td>${list.length} people</td><td class="num">${sum(list, 'link_count')}</td><td></td><td class="num">${sum(list, 'payment_count')}</td>
+        <td class="num">${money(sum(list, 'settled'))}</td><td class="num">${money(sum(list, 'platform_fee'))}</td><td class="num strong">${money(sum(list, 'earnings'))}</td></tr>` : '';
+      $$('#dTable').innerHTML = `<table class="table"><thead><tr><th>Freelancer</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Earnings</th></tr></thead>
+        <tbody>${body || '<tr><td colspan="7" class="empty">Nobody had links or payments that day</td></tr>'}</tbody><tfoot>${foot}</tfoot></table>`;
       bindRows($$('#dTable'), 'user', openLinks);
       $$('#dLinks').innerHTML = '';
     }
@@ -360,7 +296,7 @@ Withdrawal fee revenue ${money(r.withdrawal_fee_revenue)}</title></rect>`).join(
         linkCache[key] = res.data || [];
       }
       drill.innerHTML = linkCard(`${escapeHtml(r.display_name || r.email || '')} · links on ${escapeHtml(dayRange(r))}`,
-        `${escapeHtml(r.email || '')}${r.reseller_email ? ` · reseller ${escapeHtml(r.reseller_name || r.reseller_email)}` : ''}`,
+        escapeHtml(r.email || ''),
         linkCache[key].filter((l) => l.business_day === state.day));
       drill.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
@@ -372,10 +308,9 @@ Withdrawal fee revenue ${money(r.withdrawal_fee_revenue)}</title></rect>`).join(
       };
     });
     $$('#dFreelancer').onchange = (e) => { state.user = e.target.value; load(); };
-    $$('#dReseller').onchange = (e) => { state.reseller = e.target.value; load(); };
     $$('#dDay').onchange = (e) => { state.day = e.target.value; drawTable(); };
     await load();
   }
 
-  return { mountSelf, mountTeam, mountAdmin, chart, pct, dayRange };
+  return { mountSelf, mountAdmin, chart, pct, dayRange };
 })();

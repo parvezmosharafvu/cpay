@@ -16,13 +16,11 @@
 ## Phase 1 delivered locally
 
 - CPAY branding and separate site/payment favicons
-- Freelancer/Reseller application choice at signup
+- Freelancer application at signup (one account type; the reseller role was removed in 20261005020000)
 - Pending-account gate until admin approval
 - Admin application queue with approve, reject and suspend actions
-- Per-role auto-approval switches in the admin panel
-- Backward-compatible role mapping:
-  - database `creator` → user-facing **Freelancer**
-  - database `moderator` → user-facing **Reseller**
+- Auto-approval switch for freelancer applications in the admin panel
+- Role mapping: database `creator` → user-facing **Freelancer**; `admin` is the operator
 - Checkout themes for the payment page and the invoice page only. A domain does not pick a theme.
 - Payer-facing final-price disclosure for link markup
 - Admin 360° profile workspace snapshot with payment, withdrawal, domain and audit timeline
@@ -79,9 +77,7 @@ Use a separate test email, not a real customer:
 2. Confirm the account is pending.
 3. In Admin → Applications, approve it.
 4. Log in again and create a payment link.
-5. Register a second test account as **Reseller**.
-6. Approve it and verify the user-facing label is Reseller.
-7. Confirm a pending account cannot create links or request withdrawals.
+5. Confirm a pending account cannot create links or request withdrawals.
 
 ## Deploy the frontend
 

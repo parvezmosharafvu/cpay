@@ -27,9 +27,6 @@ const SHAPE = {
   tron: /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
 };
 
-// Same text as self_withdraw_off_message() in the database (0101).
-export const SELF_WITHDRAW_OFF = 'Your reseller handles withdrawals for your account. Ask them to withdraw for you.';
-
 export class UserError extends Error {
   constructor(status, message, extra = {}) {
     super(message);
@@ -185,11 +182,11 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
 
   async function profileFor(userId) {
     const { rows } = await db.query(
-      // The fee is the account's own override, else its reseller's team
-      // fee, else the global default: resolve_withdrawal_fee() in 0101 is
-      // the one place that decides, and reserve checks against it again.
+      // The fee is the account's own override, else the global default:
+      // resolve_withdrawal_fee() is the one place that decides
+      // (20261005020000), and reserve checks against it again.
       `select p.account_status, resolve_withdrawal_fee(p.id)::text as fee_percent,
-              self_withdraw_allowed(p.id) as self_withdraw_allowed, b.available::text as available
+              b.available::text as available
          from profiles p cross join lateral get_balance_for(p.id) b where p.id = $1`,
       [userId],
     );
@@ -253,7 +250,6 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     if (amountCents < 500) throw new UserError(422, 'Minimum withdrawal is $5');
     const profile = await profileFor(userId);
     if (!profile || profile.account_status !== 'active') throw new UserError(403, 'Account approval is required before requesting withdrawals');
-    if (!profile.self_withdraw_allowed) throw new UserError(403, SELF_WITHDRAW_OFF);
     if (amountCents > Math.round(Number(profile.available) * 100)) {
       throw new UserError(422, `Insufficient balance. Available: $${Number(profile.available).toFixed(2)}`);
     }
@@ -315,7 +311,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
       );
       return rows[0];
     } catch (e) {
-      if (e.code === 'P0001') throw new UserError(e.message === SELF_WITHDRAW_OFF ? 403 : 422, e.message);
+      if (e.code === 'P0001') throw new UserError(422, e.message);
       throw e;
     }
   }

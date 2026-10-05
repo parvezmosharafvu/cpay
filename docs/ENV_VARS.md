@@ -25,21 +25,19 @@ Used by `daily-report`, `ledger-backup`, `health` and `telegram-notify`:
       requests if it is unset. The same value is stored in Vault as
       `cpay_cron_secret`, which is where pg_cron reads it.
 
-Used by `telegram-notify` (settled-payment messages and the 17:00 Dhaka daily
-close, both queued by migration 0106 in `telegram_outbox`), and by `health`,
+Used by `telegram-notify` (settled-payment messages to the admin group,
+queued by migration 0106 in `telegram_outbox`), and by `health`,
 `daily-report` and `ledger-backup` for ops alerts:
 
-- [ ] `ALERT_TELEGRAM_BOT_TOKEN` — the cpay bot's token from @BotFather. One
-      bot serves every group: each reseller adds it to their own group and
-      saves the group chat ID in their desk (Profile → Telegram group), or
-      the admin does it under Telegram groups. Unset = `telegram-notify`
-      answers 503 and leaves every message queued.
+- [ ] `ALERT_TELEGRAM_BOT_TOKEN` — the cpay bot's token from @BotFather. Add
+      the bot to the admin group. Unset = `telegram-notify` answers 503 and
+      leaves every message queued.
 - [ ] `ALERT_TELEGRAM_CHAT_ID` *(optional)* — the admin group (a negative
       number such as `-1001234567890`). It gets ops alerts and, unless
       `ALERT_ON_SETTLED=false`, a copy of every settled-payment message.
       Unset = admin copies are skipped.
 - [ ] `ALERT_ON_SETTLED` *(optional)* — `false` stops the admin group's copy
-      of settled-payment messages. Reseller groups are not affected.
+      of settled-payment messages.
 
 New in this update:
 

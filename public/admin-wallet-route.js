@@ -20,16 +20,13 @@ async function walletFetch(path, payload) {
   return data;
 }
 
+// The wallet lives at the admin-actions /admin-wallet route. The bare
+// admin-actions root has no handler and answers 404, so the call goes
+// straight to the route (no root probe and fallback).
+const WALLET_ROUTE = 'admin-actions/admin-wallet';
+
 async function walletCall(action, body = {}) {
-  const payload = { action, ...body };
-  try {
-    return await walletFetch('admin-actions', payload);
-  } catch (e) {
-    if (e.status === 404 || /not found/i.test(String(e.message || ''))) {
-      return await walletFetch('admin-actions/admin-wallet', payload);
-    }
-    throw e;
-  }
+  return walletFetch(WALLET_ROUTE, { action, ...body });
 }
 
 function walletShell() {

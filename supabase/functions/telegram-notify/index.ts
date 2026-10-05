@@ -2,11 +2,11 @@
 //
 // Secrets (Dashboard > Edge Functions > Secrets):
 //   CRON_SECRET               the x-cron-secret pg_cron sends
-//   ALERT_TELEGRAM_BOT_TOKEN  the cpay bot, from @BotFather. Add it to each
-//                             reseller's group and to the admin group.
+//   ALERT_TELEGRAM_BOT_TOKEN  the cpay bot, from @BotFather. Add it to the
+//                             admin group.
 //   ALERT_TELEGRAM_CHAT_ID    optional: the admin group
 //   ALERT_ON_SETTLED          optional: false stops payment messages to the
-//                             admin group (resellers still get theirs)
+//                             admin group
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createHandler, outboxFromSupabase } from "./handler.ts";
 

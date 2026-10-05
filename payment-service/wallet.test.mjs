@@ -163,6 +163,46 @@ test('every wallet action is refused with 403 unless adminId is an admin', async
   assert.equal((await route('GET', '/admin/wallet/info', null))[0], 405);
 });
 
+test('a suspended, pending or rejected admin is refused every wallet action with 403 and no SDK call', async () => {
+  const { route, breez } = setup();
+  const actions = ['info', 'payments', 'receive', 'addresses', 'send-prepare', 'send-confirm', 'stable-routes', 'stable-quote', 'stable-confirm', 'fiat'];
+  for (const status of ['suspended', 'pending', 'rejected']) {
+    const admin = await makeUser({ role: 'admin' });
+    await db.query('update profiles set account_status = $2 where id = $1', [admin, status]);
+    for (const action of actions) {
+      const [code, body] = await route('POST', `/admin/wallet/${action}`, { adminId: admin, amountSat: 1000, destination: BOLT11, prepareId: randomUUID(), quoteId: randomUUID() });
+      assert.equal(code, 403, `${action} as a ${status} admin`);
+      assert.deepEqual(body, { error: 'admin only' });
+    }
+  }
+  assert.equal(breez.calls.length, 0, 'no SDK call was made for an inactive admin');
+  // The same actions still work for an active admin (unchanged).
+  const active = await makeUser({ role: 'admin' });
+  assert.equal((await route('POST', '/admin/wallet/info', { adminId: active }))[0], 200);
+  assert.equal((await route('POST', '/admin/wallet/addresses', { adminId: active }))[0], 200);
+});
+
+test('a send prepared by an active admin cannot be confirmed once that admin is suspended', async () => {
+  const { route, breez } = setup();
+  const admin = await makeUser({ role: 'admin' });
+  const [, prep] = await route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 });
+  assert.ok(prep.prepareId);
+  await db.query(`update profiles set account_status = 'suspended' where id = $1`, [admin]);
+  for (const action of ['send-confirm', 'stable-confirm']) {
+    const [code, body] = await route('POST', `/admin/wallet/${action}`, { adminId: admin, prepareId: prep.prepareId, quoteId: prep.prepareId });
+    assert.equal(code, 403, action);
+    assert.deepEqual(body, { error: 'admin only' });
+  }
+  assert.equal(breez.calls.filter((c) => c[0] === 'sendPayment' || c[0] === 'lnurlPay').length, 0, 'nothing sent');
+  assert.deepEqual(await auditRows(prep.prepareId), [], 'nothing audited as a send');
+  // Back to active: the same admin's prepared send confirms as before.
+  await db.query(`update profiles set account_status = 'active' where id = $1`, [admin]);
+  const [code, sent] = await route('POST', '/admin/wallet/send-confirm', { adminId: admin, prepareId: prep.prepareId });
+  assert.equal(code, 200);
+  assert.equal(sent.status, 'completed');
+  assert.deepEqual(breez.calls.filter((c) => c[0] === 'sendPayment'), [['sendPayment', prep.prepareId]]);
+});
+
 test('info shows sats, USD at the Breez rate and what is owed to creators', async () => {
   const { route } = setup(fakeBreez({ balanceSats: 250_000_000 }));
   const admin = await makeUser({ role: 'admin' });

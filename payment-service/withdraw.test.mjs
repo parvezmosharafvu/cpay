@@ -700,6 +700,35 @@ test('fee: the account override, else the global default, else none; the quote a
   }
 });
 
+// Admin → Withdraw for (admin_request_withdrawal_for): an active admin may,
+// a suspended, pending or rejected admin may not, a non-admin may not.
+test('Admin → Withdraw for: active admin allowed, suspended admin denied, non-admin denied', async () => {
+  const target = await makeUser({ earned: 100, fee: 0 });
+  await db.query(`insert into usdt_wallets(user_id, network, address) values ($1, 'tron', $2)`, [target, TRON]);
+  const admin = await makeUser({ earned: 1, fee: 0 });
+  await db.query(`update profiles set role = 'admin' where id = $1`, [admin]);
+  const creator = await makeUser({ earned: 100, fee: 0 });
+  const before = await balance(target);
+
+  for (const status of ['suspended', 'pending', 'rejected']) {
+    await db.query('update profiles set account_status = $2 where id = $1', [admin, status]);
+    await asUser(admin, async (c) => {
+      assert.match(await refusal(c, `select admin_request_withdrawal_for($1, 10, 'tron', '')`, [target]), /Not authorized/, status);
+    }, { browser: true });
+  }
+  await asUser(creator, async (c) => {
+    assert.match(await refusal(c, `select admin_request_withdrawal_for($1, 10, 'tron', '')`, [target]), /Not authorized/);
+  }, { browser: true });
+  assert.deepEqual(await balance(target), before, 'refusals change nothing');
+  assert.equal((await rows(target)).length, 0);
+
+  await db.query(`update profiles set account_status = 'active' where id = $1`, [admin]);
+  await asUser(admin, async (c) => {
+    const r = (await c.query(`select user_id, amount_requested::text, destination, status from admin_request_withdrawal_for($1, 10, 'tron', '')`, [target])).rows[0];
+    assert.deepEqual(r, { user_id: target, amount_requested: '10.00000000', destination: TRON, status: 'pending' });
+  }, { browser: true }); // asUser rolls back: nothing is left behind
+});
+
 test('only an admin sets fees or withdraws for another account', async () => {
   const freelancer = await makeUser({ earned: 100, fee: null });
   const other = await makeUser({ earned: 100, fee: null });

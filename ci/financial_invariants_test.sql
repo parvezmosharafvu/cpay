@@ -3,6 +3,11 @@
 
 \set ON_ERROR_STOP on
 
+-- Run inside a transaction that is rolled back, so nothing this script
+-- creates (payments, audit rows, telegram_outbox rows from the settle
+-- trigger) leaks into later CI steps that share this database.
+begin;
+
 do $$
 declare
   u uuid := gen_random_uuid();
@@ -91,3 +96,5 @@ begin
 
   raise notice 'financial_invariants_test: PASS';
 end $$;
+
+rollback;

@@ -31,10 +31,22 @@ test('admin payment rows render user-controlled values as DOM text', async () =>
       this.tagName = tagName;
       this.children = [];
       this.dataset = {};
+      this.style = {};
+      this.className = '';
+      this.id = '';
+      this.type = '';
+      this.value = '';
+      this.placeholder = '';
+      this.selected = false;
+      this.disabled = false;
+      this.onclick = null;
     }
     set innerHTML(_) { throw new Error('innerHTML must not be used'); }
     set textContent(value) { this.text = String(value ?? ''); }
-    append(child) { this.children.push(child); }
+    get textContent() { return this.text || ''; }
+    setAttribute() {}
+    addEventListener() {}
+    append(...nodes) { this.children.push(...nodes); }
     replaceChildren(...children) { this.children = children; }
     querySelectorAll(selector) {
       const found = [];

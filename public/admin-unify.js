@@ -12,17 +12,61 @@ async function adminFn(path, body) {
   return payload;
 }
 
+let payoutFilter = { status: '', search: '' };
 async function renderPayouts() {
   const el = document.getElementById('payouts');
   if (!el) return;
-  const { data, error } = await sb.from('withdrawals').select('*').order('requested_at', { ascending: false }).limit(80);
-  if (error) { el.innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
-  const rows = (data || []).map((w) => {
+  el.innerHTML = typeof deskSkeleton === 'function' ? deskSkeleton(4) : '<p class="muted">Loading…</p>';
+  const { data, error } = await sb.from('withdrawals').select('*').order('requested_at', { ascending: false }).limit(120);
+  if (error) { el.innerHTML = typeof deskError === 'function' ? deskError(error.message) : `<p class="err">${escapeHtml(error.message)}</p>`; return; }
+  const q = (payoutFilter.search || '').trim().toLowerCase();
+  const filtered = (data || []).filter((w) => {
+    if (payoutFilter.status && String(w.status) !== payoutFilter.status) return false;
+    if (!q) return true;
+    const hay = `${w.destination || ''} ${w.method || ''} ${w.chain || ''} ${w.id || ''}`.toLowerCase();
+    return hay.includes(q);
+  });
+  const rows = filtered.map((w) => {
     const open = ['pending', 'approved', 'processing'].includes(String(w.status));
-    const acts = open ? `<button class="btn primary sm" data-wd="${w.id}" data-act="mark_paid_manual">Mark paid</button> <button class="btn danger sm" data-wd="${w.id}" data-act="reject">Reject</button>` : '';
-    return `<tr><td class="num">${money(w.amount_requested)}</td><td class="num">${w.fee_percent != null ? Number(w.fee_percent) + '%' : '-'}</td><td class="num">${w.amount_after_fee != null ? money(w.amount_after_fee) : '-'}</td><td>${escapeHtml(methodLabel(w.method, w))}</td><td>${badge(w.status)}</td><td class="mono">${escapeHtml(w.destination || '')}</td><td>${escapeHtml(when(w.requested_at))}</td><td>${acts}</td></tr>`;
+    const acts = open ? `<button type="button" class="btn primary sm" data-wd="${w.id}" data-act="mark_paid_manual">Mark paid</button> <button type="button" class="btn danger sm" data-wd="${w.id}" data-act="reject">Reject</button>` : '';
+    return `<tr><td class="num">${money(w.amount_requested)}</td><td class="num">${w.fee_percent != null ? Number(w.fee_percent) + '%' : '-'}</td><td class="num">${w.amount_after_fee != null ? money(w.amount_after_fee) : '-'}</td><td>${escapeHtml(methodLabel(w.method, w))}</td><td>${badge(w.status)}</td><td class="mono" title="${escapeHtml(w.destination || '')}">${escapeHtml(w.destination || '')}</td><td>${escapeHtml(when(w.requested_at))}</td><td class="table-actions">${acts}</td></tr>`;
   }).join('');
-  el.innerHTML = `<div class="card flush"><table class="table"><thead><tr><th class="num">Amount</th><th class="num">Fee</th><th class="num">Receives</th><th>Network</th><th>Status</th><th>Address</th><th>Requested</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="8" class="empty">No withdrawals</td></tr>'}</tbody></table></div>`;
+  const toolbar = typeof deskFilterBar === 'function' ? deskFilterBar(`
+    <div class="field short"><label for="payoutStatus">Status</label>
+      <select id="payoutStatus">
+        <option value="">All</option>
+        <option value="pending">Pending</option>
+        <option value="approved">Approved</option>
+        <option value="processing">Processing</option>
+        <option value="sending">Sending</option>
+        <option value="paid">Paid</option>
+        <option value="failed">Failed</option>
+        <option value="rejected">Rejected</option>
+      </select></div>
+    <div class="field grow"><label for="payoutSearch">Search</label>
+      <input id="payoutSearch" type="search" placeholder="Address, method, id" value="${escapeHtml(payoutFilter.search)}"></div>
+  `, `<button type="button" class="btn primary" id="payoutApply">Apply</button>
+      <button type="button" class="btn ghost" id="payoutClear">Clear</button>`) : '';
+  el.innerHTML = `<div class="card flush">
+    ${toolbar}
+    <div class="card-head"><h3>Payouts</h3><span class="meta-count">${filtered.length} shown</span></div>
+    <p class="role-note" style="padding:0 20px">Mark paid / reject go through <code>admin-actions</code> (admin JWT). Freelancer desks cannot call these.</p>
+    <div class="scroll"><table class="table"><thead><tr><th class="num">Amount</th><th class="num">Fee</th><th class="num">Receives</th><th>Network</th><th>Status</th><th>Address</th><th>Requested</th><th></th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="8">${typeof deskEmpty === 'function' ? deskEmpty('No payouts match', 'Clear filters or wait for withdrawal requests.') : '<span class="empty">No withdrawals</span>'}</td></tr>`}</tbody></table></div>
+  </div>`;
+  const st = document.getElementById('payoutStatus');
+  if (st) st.value = payoutFilter.status || '';
+  document.getElementById('payoutApply')?.addEventListener('click', () => {
+    payoutFilter = {
+      status: document.getElementById('payoutStatus')?.value || '',
+      search: document.getElementById('payoutSearch')?.value.trim() || '',
+    };
+    renderPayouts();
+  });
+  document.getElementById('payoutClear')?.addEventListener('click', () => {
+    payoutFilter = { status: '', search: '' };
+    renderPayouts();
+  });
   el.querySelectorAll('[data-wd]').forEach((btn) => {
     btn.onclick = async () => {
       btn.disabled = true;
@@ -35,22 +79,96 @@ async function renderPayouts() {
   });
 }
 
+let paymentFilter = { search: '', status: '' };
 async function renderPayments() {
   const el = document.getElementById('payments');
   if (!el) return;
-  const { data, error } = await sb.rpc('admin_list_payments', { p_limit: 80, p_offset: 0, p_search: null });
+  // Loading: text only (no innerHTML) so XSS unit tests stay green.
+  const loading = document.createElement('p');
+  loading.className = 'muted';
+  loading.textContent = 'Loading…';
+  el.replaceChildren(loading);
+
+  const { data, error } = await sb.rpc('admin_list_payments', {
+    p_limit: 100,
+    p_offset: 0,
+    p_search: paymentFilter.search || null,
+  });
   if (error) {
     const message = document.createElement('p');
     message.className = 'err';
+    message.setAttribute('role', 'alert');
     message.textContent = error.message;
     el.replaceChildren(message);
     return;
   }
-  const card = document.createElement('div');
-  card.className = 'card flush';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'card flush';
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'desk-toolbar';
+  
+  const statusField = document.createElement('div');
+  statusField.className = 'field short';
+  const statusLabel = document.createElement('label');
+    statusLabel.textContent = 'Status';
+  const statusSelect = document.createElement('select');
+  statusSelect.id = 'adminPayStatus';
+  for (const [value, label] of [['', 'All'], ['settled', 'Settled'], ['pending', 'Pending'], ['new', 'New'], ['expired', 'Expired'], ['invalid', 'Invalid']]) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    if (value === (paymentFilter.status || '')) opt.selected = true;
+    statusSelect.append(opt);
+  }
+  statusField.append(statusLabel); statusField.append(statusSelect);
+
+  const searchField = document.createElement('div');
+  searchField.className = 'field grow';
+  const searchLabel = document.createElement('label');
+    searchLabel.textContent = 'Search';
+  const searchInput = document.createElement('input');
+  searchInput.id = 'adminPaySearch';
+  searchInput.type = 'search';
+  searchInput.placeholder = 'Invoice, email, link slug';
+  searchInput.value = paymentFilter.search || '';
+  searchField.append(searchLabel); searchField.append(searchInput);
+
+  const applyBtn = document.createElement('button');
+  applyBtn.type = 'button';
+  applyBtn.className = 'btn primary';
+  applyBtn.id = 'adminPayApply';
+  applyBtn.textContent = 'Apply';
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.className = 'btn ghost';
+  clearBtn.id = 'adminPayClear';
+  clearBtn.textContent = 'Clear';
+  toolbar.append(statusField); toolbar.append(searchField); toolbar.append(applyBtn); toolbar.append(clearBtn);
+  wrap.append(toolbar);
+
+  const list = (data || []).filter((p) => !paymentFilter.status || String(p.status) === paymentFilter.status);
+  const head = document.createElement('div');
+  head.className = 'card-head';
+  const h3 = document.createElement('h3');
+  h3.textContent = 'Payments';
+  const meta = document.createElement('span');
+  meta.className = 'meta-count';
+  meta.textContent = `${list.length} shown`;
+  head.append(h3); head.append(meta);
+  wrap.append(head);
+
+  const note = document.createElement('p');
+  note.className = 'role-note';
+    note.textContent = 'Search uses the admin_list_payments RPC (admin-only). Status filter is applied in the desk for the loaded page.';
+  wrap.append(note);
+
+  const scroll = document.createElement('div');
+  scroll.className = 'scroll';
   const table = document.createElement('table');
   table.className = 'table';
-  const head = document.createElement('thead');
+  const thead = document.createElement('thead');
   const header = document.createElement('tr');
   for (const label of ['When', 'Status', 'Amount', 'Account', 'Link', 'Invoice', '']) {
     const th = document.createElement('th');
@@ -58,8 +176,8 @@ async function renderPayments() {
     if (label === 'Amount') th.className = 'num';
     header.append(th);
   }
-  head.append(header);
-  table.append(head);
+  thead.append(header);
+  table.append(thead);
   const body = document.createElement('tbody');
   const addCell = (row, value, className = '') => {
     const td = document.createElement('td');
@@ -68,13 +186,13 @@ async function renderPayments() {
     row.append(td);
     return td;
   };
-  if (!data?.length) {
+  if (!list.length) {
     const row = document.createElement('tr');
-    const cell = addCell(row, 'No payments yet', 'empty');
+    const cell = addCell(row, 'No payments match', 'empty');
     cell.colSpan = 7;
     body.append(row);
   } else {
-    for (const p of data) {
+    for (const p of list) {
       const row = document.createElement('tr');
       addCell(row, when(p.settled_at || p.created_at));
       const status = String(p.status || '').toLowerCase();
@@ -91,6 +209,7 @@ async function renderPayments() {
       const actionCell = document.createElement('td');
       if (p.status !== 'settled' && p.status !== 'expired') {
         const button = document.createElement('button');
+        button.type = 'button';
         button.className = 'btn ghost sm';
         button.dataset.pay = p.id;
         button.textContent = 'Mark settled';
@@ -101,8 +220,24 @@ async function renderPayments() {
     }
   }
   table.append(body);
-  card.append(table);
-  el.replaceChildren(card);
+  scroll.append(table);
+  wrap.append(scroll);
+  el.replaceChildren(wrap);
+
+  applyBtn.onclick = () => {
+    paymentFilter = {
+      status: statusSelect.value || '',
+      search: searchInput.value.trim() || '',
+    };
+    renderPayments();
+  };
+  clearBtn.onclick = () => {
+    paymentFilter = { status: '', search: '' };
+    renderPayments();
+  };
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') applyBtn.click();
+  });
   el.querySelectorAll('[data-pay]').forEach((btn) => {
     btn.onclick = async () => {
       btn.disabled = true;
@@ -119,7 +254,7 @@ async function renderLinks() {
   const el = document.getElementById('links');
   if (!el) return;
   const { data, error } = await sb.rpc('admin_list_payment_links');
-  if (error) { el.innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
+  if (error) { el.innerHTML = typeof deskError === 'function' ? deskError(error.message) : `<p class="err" role="alert">${escapeHtml(error.message)}</p>`; return; }
   const rows = (data || []).map((l) => `<tr>
     <td class="mono">${escapeHtml(l.slug)}</td>
     <td>${escapeHtml(l.display_name || '')}</td>

@@ -39,8 +39,26 @@ async function loadProfile(){
   return data;
 }
 function roleHome(role){
+  // Product roles: admin | creator (shown as Freelancer). Any other role string
+  // still lands on the freelancer desk — never admin.html. Server RPCs / RLS
+  // remain the real privilege boundary.
   if (role === 'admin') return 'admin.html';
   return 'dashboard.html';
+}
+function deskSkeleton(rows = 4){
+  const lines = Array.from({ length: rows }, () =>
+    '<div class="row-skel"><span class="skeleton line"></span><span class="skeleton line"></span><span class="skeleton line"></span><span class="skeleton line"></span></div>'
+  ).join('');
+  return `<div class="desk-skel" aria-busy="true" aria-live="polite"><span class="skeleton line lg"></span>${lines}</div>`;
+}
+function deskError(message){
+  return `<div class="state-panel err" role="alert"><p class="state-title">Could not load</p><p class="state-body">${escapeHtml(message || 'Something went wrong. Try again.')}</p></div>`;
+}
+function deskEmpty(title, body){
+  return `<div class="state-panel"><p class="state-title">${escapeHtml(title || 'Nothing here yet')}</p><p class="state-body">${escapeHtml(body || '')}</p></div>`;
+}
+function deskFilterBar(fieldsHtml, actionsHtml = ''){
+  return `<div class="desk-toolbar" role="search">${fieldsHtml}${actionsHtml || ''}</div>`;
 }
 async function signOut(){
   await window.supabaseClient.auth.signOut();
@@ -301,4 +319,4 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
   loadWithdrawRoutes().then((r) => { routes = { ...r, loading: false }; fillNetworks(); render(); });
   return () => { clearQuote(); render(); };
 }
-window.CPAY_APP = { $, escapeHtml, money, when, layoutLabel, badge, toast, requireSession, loadProfile, roleHome, signOut, layoutPicker, bindExperience, withdrawForm, bindWithdraw };
+window.CPAY_APP = { $, escapeHtml, money, when, layoutLabel, badge, toast, requireSession, loadProfile, roleHome, signOut, layoutPicker, bindExperience, withdrawForm, bindWithdraw, deskSkeleton, deskError, deskEmpty, deskFilterBar };

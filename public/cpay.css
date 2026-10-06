@@ -866,3 +866,32 @@ body.ops{padding-bottom:48px}
   .amount-text{font-size:40px}
   .key{font-size:18px}
 }
+
+/* ---------- Chat 3: authenticated desks ---------- */
+.desk-toolbar{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-end;padding:14px 16px;border-bottom:1px solid var(--line);background:var(--surface)}
+.desk-toolbar .field{margin:0;min-width:140px;flex:1 1 160px}
+.desk-toolbar .field.short{flex:0 1 140px;min-width:120px}
+.desk-toolbar .field.grow{flex:2 1 220px}
+.desk-toolbar label{font-size:12px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.03em}
+.desk-toolbar .btn{min-height:var(--touch)}
+.desk-toolbar input,.desk-toolbar select{min-height:var(--touch)}
+.state-panel{padding:28px 20px;text-align:center}
+.state-panel .state-title{margin:0 0 6px;font-size:16px;font-weight:650}
+.state-panel .state-body{margin:0;color:var(--muted);font-size:14px}
+.state-panel.err .state-title{color:var(--danger)}
+.desk-skel{display:grid;gap:12px;padding:16px}
+.desk-skel .skeleton.line{margin:0}
+.desk-skel .row-skel{display:grid;grid-template-columns:1.2fr .6fr .5fr .8fr;gap:12px}
+.side .navi{min-height:var(--touch)}
+.side .navi.btn,button.navi{min-height:var(--touch)}
+.main > section{min-width:0}
+.card-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:16px 20px 0}
+.card-head h3{margin:0}
+.meta-count{font-size:13px;color:var(--faint)}
+.role-note{font-size:13px;color:var(--muted);margin:0 0 12px}
+.table-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+@media (max-width:720px){
+  .desk-toolbar{padding:12px}
+  .desk-skel .row-skel{grid-template-columns:1fr 1fr}
+  .table-actions{justify-content:flex-start}
+}

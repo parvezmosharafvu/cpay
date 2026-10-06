@@ -31,3 +31,10 @@ The site is static HTML. Payment links are unmatched paths, served as
 - Invoice shows a payment status timeline, expiry countdown, copy/share/QR download, and retry after expiry.
 - Checkout designs still come from the payment link (or invoice `theme` query); domains do not pick a theme.
 - Do not advertise traditional payout rails or name the wallet processor on public pages.
+
+## Chat 3 (authenticated desks)
+
+- Freelancer (`dashboard.html` + `freelancer-desk.js`): payment and withdrawal filters, link on/off, skeleton/empty/error states, skip link + `a11y.css`.
+- Admin (`admin.html` + `admin-*.js`): Manage users Status control, payment/payout/audit filters, same design-system loading states.
+- Roles in UI: Freelancer (`creator`) and Admin only. Reserved slugs still list `moderator`/`reseller` so those paths are not payment links. Do not reintroduce reseller desks.
+- Authz: `loadProfile` signs out non-active accounts; admin RPCs / `admin-actions` require `role=admin` on the server. Hidden UI is not a privilege boundary.

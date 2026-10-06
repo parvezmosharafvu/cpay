@@ -21,15 +21,18 @@ Follow-on chats should start from merged main after prior PRs land (or from the 
 5. Docs public-copy hygiene so `ci/check_public_copy.py` stays green.
 6. No backend contract changes; no processor names/secrets; no traditional payout ads; Vanilla only.
 
-## Chat 3 — Freelancer & admin dashboards / roles
+## Done in Chat 3 — Freelancer & admin dashboards / roles
+
+1. Freelancer desk: payment filters (`get_my_payments` search/status), withdrawal history filters, link on/off, skeleton/empty/error panels, Chat 2 design system on `dashboard.html`.
+2. Admin desk: account Status control wired to `admin_update_account_control`, people/payment/payout/audit filters, honest loading/error states, skip links + a11y on `admin.html`.
+3. `roleHome` still admin→admin / else→freelancer; retired moderator/reseller never get admin via UI. Server RPCs remain authoritative.
+4. No reseller commission/role UI; Freelancer terminology in user-facing copy; USDT withdraw only.
+5. Tests: desk unit suite + existing frontend/CI checks.
+
+## Chat 3 (historical goal — completed above)
 
 **Goal:** Polish authenticated desks without weakening auth/RLS or reintroducing reseller.
 
-1. Freelancer dashboard: links, storefront, payments history, balance, USDT withdraw quote→confirm UX (loading/empty/error, skeleton where useful).
-2. Admin desk: accounts approval/suspend, payments, withdrawals, settings/flags, health — clearer hierarchy, tables, filters; preserve server-backed gates.
-3. Role home routing (`roleHome`) and suspended/pending gates remain authoritative.
-4. Accessibility and 44px targets in desks; no fake balances; never print secrets.
-5. Tests: frontend unit + `check_frontend` + any desk smoke available.
 
 ## Chat 4 — Ops cutover hygiene
 

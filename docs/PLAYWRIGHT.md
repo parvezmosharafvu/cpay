@@ -31,3 +31,14 @@ Workflow `.github/workflows/e2e.yml` is manual + nightly. Add repository secrets
 - optional `CPAY_BASE_URL`
 
 Without those secrets the `adminPage` fixture skips the tests.
+
+## Public journey smoke (no secrets)
+
+Static pages only. Does not hit Supabase.
+
+```bash
+npm install --no-save @playwright/test@1.55.0
+npx playwright install chromium
+python3 -m http.server 8765 --directory public &
+CPAY_BASE_URL=http://127.0.0.1:8765 npx playwright test -c tests/public-smoke/playwright.config.ts
+```

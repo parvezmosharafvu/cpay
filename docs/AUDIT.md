@@ -13,7 +13,7 @@ browser (Vanilla HTML/CSS/JS, anon key + JWT, RLS)
   → Supabase Postgres (ledger, SECURITY DEFINER RPCs, pg_cron)
   → Edge functions (create-invoice, user-withdraw, admin-actions, …)
        → Bearer PAYMENT_SERVICE_SECRET
-  → payment-service (Node 22, Breez Spark wallet, DATABASE_URL service role)
+  → payment-service (Node 22, Spark platform wallet, DATABASE_URL service role)
 ```
 
 | Boundary | Rule |
@@ -50,7 +50,7 @@ browser (Vanilla HTML/CSS/JS, anon key + JWT, RLS)
 
 | ID | Finding | File refs | Status |
 |---|---|---|---|
-| H1 | `user-withdraw` still accepted `VALID_METHODS = bkash/nagad/binance/lightning/bank`, validated Lightning payout destinations, and called closed `request_withdrawal`. Product forbids those payouts; SQL already raised, but the edge path advertised and attempted them. | `supabase/functions/user-withdraw/index.ts` | **FIXED** — non-`routes`/`quote`/`confirm` → HTTP 410; methods removed |
+| H1 | `user-withdraw` still accepted closed traditional/manual payout method strings plus Lightning payout destinations, and called closed `request_withdrawal`. Product forbids those payouts; SQL already raised, but the edge path advertised and attempted them. | `supabase/functions/user-withdraw/index.ts` | **FIXED** — non-`routes`/`quote`/`confirm` → HTTP 410; methods removed |
 | H2 | Address validators missing pinned `search_path` (Supabase advisor WARN `function_search_path_mutable`). | `usdt_address_ok`, `cpay_valid_onchain_address` | **FIXED** in `20261007040000_…` |
 | H3 | Orphan Edge Functions still **ACTIVE** in production with `verify_jwt: false`: `reconcile`, `reseller-digest`, `telegram-report`. Not in repo; 0 recent traffic; broken deps. Documented in `docs/OPS_DRIFT_2026-10.md`. | Production function list 2026-10-07 | **OPEN (ops)** — delete needs owner approval; not done in this PR |
 | H4 | Telegram notify 503 storm when `ALERT_TELEGRAM_BOT_TOKEN` unset (pending outbox row never claimed). | `docs/OPS_DRIFT_2026-10.md`, cron job `cpay-telegram-send` | **OPEN (ops)** — set secrets or clear/skip stale outbox |
@@ -61,7 +61,7 @@ browser (Vanilla HTML/CSS/JS, anon key + JWT, RLS)
 |---|---|---|---|
 | M1 | Dead `submitManual` / `request_withdrawal` wiring in freelancer desk (unused by `bindWithdraw`, always would fail). | `public/freelancer-desk.js`, `public/app.js` | **FIXED** |
 | M2 | Trigger SECURITY DEFINER helpers still `EXECUTE` for anon/authenticated (PostgREST cannot call `RETURNS trigger`, but advisors flag them). | production advisors + migration | **FIXED** revoke in `20261007040000_…` |
-| M3 | Historical `profiles.wallet_bkash` / `wallet_nagad` / … columns remain (unused by queue path). | schema | OPEN — leave for history; no public UI ads (copy checks pass) |
+| M3 | Historical `profiles.wallet_*` traditional-rail columns remain (unused by queue path). | schema | OPEN — leave for history; no public UI ads (copy checks pass) |
 | M4 | Admin `process-withdrawal` still supports `mark_paid_manual` for legacy rows. | `supabase/functions/admin-actions/index.ts` | OPEN — keep for old pending rows; do not expose in freelancer UI |
 | M5 | Repo is public; hygiene job comment still assumes private. | `.github/workflows/verify.yml`, `docs/OPS_DRIFT_2026-10.md` | OPEN — docs/comment only |
 

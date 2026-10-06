@@ -44,7 +44,7 @@ async function readJson(req) {
 }
 
 export function createApp({
-  sdk, db, secret, log = logJson, confirmWaitMs, now = () => Date.now(),
+  sdk, db, secret, log: logRaw = logJson, confirmWaitMs, now = () => Date.now(),
   // F1 PR 1 receipt log: 'off' (default) or 'shadow'. recordDb is a separate
   // small pool so recording can never take the settlement path's connections.
   receiptRecording = 'off', recordDb = null, recordTimeoutMs,
@@ -52,7 +52,31 @@ export function createApp({
   let lastSyncedAt = 0;
   let optimizing = false;
   let draining = false;
+  let ready = false;
   const inflight = new Set();
+  // Process counters only: no balances, user ids, invoices or secrets.
+  // Single platform wallet: one Breez mnemonic / one Spark tree for all
+  // creators (documented in README). Metrics do not claim otherwise.
+  const metrics = {
+    invoicesAttached: 0,
+    invoiceIdempotentHits: 0,
+    settles: Object.create(null),
+    catchUps: 0,
+    lastCatchUpAt: null,
+    withdrawalsFinalized: Object.create(null),
+    withdrawalStuck: 0,
+    authRejected: 0,
+    requestErrors: 0,
+    leafRetries: 0,
+  };
+  function bump(bucket, key) {
+    bucket[key] = (bucket[key] ?? 0) + 1;
+  }
+  const log = (entry) => {
+    if (entry?.event === 'leaf-retry') metrics.leafRetries += 1;
+    if (entry?.event === 'withdrawal-stuck') metrics.withdrawalStuck += 1;
+    return logRaw(entry);
+  };
 
   // Work that must finish before the SDK disconnects: requests, settles,
   // catch-up passes and sends that outlive their request.
@@ -86,6 +110,7 @@ export function createApp({
   // call itself is ledger.settlePayment(), unchanged from main.
   async function settle(payment, source) {
     const outcome = await settleWithReceipt({ db, recorder: receipts, payment, source });
+    bump(metrics.settles, outcome);
     log({ event: 'settle', source, breezPaymentId: payment.id, amountSat: String(payment.amount), outcome });
     return outcome;
   }
@@ -134,6 +159,12 @@ export function createApp({
     });
     if (synced) lastSyncedAt = now();
     const withdrawalOutcomes = await withdrawals.reconcile({ synced });
+    metrics.catchUps += 1;
+    metrics.lastCatchUpAt = new Date(now()).toISOString();
+    for (const [k, n] of Object.entries(withdrawalOutcomes ?? {})) {
+      if (k === 'sending') continue;
+      bump(metrics.withdrawalsFinalized, k);
+    }
     log({
       event: 'catch-up', since, outcomes, expired, withdrawals: withdrawalOutcomes,
       ...(receipts.enabled ? { receipts: receipts.stats() } : {}),
@@ -158,6 +189,7 @@ export function createApp({
       const row = await ledger.invoiceRow(client, paymentId);
       if (!row) return [404, { error: 'payment not found' }];
       if (row.lightning_invoice) {
+        metrics.invoiceIdempotentHits += 1;
         return [200, { ...invoiceLinks(row.lightning_invoice), paymentHash: row.invoice_ref, amountSat: Number(row.amount_sat) }];
       }
       if (row.status !== 'new') return [409, { error: `payment is ${row.status}` }];
@@ -182,6 +214,7 @@ export function createApp({
       }
       await client.query('commit');
       transactionStarted = false;
+      metrics.invoicesAttached += 1;
       return [200, { ...invoiceLinks(paymentRequest), paymentHash: parsed.paymentHash, amountSat }];
     } finally {
       if (transactionStarted) await client.query('rollback').catch(() => {});
@@ -213,6 +246,33 @@ export function createApp({
     }];
   }
 
+  // Readiness: startup catch-up finished and not draining. Unauthenticated,
+  // like /health — hosts may probe it before sending traffic. No balances.
+  function readiness() {
+    const isReady = ready && !draining;
+    return [isReady ? 200 : 503, { ready: isReady, shuttingDown: draining }];
+  }
+
+  function metricsSnapshot() {
+    return {
+      ready,
+      shuttingDown: draining,
+      inflight: inflight.size,
+      invoicesAttached: metrics.invoicesAttached,
+      invoiceIdempotentHits: metrics.invoiceIdempotentHits,
+      settles: { ...metrics.settles },
+      catchUps: metrics.catchUps,
+      lastCatchUpAt: metrics.lastCatchUpAt,
+      withdrawalsFinalized: { ...metrics.withdrawalsFinalized },
+      withdrawalStuck: metrics.withdrawalStuck,
+      authRejected: metrics.authRejected,
+      requestErrors: metrics.requestErrors,
+      leafRetries: metrics.leafRetries,
+      // Custody model reminder for operators reading the scrape:
+      singleWallet: true,
+    };
+  }
+
   async function withdrawRoute(method, path, req) {
     if (method === 'GET' && path === '/withdraw/routes') {
       return [200, { routes: await withdrawals.listRoutes(), cache: withdrawals.routeCacheInfo() }];
@@ -232,7 +292,15 @@ export function createApp({
     const path = new URL(req.url, 'http://localhost').pathname;
     const method = req.method;
     if (path === '/health') return method === 'GET' ? health() : [405, { error: 'method not allowed' }];
-    if (!authorised(req.headers.authorization)) return [401, { error: 'unauthorized' }];
+    if (path === '/ready') return method === 'GET' ? readiness() : [405, { error: 'method not allowed' }];
+    if (!authorised(req.headers.authorization)) {
+      metrics.authRejected += 1;
+      return [401, { error: 'unauthorized' }];
+    }
+    if (path === '/metrics') {
+      if (method !== 'GET') return [405, { error: 'method not allowed' }];
+      return [200, metricsSnapshot()];
+    }
     if (draining) return [503, { error: 'shutting down' }];
     if (path === '/invoices') {
       if (method !== 'POST') return [405, { error: 'method not allowed' }];
@@ -252,6 +320,7 @@ export function createApp({
       if (e instanceof UserError) {
         [status, body] = [e.status, { error: e.message, ...e.extra }];
       } else {
+        metrics.requestErrors += 1;
         log({ event: 'request-failed', method: req.method, path: new URL(req.url, 'http://localhost').pathname, error: errorText(e) });
         [status, body] = [500, { error: 'internal error' }];
       }
@@ -279,8 +348,12 @@ export function createApp({
 
   return {
     handle: (req, res) => track(handle(req, res)),
-    onEvent, catchUp, drain, health, track,
+    onEvent, catchUp, drain, health, readiness, track,
     markSynced: () => { lastSyncedAt = now(); },
+    markReady: () => { ready = true; },
+    noteStuck: () => { metrics.withdrawalStuck += 1; },
+    noteLeafRetry: () => { metrics.leafRetries += 1; },
+    metrics: metricsSnapshot,
     receiptStats: () => receipts.stats(),
   };
 }

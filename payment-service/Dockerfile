@@ -18,7 +18,7 @@ ENV NODE_ENV=production \
     PORT=8080
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json app.mjs config.mjs ledger.mjs server.mjs service.mjs wallet.mjs withdraw.mjs ./
+COPY package.json app.mjs config.mjs ledger.mjs money.mjs receipts.mjs server.mjs service.mjs wallet.mjs withdraw.mjs ./
 # The node image ships an unprivileged "node" user (uid 1000).
 RUN mkdir -p /data && chown node:node /data
 USER node

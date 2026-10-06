@@ -16,3 +16,8 @@
     transition-duration:0.01ms !important;
   }
 }
+.side .navi,.desk-toolbar .btn,.desk-toolbar input,.desk-toolbar select,
+.main .btn,.main input,.main select,.main textarea{
+  min-height:44px;
+}
+.main .btn.sm{min-height:40px;padding:8px 12px}

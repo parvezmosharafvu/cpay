@@ -2,10 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#047857">
 <title>Admin · CPAY</title>
 <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
+<link rel="stylesheet" href="a11y.css">
 <style>
 .msg-bubble{padding:9px 12px;border-radius:10px;max-width:85%;background:var(--surface-2);border:1px solid var(--line)}
 .msg-bubble.admin{background:var(--accent-soft);border-color:var(--accent-ring);margin-left:auto}
@@ -17,27 +20,28 @@
 <script src="daily-desk.js?v=3"></script>
 </head>
 <body>
+<a class="skip-link" href="#adminMain">Skip to admin desk</a>
 <div class="shell">
   <aside class="side" aria-label="Sections">
     <a class="brand" href="/admin.html"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
-    <button class="navi active" data-tab="home">Overview</button>
-    <button class="navi" data-tab="daily">Daily earnings</button>
+    <button type="button" class="navi active" data-tab="home">Overview</button>
+    <button type="button" class="navi" data-tab="daily">Daily earnings</button>
     <a class="navi" data-tab="people" href="#people">Manage users</a>
-    <button class="navi" data-tab="apps">Applications</button>
-    <button class="navi" data-tab="payments">Payments</button>
-    <button class="navi" data-tab="payouts">Payouts</button>
-    <button class="navi" data-tab="links">Links</button>
+    <button type="button" class="navi" data-tab="apps">Applications</button>
+    <button type="button" class="navi" data-tab="payments">Payments</button>
+    <button type="button" class="navi" data-tab="payouts">Payouts</button>
+    <button type="button" class="navi" data-tab="links">Links</button>
     <a class="navi" data-tab="wallet" href="#wallet">Wallet</a>
-    <button class="navi" data-tab="settings">Settings</button>
-    <button class="navi" data-tab="health">Health</button>
-    <button class="navi" data-tab="system">System</button>
-    <button class="navi" data-tab="audit">Audit</button>
-    <button class="navi" data-tab="chat">Inbox</button>
-    <button class="navi" id="logoutBtn">Log out</button>
+    <button type="button" class="navi" data-tab="settings">Settings</button>
+    <button type="button" class="navi" data-tab="health">Health</button>
+    <button type="button" class="navi" data-tab="system">System</button>
+    <button type="button" class="navi" data-tab="audit">Audit</button>
+    <button type="button" class="navi" data-tab="chat">Inbox</button>
+    <button type="button" class="navi" id="logoutBtn">Log out</button>
   </aside>
-  <main class="main">
+  <main class="main" id="adminMain">
     <div class="topbar"><div><div class="kicker">Admin</div><h2>CPAY admin</h2></div><div id="toast" role="status" style="display:none"></div></div>
-    <section id="home"></section>
+    <section id="home" aria-live="polite"></section>
     <section id="daily" hidden></section>
     <section id="people" hidden></section>
     <section id="payments" hidden></section>
@@ -72,9 +76,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="admin-wallet.js?v=26"></script>
 <script src="admin-wallet-route.js?v=26"></script>
-<script src="admin-desk.js?v=27"></script>
-<script src="admin-unify.js?v=25"></script>
-<script src="admin-ops-rest.js?v=27"></script>
+<script src="admin-desk.js?v=28"></script>
+<script src="admin-unify.js?v=26"></script>
+<script src="admin-ops-rest.js?v=28"></script>
 <script src="admin-ops-gates.js?v=25"></script>
 <script src="admin-home-live.js?v=26"></script>
 </body>

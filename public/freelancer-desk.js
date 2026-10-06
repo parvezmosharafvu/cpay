@@ -148,22 +148,11 @@ async function renderCash() {
   const wallets = book?.wallets || [];
   const savedNote = wallets.length
     ? `<p class="hint">Saved USDT wallets: ${wallets.map((w) => escapeHtml(w.network)).join(', ')}. Open Profile to add more networks.</p>`
-    : `<p class="hint">Save a USDT address in Profile first. Lightning payouts are off.</p>`;
+    : `<p class="hint">Save a USDT address in Profile first.</p>`;
   document.getElementById('cash').innerHTML = withdrawForm(`<p class="muted">Available balance <strong id="wAvail">${money(b.available)}</strong></p>`
     + savedNote)
     + '<div id="wHist"></div>';
   bindWithdraw(() => fee, {
-    submitManual: async () => {
-      const { data, error } = await sb.rpc('request_withdrawal', {
-        p_amount: Number(document.getElementById('wAmt').value),
-        p_method: document.getElementById('wMethod').value,
-        p_destination: document.getElementById('wDest').value.trim(),
-      });
-      if (error) { toast(error.message); return false; }
-      const row = Array.isArray(data) ? data[0] : data;
-      toast(row?.amount_after_fee != null ? `Withdrawal requested. You receive ${money(row.amount_after_fee)} after an admin approves it.` : 'Withdrawal requested', true);
-      return true;
-    },
     onDone: async () => {
       renderHome();
       renderWithdrawHistory();
@@ -213,7 +202,7 @@ async function renderProfile() {
     </div>
     <div class="card">
       <h3>USDT payout</h3>
-      <p class="hint">One address per network. Withdraw sends USDT there. Lightning payouts are off.</p>
+      <p class="hint">One address per network. Withdraw sends USDT there.</p>
       <div class="field"><label for="usdtNet">Network</label><select id="usdtNet">${netOpts}</select></div>
       <div class="field"><label for="usdtAddr">Wallet address</label><input id="usdtAddr" placeholder="Address for that network" autocomplete="off" spellcheck="false"></div>
       <button class="btn primary" id="saveUsdt">Save address</button>

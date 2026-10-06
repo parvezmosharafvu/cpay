@@ -167,7 +167,7 @@ async function loadWithdrawRoutes(){
   return withdrawRoutes;
 }
 function shortAddress(a){ return a && a.length > 16 ? `${a.slice(0, 8)}...${a.slice(-6)}` : (a || ''); }
-function bindWithdraw(feePercent, { submitManual, instantAllowed = () => true, onDone = () => {}, blocked = null } = {}){
+function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => {}, blocked = null } = {}){
   let routes = { routes: [], error: null, loading: true };
   let quote = null;
   let busy = false;

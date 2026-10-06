@@ -406,8 +406,12 @@ jobs:
         # No payment-processor name, no bKash/Nagad/Binance/bank, no
         # "any Lightning wallet" promise. See ci/check_public_copy.py.
         run: python3 ci/check_public_copy.py
-      - name: Frontend HTML escaping regression tests
-        run: node --test tests/frontend/app.test.mjs
+      - name: Frontend tests (escaping, design system, desk dashboards)
+        # Every file in tests/frontend, as docs/TESTING.md and
+        # docs/RELEASE-CHECKLIST.md describe. Only app.test.mjs used to run
+        # here, so design-system.test.mjs and desk-dashboards.test.mjs
+        # (the admin/freelancer desk checks) never ran on a PR.
+        run: node --test tests/frontend/*.test.mjs
 
   hygiene:
     name: Ledger snapshots are where you expect

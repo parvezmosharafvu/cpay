@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#f6f7f9">
+<meta name="color-scheme" content="light">
 <title>Pay invoice · CPAY</title>
 
 <!-- Invoice URLs are per-customer and live in the address bar. They must
@@ -24,10 +25,19 @@
 <script src="config.js"></script>
 <script src="theme.js"></script>
 <script src="wallets-config.js"></script>
-<script>setDesign(new URLSearchParams(location.search).get('theme'));</script>
+<script>
+/* Apply checkout design before first paint so the page colour does not flash. */
+(function(){
+  try {
+    var q = new URLSearchParams(location.search).get('theme');
+    if (typeof setDesign === 'function') setDesign(q);
+  } catch (e) {}
+})();
+</script>
 
 </head>
 <body class="checkout invoice">
+<a class="skip-link" href="#step2">Skip to invoice</a>
 
 <header class="checkout-head">
   <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
@@ -65,6 +75,12 @@
       <span class="status-chip" id="statusChip" data-state="waiting" role="status" aria-live="polite">Waiting for payment</span>
       <span class="timer-pill" id="timerPill" role="timer" aria-live="off">--:--</span>
     </div>
+    <ol class="status-timeline" id="statusTimeline" aria-label="Payment progress">
+      <li class="done" data-step="created">Created</li>
+      <li class="current" data-step="waiting">Waiting</li>
+      <li data-step="detected">Detected</li>
+      <li data-step="settled">Paid</li>
+    </ol>
   </div>
 
   <div class="pay-actions" id="payActions">
@@ -82,6 +98,9 @@
     </div>
   </button>
 
+  <div class="qr-actions">
+    <button class="link-btn" id="downloadQrBtn" type="button">Download QR</button>
+  </div>
   <div class="action-footer single">
     <button id="copyBtn" class="pill-btn btn-copy" type="button">Copy payment request</button>
   </div>
@@ -259,6 +278,7 @@ function showInvoiceGone(msg){
 function showExpired(){
   stopStatusWork();
   sessionStorage.removeItem('invoiceSession');
+  updateTimeline('expired');
   showState({
     title: 'This payment request expired',
     sub: 'It can no longer be paid. If you paid just before it expired, don\'t pay again: this page will switch to "Payment received" when it lands. Otherwise, generate a new one.',
@@ -289,6 +309,7 @@ function lateCheck(until){
 function showFailed(sub){
   stopStatusWork();
   sessionStorage.removeItem('invoiceSession');
+  updateTimeline('failed');
   showState({
     title: 'This payment could not be completed',
     sub: sub || ('This request was cancelled and can no longer be paid. If money already left your wallet, keep reference ' + shortRef(currentPaymentId) + ' and contact ' + (merchantName || 'the person you were paying') + '.'),
@@ -471,6 +492,27 @@ function setStatus(state){
   el('payHint').textContent = busy
     ? 'Your payment is on its way. Keep this page open; it updates by itself.'
     : 'The amount is already in the request. Pay before the timer runs out.';
+  updateTimeline(state);
+}
+function updateTimeline(state){
+  const tl = el('statusTimeline');
+  if (!tl) return;
+  const order = ['created', 'waiting', 'detected', 'settled'];
+  let active = state === 'detected' ? 'detected' : (state === 'settled' ? 'settled' : 'waiting');
+  if (state === 'expired' || state === 'failed') active = 'waiting';
+  const idx = order.indexOf(active);
+  tl.querySelectorAll('li').forEach((li) => {
+    const step = li.dataset.step;
+    const si = order.indexOf(step);
+    li.classList.remove('done', 'current', 'failed');
+    if (state === 'expired' || state === 'failed') {
+      if (step === 'waiting') li.classList.add('failed');
+      else if (si < 1) li.classList.add('done');
+      return;
+    }
+    if (si < idx) li.classList.add('done');
+    else if (si === idx) li.classList.add(si === order.length - 1 ? 'done' : 'current');
+  });
 }
 
 function applyStatus(row){
@@ -696,6 +738,7 @@ function finishAsSettled(amount){
   clearTimeout(lateTimer);
   closeSheet();
   sessionStorage.removeItem('invoiceSession');
+  updateTimeline('settled');
   showStep(3);
 
   const paid = Number.isFinite(parseFloat(amount)) ? parseFloat(amount).toFixed(2) : Number(amountRequested).toFixed(2);
@@ -822,8 +865,28 @@ async function shareInvoicePage(){
 }
 async function copyInvoicePageLink(){ toast(await copyText(location.href) ? 'Payment link copied' : 'Could not copy link'); }
 
+function downloadQr(){
+  const node = el('qrcode');
+  const canvas = node && node.querySelector('canvas');
+  const img = node && node.querySelector('img');
+  let href = '';
+  if (canvas) {
+    try { href = canvas.toDataURL('image/png'); } catch (e) { href = ''; }
+  } else if (img && img.src) {
+    href = img.src;
+  }
+  if (!href){ toast('QR is not ready yet'); return; }
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = 'cpay-payment-qr.png';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  toast('QR downloaded');
+}
 el('shareInvoiceBtn').addEventListener('click', shareInvoicePage);
 el('copyLinkBtn').addEventListener('click', copyInvoicePageLink);
+el('downloadQrBtn').addEventListener('click', downloadQr);
 el('copyBtn').addEventListener('click', copyAddress);
 el('refChip').addEventListener('click', copyRefChip);
 el('payBtn').addEventListener('click', openLightning);

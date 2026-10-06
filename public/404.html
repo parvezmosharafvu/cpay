@@ -4,20 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#f6f7f9">
+    <meta name="color-scheme" content="light">
     <title>CPAY — Pay</title>
     <link rel="icon" type="image/svg+xml" href="/favicon-payment.svg">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="cpay.css">
-    <style>
-      [hidden]{display:none !important}
-      .checkout .key,.checkout .pay-btn,.checkout .quick-chip,.checkout .classic-chip,.checkout .quick-btn,.checkout .classic-toggle{min-height:44px;min-width:44px}
-      .checkout :focus-visible{outline:2px solid var(--brand,#635bff);outline-offset:2px}
-    </style>
+    <link rel="stylesheet" href="a11y.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
     <script src="theme.js"></script>
   </head>
   <body class="checkout">
+    <a class="skip-link" href="#paymentCard">Skip to payment</a>
     <header class="checkout-head">
       <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
       <span class="secure"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Secure payment</span>
@@ -26,6 +24,8 @@
     <div class="checkout-card state-panel" id="loadingState" role="status" aria-live="polite">
       <div class="spinner" aria-hidden="true"></div>
       <div class="state-sub">Loading payment page…</div>
+      <div class="skeleton line" style="width:60%;margin-top:16px" aria-hidden="true"></div>
+      <div class="skeleton line" style="width:40%" aria-hidden="true"></div>
     </div>
 
     <div class="checkout-card state-panel" id="loadErrorCard" hidden aria-hidden="true">

@@ -1,38 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f6f7f9">
+<meta name="color-scheme" content="light">
 <title>Log in · CPAY</title>
 <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
-<style>
-  .auth :focus-visible{outline:2px solid var(--brand,#635bff);outline-offset:2px}
-  .auth .btn,.auth input{min-height:44px}
-</style>
+<link rel="stylesheet" href="a11y.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script>
 </head>
 <body class="auth">
+  <a class="skip-link" href="#loginCard">Skip to form</a>
   <main class="auth-card">
     <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
-    <div class="card">
+    <div class="card" id="loginCard">
       <h1>Log in</h1>
       <p class="sub">Welcome back. Enter your email and password.</p>
-      <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email"></div>
-      <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password"></div>
+      <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" inputmode="email" required></div>
+      <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required></div>
       <button class="btn primary block lg" id="submitBtn" type="button">Log in</button>
       <p class="foot" style="margin-top:12px"><button class="btn ghost block" id="forgotBtn" type="button">Forgot password?</button></p>
-      <p class="err" id="errorMsg" role="alert" style="display:none;margin-top:12px"></p>
-      <p class="faint" id="okMsg" role="status" style="display:none;margin-top:12px"></p>
+      <div class="alert alert-danger" id="errorMsg" role="alert" hidden></div>
+      <div class="alert alert-success" id="okMsg" role="status" hidden></div>
     </div>
     <p class="foot">No account? <a href="register.html">Create one</a></p>
   </main>
 <script>
 const errEl = () => document.getElementById('errorMsg');
 const okEl = () => document.getElementById('okMsg');
-function showErr(t){ const e=errEl(); e.textContent=t; e.style.display='block'; okEl().style.display='none'; }
-function showOk(t){ const o=okEl(); o.textContent=t; o.style.display='block'; errEl().style.display='none'; }
+function showErr(t){ const e=errEl(); e.textContent=t; e.hidden=false; okEl().hidden=true; }
+function showOk(t){ const o=okEl(); o.textContent=t; o.hidden=false; errEl().hidden=true; }
 async function go(id){
   const { data } = await window.supabaseClient.from('profiles').select('role,account_status').eq('id', id).single();
   if (data?.account_status && data.account_status !== 'active'){
@@ -47,7 +48,7 @@ async function go(id){
 document.getElementById('submitBtn').onclick = async () => {
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
-  errEl().style.display='none'; okEl().style.display='none';
+  errEl().hidden=true; okEl().hidden=true;
   if (!email || !password){ showErr('Enter email and password.'); return; }
   const btn = document.getElementById('submitBtn');
   if (btn.disabled) return;

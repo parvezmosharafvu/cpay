@@ -82,9 +82,9 @@ status,
 headers: { "Content-Type": "application/json", ...cors },
 });
 }
-// Manual methods, paid by an admin. USDT goes through the instant
-// stablecoin actions below instead.
-const VALID_METHODS = ["bkash", "nagad", "binance", "lightning", "bank"];
+// Manual payout methods (bKash / Nagad / Binance / bank / Lightning payout)
+// are closed. The only product path is USDT/USDC via routes/quote/confirm.
+// request_withdrawal() in SQL also raises for any method.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Calls the payment service, which holds the platform wallet.
@@ -223,49 +223,10 @@ Deno.serve(async (req) => {
     }
   }
 
-  const amount = Number(body.amount);
-  const method = String(body.method ?? "").trim();
-  const destination = String(body.destination ?? "").trim();
-  // Cheap client-side-mirroring checks. The authoritative versions all live
-  // in request_withdrawal(); these only exist to return a nicer error faster.
-  if (!Number.isFinite(amount) || amount < 5) {
-    return json({ error: "Minimum withdrawal is $5" }, 400, cors);
-  }
-  if (method === "usdt_bep20") {
-    return json({ error: "USDT withdrawals are sent instantly. Choose Stablecoin (instant) instead." }, 400, cors);
-  }
-  if (!VALID_METHODS.includes(method)) {
-    return json({ error: "Invalid withdrawal method" }, 400, cors);
-  }
-  if (!destination) {
-    return json({ error: "Destination account is required" }, 400, cors);
-  }
-  // Two shapes are valid for a Lightning destination: a bolt11 invoice
-  // (one-shot, expires within the hour) and a Lightning Address (static,
-  // resolved via LNURL-pay at payout time).
-  const LN_INVOICE = /^ln(bc|tb|bcrt)[0-9a-z]+$/i;
-  const LN_ADDRESS = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
-  if (method === "lightning" && !LN_INVOICE.test(destination) && !LN_ADDRESS.test(destination)) {
-    return json({
-      error: "That does not look like a Lightning invoice or a Lightning Address (you@wallet.com)",
-    }, 400, cors);
-  }
-  // One code path for balance maths: the database decides.
-  const { data: withdrawal, error: rpcErr } = await callerClient
-    .rpc("request_withdrawal", {
-      p_amount: amount,
-      p_method: method,
-      p_destination: destination,
-    });
-  if (rpcErr || !withdrawal) {
-    // Postgres RAISE messages here are user-facing and intentionally safe
-    // ("Insufficient balance. Available: $12.40").
-    return json({ error: rpcErr?.message ?? "Could not create withdrawal request" }, 400, cors);
-  }
-  const row = Array.isArray(withdrawal) ? withdrawal[0] : withdrawal;
+  // Anything other than routes / quote / confirm is the retired manual path.
+  // SQL request_withdrawal() also raises; refuse here so the edge function
+  // never names closed payout methods or Lightning payout destinations.
   return json({
-    status: "pending",
-    withdrawalId: row.id,
-    msg: "Request queued for admin approval.",
-  }, 200, cors);
+    error: "Only USDT to a saved wallet address is supported. Use quote and confirm.",
+  }, 410, cors);
 });

@@ -108,11 +108,13 @@ async function renderPayments() {
 
   const toolbar = document.createElement('div');
   toolbar.className = 'desk-toolbar';
-  
+  toolbar.setAttribute('role', 'search');
+
   const statusField = document.createElement('div');
   statusField.className = 'field short';
   const statusLabel = document.createElement('label');
-    statusLabel.textContent = 'Status';
+  statusLabel.htmlFor = 'adminPayStatus';
+  statusLabel.textContent = 'Status';
   const statusSelect = document.createElement('select');
   statusSelect.id = 'adminPayStatus';
   for (const [value, label] of [['', 'All'], ['settled', 'Settled'], ['pending', 'Pending'], ['new', 'New'], ['expired', 'Expired'], ['invalid', 'Invalid']]) {
@@ -127,7 +129,8 @@ async function renderPayments() {
   const searchField = document.createElement('div');
   searchField.className = 'field grow';
   const searchLabel = document.createElement('label');
-    searchLabel.textContent = 'Search';
+  searchLabel.htmlFor = 'adminPaySearch';
+  searchLabel.textContent = 'Search';
   const searchInput = document.createElement('input');
   searchInput.id = 'adminPaySearch';
   searchInput.type = 'search';
@@ -161,7 +164,7 @@ async function renderPayments() {
 
   const note = document.createElement('p');
   note.className = 'role-note';
-    note.textContent = 'Search uses the admin_list_payments RPC (admin-only). Status filter is applied in the desk for the loaded page.';
+  note.textContent = 'Search uses the admin_list_payments RPC (admin-only). Status filter is applied in the desk for the loaded page.';
   wrap.append(note);
 
   const scroll = document.createElement('div');

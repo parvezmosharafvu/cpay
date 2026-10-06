@@ -47,6 +47,9 @@ async function renderHome() {
   </div>`;
 }
 
+// Filter state lives outside the section: the skeleton below replaces the
+// toolbar, so reading the inputs after it would always see empty values.
+let peopleFilter = { status: '', search: '' };
 async function renderPeople() {
   const el = document.getElementById('people');
   if (el) el.innerHTML = typeof deskSkeleton === 'function' ? deskSkeleton(4) : '<p class="muted">Loading…</p>';
@@ -61,8 +64,8 @@ async function renderPeople() {
   const wfee = Object.fromEntries((wfees || []).map((f) => [f.user_id, f]));
   if (error) { el.innerHTML = typeof deskError === 'function' ? deskError(error.message) : `<p class="err">${escapeHtml(error.message)}</p>`; return; }
   people = data || [];
-  const statusFilter = (document.getElementById('peopleStatus')?.value) || '';
-  const searchFilter = (document.getElementById('peopleSearch')?.value || '').trim().toLowerCase();
+  const statusFilter = peopleFilter.status || '';
+  const searchFilter = (peopleFilter.search || '').trim().toLowerCase();
   const filtered = people.filter((p) => {
     if (statusFilter && String(p.account_status || '') !== statusFilter) return false;
     if (!searchFilter) return true;
@@ -112,14 +115,19 @@ async function renderPeople() {
     <tbody>${rows || `<tr><td colspan="10">${typeof deskEmpty === 'function' ? deskEmpty('No accounts match', 'Clear filters or wait for applications.') : '<span class="empty">No accounts</span>'}</td></tr>`}</tbody></table></div>
   </div>`;
   if (document.getElementById('peopleStatus')) document.getElementById('peopleStatus').value = statusFilter;
-  document.getElementById('peopleApply')?.addEventListener('click', () => renderPeople());
+  document.getElementById('peopleApply')?.addEventListener('click', () => {
+    peopleFilter = {
+      status: document.getElementById('peopleStatus')?.value || '',
+      search: document.getElementById('peopleSearch')?.value.trim() || '',
+    };
+    renderPeople();
+  });
   document.getElementById('peopleClear')?.addEventListener('click', () => {
-    const s = document.getElementById('peopleStatus'); const q = document.getElementById('peopleSearch');
-    if (s) s.value = ''; if (q) q.value = '';
+    peopleFilter = { status: '', search: '' };
     renderPeople();
   });
   document.getElementById('peopleSearch')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') renderPeople();
+    if (e.key === 'Enter') document.getElementById('peopleApply')?.click();
   });
   document.querySelectorAll('[data-limit]').forEach((btn) => {
     btn.onclick = async () => {

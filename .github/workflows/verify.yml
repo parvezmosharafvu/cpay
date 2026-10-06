@@ -76,6 +76,11 @@ jobs:
           done
           echo "All migrations applied cleanly to an empty database."
 
+      - name: Financial invariants on the migrated schema (settle once, available >= 0, request_withdrawal closed)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/financial_invariants_test.sql
+
       - name: Preserve receipt history while restoring settlement behavior
         env:
           PGPASSWORD: postgres

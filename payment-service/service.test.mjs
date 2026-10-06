@@ -289,3 +289,37 @@ test('a request that arrives while draining is refused with 503', async () => {
   fake.onEvent({ type: 'autoOptimization', optimizationEvent: { type: 'completed' } });
   await stopped;
 });
+
+test('GET /ready is public and true after startup catch-up; false while draining', async () => {
+  const fake = fakeBreez();
+  const { service, call } = await start(fake);
+  const r = await call('/ready', { auth: null });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { ready: true, shuttingDown: false });
+  fake.onEvent({ type: 'autoOptimization', optimizationEvent: { type: 'started', totalRounds: 1 } });
+  const stopped = service.stop('SIGTERM');
+  await until(() => {
+    const [status] = service.app.readiness();
+    return status === 503;
+  });
+  const [status, body] = service.app.readiness();
+  assert.equal(status, 503);
+  assert.equal(body.ready, false);
+  assert.equal(body.shuttingDown, true);
+  fake.onEvent({ type: 'autoOptimization', optimizationEvent: { type: 'completed' } });
+  await stopped;
+});
+
+test('GET /metrics requires the secret and never includes balances or secrets', async () => {
+  const { call } = await start(fakeBreez());
+  assert.equal((await call('/metrics', { auth: null })).status, 401);
+  const r = await call('/metrics');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.singleWallet, true);
+  assert.equal(r.body.ready, true);
+  assert.ok(r.body.catchUps >= 1);
+  assert.equal(typeof r.body.invoicesAttached, 'number');
+  assert.ok(!('balance' in r.body));
+  assert.ok(!('balanceSats' in r.body));
+  assert.ok(!JSON.stringify(r.body).includes(SECRET));
+});

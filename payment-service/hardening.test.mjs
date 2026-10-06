@@ -179,9 +179,14 @@ test('/ready is 503 until markReady; /metrics needs bearer; /health stays unauth
 test('wait helper and body limits stay bounded', async () => {
   assert.equal(MAX_BODY_BYTES, 10_000);
   assert.equal(SYNC_STALE_MS, 10 * 60 * 1000);
+  // wait() unrefs its timer so it never holds the process open. Keep a ref'd
+  // timer alive while awaiting it, or node:test sees an empty event loop with a
+  // pending promise and fails this test and the next one.
+  const keepAlive = setTimeout(() => {}, 1_000);
   const t0 = Date.now();
   await wait(5);
-  assert.ok(Date.now() - t0 >= 0);
+  clearTimeout(keepAlive);
+  assert.ok(Date.now() - t0 >= 4);
 });
 
 test('redactor never leaves mnemonic or secret fragments in a line', () => {

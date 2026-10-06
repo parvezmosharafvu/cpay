@@ -22,3 +22,12 @@ The site is static HTML. Payment links are unmatched paths, served as
 
 - The freelancer Withdraw tab lists the last 30 payouts: when, status, network, requested, after fee, address.
 - Checkout stores the server `cashAppUrl`. The invoice page opens that link, and builds one if the server did not send it.
+
+## Chat 2 (design system)
+
+- One design system file: `public/cpay.css` (tokens, cards, forms, buttons, alerts, skeleton, status timeline).
+- `public/a11y.css` enforces 44px touch targets and `prefers-reduced-motion`.
+- Landing, auth, store, payment slug (`404.html`), and invoice pages share skip links, alerts, and light `color-scheme` to avoid theme flash.
+- Invoice shows a payment status timeline, expiry countdown, copy/share/QR download, and retry after expiry.
+- Checkout designs still come from the payment link (or invoice `theme` query); domains do not pick a theme.
+- Do not advertise traditional payout rails or name the wallet processor on public pages.

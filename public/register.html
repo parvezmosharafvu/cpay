@@ -1,7 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f6f7f9">
+<meta name="color-scheme" content="light">
 <title>Create account · CPAY</title>
 <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
@@ -11,18 +14,19 @@
 <script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script>
 </head>
 <body class="auth">
+  <a class="skip-link" href="#registerCard">Skip to form</a>
   <main class="auth-card">
     <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
-    <div class="card">
+    <div class="card" id="registerCard">
       <h1>Open a CPAY account</h1>
       <p class="sub">A freelancer account: payment links, a storefront, and USDT payouts.</p>
       <div class="field"><label for="displayName">Display name</label><input id="displayName" autocomplete="name"></div>
-      <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email"></div>
-      <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="new-password" aria-describedby="passwordHint" placeholder="At least 8 characters"></div>
-      <p class="faint" id="passwordHint">At least 8 characters.</p>
+      <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" inputmode="email" required></div>
+      <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="new-password" aria-describedby="passwordHint" placeholder="At least 8 characters" minlength="8" required></div>
+      <p class="hint" id="passwordHint">At least 8 characters.</p>
       <button class="btn primary block lg" id="submitBtn" type="button">Create account</button>
-      <p class="err" id="errorMsg" role="alert" style="display:none;margin-top:12px"></p>
-      <p class="ok" id="successMsg" role="status" style="display:none;margin-top:12px"></p>
+      <div class="alert alert-danger" id="errorMsg" role="alert" hidden></div>
+      <div class="alert alert-success" id="successMsg" role="status" hidden></div>
     </div>
     <p class="foot">Already have an account? <a href="login.html">Log in</a></p>
   </main>
@@ -32,9 +36,9 @@ document.getElementById('submitBtn').onclick = async () => {
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
   const err = document.getElementById('errorMsg'); const ok = document.getElementById('successMsg');
-  err.style.display=ok.style.display='none';
-  if (!email || !password){ err.textContent='Email and password required.'; err.style.display='block'; return; }
-  if (password.length < 8){ err.textContent='Use at least 8 characters.'; err.style.display='block'; return; }
+  err.hidden = ok.hidden = true;
+  if (!email || !password){ err.textContent='Email and password required.'; err.hidden=false; return; }
+  if (password.length < 8){ err.textContent='Use at least 8 characters.'; err.hidden=false; return; }
   const btn = document.getElementById('submitBtn');
   if (btn.disabled) return;
   btn.disabled = true;
@@ -47,10 +51,10 @@ document.getElementById('submitBtn').onclick = async () => {
   } catch (e) {
     error = { message: 'Could not reach the server. Check your connection and try again.' };
   }
-  if (error){ err.textContent=error.message; err.style.display='block'; btn.disabled=false; return; }
+  if (error){ err.textContent=error.message; err.hidden=false; btn.disabled=false; return; }
   if (data.session){ location.href = 'dashboard.html'; return; }
   ok.textContent = 'Application received. Confirm your email. An admin then approves the account, unless auto-approval is on.';
-  ok.style.display='block';
+  ok.hidden=false;
 };
 window.addEventListener('DOMContentLoaded', () => { if (window.applyDomainTheme) applyDomainTheme(); });
 </script>

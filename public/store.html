@@ -1,44 +1,49 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f6f7f9">
+<meta name="color-scheme" content="light">
 <meta name="description" content="CPAY storefront">
 <title>CPAY Store</title>
 <link rel="icon" href="/favicon-site.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
+<link rel="stylesheet" href="a11y.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="theme.js"></script>
 </head>
 <body class="store">
+<a class="skip-link" href="#grid">Skip to payment options</a>
 <main class="wrap" style="max-width:860px">
-  <nav class="nav"><a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a></nav>
-  <section class="store-hero">
-    <div class="merchant-avatar" id="avatar">$</div>
-    <h1 id="name">Loading…</h1>
-    <p id="tagline">Choose a payment option</p>
+  <nav class="nav" aria-label="Store"><a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a></nav>
+  <section class="store-hero" aria-live="polite">
+    <div class="merchant-avatar skeleton avatar" id="avatar" aria-hidden="true"></div>
+    <h1 id="name"><span class="skeleton line lg" style="display:inline-block;width:180px">&nbsp;</span></h1>
+    <p id="tagline"><span class="skeleton line" style="display:inline-block;width:220px">&nbsp;</span></p>
     <p id="bio" class="faint"></p>
     <button id="share" class="btn ghost" type="button" style="margin-top:14px" hidden>Share store</button>
   </section>
-  <section id="grid" class="store-grid"></section>
-  <div id="state" class="store-empty">Loading storefront…</div>
+  <section id="grid" class="store-grid" aria-label="Payment options"></section>
+  <div id="state" class="store-empty" role="status">Loading storefront…</div>
   <footer class="site" style="margin-top:40px;text-align:center">Powered by CPAY</footer>
 </main>
 <script>
 const sb=window.supabaseClient,params=new URLSearchParams(location.search),uid=params.get('u');
-// window.name is a built-in string, so every element is looked up explicitly.
 const [avatar,name,tagline,bio,share,grid,state]=['avatar','name','tagline','bio','share','grid','state'].map(id=>document.getElementById(id));
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 (async()=>{
-  if(!uid){state.textContent='Store not found.';return}
+  if(!uid){state.textContent='Store not found.';avatar.classList.remove('skeleton','avatar');avatar.textContent='?';name.textContent='Store not found';tagline.textContent='';return}
   const {data,error}=await sb.rpc('get_public_store',{p_user_id:uid});
-  if(error||!data?.length){state.textContent='Store not found or unavailable.';return}
+  if(error||!data?.length){state.textContent='Store not found or unavailable.';avatar.classList.remove('skeleton','avatar');avatar.textContent='?';name.textContent='Unavailable';tagline.textContent='';return}
   const r=data[0];
   document.title=(r.display_name||'CPAY freelancer')+' · CPAY';
-  // store_theme (midnight, snow, glass, sunset) maps onto the shared checkout designs.
+  // Apply design before paint of content so the page colour does not flash.
   setDesign(r.theme||'midnight');
   if(/^#[0-9a-f]{6}$/i.test(r.accent||''))document.documentElement.style.setProperty('--merchant-accent',r.accent);
+  avatar.classList.remove('skeleton','avatar');
   name.textContent=r.display_name||'CPAY freelancer';
   tagline.textContent=r.tagline||'Choose a payment option';
   bio.textContent=r.bio||'';bio.style.display=r.bio?'block':'none';

@@ -3,57 +3,71 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f6f7f9">
+  <meta name="color-scheme" content="light">
   <title>CPAY · Lightning payments for freelancers</title>
-  <meta name="description" content="CPAY receives Lightning payments from Cash App and every other Lightning wallet. Withdraw to USDT.">
+  <meta name="description" content="CPAY receives Lightning payments from Cash App and other Lightning wallets. Withdraw to USDT.">
   <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="cpay.css">
+  <link rel="stylesheet" href="a11y.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="theme.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
-    <nav class="nav">
+    <nav class="nav" aria-label="Primary">
       <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
       <div class="nav-links">
         <a class="btn ghost" href="login.html">Log in</a>
         <a class="btn primary" href="register.html">Open account</a>
       </div>
     </nav>
-    <section class="hero">
-      <div class="kicker">Lightning payments</div>
-      <h1>Get paid in Lightning, from Cash App and other wallets.</h1>
-      <p>Share a payment link. Your customer pays a Lightning invoice from Cash App or another wallet that supports it. Your balance is kept in US dollars, and you withdraw USDT to an address you save.</p>
-      <div class="row">
-        <a class="btn primary lg" href="register.html">Join as a freelancer</a>
-      </div>
-    </section>
-    <section class="features">
-      <div class="card">
-        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></div>
-        <h3>Payment links</h3>
-        <p>Each link opens a checkout with a Lightning invoice. The payer scans it and the payment lands on your balance.</p>
-      </div>
-      <div class="card">
-        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/></svg></div>
-        <h3>Your own dashboard</h3>
-        <p>See every payment, your balance and your withdrawals in one place, in US dollars.</p>
-      </div>
-      <div class="card">
-        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div>
-        <h3>Fees you can see</h3>
-        <p>Every USDT withdrawal shows the fee and the amount you receive before you confirm it.</p>
-      </div>
-    </section>
-    <footer class="site">CPAY</footer>
+    <main id="main">
+      <section class="hero">
+        <div class="kicker">Lightning payments</div>
+        <h1>Get paid in Lightning, from Cash App and other wallets.</h1>
+        <p>Share a payment link. Your customer pays a Lightning invoice from Cash App or another wallet that supports it. Your balance is kept in US dollars, and you withdraw USDT to an address you save.</p>
+        <div class="row">
+          <a class="btn primary lg" href="register.html">Join as a freelancer</a>
+          <a class="btn ghost lg" href="login.html">I already have an account</a>
+        </div>
+      </section>
+      <section class="features" aria-label="How CPAY works">
+        <div class="card">
+          <div class="icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></div>
+          <h3>Payment links</h3>
+          <p>Each link opens a checkout with a Lightning invoice. The payer scans it and the payment lands on your balance.</p>
+        </div>
+        <div class="card">
+          <div class="icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/></svg></div>
+          <h3>Your own dashboard</h3>
+          <p>See every payment, your balance and your withdrawals in one place, in US dollars.</p>
+        </div>
+        <div class="card">
+          <div class="icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div>
+          <h3>Fees you can see</h3>
+          <p>Every USDT withdrawal shows the fee and the amount you receive before you confirm it.</p>
+        </div>
+      </section>
+    </main>
+    <footer class="site">
+      <span>CPAY</span>
+      <span class="faint" style="margin-left:12px">Lightning collect · USD ledger · USDT withdraw</span>
+    </footer>
   </div>
   <script>
     window.addEventListener('DOMContentLoaded', async () => {
-      const { data: { session } } = await window.supabaseClient.auth.getSession();
-      if (!session) return;
-      const { data } = await window.supabaseClient.from('profiles').select('role,account_status').eq('id', session.user.id).single();
-      if (data?.account_status === 'active') location.href = data.role === 'admin' ? 'admin.html' : 'dashboard.html';
+      try {
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        if (!session) return;
+        const { data } = await window.supabaseClient.from('profiles').select('role,account_status').eq('id', session.user.id).single();
+        if (data?.account_status === 'active') location.href = data.role === 'admin' ? 'admin.html' : 'dashboard.html';
+      } catch (_) { /* stay on landing */ }
     });
   </script>
 </body>

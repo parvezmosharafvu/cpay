@@ -1,7 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f6f7f9">
+<meta name="color-scheme" content="light">
 <title>New password · CPAY</title>
 <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
@@ -11,21 +14,22 @@
 <script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script>
 </head>
 <body class="auth">
+  <a class="skip-link" href="#resetCard">Skip to form</a>
   <main class="auth-card">
-    <a class="brand" href="/login.html">CPAY</a>
-    <div class="card">
+    <a class="brand" href="/login.html"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
+    <div class="card" id="resetCard">
       <h1>Set a new password</h1>
       <p class="sub">Use the link from your email, then choose a new password.</p>
-      <div class="field"><label for="password">New password</label><input id="password" type="password" autocomplete="new-password" aria-describedby="passwordHint"></div>
-      <p class="faint" id="passwordHint">At least 8 characters.</p>
-      <div class="field"><label for="password2">Confirm</label><input id="password2" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="password">New password</label><input id="password" type="password" autocomplete="new-password" aria-describedby="passwordHint" minlength="8" required></div>
+      <p class="hint" id="passwordHint">At least 8 characters.</p>
+      <div class="field"><label for="password2">Confirm</label><input id="password2" type="password" autocomplete="new-password" required></div>
       <button class="btn primary block lg" id="saveBtn" type="button">Save password</button>
-      <p class="err" id="errorMsg" role="alert" style="display:none;margin-top:12px"></p>
+      <div class="alert alert-danger" id="errorMsg" role="alert" hidden></div>
     </div>
     <p class="foot"><a href="login.html">Back to log in</a></p>
   </main>
 <script>
-function showErr(t){ const e=document.getElementById('errorMsg'); e.textContent=t; e.style.display='block'; }
+function showErr(t){ const e=document.getElementById('errorMsg'); e.textContent=t; e.hidden=false; }
 window.addEventListener('DOMContentLoaded', async () => {
   if (window.applyDomainTheme) await applyDomainTheme();
   const { data:{ session } } = await window.supabaseClient.auth.getSession();

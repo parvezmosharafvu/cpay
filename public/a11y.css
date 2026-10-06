@@ -1,10 +1,13 @@
+/* Touch targets, focus rings, and reduced motion — shared by public pages.
+   Keep in sync with the Chat 2 tokens in cpay.css. */
 [hidden]{display:none !important}
 .checkout .key,.checkout .pay-btn,.checkout .quick-chip,.checkout .classic-chip,
-.checkout .pill-btn,.checkout .icon-btn,.auth .btn,.auth input,.auth select{
+.checkout .pill-btn,.checkout .icon-btn,.checkout .quick-btn,.checkout .classic-toggle,
+.checkout .link-btn,.auth .btn,.auth input,.auth select,.store .btn{
   min-height:44px;
 }
-.checkout .icon-btn{min-width:44px}
-:focus-visible{outline:2px solid var(--brand,#635bff);outline-offset:2px}
+.checkout .icon-btn,.checkout .key{min-width:44px}
+:focus-visible{outline:2px solid var(--accent, #047857);outline-offset:2px}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{
     scroll-behavior:auto !important;

@@ -35,7 +35,7 @@ Follow-on chats should start from merged main after this PR, not from stale tree
 
 ## Chat 4 — Hardening / cleanup (optional)
 
-1. Drop unused historical wallet columns only after confirming no rows and no admin tools need them (`wallet_bkash`, etc.) — or leave forever.
+1. Drop unused historical wallet columns only after confirming no rows and no admin tools need them (historical `wallet_*` traditional-rail columns) — or leave forever.
 2. Narrow admin `process-withdrawal` once no non-stablecoin pending rows remain.
 3. Fix verify.yml “private repo” hygiene wording for public repo.
 4. Node 22 alignment in any local/dev docs.
@@ -50,7 +50,7 @@ Follow-on chats should start from merged main after this PR, not from stale tree
 ## Non-goals (all chats)
 
 - Fake production credentials or simulated balances in prod code.
-- bKash / Nagad / bank / Binance Pay / Lightning **payout** product surfaces.
+- Traditional local-rail / exchange **payout** product surfaces, or Lightning **payout** product surfaces.
 - Turning `RECEIPT_RECORDING` on without a separate owner decision (default stays **off**).
 - Reintroducing reseller commission or reseller role.
 - Migrating frontend off Vanilla HTML/CSS/JS.

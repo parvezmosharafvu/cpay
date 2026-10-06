@@ -88,8 +88,8 @@ browser (Vanilla HTML/CSS/JS, anon key + JWT, RLS)
 
 ## Remaining release blockers (not fixed here)
 
-1. Owner: delete orphan Edge Functions `reconcile`, `reseller-digest`, `telegram-report` (after confirming zero callers).
-2. Owner: set `ALERT_TELEGRAM_BOT_TOKEN` (+ chat id) or resolve stuck `telegram_outbox` pending row so cron stops 503s.
+1. Owner: delete orphan Edge Functions `reconcile`, `reseller-digest`, `telegram-report` (after confirming zero callers). Exact steps: `docs/OPS_OWNER_CUTOVER.md`.
+2. Owner: set `ALERT_TELEGRAM_BOT_TOKEN` (+ chat id) or resolve stuck `telegram_outbox` pending row so cron stops 503s. Exact steps: `docs/OPS_OWNER_CUTOVER.md`.
 3. Owner: apply migration `20261007040000` to production and redeploy `user-withdraw`.
 4. Staging sign-off still open per `docs/PRODUCTION-READINESS.md` (mainnet wallet custody, small USDT send, limits, health).
 5. Full payment-service suite against migrated DB in CI/CD host (Azure) — verify after deploy.

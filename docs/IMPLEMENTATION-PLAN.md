@@ -34,19 +34,27 @@ Follow-on chats should start from merged main after prior PRs land (or from the 
 **Goal:** Polish authenticated desks without weakening auth/RLS or reintroducing reseller.
 
 
-## Chat 4 — Ops cutover hygiene
+## Done in Chat 4 — Payment reliability + security hardening
 
-1. With owner approval: delete orphan Edge Functions `reconcile`, `reseller-digest`, `telegram-report`; save source first.
+1. payment-service: `GET /ready` (startup catch-up gate), `GET /metrics` (auth, counters only, `singleWallet`), graceful shutdown/auth/timeouts/retry/idempotency/stuck-transfer invariants covered by tests.
+2. Failure-path + financial-invariant tests (`hardening.test.mjs`, `ci/financial_invariants_test.sql`, existing withdraw/service suites).
+3. Ops owner runbook `docs/OPS_OWNER_CUTOVER.md` for orphan Edge deletes + Telegram secrets — **documented only**, not executed.
+4. `RECEIPT_RECORDING` remains default off; no reseller commission; no real money moves.
+
+## Chat 4 owner ops (still open — needs approval)
+
+1. With owner approval: delete orphan Edge Functions `reconcile`, `reseller-digest`, `telegram-report` per `docs/OPS_OWNER_CUTOVER.md`.
 2. Set `ALERT_TELEGRAM_BOT_TOKEN` and `ALERT_TELEGRAM_CHAT_ID` (or mark stale outbox skipped).
 3. Apply `20261007040000` on production; redeploy `user-withdraw`.
 4. Confirm `RECEIPT_RECORDING` remains unset/`off` on Azure payment-service host.
 5. Update `docs/AUDIT.md` H3/H4 to closed with evidence timestamps (Asia/Dhaka).
 
-## Chat 5 — Staging money path + production rollout
+## Chat 5 — Final QA + release package (GO / CONDITIONAL / NO-GO)
 
 1. Staging create-invoice → settle → balance → USDT quote/confirm (small amount).
-2. Idempotency, suspended gates, emergency stops.
+2. Idempotency, suspended gates, emergency stops, stuck-sending human path.
 3. Fill `docs/PRODUCTION-READINESS.md`; backup; controlled live send.
+4. Verdict: **GO** / **CONDITIONAL GO** / **NO-GO** with explicit blockers.
 
 ## Non-goals (all chats)
 

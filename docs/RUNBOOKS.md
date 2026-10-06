@@ -18,9 +18,14 @@ and/or Telegram.
 
 The service's own view: `GET /health` needs no secret and returns only
 `ok`, `sdkConnected`, `db`, `synced`, `lastSyncedAt` and `shuttingDown`,
-with 200 when all is well and 503 otherwise. The wallet balance comes from the admin
+with 200 when all is well and 503 otherwise. `GET /ready` is 200 after
+startup catch-up and while not draining. `GET /metrics` (bearer secret)
+exposes process counters only — never balances. The wallet balance comes from the admin
 wallet `info` action (`POST /admin/wallet/info`) and the withdraw route cache
 from `GET /withdraw/routes`, both behind the bearer secret.
+
+Owner cutover steps for orphan Edge Functions and Telegram secrets:
+`docs/OPS_OWNER_CUTOVER.md` (do not delete or set secrets without approval).
 
 ## Restart the payment service
 

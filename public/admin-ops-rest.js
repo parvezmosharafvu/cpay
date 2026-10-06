@@ -47,7 +47,7 @@ async function renderFlagsLive() {
 async function renderHealth() {
   const el = document.getElementById('health'); if (!el) return;
   const { data, error } = await sb.rpc('admin_ops_snapshot');
-  if (error) { el.innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
+  if (error) { el.innerHTML = typeof deskError === 'function' ? deskError(error.message) : `<p class="err" role="alert">${escapeHtml(error.message)}</p>`; return; }
   const s = data || {};
   el.innerHTML = `<div class="card"><h3>Health</h3><p class="faint">Can payments and payouts run right now?</p></div>${kvCard('Switches', s.flags)}${kvCard('Payouts', s.withdrawals)}${kvCard('Pipeline', s.pipeline)}${kvCard('Receiving', s.receiving)}${kvCard('Accounts', s.profiles)}${kvCard('Domains', s.domains)}`;
 }
@@ -55,17 +55,47 @@ async function renderSystem() {
   const el = document.getElementById('system'); if (!el) return;
   const snap = await sb.rpc('admin_system_snapshot');
   const alerts = await sb.rpc('admin_system_alerts');
-  if (snap.error) { el.innerHTML = `<p class="err">${escapeHtml(snap.error.message)}</p>`; return; }
+  if (snap.error) { el.innerHTML = typeof deskError === 'function' ? deskError(snap.error.message) : `<p class="err" role="alert">${escapeHtml(snap.error.message)}</p>`; return; }
   const s = snap.data || {};
   const alertRows = ((alerts.data && alerts.data.alerts) || []).map((a) => `<tr><td>${escapeHtml(a.severity || '')}</td><td>${escapeHtml(a.title || '')}</td><td>${escapeHtml(a.detail || '')}</td></tr>`).join('');
   el.innerHTML = `<div class="card"><h3>System</h3><p class="faint">Database, traffic and queues. Read only.</p></div>${kvCard('Database', s.database)}${kvCard('Last 24 hours', s.traffic)}${kvCard('Queues', s.queues)}${kvCard('Platform', s.platform)}${kvCard('Timing', s.latency)}<div class="card flush"><h3 style="padding:16px 20px 0">Alerts</h3><table class="table"><thead><tr><th>Level</th><th>Title</th><th>Detail</th></tr></thead><tbody>${alertRows || '<tr><td colspan="3" class="empty">No alerts</td></tr>'}</tbody></table></div>`;
 }
+let auditFilter = { search: '' };
 async function renderAudit() {
   const el = document.getElementById('audit'); if (!el) return;
-  const { data, error } = await sb.from('audit_log').select('id,occurred_at,actor_email,action,subject_type,subject_id,note').order('occurred_at', { ascending: false }).limit(80);
-  if (error) { el.innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
-  const rows = (data || []).map((r) => `<tr><td>${escapeHtml(when(r.occurred_at))}</td><td>${escapeHtml(r.actor_email || '')}</td><td>${escapeHtml(r.action || '')}</td><td>${escapeHtml(r.subject_type || '')}</td><td class="mono">${escapeHtml(String(r.subject_id || '').slice(0, 8))}</td><td>${escapeHtml(r.note || '')}</td></tr>`).join('');
-  el.innerHTML = `<div class="card flush"><table class="table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Type</th><th>Id</th><th>Note</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="empty">No audit rows</td></tr>'}</tbody></table></div>`;
+  el.innerHTML = typeof deskSkeleton === 'function' ? deskSkeleton(4) : '<p class="muted">Loading…</p>';
+  const { data, error } = await sb.from('audit_log').select('id,occurred_at,actor_email,action,subject_type,subject_id,note').order('occurred_at', { ascending: false }).limit(120);
+  if (error) { el.innerHTML = typeof deskError === 'function' ? deskError(error.message) : `<p class="err" role="alert">${escapeHtml(error.message)}</p>`; return; }
+  const q = (auditFilter.search || '').trim().toLowerCase();
+  const filtered = (data || []).filter((r) => {
+    if (!q) return true;
+    const hay = `${r.actor_email || ''} ${r.action || ''} ${r.subject_type || ''} ${r.note || ''} ${r.subject_id || ''}`.toLowerCase();
+    return hay.includes(q);
+  });
+  const rows = filtered.map((r) => `<tr><td>${escapeHtml(when(r.occurred_at))}</td><td>${escapeHtml(r.actor_email || '')}</td><td>${escapeHtml(r.action || '')}</td><td>${escapeHtml(r.subject_type || '')}</td><td class="mono">${escapeHtml(String(r.subject_id || '').slice(0, 8))}</td><td>${escapeHtml(r.note || '')}</td></tr>`).join('');
+  const toolbar = typeof deskFilterBar === 'function' ? deskFilterBar(`
+    <div class="field grow"><label for="auditSearch">Search audit</label>
+      <input id="auditSearch" type="search" placeholder="Actor, action, note…" value="${escapeHtml(auditFilter.search)}"></div>
+  `, `<button type="button" class="btn primary" id="auditApply">Apply</button>
+      <button type="button" class="btn ghost" id="auditClear">Clear</button>`) : '';
+  el.innerHTML = `<div class="card flush">
+    ${toolbar}
+    <div class="card-head"><h3>Audit log</h3><span class="meta-count">${filtered.length} shown</span></div>
+    <p class="role-note" style="padding:0 20px">Read-only visibility of server-written audit rows. RLS restricts this table to admins.</p>
+    <div class="scroll"><table class="table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Type</th><th>Id</th><th>Note</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="6">${typeof deskEmpty === 'function' ? deskEmpty('No audit rows', 'Admin actions will appear here.') : '<span class="empty">No audit rows</span>'}</td></tr>`}</tbody></table></div>
+  </div>`;
+  document.getElementById('auditApply')?.addEventListener('click', () => {
+    auditFilter = { search: document.getElementById('auditSearch')?.value.trim() || '' };
+    renderAudit();
+  });
+  document.getElementById('auditClear')?.addEventListener('click', () => {
+    auditFilter = { search: '' };
+    renderAudit();
+  });
+  document.getElementById('auditSearch')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('auditApply')?.click();
+  });
 }
 function rememberedTab() {
   try { return localStorage.getItem('cpay-admin-tab'); } catch (e) { return null; }

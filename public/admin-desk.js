@@ -22,7 +22,12 @@ window.addEventListener('hashchange', () => {
 async function boot() {
   me = await loadProfile();
   if (!me) return;
+  // UI redirect only — admin RPCs and admin-actions still require role=admin server-side.
   if (me.role !== 'admin') { location.href = roleHome(me.role); return; }
+  ['home','people','apps','payouts','chat','daily'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && !el.innerHTML) el.innerHTML = typeof deskSkeleton === 'function' ? deskSkeleton(3) : '<p class="muted">Loading…</p>';
+  });
   await Promise.all([renderHome(), renderPeople(), renderApps(), renderFees(), renderFlags(), renderAlerts(), renderPayouts(), renderChat()]);
   // Needs the people list renderPeople() loads, for the filters.
   await Daily.mountAdmin(document.getElementById('daily'), people);
@@ -43,6 +48,8 @@ async function renderHome() {
 }
 
 async function renderPeople() {
+  const el = document.getElementById('people');
+  if (el) el.innerHTML = typeof deskSkeleton === 'function' ? deskSkeleton(4) : '<p class="muted">Loading…</p>';
   const [{ data, error }, { data: usage }, { data: wfees }, { data: wallets }] = await Promise.all([
     sb.rpc('admin_list_business_profiles'), sb.rpc('admin_link_usage'), sb.rpc('admin_withdraw_fee_overview'), sb.rpc('admin_list_user_wallets'),
   ]);
@@ -52,11 +59,22 @@ async function renderPeople() {
   const walletLinks = (id) => (byWallet[id] || []).map((w) => `<a href="${EXPLORER[w.network] || '#'}${encodeURIComponent(w.address)}" target="_blank" rel="noopener">${escapeHtml(w.network)}</a>`).join(' · ') || '<span class="faint">No wallet</span>';
   const links = Object.fromEntries((usage || []).map((u) => [u.user_id, u]));
   const wfee = Object.fromEntries((wfees || []).map((f) => [f.user_id, f]));
-  if (error) { document.getElementById('people').innerHTML = `<p class="err">${escapeHtml(error.message)}</p>`; return; }
+  if (error) { el.innerHTML = typeof deskError === 'function' ? deskError(error.message) : `<p class="err">${escapeHtml(error.message)}</p>`; return; }
   people = data || [];
-  const rows = people.map((p) => `<tr>
+  const statusFilter = (document.getElementById('peopleStatus')?.value) || '';
+  const searchFilter = (document.getElementById('peopleSearch')?.value || '').trim().toLowerCase();
+  const filtered = people.filter((p) => {
+    if (statusFilter && String(p.account_status || '') !== statusFilter) return false;
+    if (!searchFilter) return true;
+    const hay = `${p.display_name || ''} ${p.email || ''}`.toLowerCase();
+    return hay.includes(searchFilter);
+  });
+  const rows = filtered.map((p) => {
+    const roleLabel = p.role === 'creator' ? 'Freelancer' : (p.role === 'admin' ? 'Admin' : escapeHtml(p.role || ''));
+    // Unexpected role strings stay raw; only creator maps to Freelancer.
+    return `<tr>
     <td>${escapeHtml(p.display_name || '')}<div class="faint">${escapeHtml(p.email)}</div></td>
-    <td>${p.role === 'creator' ? 'Freelancer' : escapeHtml(p.role || '')}</td>
+    <td>${roleLabel}</td>
     <td>${badge(p.account_status)}</td>
     <td class="num nowrap">${links[p.id] ? `${links[p.id].links_used} / ${links[p.id].link_limit}` : '-'}</td>
     <td class="num">${Number(p.platform_fee_percent || 0).toFixed(2)}%</td>
@@ -64,17 +82,45 @@ async function renderPeople() {
     <td>${escapeHtml(p.hide_small_payments_mode)}</td>
     <td>${walletLinks(p.id)}</td>
     <td class="num">${money(p.available)}</td>
-    <td style="white-space:nowrap">
-      ${links[p.id] ? `<button class="btn ghost sm" data-limit="${p.id}" data-cur="${links[p.id].link_limit}">Link limit</button>` : ''}
-      <button class="btn ghost sm" data-fee="${p.id}">Platform fee</button>
-      <button class="btn ghost sm" data-wfee="${p.id}" data-cur="${wfee[p.id]?.own_fee_percent ?? ''}">Withdraw fee</button>
-      <button class="btn ghost sm" data-hide="${p.id}">Hide &lt;$10</button>
-    </td>
-  </tr>`).join('');
-  document.getElementById('people').innerHTML = `<div class="card flush">
-    <table class="table"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th class="num">Links</th><th class="num">Platform fee</th><th class="num">Withdraw fee</th><th>Small payments</th><th>Wallet</th><th class="num">Available</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="10" class="empty">No accounts</td></tr>'}</tbody></table>
+    <td><div class="table-actions">
+      ${links[p.id] ? `<button type="button" class="btn ghost sm" data-limit="${p.id}" data-cur="${links[p.id].link_limit}">Link limit</button>` : ''}
+      <button type="button" class="btn ghost sm" data-fee="${p.id}">Platform fee</button>
+      <button type="button" class="btn ghost sm" data-wfee="${p.id}" data-cur="${wfee[p.id]?.own_fee_percent ?? ''}">Withdraw fee</button>
+      <button type="button" class="btn ghost sm" data-hide="${p.id}">Hide &lt;$10</button>
+      <button type="button" class="btn ghost sm" data-status="${p.id}" data-role="${escapeHtml(p.role || 'creator')}" data-st="${escapeHtml(p.account_status || 'active')}">Status</button>
+    </div></td>
+  </tr>`;
+  }).join('');
+  const toolbar = typeof deskFilterBar === 'function' ? deskFilterBar(`
+    <div class="field short"><label for="peopleStatus">Status</label>
+      <select id="peopleStatus">
+        <option value="">All</option>
+        <option value="active">Active</option>
+        <option value="pending">Pending</option>
+        <option value="suspended">Suspended</option>
+        <option value="rejected">Rejected</option>
+      </select></div>
+    <div class="field grow"><label for="peopleSearch">Search</label>
+      <input id="peopleSearch" type="search" placeholder="Name or email" value="${escapeHtml(searchFilter)}"></div>
+  `, `<button type="button" class="btn primary" id="peopleApply">Apply</button>
+      <button type="button" class="btn ghost" id="peopleClear">Clear</button>`) : '';
+  el.innerHTML = `<div class="card flush">
+    ${toolbar}
+    <div class="card-head"><h3>Accounts</h3><span class="meta-count">${filtered.length} shown · ${people.length} total</span></div>
+    <p class="role-note" style="padding:0 20px">Status changes call <code>admin_update_account_control</code> on the server. Hiding UI never grants access — suspended accounts are signed out by <code>loadProfile</code>.</p>
+    <div class="scroll"><table class="table"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th class="num">Links</th><th class="num">Platform fee</th><th class="num">Withdraw fee</th><th>Small payments</th><th>Wallet</th><th class="num">Available</th><th></th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="10">${typeof deskEmpty === 'function' ? deskEmpty('No accounts match', 'Clear filters or wait for applications.') : '<span class="empty">No accounts</span>'}</td></tr>`}</tbody></table></div>
   </div>`;
+  if (document.getElementById('peopleStatus')) document.getElementById('peopleStatus').value = statusFilter;
+  document.getElementById('peopleApply')?.addEventListener('click', () => renderPeople());
+  document.getElementById('peopleClear')?.addEventListener('click', () => {
+    const s = document.getElementById('peopleStatus'); const q = document.getElementById('peopleSearch');
+    if (s) s.value = ''; if (q) q.value = '';
+    renderPeople();
+  });
+  document.getElementById('peopleSearch')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') renderPeople();
+  });
   document.querySelectorAll('[data-limit]').forEach((btn) => {
     btn.onclick = async () => {
       const raw = prompt('Active payment links this account may have (0 to 10). A name with several spellings counts as one link.', btn.dataset.cur);
@@ -121,8 +167,10 @@ async function renderPeople() {
       if (next == null) return;
       const status = next.trim().toLowerCase();
       if (!['active','pending','suspended','rejected'].includes(status)) return toast('Use active, pending, suspended, or rejected');
+      // Status control never promotes to admin — only preserves an existing admin role.
+      const role = btn.dataset.role === 'admin' ? 'admin' : 'creator';
       const { error: e } = await sb.rpc('admin_update_account_control', {
-        p_user_id: btn.dataset.status, p_role: btn.dataset.role, p_account_status: status, p_review_note: 'Set from Manage users'
+        p_user_id: btn.dataset.status, p_role: role, p_account_status: status, p_review_note: 'Set from Manage users'
       });
       if (e) return toast(e.message);
       toast('Account updated', true); renderPeople();
@@ -141,7 +189,7 @@ async function renderPeople() {
 
 async function renderApps() {
   const { data, error } = await sb.rpc('admin_list_account_applications');
-  if (error) { document.getElementById('apps').innerHTML = `<p class="muted">Applications RPC: ${escapeHtml(error.message)}</p>`; return; }
+  if (error) { document.getElementById('apps').innerHTML = typeof deskError === 'function' ? deskError(error.message) : `<p class="err" role="alert">${escapeHtml(error.message)}</p>`; return; }
   const rows = (data || []).map((a) => `<tr>
     <td>${escapeHtml(a.display_name || a.email)}</td>
     <td>${escapeHtml(a.requested_role)}</td>
@@ -151,7 +199,7 @@ async function renderApps() {
       <button class="btn danger sm" data-reject="${a.id}">Reject</button>
     </td>
   </tr>`).join('');
-  document.getElementById('apps').innerHTML = `<div class="card flush"><table class="table"><thead><tr><th>Applicant</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="empty">No applications waiting</td></tr>'}</tbody></table></div>`;
+  document.getElementById('apps').innerHTML = `<div class="card flush"><table class="table"><thead><tr><th>Applicant</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="4">${typeof deskEmpty === 'function' ? deskEmpty('No applications waiting', 'New signups appear here for review.') : '<span class="empty">No applications waiting</span>'}</td></tr>`}</tbody></table></div>`;
   document.querySelectorAll('[data-approve]').forEach((b) => b.onclick = () => review(b.dataset.approve, 'approved'));
   document.querySelectorAll('[data-reject]').forEach((b) => b.onclick = () => review(b.dataset.reject, 'rejected'));
 }

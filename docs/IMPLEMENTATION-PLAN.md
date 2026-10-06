@@ -45,8 +45,12 @@ Follow-on chats should start from merged main after prior PRs land (or from the 
 ## Chat 5 — Staging money path + production rollout
 
 1. Staging create-invoice → settle → balance → USDT quote/confirm (small amount).
-2. Idempotency, suspended gates, emergency stops.
-3. Fill `docs/PRODUCTION-READINESS.md`; backup; controlled live send.
+2. Idempotency: duplicate settle / duplicate confirm.
+3. Suspended/pending account cannot create links or withdraw.
+4. Emergency stops (payments + withdrawals).
+5. Fill `docs/PRODUCTION-READINESS.md` checkboxes with evidence links.
+6. Backup / snapshot, then migrate + deploy edge + payment-service image (includes money.mjs/receipts.mjs from PR #27).
+7. Controlled small live payment + USDT withdraw; watch health, telegram, ledger-backup.
 
 ## Non-goals (all chats)
 

@@ -411,6 +411,38 @@ def check_reseller_role_removed() -> None:
         print(f"ok   reseller role absent from {len(files)} public pages, scripts and styles")
 
 
+def check_manual_payout_closed() -> None:
+    # Product rule: payout is USDT/USDC only. The edge function must not accept
+    # or validate bKash/Nagad/Binance/bank/Lightning payout methods, and the
+    # freelancer desk must not call the closed request_withdrawal RPC.
+    hits = []
+    path = "supabase/functions/user-withdraw/index.ts"
+    if not os.path.exists(path):
+        failures.append(f"{path} missing")
+        return
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        body = fh.read()
+    if re.search(r'VALID_METHODS\s*=\s*\[', body):
+        hits.append(f"{path}: VALID_METHODS allowlist still present")
+    if re.search(r'\["bkash"|\'bkash\'|"nagad"|"binance"|"bank"', body):
+        hits.append(f"{path}: closed payout method name still referenced")
+    if ".rpc(\"request_withdrawal\"" in body or ".rpc('request_withdrawal'" in body:
+        hits.append(f"{path}: still calls request_withdrawal")
+    desk = "public/freelancer-desk.js"
+    if os.path.exists(desk):
+        with open(desk, encoding="utf-8", errors="replace") as fh:
+            d = fh.read()
+        if "request_withdrawal" in d:
+            hits.append(f"{desk}: still references request_withdrawal")
+        if "submitManual" in d:
+            hits.append(f"{desk}: dead submitManual path still present")
+    if hits:
+        failures.append("manual payout surface not closed: " + "; ".join(hits[:8]))
+    else:
+        print("ok   manual payout path closed (user-withdraw + freelancer desk)")
+
+
+
 check_js_syntax()
 check_dom_references()
 check_rpc_signatures()
@@ -423,6 +455,7 @@ check_wallet_config()
 check_provider_name_hidden()
 check_reseller_commission_removed()
 check_reseller_role_removed()
+check_manual_payout_closed()
 
 if failures:
     text = "\n".join(f"FAIL {f}" for f in failures)

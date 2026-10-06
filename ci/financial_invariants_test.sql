@@ -87,7 +87,7 @@ begin
     raise exception 'finalize_stablecoin_withdrawal missing';
   end if;
 
-  delete from webhook_events where delivery_id like 'breez-fin-%';
+  delete from webhook_events where delivery_id = 'breez:' || bid;
   delete from payments where user_id = u;
   delete from withdrawals where user_id = u;
   perform set_config('cpay.audit_maintenance', 'on', true);

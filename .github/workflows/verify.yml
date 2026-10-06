@@ -295,6 +295,11 @@ jobs:
           # nothing, and the sender's claim/finish rules. BEGIN/ROLLBACK.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/telegram_test.sql
 
+      - name: Financial invariants (settle once, available ≥ 0, request_withdrawal closed)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/financial_invariants_test.sql
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

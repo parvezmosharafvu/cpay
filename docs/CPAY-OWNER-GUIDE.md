@@ -118,3 +118,10 @@ larger payouts. Do not run the same seed on two hosts.
 4. Run the onboarding, link and invoice checklist.
 5. Review Admin → Health and `docs/PRODUCTION-READINESS.md`.
 6. Only after a small mainnet receive and USDT send succeed, move real creator balances.
+
+## Release and ops (Chat 5)
+
+- Readiness: `docs/PRODUCTION-READINESS.md` (current verdict **CONDITIONAL GO** until High ops close).
+- Orphan Edge deletes + Telegram secrets: `docs/OPS_OWNER_CUTOVER.md` — **owner only**.
+- Testing map: `docs/TESTING.md`. Release cut: `docs/RELEASE-CHECKLIST.md`.
+

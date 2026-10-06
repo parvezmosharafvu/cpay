@@ -6,6 +6,8 @@
 do $$
 declare
   u uuid := gen_random_uuid();
+  pay_hash text := replace(u::text, '-', '') || replace(gen_random_uuid()::text, '-', '');
+  breez_id text := 'breez-fin-' || u::text;
   bal numeric;
   earned_after numeric;
   outcome text;
@@ -19,15 +21,15 @@ begin
   if bal <> 0 then raise exception 'expected zero available, got %', bal; end if;
 
   insert into payments(user_id, invoice_ref, lightning_invoice, amount_requested, amount_sat, btc_usd_rate, status, expires_at)
-  values (u, repeat('ab', 32), 'lnbcrt1fininv', 10.00, 10000, 100000, 'new', now() + interval '1 hour');
+  values (u, pay_hash, 'lnbcrt1fininv', 10.00, 10000, 100000, 'new', now() + interval '1 hour');
 
-  select settle_breez_payment('breez-fin-1', repeat('ab', 32), 10000) into outcome;
+  select settle_breez_payment(breez_id, pay_hash, 10000) into outcome;
   if outcome <> 'settled' then raise exception 'first settle expected settled, got %', outcome; end if;
 
   select earned into earned_after from get_balance_for(u);
   if earned_after <= 0 then raise exception 'earned must be positive after settle, got %', earned_after; end if;
 
-  select settle_breez_payment('breez-fin-1', repeat('ab', 32), 10000) into outcome;
+  select settle_breez_payment(breez_id, pay_hash, 10000) into outcome;
   if outcome not in ('duplicate', 'already_settled') then
     raise exception 'replay settle must be duplicate/already_settled, got %', outcome;
   end if;
@@ -73,7 +75,7 @@ begin
     raise exception 'finalize_stablecoin_withdrawal missing';
   end if;
 
-  delete from webhook_events where delivery_id like 'breez-fin-%';
+  delete from webhook_events where delivery_id = 'breez:' || breez_id;
   delete from payments where user_id = u;
   delete from withdrawals where user_id = u;
   perform set_config('cpay.audit_maintenance', 'on', true);

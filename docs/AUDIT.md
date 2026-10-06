@@ -97,3 +97,10 @@ browser (Vanilla HTML/CSS/JS, anon key + JWT, RLS)
 ## Incorporates (do not regress)
 
 PRs #16–#27: revenue_desk admin-only, receipt log record-only, checkout UX, reseller authz, production drift, ops drift docs, commission removal, role removal, public branding, suspended-admin gate, payment-service Dockerfile copy.
+
+
+## Chat 5 status (2026-10-07 Asia/Dhaka)
+
+Automated re-verification on `release/chat5-qa`: frontend/CI/SQL/Deno/payment-service
+green locally (see `/workspace/cpay-audit/CHAT5_RELEASE.md`). **No new Critical/High
+code findings.** H3/H4 remain **OPEN (ops)**. Verdict: **CONDITIONAL GO**.

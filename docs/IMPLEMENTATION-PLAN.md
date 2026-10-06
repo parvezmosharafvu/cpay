@@ -49,12 +49,19 @@ Follow-on chats should start from merged main after prior PRs land (or from the 
 4. Confirm `RECEIPT_RECORDING` remains unset/`off` on Azure payment-service host.
 5. Update `docs/AUDIT.md` H3/H4 to closed with evidence timestamps (Asia/Dhaka).
 
-## Chat 5 — Final QA + release package (GO / CONDITIONAL / NO-GO)
+## Done in Chat 5 — Final QA + release package
 
-1. Staging create-invoice → settle → balance → USDT quote/confirm (small amount).
-2. Idempotency, suspended gates, emergency stops, stuck-sending human path.
-3. Fill `docs/PRODUCTION-READINESS.md`; backup; controlled live send.
-4. Verdict: **GO** / **CONDITIONAL GO** / **NO-GO** with explicit blockers.
+1. Full available automated suite re-run on `release/chat5-qa` (from Chat 4 tip `4540043`); test hygiene for shared-DB SQL suites.
+2. Docs package: TESTING, RELEASE-CHECKLIST, BACKUP-RECOVERY, INCIDENT; PRODUCTION-READINESS filled with evidence vs OPEN.
+3. RC tag on branch (not main). Stack still unmerged.
+4. Verdict: **CONDITIONAL GO** — no verified Critical/High in CODE; High OPS (H3/H4, prod migrate, staging money, stack merge) still open.
+
+## Chat 5 owner follow-ups (unchanged ops)
+
+1. Staging money path with explicit approval.
+2. OPS_OWNER_CUTOVER (orphans + Telegram + migration + user-withdraw redeploy).
+3. Merge stack when CI green; do not force-merge red #28.
+4. Promote CONDITIONAL → GO only after High ops closed with dated evidence.
 
 ## Non-goals (all chats)
 

@@ -161,9 +161,10 @@ export function createApp({
     const withdrawalOutcomes = await withdrawals.reconcile({ synced });
     metrics.catchUps += 1;
     metrics.lastCatchUpAt = new Date(now()).toISOString();
+    // reconcile() returns { outcome: count }; add the count, not 1 per pass.
     for (const [k, n] of Object.entries(withdrawalOutcomes ?? {})) {
-      if (k === 'sending') continue;
-      bump(metrics.withdrawalsFinalized, k);
+      if (k === 'sending' || !(n > 0)) continue;
+      metrics.withdrawalsFinalized[k] = (metrics.withdrawalsFinalized[k] ?? 0) + n;
     }
     log({
       event: 'catch-up', since, outcomes, expired, withdrawals: withdrawalOutcomes,

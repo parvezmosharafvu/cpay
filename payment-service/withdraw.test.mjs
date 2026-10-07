@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { TRON, EVM, BSC_USDT, LEAF_ERROR, fakeBreez } from './fake-breez.mjs';
+import { decimalToCents, formatCents } from './money.mjs';
 import { createWithdrawals, splitFee, outcomeOf, fromBaseUnits, routeId, failedBeforeSend, networkFeeUsd, LEAF_RETRY_MS } from './withdraw.mjs';
 
 // Runs against a database with every migration applied. Unlike
@@ -50,8 +51,9 @@ after(async () => {
   await db.end();
 });
 
-test('splitFee matches the database rounding for every cent from $5.00 to $60.00 at five fee rates', async () => {
-  const fees = ['0', '2.5', '3', '3.33', '7.25'];
+test('splitFee matches the database rounding for every cent from $5.00 to $60.00 at ten fee rates', async () => {
+  // 0.145, 0.29 and 2.125 are where Number(fee) * 100 used to drift.
+  const fees = ['0', '2.5', '3', '3.33', '7.25', '0.29', '0.145', '2.125', '99.99', '100'];
   const { rows: dbRows } = await db.query(
     `select a::text as amount, f::text as fee, round(a*(1-f/100),2)::text as after
        from generate_series(500, 6000) c, lateral (select c/100.0 as a) x, unnest($1::numeric[]) f`,
@@ -59,10 +61,11 @@ test('splitFee matches the database rounding for every cent from $5.00 to $60.00
   );
   let mismatches = 0;
   for (const r of dbRows) {
-    const { sendCents } = splitFee(Math.round(Number(r.amount) * 100), r.fee);
-    if ((sendCents / 100).toFixed(2) !== Number(r.after).toFixed(2)) mismatches++;
+    const { sendCents, feeCents } = splitFee(decimalToCents(r.amount), r.fee);
+    if (formatCents(sendCents) !== formatCents(decimalToCents(r.after))) mismatches++;
+    if (sendCents + feeCents !== decimalToCents(r.amount)) mismatches++;
   }
-  assert.equal(dbRows.length, 5501 * 5);
+  assert.equal(dbRows.length, 5501 * fees.length);
   assert.equal(mismatches, 0);
 });
 

@@ -3,7 +3,7 @@
 // Pool, `btcUsdRate` an async function returning USD per BTC.
 
 import { randomUUID } from 'node:crypto';
-import { usdCentsToSats } from './money.mjs';
+import { decimalToCents, formatCents, parseUsdCents, splitFeeCents, usdCentsToSats } from './money.mjs';
 
 export const ROUTE_CACHE_MS = 10 * 60 * 1000;
 // A 'sending' row with no Breez payment is refunded only once its quote has
@@ -63,10 +63,9 @@ export function fromBaseUnits(value, decimals) {
 }
 
 // Same rounding as the database: amount_after_fee = round(amount * (1 - fee/100), 2).
+// Exact decimal arithmetic in money.mjs: no Number(feePercent) * 100.
 export function splitFee(amountCents, feePercent) {
-  const feeBps = Math.round(Number(feePercent) * 100);
-  const sendCents = Math.floor((amountCents * (10000 - feeBps) + 5000) / 10000);
-  return { sendCents, feeCents: amountCents - sendCents };
+  return splitFeeCents(amountCents, feePercent);
 }
 
 // sendUsd minus the coins the destination gets, exact to the coin's base
@@ -81,13 +80,12 @@ export function networkFeeUsd(sendCents, estimatedOutBase, decimals) {
   return fromBaseUnits(fee < 0n ? 0n : fee, decimals);
 }
 
+// "12.34" -> 1234, exactly (BigInt digits, never Number(s) * 100).
 export function parseAmountCents(amount) {
-  const s = String(amount ?? '').trim();
-  if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
-  return Math.round(Number(s) * 100);
+  try { return parseUsdCents(amount); } catch { return null; }
 }
 
-const cents = (c) => (c / 100).toFixed(2);
+const cents = (c) => formatCents(c);
 
 // The withdrawal outcome a Breez payment implies. 'stuck' means the
 // cross-chain leg failed without a refund: the row stays 'sending' for a
@@ -250,8 +248,11 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     if (amountCents < 500) throw new UserError(422, 'Minimum withdrawal is $5');
     const profile = await profileFor(userId);
     if (!profile || profile.account_status !== 'active') throw new UserError(403, 'Account approval is required before requesting withdrawals');
-    if (amountCents > Math.round(Number(profile.available) * 100)) {
-      throw new UserError(422, `Insufficient balance. Available: $${Number(profile.available).toFixed(2)}`);
+    // Floor, not round: $10.005 available allows $10.00, never $10.01.
+    // reserve_stablecoin_withdrawal() checks again in numeric.
+    const availableCents = decimalToCents(profile.available, 'floor');
+    if (amountCents > availableCents) {
+      throw new UserError(422, `Insufficient balance. Available: $${formatCents(Math.max(0, availableCents))}`);
     }
     const route = (await listRoutes()).find((r) => r.id === id);
     if (!route) throw new UserError(422, 'That coin and network is not available right now');

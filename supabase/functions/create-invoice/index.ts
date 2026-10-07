@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { invoiceChargeCents } from "./invoice-amount.ts";
+import { formatCents, parseAmountToCents, toCents } from "../_shared/money.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -24,7 +25,7 @@ return new Response(null, { headers: CORS_HEADERS });
 if (req.method !== "POST") {
 return new Response("Method not allowed", { status: 405, headers: CORS_HEADERS });
 }
-let body: { slug?: string; amount?: number };
+let body: { slug?: string; amount?: number | string };
 try {
 body = await req.json();
 } catch {
@@ -48,14 +49,14 @@ if (paymentStop?.value === true || String(paymentStop?.value) === "true") {
 // Case matters: /taylor-james, /TaylorJames and /taylorjames are three
 // different links.
 const slug = String(body.slug ?? "").trim();
-const amount = Math.round(Number(body.amount) * 100) / 100;
-// `Number(body.amount)` alone let NaN and Infinity through the old
-// `!amount` check in some shapes, and fractional cents reached the
-// provider as an amount the ledger could never match exactly.
+// Integer cents, parsed from the decimal digits (never Number(x) * 100,
+// which turns 4.35 into 434.99999999999994). NaN, Infinity, negatives and
+// exponents are refused; a third decimal rounds half-up to the cent.
+const amountCents = parseAmountToCents(body.amount);
 if (!/^[A-Za-z0-9][A-Za-z0-9-]{2,48}[A-Za-z0-9]$/.test(slug)) {
 return json({ error: "Invalid payment link" }, 400);
 }
-if (!Number.isFinite(amount) || amount < 1 || amount > 5000) {
+if (amountCents === null || amountCents < 100 || amountCents > 500000) {
 return json({ error: "Amount must be between $1 and $5000" }, 400);
 }
 // Look up the payment link — must exist and be active.
@@ -82,7 +83,6 @@ const costPercent = Number.isFinite(rawCost) ? Math.min(Math.max(rawCost, 0), 10
 // Rounded to cents, because that is what gets both charged and recorded
 // — computing one and storing the other would make every reconciliation
 // off by fractions.
-const amountCents = Math.round(amount * 100);
 const chargedAmountCents = invoiceChargeCents(amountCents, costPercent);
 const chargedAmount = chargedAmountCents / 100;
 
@@ -97,10 +97,11 @@ if (profileLimitError) {
   console.error("profile invoice-limit read failed:", profileLimitError.message);
   return json({ error: "Payment service temporarily unavailable" }, 503);
 }
-const profileMaxInvoice = Number(profileLimit?.max_invoice_amount ?? 5000);
-if (Number.isFinite(profileMaxInvoice) && chargedAmount > profileMaxInvoice) {
+// Compared in integer cents: the limit is numeric in the database.
+const profileMaxCents = toCents(profileLimit?.max_invoice_amount ?? 5000, "floor");
+if (profileMaxCents !== null && chargedAmountCents > profileMaxCents) {
   return json({
-    error: `This profile accepts payments up to $${profileMaxInvoice.toFixed(2)} per invoice.`,
+    error: `This profile accepts payments up to $${formatCents(profileMaxCents)} per invoice.`,
   }, 400);
 }
 
@@ -115,7 +116,7 @@ if (Number.isFinite(profileMaxInvoice) && chargedAmount > profileMaxInvoice) {
 // Set well above any real payment so it never interferes with ordinary
 // use; this catches the combination of two individually-legal numbers,
 // not a normal one.
-if (chargedAmount > 50000) {
+if (chargedAmountCents > 5_000_000) {
 return json({
 error: "This link's current price is too high to invoice. Lower the link's cost percentage and try again.",
 }, 400);
@@ -154,9 +155,10 @@ const { data: payment, error: insertErr } = await supabaseAdmin
     user_id: link.user_id,
     method: "lightning",
     // What the payer typed, before markup. Display only.
-    buyer_amount: amount,
+    // Sent as exact decimal strings so numeric columns never see a float.
+    buyer_amount: formatCents(amountCents),
     // What the payer is charged, and what the owner is credited on settle.
-    amount_requested: chargedAmount,
+    amount_requested: formatCents(chargedAmountCents),
     status: "new",
     expires_at: expiresAt,
     customer_city: req.headers.get("cf-ipcity") || null,

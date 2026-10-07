@@ -36,9 +36,33 @@ function safeInteger(value, message) {
   return result;
 }
 
-export function decimalToCents(value) {
+// Decimal dollars (string or numeric text) to integer cents. 'half-up'
+// (default) matches Postgres round(x, 2) for non-negative amounts; 'floor'
+// is for "how much of this balance may be spent".
+export function decimalToCents(value, mode = 'half-up') {
   const { numerator, denominator } = decimalFraction(value);
-  return safeInteger(divideRounded(numerator * 100n, denominator, 'half-up'), 'Dollar amount is out of range');
+  return safeInteger(divideRounded(numerator * 100n, denominator, mode), 'Dollar amount is out of range');
+}
+
+// A user-typed dollar amount with at most two decimals ("12", "12.3",
+// "12.34") to integer cents, exactly. Anything else is null.
+export function parseUsdCents(value) {
+  const match = /^(\d{1,12})(?:\.(\d{1,2}))?$/.exec(String(value ?? '').trim());
+  if (!match) return null;
+  return safeInteger(BigInt(match[1]) * 100n + BigInt((match[2] ?? '').padEnd(2, '0')), 'Dollar amount is out of range');
+}
+
+// The database's amount_after_fee = round(amount * (1 - fee/100), 2), in
+// integer cents with exact decimal fee arithmetic (no float bps rounding).
+export function splitFeeCents(amountCents, feePercent) {
+  const amount = BigInt(amountCents);
+  const fee = decimalFraction(feePercent);
+  if (amount < 0n || fee.numerator < 0n || fee.numerator > 100n * fee.denominator) {
+    throw new RangeError('Amount must be nonnegative and the fee between 0 and 100 percent');
+  }
+  const send = divideRounded(amount * (100n * fee.denominator - fee.numerator), 100n * fee.denominator, 'half-up');
+  const sendCents = safeInteger(send, 'Dollar amount is out of range');
+  return { sendCents, feeCents: safeInteger(amount - send, 'Dollar amount is out of range') };
 }
 
 export function usdToSats(usd, btcUsdRate) {

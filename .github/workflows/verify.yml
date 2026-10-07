@@ -300,6 +300,11 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/financial_invariants_test.sql
 
+      - name: Money is exact (no float columns or float casts in public)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/money_types_test.sql
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -349,6 +354,8 @@ jobs:
             deno check "${d}index.ts" || fail=1
           done
           exit $fail
+      - name: exact money helpers and invoice markup (no float cents)
+        run: deno test supabase/functions/_shared/ supabase/functions/create-invoice/
       - name: auth-settings against a mock Management API
         # Local mock servers only: no call to api.supabase.com, no real token.
         # Covers the admin check (a non-admin is refused before any

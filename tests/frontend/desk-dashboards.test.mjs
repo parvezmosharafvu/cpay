@@ -82,3 +82,18 @@ test('cpay.css includes Chat 3 desk toolbar and state panels', () => {
   assert.match(css, /\.state-panel/);
   assert.match(css, /\.desk-skel/);
 });
+
+test('admin people filter keeps state outside the re-rendered section', () => {
+  const src = read('admin-desk.js');
+  // The skeleton wipes #people before the RPCs return, so filters must not be
+  // read back from the (already replaced) inputs inside renderPeople().
+  assert.match(src, /let peopleFilter = \{ status: '', search: '' \}/);
+  assert.match(src, /const statusFilter = peopleFilter\.status/);
+  assert.doesNotMatch(src, /const statusFilter = \(document\.getElementById\('peopleStatus'\)/);
+});
+
+test('admin payments filter labels are tied to their controls', () => {
+  const src = read('admin-unify.js');
+  assert.match(src, /statusLabel\.htmlFor = 'adminPayStatus'/);
+  assert.match(src, /searchLabel\.htmlFor = 'adminPaySearch'/);
+});

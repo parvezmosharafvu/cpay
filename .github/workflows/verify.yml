@@ -385,6 +385,10 @@ jobs:
           ! echo "$out" | grep -q '^  MISSING' || { echo "a repo function is missing from the fixture"; exit 1; }
           python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json \
             --allow reconcile --allow reseller-digest --allow telegram-report
+      - name: deployed-vs-repo drift check (2026-10-07 list, after orphan deletes)
+        # Production list saved after reconcile, reseller-digest and
+        # telegram-report were deleted (2026-10-07). Must report no drift.
+        run: python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-07.json
 
   frontend:
     name: Pages parse and reference real things

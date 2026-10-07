@@ -1,0 +1,11 @@
+[
+  {"slug": "og-image", "status": "ACTIVE"},
+  {"slug": "daily-report", "status": "ACTIVE"},
+  {"slug": "user-withdraw", "status": "ACTIVE"},
+  {"slug": "ledger-backup", "status": "ACTIVE"},
+  {"slug": "create-invoice", "status": "ACTIVE"},
+  {"slug": "health", "status": "ACTIVE"},
+  {"slug": "auth-settings", "status": "ACTIVE"},
+  {"slug": "admin-actions", "status": "ACTIVE"},
+  {"slug": "telegram-notify", "status": "ACTIVE"}
+]

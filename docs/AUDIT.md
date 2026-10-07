@@ -52,8 +52,8 @@ browser (Vanilla HTML/CSS/JS, anon key + JWT, RLS)
 |---|---|---|---|
 | H1 | `user-withdraw` still accepted closed traditional/manual payout method strings plus Lightning payout destinations, and called closed `request_withdrawal`. Product forbids those payouts; SQL already raised, but the edge path advertised and attempted them. | `supabase/functions/user-withdraw/index.ts` | **FIXED** — non-`routes`/`quote`/`confirm` → HTTP 410; methods removed |
 | H2 | Address validators missing pinned `search_path` (Supabase advisor WARN `function_search_path_mutable`). | `usdt_address_ok`, `cpay_valid_onchain_address` | **FIXED** in `20261007040000_…` |
-| H3 | Orphan Edge Functions still **ACTIVE** in production with `verify_jwt: false`: `reconcile`, `reseller-digest`, `telegram-report`. Not in repo; 0 recent traffic; broken deps. Documented in `docs/OPS_DRIFT_2026-10.md`. | Production function list 2026-10-07 | **OPEN (ops)** — delete needs owner approval; not done in this PR |
-| H4 | Telegram notify 503 storm when `ALERT_TELEGRAM_BOT_TOKEN` unset (pending outbox row never claimed). | `docs/OPS_DRIFT_2026-10.md`, cron job `cpay-telegram-send` | **OPEN (ops)** — set secrets or clear/skip stale outbox |
+| H3 | Orphan Edge Functions still **ACTIVE** in production with `verify_jwt: false`: `reconcile`, `reseller-digest`, `telegram-report`. Not in repo; 0 recent traffic; broken deps. Documented in `docs/OPS_DRIFT_2026-10.md`. | Production function list 2026-10-07 | **CLOSED 2026-10-07 04:51–04:54 Asia/Dhaka** — all three deleted after pre-checks (no cron/DB/repo/frontend callers; 7 days of logs show only 401/405 probes); source backed up; live drift check: No drift. |
+| H4 | Telegram notify 503 storm when `ALERT_TELEGRAM_BOT_TOKEN` unset (pending outbox row never claimed). | `docs/OPS_DRIFT_2026-10.md`, cron job `cpay-telegram-send` | **OPEN (ops)** — 2026-10-07: `ALERT_TELEGRAM_BOT_TOKEN` / `ALERT_TELEGRAM_CHAT_ID` still not set; 1 stale pending outbox row (2026-10-01); owner must supply secrets (and decide on the stale row) |
 
 ### Medium
 

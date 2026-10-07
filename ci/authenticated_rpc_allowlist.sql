@@ -32,7 +32,6 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('get_public_store(uuid)',                                                  'public',        'public creator storefront by user uuid; active accounts only, public fields only'),
   ('link_style_options(text)',                                                'public',        'slug suggestions for a name; only says whether a slug is taken'),
   ('lookup_payment_status(text)',                                             'public',        'public status lookup by full invoice ref or Lightning invoice'),
-  ('public_settled_feed(integer)',                                            'public',        'public settled feed, admin toggle; no ids or emails'),
   ('request_withdrawal(numeric, text, text)',                                 'public',        'retired: always raises'),
   ('admin_audit_log(integer, integer, text)',                                 'admin',         'admin: audit log; refuses without an active admin'),
   ('admin_customer_directory()',                                              'admin',         'admin: customer directory; refuses without an active admin'),

@@ -164,6 +164,9 @@ jobs:
             psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -q -f "$f"
           done
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/anon_rpc_allowlist.sql
+          # anon has no access to the payments table at all (20261007110000),
+          # with production's default grants; the invoice page RPCs still work.
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/public_exposure_test.sql
           # The same database for the authenticated role: internal helpers
           # are service-role only, and the SECURITY DEFINER functions a
           # signed-in user can call must match the reviewed list in

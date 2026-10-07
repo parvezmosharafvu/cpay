@@ -74,6 +74,8 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('admin_toggle_creator_auto(uuid, boolean)',                                'admin',         'admin: toggle creator auto; refuses without an active admin'),
   ('admin_toggle_link(uuid, boolean)',                                        'admin',         'admin: toggle link; refuses without an active admin'),
   ('admin_update_creator_fee(uuid, numeric)',                                 'admin',         'admin: update creator fee; refuses without an active admin'),
+  ('admin_list_receipt_reviews(text, integer)',                              'admin',         'admin: receipt review queue (20261007130000); refuses without an active admin'),
+  ('admin_resolve_receipt_review(bigint, text, text)',                        'admin',         'admin: close a receipt review, audited, no ledger change; refuses without an active admin'),
   ('admin_withdraw_fee_overview()',                                           'admin',         'admin: withdraw fee overview; refuses without an active admin'),
   ('revenue_desk()',                                                          'admin',         'platform revenue report, is_admin() (20261003040000)'),
   ('daily_link_breakdown(integer, uuid)',                                     'self_or_admin', 'own links, or anyone''s for an active admin'),
@@ -128,6 +130,8 @@ insert into internal_only values
   ('cpay_feature_enabled(uuid, text)',          'feature guard triggers, reserve_stablecoin_withdrawal()'),
   ('self_withdraw_allowed(uuid)',               'compatibility shim for the previous payment service; always true (20261005020000)'),
   ('hide_threshold_for(uuid)',                  'dashboard, balance and Telegram SECURITY DEFINER functions'),
+  ('system_flag_receipt(text, text, bigint, text)', 'payment-service after settle_breez_payment (service role; 20261007130000)'),
+  ('system_sweep_receipt_reviews()',             'pg_cron receipt-review-sweep (20261007130000)'),
   ('telegram_context(text, integer)',           'telegram-report Edge Function (service role; deployed outside this repo)');
 
 -- The SECURITY DEFINER functions authenticated can execute right now, with

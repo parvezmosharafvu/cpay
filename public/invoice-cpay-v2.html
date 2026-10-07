@@ -190,9 +190,9 @@ const LOAD_TIMEOUT_MS = 15000;
 const CREATE_TIMEOUT_MS = 25000;
 // Status is pushed over Realtime where available; a slow read of the same
 // public status RPC backs it up, so a dropped socket can't strand the payer.
-const POLL_MS = 5000;
+const POLL_MS = 3000;
 
-let timerInterval, realtimeChannel, pollTimer, loadTimer;
+let timerInterval, pollTimer, loadTimer;
 let currentPayCode = '';
 let currentPayUrl = '';   // the lightning: URI handed to the OS
 let currentCashAppUrl = '';
@@ -258,7 +258,6 @@ function stopStatusWork(){
   clearInterval(timerInterval);
   clearTimeout(pollTimer);
   clearTimeout(loadTimer);
-  if (realtimeChannel){ try { supabaseClient.removeChannel(realtimeChannel); } catch {} realtimeChannel = null; }
 }
 
 const back = { label: 'Back', run: () => goBack() };
@@ -461,7 +460,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   showStep(2);
   setStatus(row.status === 'pending' ? 'detected' : 'waiting');
   startTimer(row.expires_at);
-  subscribeToPaymentUpdates(currentPaymentId);
   schedulePoll();
 });
 
@@ -523,19 +521,10 @@ function applyStatus(row){
   else if (row.status === 'pending') setStatus('detected');
 }
 
-// Realtime first: instant confirmation without repeated requests.
-function subscribeToPaymentUpdates(paymentId){
-  try {
-    realtimeChannel = supabaseClient
-      .channel('payment-' + paymentId)
-      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'payments', filter:`id=eq.${paymentId}` },
-          (payload) => applyStatus(payload.new))
-      .subscribe();
-  } catch (e){ console.error('realtime unavailable:', e); }
-}
-
-// Backup: the same read-only status RPC the page loads with, every few
-// seconds while the tab is visible. Errors are ignored and retried; the
+// No Realtime: anon has no SELECT on payments (20261007110000), so other
+// payers' rows can never be listed. The page follows its own invoice by id.
+// The same read-only status RPC the page loads with (get_invoice_public,
+// this invoice's id only), every few seconds while the tab is visible. Errors are ignored and retried; the
 // expiry timer still bounds the wait.
 function schedulePoll(delay = POLL_MS){
   clearTimeout(pollTimer);

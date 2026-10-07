@@ -24,7 +24,6 @@ insert into anon_rpc_allowlist(signature, reason) values
   ('get_invoice_public(uuid)',               'public invoice page'),
   ('get_link_preview(text)',                 'public payment link page / OG preview'),
   ('get_public_store(uuid)',                 'public creator store: active accounts, public fields only'),
-  ('public_settled_feed(integer)',           'public settled feed (admin toggle)'),
   ('lookup_payment_status(text)',            'public payment status lookup'),
   ('is_admin()',                             'returns false for callers without a session');
 

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { formatCents, parseAmountToCents, toCents } from "../_shared/money.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -184,16 +185,18 @@ Deno.serve(async (req) => {
       }
       if (action === "quote") {
         const amount = String(body.amount ?? "").trim();
-        if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) < 5) {
+        // Integer cents throughout; at most two decimals as before.
+        const amountCents = /^\d+(\.\d{1,2})?$/.test(amount) ? parseAmountToCents(amount) : null;
+        if (amountCents === null || amountCents < 500) {
           return json({ error: "Minimum withdrawal is $5" }, 400, cors);
         }
         // Early answer for the common mistake. The payment service checks
         // again, and reserve_stablecoin_withdrawal() decides at confirm.
         const { data: bal, error: balErr } = await callerClient.rpc("get_my_balance");
-        const available = Number((Array.isArray(bal) ? bal[0] : bal)?.available ?? 0);
         if (balErr) return json({ error: balErr.message }, 400, cors);
-        if (Number(amount) > available) {
-          return json({ error: `Insufficient balance. Available: $${available.toFixed(2)}` }, 400, cors);
+        const availableCents = toCents((Array.isArray(bal) ? bal[0] : bal)?.available ?? 0, "floor") ?? 0;
+        if (amountCents > availableCents) {
+          return json({ error: `Insufficient balance. Available: $${formatCents(Math.max(0, availableCents))}` }, 400, cors);
         }
         const { status, payload } = await paymentService("/withdraw/quote", {
           method: "POST",

@@ -34,19 +34,34 @@ Follow-on chats should start from merged main after prior PRs land (or from the 
 **Goal:** Polish authenticated desks without weakening auth/RLS or reintroducing reseller.
 
 
-## Chat 4 — Ops cutover hygiene
+## Done in Chat 4 — Payment reliability + security hardening
 
-1. With owner approval: delete orphan Edge Functions `reconcile`, `reseller-digest`, `telegram-report`; save source first.
+1. payment-service: `GET /ready` (startup catch-up gate), `GET /metrics` (auth, counters only, `singleWallet`), graceful shutdown/auth/timeouts/retry/idempotency/stuck-transfer invariants covered by tests.
+2. Failure-path + financial-invariant tests (`hardening.test.mjs`, `ci/financial_invariants_test.sql`, existing withdraw/service suites).
+3. Ops owner runbook `docs/OPS_OWNER_CUTOVER.md` for orphan Edge deletes + Telegram secrets — **documented only**, not executed.
+4. `RECEIPT_RECORDING` remains default off; no reseller commission; no real money moves.
+
+## Chat 4 owner ops (still open — needs approval)
+
+1. With owner approval: delete orphan Edge Functions `reconcile`, `reseller-digest`, `telegram-report` per `docs/OPS_OWNER_CUTOVER.md`.
 2. Set `ALERT_TELEGRAM_BOT_TOKEN` and `ALERT_TELEGRAM_CHAT_ID` (or mark stale outbox skipped).
 3. Apply `20261007040000` on production; redeploy `user-withdraw`.
 4. Confirm `RECEIPT_RECORDING` remains unset/`off` on Azure payment-service host.
 5. Update `docs/AUDIT.md` H3/H4 to closed with evidence timestamps (Asia/Dhaka).
 
-## Chat 5 — Staging money path + production rollout
+## Done in Chat 5 — Final QA + release package
 
-1. Staging create-invoice → settle → balance → USDT quote/confirm (small amount).
-2. Idempotency, suspended gates, emergency stops.
-3. Fill `docs/PRODUCTION-READINESS.md`; backup; controlled live send.
+1. Full available automated suite re-run on `release/chat5-qa` (from Chat 4 tip `4540043`); test hygiene for shared-DB SQL suites.
+2. Docs package: TESTING, RELEASE-CHECKLIST, BACKUP-RECOVERY, INCIDENT; PRODUCTION-READINESS filled with evidence vs OPEN.
+3. RC tag on branch (not main). Stack still unmerged.
+4. Verdict: **CONDITIONAL GO** — no verified Critical/High in CODE; High OPS (H3/H4, prod migrate, staging money, stack merge) still open.
+
+## Chat 5 owner follow-ups (unchanged ops)
+
+1. Staging money path with explicit approval.
+2. OPS_OWNER_CUTOVER (orphans + Telegram + migration + user-withdraw redeploy).
+3. Merge stack when CI green; do not force-merge red #28.
+4. Promote CONDITIONAL → GO only after High ops closed with dated evidence.
 
 ## Non-goals (all chats)
 

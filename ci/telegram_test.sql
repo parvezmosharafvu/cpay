@@ -77,11 +77,21 @@ end $$;
 do $$
 declare v_expect text; v_got text; p jsonb;
 begin
+  -- Scope to this suite's payment ids (e2000000-…) so leftover outbox
+  -- rows from other CI/payment-service runs on a shared DB cannot poison
+  -- the exact-list assertion.
   select string_agg(right(ref, 2) || ':' || recipient, ' ' order by ref, recipient)
-    into v_got from telegram_outbox where kind = 'payment_settled';
+    into v_got from telegram_outbox
+   where kind = 'payment_settled'
+     and ref like 'e2000000-0000-0000-0000-%';
   v_expect := '01:admin 02:admin 03:admin 04:admin 05:admin 06:admin 07:admin 08:admin 10:admin';
-  if v_got <> v_expect then raise exception 'payment_settled rows: % (expected %)', v_got, v_expect; end if;
-  if exists (select 1 from telegram_outbox where recipient <> 'admin' or chat <> 'admin') then
+  if v_got is distinct from v_expect then raise exception 'payment_settled rows: % (expected %)', v_got, v_expect; end if;
+  if exists (
+    select 1 from telegram_outbox
+     where kind = 'payment_settled'
+       and ref like 'e2000000-0000-0000-0000-%'
+       and (recipient <> 'admin' or chat <> 'admin')
+  ) then
     raise exception 'a row is not for the admin group';
   end if;
 
@@ -130,11 +140,19 @@ do $$
 declare
   v_claimed int; v_id bigint; v_id2 bigint; v_r text;
 begin
+  -- Isolate from leftover pending outbox rows left by payment-service /
+  -- other CI suites on a shared migrated DB (rolled back with this txn).
+  update telegram_outbox
+     set status = 'skipped', last_error = 'telegram_test isolation'
+   where status in ('pending', 'sending')
+     and not (kind = 'payment_settled' and ref like 'e2000000-0000-0000-0000-%');
+
   select count(*) into v_claimed from telegram_claim(100);
   if v_claimed <> 9 then raise exception 'claimed % rows, expected 9', v_claimed; end if;
   if (select count(*) from telegram_claim(100)) <> 0 then raise exception 'claimed twice'; end if;
 
-  select min(id), max(id) into v_id, v_id2 from telegram_outbox;
+  select min(id), max(id) into v_id, v_id2 from telegram_outbox
+   where kind = 'payment_settled' and ref like 'e2000000-0000-0000-0000-%';
   if telegram_finish(v_id, 'sent', 42) <> 'sent' then raise exception 'finish sent'; end if;
   if telegram_finish(v_id, 'sent', 43) <> 'already_sent' then raise exception 'second finish moved a sent row'; end if;
   if (select telegram_message_id from telegram_outbox where id = v_id) <> 42 then raise exception 'message id'; end if;

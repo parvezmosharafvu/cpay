@@ -73,3 +73,18 @@ closed.
 **A pages/ folder and a split design system.** Slug routing needs
 `404.html` at the site root. Themes stay on the payment and invoice pages.
 See `docs/UI.md`.
+
+## Docs map (release)
+
+| Doc | Purpose |
+|---|---|
+| `docs/CPAY-OWNER-GUIDE.md` | Owner onboarding |
+| `docs/ARCHITECTURE.md` | Trust boundaries + money flow |
+| `docs/DEPLOYMENT.md` / `ENV_VARS.md` | Deploy + env inventory |
+| `docs/TESTING.md` | What was run vs manual-only |
+| `docs/RELEASE-CHECKLIST.md` | Cut order + rollback |
+| `docs/PRODUCTION-READINESS.md` | Honest GO / CONDITIONAL / NO-GO checklist |
+| `docs/OPS_OWNER_CUTOVER.md` | Orphans + Telegram (owner only) |
+| `docs/RUNBOOKS.md` / `INCIDENT.md` / `BACKUP-RECOVERY.md` | Ops |
+| `SECURITY.md` | Reporting + trust notes |
+

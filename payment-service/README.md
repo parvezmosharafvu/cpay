@@ -42,6 +42,16 @@ to settle before mainnet.
   otherwise. The body is only `ok`, `sdkConnected`, `db`, `synced`,
   `lastSyncedAt` and `shuttingDown`: no balance, id or setting. The `health`
   edge function calls it.
+- `GET /ready` needs no secret. It returns 200 only after the startup
+  catch-up has finished and while the process is not draining (503
+  otherwise). Prefer this for load-balancer readiness probes; keep
+  `/health` for ongoing liveness/sync freshness.
+- `GET /metrics` requires `Authorization: Bearer $PAYMENT_SERVICE_SECRET`.
+  Process counters only (`invoicesAttached`, settle/withdrawal outcome
+  tallies, `catchUps`, `withdrawalStuck`, `inflight`, `authRejected`, …)
+  plus `singleWallet: true`. No balances, payment ids, invoices or
+  configuration secrets. Custody model: one Breez Spark wallet holds all
+  unsettled creator funds.
 - On SIGTERM or SIGINT the service stops taking requests (new ones get 503
   and the listener closes), waits up to `SHUTDOWN_TIMEOUT_SECS` for work in
   flight (requests, creator withdrawal sends, admin sends, settles, leaf

@@ -46,6 +46,8 @@ export function createService({ config, breez, log = logJson }) {
     await sdk.getInfo({ ensureSynced: true });
     app.markSynced();
     await app.catchUp();
+    // Listen only after the first catch-up so /ready is true when traffic can arrive.
+    app.markReady();
     if (stopping) return null;
     timer = setInterval(() => app.catchUp().catch((e) => log({ event: 'catch-up-failed', error: errorText(e) })), config.catchUpMs);
     server = http.createServer(app.handle);

@@ -29,7 +29,8 @@ browser ──► public/ (static, Cloudflare Workers assets)
 ```
 
 - **payment-service** is the only process that holds the wallet mnemonic.
-  Routes: `POST /invoices`, `GET /health`, `/withdraw/{routes,quote,confirm}`,
+  Routes: `POST /invoices`, `GET /health`, `GET /ready` (startup catch-up gate),
+  `GET /metrics` (bearer; process counters only), `/withdraw/{routes,quote,confirm}`,
   `/admin/wallet/*`.
 - **Supabase Postgres** is the ledger. Every balance rule lives in SQL.
 

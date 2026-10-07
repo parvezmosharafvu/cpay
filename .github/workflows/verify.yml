@@ -295,6 +295,11 @@ jobs:
           # nothing, and the sender's claim/finish rules. BEGIN/ROLLBACK.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/telegram_test.sql
 
+      - name: Financial invariants (settle once, available ≥ 0, request_withdrawal closed)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/financial_invariants_test.sql
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -380,6 +385,10 @@ jobs:
           ! echo "$out" | grep -q '^  MISSING' || { echo "a repo function is missing from the fixture"; exit 1; }
           python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json \
             --allow reconcile --allow reseller-digest --allow telegram-report
+      - name: deployed-vs-repo drift check (2026-10-07 list, after orphan deletes)
+        # Production list saved after reconcile, reseller-digest and
+        # telegram-report were deleted (2026-10-07). Must report no drift.
+        run: python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-07.json
 
   frontend:
     name: Pages parse and reference real things

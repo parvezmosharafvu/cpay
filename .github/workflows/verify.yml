@@ -305,6 +305,11 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/money_types_test.sql
 
+      - name: One invoice per payer request; public rate limits (20261007120000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/invoice_idempotency_test.sql
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

@@ -1,10 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { formatCents, parseAmountToCents, toCents } from "../_shared/money.ts";
+import { serviceAuthHeaders, serviceAuthMode } from "../_shared/service-auth.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const PAYMENT_SERVICE_URL = Deno.env.get("PAYMENT_SERVICE_URL") ?? "";
 const PAYMENT_SERVICE_SECRET = Deno.env.get("PAYMENT_SERVICE_SECRET") ?? "";
+const PAYMENT_SERVICE_AUTH_MODE = serviceAuthMode(Deno.env.get("PAYMENT_SERVICE_AUTH_MODE"));
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 // Only browser calls need CORS (server-to-server callers like pg_cron
 // ignore these headers entirely). The allowed-origin list is read
@@ -90,10 +92,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Calls the payment service, which holds the platform wallet.
 async function paymentService(path: string, init: { method: string; body?: unknown }, timeoutMs: number) {
+  const body = init.body === undefined ? undefined : JSON.stringify(init.body);
+  const auth = await serviceAuthHeaders({
+    mode: PAYMENT_SERVICE_AUTH_MODE, secret: PAYMENT_SERVICE_SECRET, method: init.method, path, body: body ?? "",
+  });
   const res = await fetch(`${PAYMENT_SERVICE_URL}${path}`, {
     method: init.method,
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${PAYMENT_SERVICE_SECRET}` },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    headers: { "Content-Type": "application/json", ...auth },
+    body,
     signal: AbortSignal.timeout(timeoutMs),
   });
   const payload = await res.json().catch(() => ({}));

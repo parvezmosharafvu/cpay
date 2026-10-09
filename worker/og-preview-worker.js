@@ -272,8 +272,28 @@ return `<!DOCTYPE html>
  * unavailable the payment page can still call Supabase directly and the
  * only thing lost is the location.
  */
-async function proxyCreateInvoice(request) {
+async function proxyCreateInvoice(request, env) {
 const cf = request.cf || {};
+// Per-client brake before anything reaches Supabase: 20 invoice requests a
+// minute per connecting address per Cloudflare location (binding
+// INVOICE_RATE_LIMITER in worker/wrangler.jsonc). create-invoice applies
+// its own per-address, per-link and per-owner limits as well. If the
+// binding is missing the request is forwarded as before.
+const clientIp = request.headers.get("cf-connecting-ip") || "";
+if (env && env.INVOICE_RATE_LIMITER && clientIp) {
+  let limited = false;
+  try {
+    const { success } = await env.INVOICE_RATE_LIMITER.limit({ key: `invoice:${clientIp}` });
+    limited = !success;
+  } catch (e) {
+    console.error("invoice rate limiter unavailable:", e);
+  }
+  if (limited) {
+    return new Response(JSON.stringify({ error: "Too many payment requests. Please wait a minute and try again." }), {
+      status: 429, headers: { "Content-Type": "application/json", "Retry-After": "60" },
+    });
+  }
+}
 const body = await request.text();
 
 const res = await fetch(`${SUPABASE_URL}/functions/v1/create-invoice`, {
@@ -286,6 +306,9 @@ Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
 // same keys whichever path the request took.
 "cf-ipcity": cf.city || "",
 "cf-ipcountry": cf.country || "",
+// The payer's address for create-invoice's per-address limit: Supabase
+// sees this Worker's egress address, shared by every proxied payer.
+...(clientIp ? { "x-cpay-client-ip": clientIp } : {}),
 },
 body,
 });
@@ -296,7 +319,7 @@ return out;
 }
 
 export default {
-                            async fetch(request) {
+                            async fetch(request, env) {
                             const url = new URL(request.url);
                             const path = url.pathname.replace(/^\/|\/$/g, "");
 
@@ -317,7 +340,7 @@ return serveOgImage(request, url);
 // city and country by the time we forward it. Same origin too, so the
 // browser skips the CORS preflight.
 if (path === "api/create-invoice" && request.method === "POST") {
-return proxyCreateInvoice(request);
+return proxyCreateInvoice(request, env);
 }
 
 // A payment-only domain serves payment links and nothing else. The

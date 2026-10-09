@@ -16,6 +16,21 @@ Used by `create-invoice`, `user-withdraw`, `admin-actions` and `health`:
 - [ ] `PAYMENT_SERVICE_SECRET` — long random string, the same value the
       payment service has. Sent as `Authorization: Bearer`.
 
+- [ ] `TURNSTILE_SECRET_KEY` + `TURNSTILE_MODE` — optional Cloudflare
+      Turnstile on `create-invoice`. Off unless both are set. `monitor`
+      verifies and logs but never blocks; `enforce` refuses a missing or
+      failed token. Turning it on also needs `window.CPAY_TURNSTILE_SITE_KEY`
+      in `public/config.js` and `https://challenges.cloudflare.com` in the
+      CSP `script-src` and `frame-src` (`public/_headers`). Start with
+      `monitor`.
+
+Public invoice limits (create-invoice, table `public_rate_limits`,
+migration 20261007120000; fail closed with 503 if the check errors):
+60/min per payer address (hashed; proxied payers keyed by the address the
+site Worker forwards), 20/min per payment link, plus the existing 30/min per
+link owner. The site Worker adds 20/min per address per Cloudflare location
+(`INVOICE_RATE_LIMITER` in `worker/wrangler.jsonc`).
+
 The payment service's own settings are listed below under
 [Payment service](#payment-service). The mnemonic never goes into Supabase.
 

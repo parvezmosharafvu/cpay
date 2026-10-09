@@ -7,5 +7,9 @@
     "enabled": true
   },
   "previews": {},
+  // Per-client limit for /api/create-invoice (see proxyCreateInvoice).
+  "ratelimits": [
+    { "name": "INVOICE_RATE_LIMITER", "namespace_id": "4201", "simple": { "limit": 20, "period": 60 } }
+  ],
   "workers_dev": true
 }

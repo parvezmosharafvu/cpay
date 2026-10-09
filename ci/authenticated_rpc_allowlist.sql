@@ -99,6 +99,7 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('my_earnings_split()',                                                     'self',          'caller''s own data: my earnings split (auth.uid())'),
   ('my_payout_book()',                                                        'self',          'caller''s own data: my payout book (auth.uid())'),
   ('my_withdraw_settings()',                                                  'self',          'caller''s own data: my withdraw settings (auth.uid())'),
+  ('my_usdt_wallet_status()',                                                 'self',          'caller''s own data: saved payout addresses and their 24 h cooldown (auth.uid())'),
   ('onchain_address_create(text, text, text)',                                'self',          'creates an address row for auth.uid()'),
   ('set_my_payout_prefs(numeric, text, boolean)',                             'self',          'caller''s own payout preferences'),
   ('set_my_usdt_wallet(text, text)',                                          'self',          'caller''s own USDT wallet'),

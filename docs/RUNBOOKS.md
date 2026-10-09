@@ -120,3 +120,40 @@ reconcile, every `CATCH_UP_INTERVAL_SECS` (default 300) and at startup.
 Admin panel (emergency controls): **emergency payments stop** (create-invoice refuses
 new invoices) and **emergency withdrawals stop** (every withdrawal path
 refuses). Both are checked server-side.
+
+## Payout safety: step-up and address cooldown
+
+- **Step-up** (`_shared/step-up.ts`): confirming a payout needs a sign-in in
+  the last `STEP_UP_MAX_AGE_SECONDS` (default 10 minutes); the dashboard asks
+  for the password and retries once. Rollback: set the Edge secret to `0`.
+- **24 h address cooldown** (migration 20261009010000): payouts go only to a
+  saved address whose `usdt_wallets.usable_after` has passed. Any save or
+  change (user, direct table write, `admin_set_user_usdt_wallet()`) restarts
+  the 24 h and writes `payout_wallet.saved` to `audit_log`. The payment
+  service checks `withdraw_destination_status()` at quote and again at
+  confirm. A user who needs an urgent exception waits; there is no bypass
+  switch on purpose.
+## Service auth rollout
+
+The payment service accepts a static bearer (legacy) and HMAC-signed
+requests, and for `/admin/wallet/*` it can require the admin's own Supabase
+session (`payment-service/auth.mjs`). Order, so no step can lock the Edge
+Functions out:
+
+1. Deploy a payment service that has `auth.mjs`. Add to `/etc/cpay/env`
+   `SUPABASE_URL` and `SUPABASE_ANON_KEY` (public key). Leave
+   `REQUEST_AUTH_MODE` and `ADMIN_JWT_MODE` unset (`any` / `optional`).
+   `/metrics` now shows `requestAuthMode`, `adminJwtMode`,
+   `authSigned`, `authBearer`, `adminTokenVerified`, `adminLegacy`.
+2. Set the Edge secret `PAYMENT_SERVICE_AUTH_MODE=signed`. Check
+   Admin → Health and watch `/metrics`: `authSigned` grows as the Edge
+   Functions call in, `authBearer` stops growing.
+   Open Admin → Wallet once: `adminTokenVerified` grows.
+3. Set `REQUEST_AUTH_MODE=signed` and `ADMIN_JWT_MODE=required` on the host
+   and restart (see [Restart the payment service](#restart-the-payment-service)).
+   A bearer-only call now gets 401, and a wallet call without a valid
+   active-admin session gets 401/403 (logged as `auth-refused` /
+   `admin-auth-refused`, with a reason, never a value).
+
+Rollback at any step: unset the variable just set (Edge or host) and
+restart; each step only narrows what is accepted.

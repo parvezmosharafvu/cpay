@@ -2,6 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
+import { saveReadyAddresses } from './test-addresses.mjs';
 import { TRON, EVM, BSC_USDT, LEAF_ERROR, fakeBreez } from './fake-breez.mjs';
 import { decimalToCents, formatCents } from './money.mjs';
 import { createWithdrawals, splitFee, outcomeOf, fromBaseUnits, routeId, failedBeforeSend, networkFeeUsd, LEAF_RETRY_MS } from './withdraw.mjs';
@@ -25,6 +26,7 @@ async function makeUser({ earned = 100, fee = 3, active = true, dailyLimit = nul
     [id, earned],
   );
   if (dailyLimit != null) await db.query(`insert into profile_limits(user_id, daily_withdrawal_limit) values ($1, $2)`, [id, dailyLimit]);
+  await saveReadyAddresses(db, id);
   return id;
 }
 
@@ -539,6 +541,7 @@ test('a new account gets a 0% withdrawal fee, and its quote has no platform fee'
     `insert into payments(user_id, amount_requested, amount_settled, status, settled_at, expires_at)
      values ($1, 50, 50, 'settled', now(), now() + interval '1 hour')`, [id],
   );
+  await saveReadyAddresses(db, id);
   const q = await service(fakeBreez()).quote({ userId: id, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '20' });
   assert.equal(Number(q.feePercent), 0);
   assert.equal(q.platformFeeUsd, '0.00');
@@ -680,7 +683,7 @@ test('fee: the account override, else the global default, else none; the quote a
     // Every SQL path stores the resolved fee: the admin's withdrawal on an
     // account's behalf (to its saved wallet, never a typed address) and
     // the auto-queue.
-    await db.query(`insert into usdt_wallets(user_id, network, address) values ($1, 'tron', $2), ($3, 'tron', $2)`, [freelancer, TRON, solo]);
+    await db.query(`insert into usdt_wallets(user_id, network, address) values ($1, 'tron', $2), ($3, 'tron', $2) on conflict (user_id, network) do nothing`, [freelancer, TRON, solo]);
     await asUser(admin, async (c) => {
       const r = (await c.query(`select fee_percent::text, amount_after_fee::text, destination, admin_note from admin_request_withdrawal_for($1, 10, 'tron', 'typed-not-used')`, [freelancer])).rows[0];
       assert.deepEqual(r, { fee_percent: '2.00', amount_after_fee: '9.80000000', destination: TRON, admin_note: 'USDT payout submitted by admin' });
@@ -707,7 +710,7 @@ test('fee: the account override, else the global default, else none; the quote a
 // a suspended, pending or rejected admin may not, a non-admin may not.
 test('Admin → Withdraw for: active admin allowed, suspended admin denied, non-admin denied', async () => {
   const target = await makeUser({ earned: 100, fee: 0 });
-  await db.query(`insert into usdt_wallets(user_id, network, address) values ($1, 'tron', $2)`, [target, TRON]);
+  await db.query(`insert into usdt_wallets(user_id, network, address) values ($1, 'tron', $2) on conflict (user_id, network) do nothing`, [target, TRON]);
   const admin = await makeUser({ earned: 1, fee: 0 });
   await db.query(`update profiles set role = 'admin' where id = $1`, [admin]);
   const creator = await makeUser({ earned: 100, fee: 0 });
@@ -735,7 +738,7 @@ test('Admin → Withdraw for: active admin allowed, suspended admin denied, non-
 test('only an admin sets fees or withdraws for another account', async () => {
   const freelancer = await makeUser({ earned: 100, fee: null });
   const other = await makeUser({ earned: 100, fee: null });
-  await db.query(`insert into usdt_wallets(user_id, network, address) values ($1, 'tron', $2)`, [other, TRON]);
+  await db.query(`insert into usdt_wallets(user_id, network, address) values ($1, 'tron', $2) on conflict (user_id, network) do nothing`, [other, TRON]);
   const before = await balance(other);
   await asUser(freelancer, async (c) => {
     assert.match(await refusal(c, 'select admin_set_default_withdrawal_fee(0)'), /Not authorized/);
@@ -763,4 +766,46 @@ test('the browser roles cannot call the fee resolvers or the compatibility shim'
     ['self_withdraw_allowed', false, false, true],
     ['withdrawal_fee_resolution', false, false, true],
   ]);
+});
+
+// 20261009010000: payouts only to an address saved at least 24 h earlier.
+test('cooldown: an unsaved address, or one saved under 24 h ago, gets no quote and no withdrawal', async () => {
+  const user = await makeUser({ earned: 100 });
+  const w = service(fakeBreez());
+  const OTHER_TRON = 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8';
+  await assert.rejects(w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: OTHER_TRON, amountUsd: '10' }),
+    (e) => e.status === 403 && e.extra.code === 'address_not_saved');
+  // Saved just now (and a client trying to backdate it): still cooling down.
+  await db.query(`update usdt_wallets set address = $2, usable_after = now() - interval '2 days' where user_id = $1 and network = 'tron'`, [user, OTHER_TRON]);
+  const { rows: [wallet] } = await db.query(`select usable_after > now() + interval '23 hours' as cooling from usdt_wallets where user_id = $1 and network = 'tron'`, [user]);
+  assert.equal(wallet.cooling, true);
+  await assert.rejects(w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: OTHER_TRON, amountUsd: '10' }),
+    (e) => e.status === 403 && e.extra.code === 'address_cooling_down' && /24 hours/.test(e.message));
+  // The old address is no longer saved either.
+  await assert.rejects(w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '10' }),
+    (e) => e.extra.code === 'address_not_saved');
+  const audit = await db.query(`select count(*)::int as n from audit_log where action = 'payout_wallet.saved' and subject_id = $1`, [user]);
+  assert.ok(audit.rows[0].n >= 2, 'address changes are audited');
+  assert.equal((await rows(user)).length, 0);
+  assert.equal((await balance(user)).available, '100.00000000');
+});
+
+test('cooldown: EVM addresses match case-insensitively; a ready address quotes and confirms', async () => {
+  const user = await makeUser({ earned: 100, fee: 0 });
+  const w = service(fakeBreez());
+  const q = await w.quote({ userId: user, routeId: 'orchestra:bsc:usdt', address: EVM.toLowerCase(), amountUsd: '10' });
+  const row = await w.confirm({ userId: user, quoteId: q.quoteId });
+  assert.ok(['sending', 'paid'].includes(row.status), row.status);
+});
+
+test('cooldown: an address changed after the quote is not paid at confirm', async () => {
+  const user = await makeUser({ earned: 100 });
+  const fake = fakeBreez();
+  const w = service(fake);
+  const q = await w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '10' });
+  await db.query(`update usdt_wallets set address = 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8' where user_id = $1 and network = 'tron'`, [user]);
+  await assert.rejects(w.confirm({ userId: user, quoteId: q.quoteId }), (e) => e.status === 403 && e.extra.code === 'address_not_saved');
+  assert.equal(fake.calls.send, 0);
+  assert.equal((await rows(user)).length, 0);
+  assert.equal((await balance(user)).available, '100.00000000');
 });

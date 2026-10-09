@@ -4,6 +4,7 @@ import { formatCents, parseAmountToCents, toCents } from "../_shared/money.ts";
 import {
   checkTurnstile, clientKey, type ExistingPayment, parseRequestId, PUBLIC_LIMITS, replayDecision, sha256Hex, turnstileMode,
 } from "./guards.ts";
+import { serviceAuthHeaders, serviceAuthMode } from "../_shared/service-auth.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -11,6 +12,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 // makes the Lightning invoice for a payments row this function inserts.
 const PAYMENT_SERVICE_URL = Deno.env.get("PAYMENT_SERVICE_URL") ?? "";
 const PAYMENT_SERVICE_SECRET = Deno.env.get("PAYMENT_SERVICE_SECRET") ?? "";
+const PAYMENT_SERVICE_AUTH_MODE = serviceAuthMode(Deno.env.get("PAYMENT_SERVICE_AUTH_MODE"));
 const INVOICE_MINUTES = 60;
 // Optional Cloudflare Turnstile (off unless both are set; see guards.ts).
 const TURNSTILE_MODE = turnstileMode(Deno.env.get("TURNSTILE_SECRET_KEY") ?? "", Deno.env.get("TURNSTILE_MODE"));
@@ -227,10 +229,14 @@ return invoiceResponse(payment.id, bolt11, chargedAmount, expiresAt);
 // payments row; idempotent per payment id (advisory lock in the service).
 async function requestInvoice(paymentId: string): Promise<string> {
   try {
+    const invoiceBody = JSON.stringify({ paymentId });
+    const auth = await serviceAuthHeaders({
+      mode: PAYMENT_SERVICE_AUTH_MODE, secret: PAYMENT_SERVICE_SECRET, method: "POST", path: "/invoices", body: invoiceBody,
+    });
     const res = await fetch(`${PAYMENT_SERVICE_URL}/invoices`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${PAYMENT_SERVICE_SECRET}` },
-      body: JSON.stringify({ paymentId }),
+      headers: { "Content-Type": "application/json", ...auth },
+      body: invoiceBody,
       signal: AbortSignal.timeout(15000),
     });
     const body = await res.json().catch(() => ({}));

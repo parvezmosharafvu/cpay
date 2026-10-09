@@ -269,7 +269,7 @@ async function renderCash() {
   const wallets = book?.wallets || [];
   const savedNote = wallets.length
     ? `<p class="hint">Saved USDT wallets: ${wallets.map((w) => escapeHtml(w.network)).join(', ')}. Open Profile to add more networks.</p>`
-    : `<p class="hint">Save a USDT address in Profile first. Withdrawals only send USDT to a saved or typed address.</p>`;
+    : `<p class="hint">Save a USDT address in Profile first. Withdrawals only go to a saved address, starting 24 hours after you save or change it.</p>`;
   el.innerHTML = withdrawForm(`<p class="muted">Available balance <strong id="wAvail">${money(b.available)}</strong></p>`
     + savedNote)
     + '<div id="wHist"></div>';
@@ -334,7 +334,7 @@ async function renderProfile() {
     </div>
     <div class="card">
       <h3>USDT payout</h3>
-      <p class="hint">One address per network. Withdraw sends USDT there. Lightning collect only — payouts are USDT.</p>
+      <p class="hint">One address per network. Withdraw sends USDT there. For your safety, a new or changed address can receive withdrawals 24 hours after you save it. Lightning collect only — payouts are USDT.</p>
       <div class="field"><label for="usdtNet">Network</label><select id="usdtNet">${netOpts}</select></div>
       <div class="field"><label for="usdtAddr">Wallet address</label><input id="usdtAddr" placeholder="Address for that network" autocomplete="off" spellcheck="false"></div>
       <button class="btn primary" id="saveUsdt" type="button">Save address</button>

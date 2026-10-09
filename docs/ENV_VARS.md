@@ -24,6 +24,13 @@ Used by `create-invoice`, `user-withdraw`, `admin-actions` and `health`:
       service reports `requestAuthMode` in `/metrics`. See
       [`RUNBOOKS.md`](RUNBOOKS.md#service-auth-rollout).
 
+- [ ] `STEP_UP_MAX_AGE_SECONDS` — optional, default `600`. A payout confirm
+      (`user-withdraw` confirm, admin wallet `send-confirm`/`stable-confirm`)
+      needs a real sign-in (the `amr` claim) within this many seconds, and an
+      `aal2` session when the account has verified MFA; otherwise it answers
+      403 `reauth_required` and the page asks for the password. `0` turns the
+      check off (rollback only).
+
 The payment service's own settings are listed below under
 [Payment service](#payment-service). The mnemonic never goes into Supabase.
 

@@ -279,7 +279,8 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
   };
   const confirmQuote = async () => {
     busy = true; render();
-    const res = await callFunction('user-withdraw', { action: 'confirm', quoteId: quote.quoteId });
+    const call = () => callFunction('user-withdraw', { action: 'confirm', quoteId: quote.quoteId });
+    const res = window.cpayWithStepUp ? await window.cpayWithStepUp(call) : await call();
     busy = false;
     if (!res.ok && res.status === 409 && res.data?.quote) {
       showQuote(res.data.quote);

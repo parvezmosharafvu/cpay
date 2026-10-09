@@ -2,6 +2,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
+import { saveReadyAddresses } from './test-addresses.mjs';
 import { TRON, fakeBreez } from './fake-breez.mjs';
 import { createService } from './service.mjs';
 
@@ -34,6 +35,7 @@ async function makeUser({ earned = 100, role = 'creator' } = {}) {
       `insert into payments(user_id, amount_requested, amount_settled, status, settled_at, expires_at)
        values ($1, $2, $2, 'settled', now(), now() + interval '1 hour')`, [id, earned]);
   }
+  await saveReadyAddresses(db, id);
   return id;
 }
 

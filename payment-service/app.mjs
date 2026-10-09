@@ -19,6 +19,11 @@ const OPTIMIZATION_DONE = new Set(['completed', 'cancelled', 'failed', 'skipped'
 // an error message that happens to quote one never reaches the log.
 export const logJson = (entry, redact = (line) => line) => console.log(redact(JSON.stringify({ at: new Date().toISOString(), ...entry })));
 const errorText = (e) => String(e?.message ?? e).slice(0, 300);
+// Settle outcomes worth a look by an admin (20261007130000). 'settled' is
+// included only so the database can spot an overpayment; it flags nothing
+// for an exact one. 'duplicate' and 'ignored' never flag.
+const REVIEW_OUTCOMES = new Set(['underpaid', 'unknown', 'not_settleable', 'no_hash', 'already_settled', 'settled']);
+const REVIEW_TIMEOUT_MS = 2_500;
 
 function timeout(promise, ms) {
   let timer;
@@ -68,6 +73,8 @@ export function createApp({
     authRejected: 0,
     requestErrors: 0,
     leafRetries: 0,
+    receiptReviews: Object.create(null),
+    receiptReviewFailed: 0,
   };
   function bump(bucket, key) {
     bucket[key] = (bucket[key] ?? 0) + 1;
@@ -112,7 +119,38 @@ export function createApp({
     const outcome = await settleWithReceipt({ db, recorder: receipts, payment, source });
     bump(metrics.settles, outcome);
     log({ event: 'settle', source, breezPaymentId: payment.id, amountSat: String(payment.amount), outcome });
+    await flagForReview(payment, outcome);
     return outcome;
+  }
+
+  // Flag-only review queue: runs after settlement has already answered, as
+  // its own statement, and never throws, so it cannot change, undo or delay
+  // a settlement beyond REVIEW_TIMEOUT_MS. Independent of RECEIPT_RECORDING.
+  // Each provider payment is flagged at most once per process; the database
+  // deduplicates across restarts.
+  const reviewed = new Set();
+  async function flagForReview(payment, outcome) {
+    if (!REVIEW_OUTCOMES.has(outcome) || payment?.paymentType !== 'receive' || payment?.status !== 'completed') return;
+    const id = typeof payment.id === 'string' ? payment.id.slice(0, 200) : '';
+    if (!id || reviewed.has(id)) return;
+    let amount;
+    try { amount = BigInt(payment.amount).toString(); } catch { amount = null; }
+    try {
+      const { rows } = await timeout(
+        db.query('select public.system_flag_receipt($1, $2, $3, $4) as kind', [id, ledger.paymentHashOf(payment), amount, outcome]),
+        REVIEW_TIMEOUT_MS,
+      );
+      reviewed.add(id);
+      if (reviewed.size > 10_000) reviewed.clear();
+      const kind = rows[0]?.kind;
+      if (kind) {
+        bump(metrics.receiptReviews, kind);
+        log({ event: 'receipt-review', breezPaymentId: id, kind, outcome });
+      }
+    } catch (e) {
+      metrics.receiptReviewFailed += 1;
+      log({ event: 'receipt-review-failed', breezPaymentId: id, outcome, error: errorText(e) });
+    }
   }
 
   function onEvent(event) {
@@ -269,6 +307,8 @@ export function createApp({
       authRejected: metrics.authRejected,
       requestErrors: metrics.requestErrors,
       leafRetries: metrics.leafRetries,
+      receiptReviews: { ...metrics.receiptReviews },
+      receiptReviewFailed: metrics.receiptReviewFailed,
       // Custody model reminder for operators reading the scrape:
       singleWallet: true,
     };

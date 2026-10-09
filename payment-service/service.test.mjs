@@ -323,3 +323,74 @@ test('GET /metrics requires the secret and never includes balances or secrets', 
   assert.ok(!('balanceSats' in r.body));
   assert.ok(!JSON.stringify(r.body).includes(SECRET));
 });
+
+test('underpaid, overpaid and unmatched receipts are flagged for review; settlement and balances are unchanged', async () => {
+  const user = await makeUser({ earned: 0 });
+  const hashes = [0, 1, 2].map(() => randomUUID().replaceAll('-', '').repeat(2));
+  for (const hash of hashes) {
+    await db.query(
+      `insert into payments(user_id, invoice_ref, lightning_invoice, amount_requested, amount_sat, btc_usd_rate, status, expires_at)
+       values ($1, $2, 'lnbcrt1rr', 10.00, 10000, 100000, 'new', now() + interval '1 hour')`, [user, hash]);
+  }
+  const fake = fakeBreez();
+  const { service, logs } = await start(fake);
+  const receive = (id, hash, amount) => ({
+    id, paymentType: 'receive', status: 'completed', amount, fees: 0n, timestamp: 0, method: 'lightning',
+    details: { type: 'lightning', htlcDetails: { paymentHash: hash } },
+  });
+  const tag = randomUUID().slice(0, 8);
+  const cases = [
+    receive(`rr-under-${tag}`, hashes[0], 9000n),
+    receive(`rr-over-${tag}`, hashes[1], 12000n),
+    receive(`rr-exact-${tag}`, hashes[2], 10000n),
+    receive(`rr-unmatched-${tag}`, randomUUID().replaceAll('-', '').repeat(2), 5000n),
+  ];
+  for (const p of cases) fake.onEvent({ type: 'paymentSucceeded', payment: p });
+  await until(() => logs.filter((e) => e.event === 'settle' && String(e.breezPaymentId).endsWith(tag)).length === 4);
+  await until(() => logs.filter((e) => e.event === 'receipt-review' && String(e.breezPaymentId).endsWith(tag)).length === 3);
+  const outcomes = Object.fromEntries(logs.filter((e) => e.event === 'settle' && String(e.breezPaymentId).endsWith(tag)).map((e) => [e.breezPaymentId, e.outcome]));
+  assert.deepEqual(outcomes, {
+    [`rr-under-${tag}`]: 'underpaid', [`rr-over-${tag}`]: 'settled', [`rr-exact-${tag}`]: 'settled', [`rr-unmatched-${tag}`]: 'unknown',
+  });
+  const { rows } = await db.query(
+    `select provider_payment_id, kind, received_sat::text, expected_sat::text, status from receipt_reviews
+      where provider_payment_id like $1 order by provider_payment_id`, [`rr-%-${tag}`]);
+  assert.deepEqual(rows.map((r) => [r.provider_payment_id, r.kind, r.received_sat, r.expected_sat, r.status]), [
+    [`rr-over-${tag}`, 'overpaid', '12000', '10000', 'open'],
+    [`rr-under-${tag}`, 'underpaid', '9000', '10000', 'open'],
+    [`rr-unmatched-${tag}`, 'unmatched', '5000', null, 'open'],
+  ]);
+  // Two settled at amount_requested (10.00 each, less the 3% platform fee); the underpaid one is not credited.
+  assert.equal((await db.query('select earned::text from get_balance_for($1)', [user])).rows[0].earned, '19.40000000');
+  assert.equal((await db.query(`select status from payments where invoice_ref = $1`, [hashes[0]])).rows[0].status, 'new');
+  assert.equal(service.app.metrics().receiptReviews.overpaid >= 1, true);
+  await db.query(`delete from receipt_reviews where provider_payment_id like $1`, [`rr-%-${tag}`]);
+});
+
+test('a failing review flag never blocks or changes settlement', async () => {
+  const user = await makeUser({ earned: 0 });
+  const hash = randomUUID().replaceAll('-', '').repeat(2);
+  await db.query(
+    `insert into payments(user_id, invoice_ref, lightning_invoice, amount_requested, amount_sat, btc_usd_rate, status, expires_at)
+     values ($1, $2, 'lnbcrt1rr', 10.00, 10000, 100000, 'new', now() + interval '1 hour')`, [user, hash]);
+  const { createApp } = await import('./app.mjs');
+  const logs = [];
+  // The real database, except that the review call fails as if the function were missing.
+  const brokenDb = {
+    query: (sql, params) => (String(sql).includes('system_flag_receipt')
+      ? Promise.reject(Object.assign(new Error('function public.system_flag_receipt does not exist'), { code: '42883' }))
+      : db.query(sql, params)),
+    connect: () => db.connect(),
+  };
+  const app = createApp({ sdk: fakeBreez(), db: brokenDb, secret: SECRET, log: (e) => logs.push(e) });
+  const id = `rr-broken-${hash.slice(0, 8)}`;
+  app.onEvent({ type: 'paymentSucceeded', payment: {
+    id, paymentType: 'receive', status: 'completed', amount: 15000n, fees: 0n, timestamp: 0, method: 'lightning',
+    details: { type: 'lightning', htlcDetails: { paymentHash: hash } },
+  } });
+  await until(() => logs.some((e) => e.event === 'receipt-review-failed' && e.breezPaymentId === id));
+  assert.equal(logs.find((e) => e.event === 'settle' && e.breezPaymentId === id).outcome, 'settled');
+  assert.equal((await db.query(`select status from payments where invoice_ref = $1`, [hash])).rows[0].status, 'settled');
+  assert.equal(app.metrics().receiptReviewFailed, 1);
+  await app.drain(1_000);
+});

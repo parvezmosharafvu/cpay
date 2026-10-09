@@ -19,6 +19,8 @@ update profiles set account_status = 'active' where id in ('7c000000-0000-0000-0
 update profiles set role = 'admin' where id = '7c000000-0000-0000-0000-0000000000a1';
 
 -- As the freelancer, through PostgREST-style direct table access and the RPC.
+-- Production grants these table privileges to authenticated (RLS limits rows).
+grant select, insert, update, delete on public.usdt_wallets to authenticated;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '7c000000-0000-0000-0000-0000000000f1', true);
 insert into usdt_wallets(user_id, network, address, usable_after)

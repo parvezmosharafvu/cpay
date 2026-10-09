@@ -5,7 +5,8 @@
 import * as ledger from './ledger.mjs';
 import { createReceiptRecorder, settleWithReceipt } from './receipts.mjs';
 import { createWithdrawals, UserError, wait } from './withdraw.mjs';
-import { bearerAuth, createWallet, createAdminWalletRoute } from './wallet.mjs';
+import { createWallet, createAdminWalletRoute } from './wallet.mjs';
+import { createRequestAuth, resolveAdmin } from './auth.mjs';
 
 export const MAX_BODY_BYTES = 10_000;
 export const SYNC_STALE_MS = 10 * 60 * 1000;
@@ -28,7 +29,7 @@ function timeout(promise, ms) {
   ]).finally(() => clearTimeout(timer));
 }
 
-async function readJson(req) {
+async function readRaw(req) {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
@@ -36,9 +37,13 @@ async function readJson(req) {
     if (size > MAX_BODY_BYTES) throw new UserError(413, 'body too large');
     chunks.push(chunk);
   }
-  if (!size) return {};
+  return Buffer.concat(chunks);
+}
+
+function parseJson(raw) {
+  if (!raw.length) return {};
   let body;
-  try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new UserError(400, 'body must be JSON'); }
+  try { body = JSON.parse(raw.toString('utf8')); } catch { throw new UserError(400, 'body must be JSON'); }
   if (body === null || typeof body !== 'object' || Array.isArray(body)) throw new UserError(400, 'body must be a JSON object');
   return body;
 }
@@ -48,6 +53,9 @@ export function createApp({
   // F1 PR 1 receipt log: 'off' (default) or 'shadow'. recordDb is a separate
   // small pool so recording can never take the settlement path's connections.
   receiptRecording = 'off', recordDb = null, recordTimeoutMs,
+  // Caller authentication (see auth.mjs). Defaults keep the legacy bearer
+  // and body adminId working so a deploy can never lock the Edge Functions out.
+  requestAuthMode = 'any', adminJwtMode = 'optional', verifyAdminToken = null,
 }) {
   let lastSyncedAt = 0;
   let optimizing = false;
@@ -66,6 +74,11 @@ export function createApp({
     withdrawalsFinalized: Object.create(null),
     withdrawalStuck: 0,
     authRejected: 0,
+    authSigned: 0,
+    authBearer: 0,
+    adminTokenVerified: 0,
+    adminLegacy: 0,
+    adminRejected: 0,
     requestErrors: 0,
     leafRetries: 0,
   };
@@ -100,7 +113,8 @@ export function createApp({
   const withdrawals = createWithdrawals({ breez: sdk, db, btcUsdRate, log, track, ...(confirmWaitMs ? { confirmWaitMs } : {}) });
   const wallet = createWallet({ breez: sdk, db, btcUsdRate, withdrawals, log, track });
   const adminWalletRoute = createAdminWalletRoute({ wallet, withdrawals });
-  const authorised = bearerAuth(secret);
+  const requestAuth = createRequestAuth({ secret, mode: requestAuthMode, now });
+  if (adminJwtMode === 'required' && !verifyAdminToken) throw new Error('ADMIN_JWT_MODE=required needs an admin token verifier');
   const receipts = createReceiptRecorder({
     mode: receiptRecording, recordDb, log, ...(recordTimeoutMs ? { timeoutMs: recordTimeoutMs } : {}),
   });
@@ -267,6 +281,13 @@ export function createApp({
       withdrawalsFinalized: { ...metrics.withdrawalsFinalized },
       withdrawalStuck: metrics.withdrawalStuck,
       authRejected: metrics.authRejected,
+      authSigned: metrics.authSigned,
+      authBearer: metrics.authBearer,
+      adminTokenVerified: metrics.adminTokenVerified,
+      adminLegacy: metrics.adminLegacy,
+      adminRejected: metrics.adminRejected,
+      requestAuthMode,
+      adminJwtMode,
       requestErrors: metrics.requestErrors,
       leafRetries: metrics.leafRetries,
       // Custody model reminder for operators reading the scrape:
@@ -274,12 +295,12 @@ export function createApp({
     };
   }
 
-  async function withdrawRoute(method, path, req) {
+  async function withdrawRoute(method, path, readBody) {
     if (method === 'GET' && path === '/withdraw/routes') {
       return [200, { routes: await withdrawals.listRoutes(), cache: withdrawals.routeCacheInfo() }];
     }
     if (method !== 'POST' || (path !== '/withdraw/quote' && path !== '/withdraw/confirm')) return [404, { error: 'not found' }];
-    const body = await readJson(req);
+    const body = await readBody();
     if (!UUID.test(String(body.userId))) return [400, { error: 'userId must be a uuid' }];
     if (path === '/withdraw/quote') {
       const { userId, routeId, address, amountUsd } = body;
@@ -289,15 +310,43 @@ export function createApp({
     return [200, await withdrawals.confirm({ userId: body.userId, quoteId: body.quoteId })];
   }
 
+  // /admin/wallet/*: the admin id comes from the admin's verified Supabase
+  // session when one is forwarded (always, once ADMIN_JWT_MODE=required).
+  async function adminRoute(method, path, req, readBody) {
+    if (method !== 'POST') return adminWalletRoute(method, path, null);
+    const body = await readBody();
+    const tokenHeader = req.headers['x-cpay-admin-token'];
+    const who = await resolveAdmin({
+      mode: adminJwtMode, verifyToken: verifyAdminToken,
+      token: typeof tokenHeader === 'string' ? tokenHeader : undefined, bodyAdminId: body.adminId,
+    });
+    if (who.refused) {
+      metrics.adminRejected += 1;
+      log({ event: 'admin-auth-refused', path, reason: who.reason });
+      return who.refused;
+    }
+    if (who.via === 'token') metrics.adminTokenVerified += 1; else metrics.adminLegacy += 1;
+    return adminWalletRoute(method, path, { ...body, adminId: who.adminId });
+  }
+
   async function route(req) {
-    const path = new URL(req.url, 'http://localhost').pathname;
+    const url = new URL(req.url, 'http://localhost');
+    const path = url.pathname;
     const method = req.method;
     if (path === '/health') return method === 'GET' ? health() : [405, { error: 'method not allowed' }];
     if (path === '/ready') return method === 'GET' ? readiness() : [405, { error: 'method not allowed' }];
-    if (!authorised(req.headers.authorization)) {
+    // A signed request covers its body, so read it (bounded) first; a bearer
+    // call is checked before any body is read, as before.
+    const signed = req.headers['x-cpay-signature'] !== undefined || req.headers['x-cpay-timestamp'] !== undefined || req.headers['x-cpay-nonce'] !== undefined;
+    let raw = signed ? await readRaw(req) : null;
+    const verdict = requestAuth.check(req.headers, method, url.pathname + url.search, raw ?? Buffer.alloc(0));
+    if (!verdict.ok) {
       metrics.authRejected += 1;
+      if (verdict.reason !== 'bad-bearer') log({ event: 'auth-refused', path, reason: verdict.reason });
       return [401, { error: 'unauthorized' }];
     }
+    if (verdict.kind === 'signed') metrics.authSigned += 1; else metrics.authBearer += 1;
+    const readBody = async () => parseJson(raw ??= await readRaw(req));
     if (path === '/metrics') {
       if (method !== 'GET') return [405, { error: 'method not allowed' }];
       return [200, metricsSnapshot()];
@@ -305,11 +354,11 @@ export function createApp({
     if (draining) return [503, { error: 'shutting down' }];
     if (path === '/invoices') {
       if (method !== 'POST') return [405, { error: 'method not allowed' }];
-      const { paymentId } = await readJson(req);
+      const { paymentId } = await readBody();
       return UUID.test(String(paymentId)) ? createInvoice(paymentId) : [400, { error: 'paymentId must be a uuid' }];
     }
-    if (path.startsWith('/withdraw/')) return withdrawRoute(method, path, req);
-    if (path.startsWith('/admin/wallet/')) return adminWalletRoute(method, path, method === 'POST' ? await readJson(req) : null);
+    if (path.startsWith('/withdraw/')) return withdrawRoute(method, path, readBody);
+    if (path.startsWith('/admin/wallet/')) return adminRoute(method, path, req, readBody);
     return [404, { error: 'not found' }];
   }
 

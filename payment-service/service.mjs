@@ -6,6 +6,7 @@ import http from 'node:http';
 import pg from 'pg';
 import { createApp, logJson } from './app.mjs';
 import { RECORD_STATEMENT_TIMEOUT_MS } from './receipts.mjs';
+import { createAdminTokenVerifier } from './auth.mjs';
 
 const errorText = (e) => String(e?.message ?? e).slice(0, 300);
 
@@ -40,8 +41,17 @@ export function createService({ config, breez, log = logJson }) {
       seed: { type: 'mnemonic', mnemonic: config.mnemonic },
       storageDir: config.dataDir,
     });
-    app = createApp({ sdk, db, secret: config.secret, log, receiptRecording, recordDb, recordTimeoutMs: config.recordTimeoutMs });
+    const verifyAdminToken = config.supabaseUrl && config.supabaseAnonKey
+      ? (config.verifyAdminToken ?? createAdminTokenVerifier({ supabaseUrl: config.supabaseUrl, anonKey: config.supabaseAnonKey }))
+      : (config.verifyAdminToken ?? null);
+    const requestAuthMode = config.requestAuthMode ?? 'any';
+    const adminJwtMode = config.adminJwtMode ?? 'optional';
+    app = createApp({
+      sdk, db, secret: config.secret, log, receiptRecording, recordDb, recordTimeoutMs: config.recordTimeoutMs,
+      requestAuthMode, adminJwtMode, verifyAdminToken,
+    });
     log({ event: 'receipt-recording', mode: receiptRecording });
+    log({ event: 'auth-modes', requestAuth: requestAuthMode, adminJwt: adminJwtMode, adminTokenVerifier: Boolean(verifyAdminToken) });
     await sdk.addEventListener({ onEvent: app.onEvent });
     await sdk.getInfo({ ensureSynced: true });
     app.markSynced();

@@ -73,3 +73,19 @@ test('RECEIPT_RECORDING: only "shadow" turns the receipt log on; unset, empty an
     assert.equal(loadConfig({ ...base, RECEIPT_RECORDING: v }).receiptRecording, 'shadow', v);
   }
 });
+
+test('caller auth modes: rollout defaults, explicit targets, and no silent downgrade on a typo', () => {
+  const d = loadConfig(base);
+  assert.equal(d.requestAuthMode, 'any');
+  assert.equal(d.adminJwtMode, 'optional');
+  assert.equal(d.supabaseUrl, '');
+  const supa = { SUPABASE_URL: 'https://abc.supabase.co', SUPABASE_ANON_KEY: 'anon.public.key' };
+  const t = loadConfig({ ...base, ...supa, REQUEST_AUTH_MODE: ' Signed ', ADMIN_JWT_MODE: 'required' });
+  assert.equal(t.requestAuthMode, 'signed');
+  assert.equal(t.adminJwtMode, 'required');
+  assert.throws(() => loadConfig({ ...base, REQUEST_AUTH_MODE: 'off' }), /REQUEST_AUTH_MODE must be any or signed/);
+  assert.throws(() => loadConfig({ ...base, ADMIN_JWT_MODE: 'no' }), /ADMIN_JWT_MODE must be optional or required/);
+  assert.throws(() => loadConfig({ ...base, ADMIN_JWT_MODE: 'required' }), /needs SUPABASE_URL and SUPABASE_ANON_KEY/);
+  assert.throws(() => loadConfig({ ...base, SUPABASE_URL: 'https://abc.supabase.co' }), /together/);
+  assert.throws(() => loadConfig({ ...base, ...supa, SUPABASE_URL: 'http://abc.supabase.co' }), /https origin/);
+});

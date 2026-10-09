@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { invoiceChargeCents } from "./invoice-amount.ts";
 import { formatCents, parseAmountToCents, toCents } from "../_shared/money.ts";
+import { serviceAuthHeaders, serviceAuthMode } from "../_shared/service-auth.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -8,6 +9,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 // makes the Lightning invoice for a payments row this function inserts.
 const PAYMENT_SERVICE_URL = Deno.env.get("PAYMENT_SERVICE_URL") ?? "";
 const PAYMENT_SERVICE_SECRET = Deno.env.get("PAYMENT_SERVICE_SECRET") ?? "";
+const PAYMENT_SERVICE_AUTH_MODE = serviceAuthMode(Deno.env.get("PAYMENT_SERVICE_AUTH_MODE"));
 const INVOICE_MINUTES = 60;
 // Wildcard origin is intentional here: payment links are embedded on
 // creator-owned custom domains, so any site must be able to POST. The
@@ -174,10 +176,14 @@ if (insertErr || !payment) {
 
 let bolt11 = "";
 try {
+  const invoiceBody = JSON.stringify({ paymentId: payment.id });
+  const auth = await serviceAuthHeaders({
+    mode: PAYMENT_SERVICE_AUTH_MODE, secret: PAYMENT_SERVICE_SECRET, method: "POST", path: "/invoices", body: invoiceBody,
+  });
   const res = await fetch(`${PAYMENT_SERVICE_URL}/invoices`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${PAYMENT_SERVICE_SECRET}` },
-    body: JSON.stringify({ paymentId: payment.id }),
+    headers: { "Content-Type": "application/json", ...auth },
+    body: invoiceBody,
     signal: AbortSignal.timeout(15000),
   });
   const body = await res.json().catch(() => ({}));

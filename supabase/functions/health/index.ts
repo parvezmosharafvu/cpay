@@ -86,8 +86,8 @@ Deno.serve(async (req) => {
     checks.push({ name: "payment_provider", ok: false, detail: "PAYMENT_SERVICE_URL or PAYMENT_SERVICE_SECRET is not set" });
   } else {
     try {
+      // /health is unauthenticated on the service; the secret is not sent.
       const res = await fetch(`${serviceUrl}/health`, {
-        headers: { "Authorization": `Bearer ${serviceSecret}` },
         signal: AbortSignal.timeout(10000),
       });
       const body = await res.json().catch(() => ({}));

@@ -14,7 +14,15 @@ Used by `create-invoice`, `user-withdraw`, `admin-actions` and `health`:
 - [ ] `PAYMENT_SERVICE_URL` — base URL of the payment service
       (`payment-service/`), e.g. `https://pay.internal.example`.
 - [ ] `PAYMENT_SERVICE_SECRET` — long random string, the same value the
-      payment service has. Sent as `Authorization: Bearer`.
+      payment service has. Used as the HMAC key for signed requests, or
+      sent as `Authorization: Bearer` while `PAYMENT_SERVICE_AUTH_MODE` is
+      `bearer`.
+- [ ] `PAYMENT_SERVICE_AUTH_MODE` — `bearer` (default, legacy) or `signed`
+      (target). `signed` sends `X-Cpay-Timestamp`/`X-Cpay-Nonce`/
+      `X-Cpay-Signature` (HMAC-SHA256 over timestamp, nonce, method, path and
+      body) and never the secret. Switch only after the running payment
+      service reports `requestAuthMode` in `/metrics`. See
+      [`RUNBOOKS.md`](RUNBOOKS.md#service-auth-rollout).
 
 - [ ] `STEP_UP_MAX_AGE_SECONDS` — optional, default `600`. A payout confirm
       (`user-withdraw` confirm, admin wallet `send-confirm`/`stable-confirm`)
@@ -119,6 +127,10 @@ these and nothing else; it refuses to start and names every bad variable
 | `PORT` | no | `8080` | HTTP port |
 | `CATCH_UP_INTERVAL_SECS` | no | `300` | How often the service re-reads recent wallet payments in case an event was missed (30 to 3600) |
 | `SHUTDOWN_TIMEOUT_SECS` | no | `90` | On SIGTERM or SIGINT, how long to wait for sends in flight before disconnecting anyway (1 to 600). Give the host's stop timeout at least this plus 10 seconds |
+| `REQUEST_AUTH_MODE` | no | `any` | `any` accepts the legacy bearer or a signed request; `signed` accepts signed requests only (5-minute window, single-use nonce). A set but unknown value is a startup error |
+| `ADMIN_JWT_MODE` | no | `optional` | Platform wallet routes (`/admin/wallet/*`). `optional` verifies a forwarded admin session (`X-Cpay-Admin-Token`) when present and otherwise trusts the body `adminId` (legacy); `required` refuses any wallet call without a valid session of an active admin. Needs `SUPABASE_URL` and `SUPABASE_ANON_KEY` |
+| `SUPABASE_URL` | with `ADMIN_JWT_MODE=required` | | `https://<ref>.supabase.co`, used to ask Supabase Auth whose session a forwarded token is |
+| `SUPABASE_ANON_KEY` | with `SUPABASE_URL` | | The public anon/publishable key (not a secret) |
 | `RECEIPT_RECORDING` | no | `off` | `shadow` writes every completed receive to `lightning_receipts` (record-only, migration 20261003050000) on a separate 2-connection pool before the unchanged settlement runs. Anything else, including unset or a typo, means `off`. Recording can never stop or change settlement |
 
 The service never logs these values: every log line passes through a redactor

@@ -3,6 +3,7 @@
 // variable. Error messages carry variable names, never values.
 
 import { readFileSync } from 'node:fs';
+import { ADMIN_JWT_MODES, REQUEST_AUTH_MODES } from './auth.mjs';
 
 const NETWORKS = new Set(['mainnet', 'regtest']);
 export const MIN_SECRET_LENGTH = 32;
@@ -45,6 +46,19 @@ export function loadConfig(env = process.env) {
   const secret = required('PAYMENT_SERVICE_SECRET');
   if (secret && secret.length < MIN_SECRET_LENGTH) errors.push(`PAYMENT_SERVICE_SECRET must be at least ${MIN_SECRET_LENGTH} characters`);
   const port = int(env, 'PORT', 8080, 1, 65535, errors);
+  // Caller authentication (auth.mjs). Unset means the rollout defaults; a
+  // value that is set but unknown is an error, never a silent downgrade.
+  const requestAuthMode = (env.REQUEST_AUTH_MODE ?? '').trim().toLowerCase() || 'any';
+  if (!REQUEST_AUTH_MODES.has(requestAuthMode)) errors.push('REQUEST_AUTH_MODE must be any or signed');
+  const adminJwtMode = (env.ADMIN_JWT_MODE ?? '').trim().toLowerCase() || 'optional';
+  if (!ADMIN_JWT_MODES.has(adminJwtMode)) errors.push('ADMIN_JWT_MODE must be optional or required');
+  const supabaseUrl = (env.SUPABASE_URL ?? '').trim();
+  const supabaseAnonKey = (env.SUPABASE_ANON_KEY ?? '').trim();
+  if (supabaseUrl && !/^https:\/\/[a-z0-9.-]+(:\d+)?\/?$/i.test(supabaseUrl) && !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/.test(supabaseUrl)) {
+    errors.push('SUPABASE_URL must be an https origin');
+  }
+  if (Boolean(supabaseUrl) !== Boolean(supabaseAnonKey)) errors.push('set SUPABASE_URL and SUPABASE_ANON_KEY together');
+  if (adminJwtMode === 'required' && !(supabaseUrl && supabaseAnonKey)) errors.push('ADMIN_JWT_MODE=required needs SUPABASE_URL and SUPABASE_ANON_KEY');
   const catchUpSecs = int(env, 'CATCH_UP_INTERVAL_SECS', 300, 30, 3600, errors);
   const shutdownSecs = int(env, 'SHUTDOWN_TIMEOUT_SECS', 90, 1, 600, errors);
   if (errors.length) throw new Error(`invalid configuration: ${errors.join('; ')}`);
@@ -52,6 +66,7 @@ export function loadConfig(env = process.env) {
     network, apiKey, mnemonic, dataDir, databaseUrl, secret, port,
     catchUpMs: catchUpSecs * 1000, shutdownTimeoutMs: shutdownSecs * 1000,
     receiptRecording: receiptRecordingMode(env.RECEIPT_RECORDING),
+    requestAuthMode, adminJwtMode, supabaseUrl, supabaseAnonKey,
   });
 }
 

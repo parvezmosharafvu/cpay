@@ -3,6 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createAdminVerifier } from "./admin-auth.ts";
 import { checkStepUp, STEP_UP_MESSAGE, stepUpWindow } from "../_shared/step-up.ts";
+import { bearerToken, serviceAuthHeaders, serviceAuthMode } from "../_shared/service-auth.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -11,6 +12,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 const PAYMENT_SERVICE_URL = Deno.env.get("PAYMENT_SERVICE_URL") ?? "";
 const PAYMENT_SERVICE_SECRET = Deno.env.get("PAYMENT_SERVICE_SECRET") ?? "";
 const STEP_UP_SECONDS = stepUpWindow(Deno.env.get("STEP_UP_MAX_AGE_SECONDS"));
+const PAYMENT_SERVICE_AUTH_MODE = serviceAuthMode(Deno.env.get("PAYMENT_SERVICE_AUTH_MODE"));
 // Only browser calls need CORS (server-to-server callers like pg_cron
 // ignore these headers entirely). The allowed-origin list is read
 // from the site_domains table — the same registry the admin panel manages —
@@ -210,11 +212,20 @@ Deno.serve(async (req) => {
             const stepUp = checkStepUp(token, me as { factors?: Array<{ status?: string }> } | null, STEP_UP_SECONDS);
             if (!stepUp.ok) return json({ error: STEP_UP_MESSAGE, code: "reauth_required", reason: stepUp.reason }, 403, cors);
         }
+        // The admin's own session goes along: the payment service asks
+        // Supabase Auth whose it is and acts as THAT admin, so the service
+        // secret alone can no longer name an admin (payment-service/auth.mjs).
+        const adminToken = bearerToken(req.headers.get("Authorization"));
+        const walletPath = `/admin/wallet/${action}`;
+        const forwardBody = JSON.stringify(forward);
         try {
-            const res = await fetch(`${PAYMENT_SERVICE_URL}/admin/wallet/${action}`, {
+            const auth = await serviceAuthHeaders({
+                mode: PAYMENT_SERVICE_AUTH_MODE, secret: PAYMENT_SERVICE_SECRET, method: "POST", path: walletPath, body: forwardBody,
+            });
+            const res = await fetch(`${PAYMENT_SERVICE_URL}${walletPath}`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${PAYMENT_SERVICE_SECRET}` },
-                body: JSON.stringify(forward),
+                headers: { "Content-Type": "application/json", ...auth, ...(adminToken ? { "X-Cpay-Admin-Token": adminToken } : {}) },
+                body: forwardBody,
                 signal: AbortSignal.timeout(sends ? 45000 : 20000),
             });
             return json(await res.json().catch(() => ({ error: "Bad response from the payment service" })), res.status, cors);

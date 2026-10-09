@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="cpay.css">
 <link rel="stylesheet" href="a11y.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script>
+<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="turnstile.js"></script>
 </head>
 <body class="auth">
   <a class="skip-link" href="#registerCard">Skip to form</a>
@@ -44,9 +44,17 @@ document.getElementById('submitBtn').onclick = async () => {
   btn.disabled = true;
   let data, error;
   try {
+    // Optional Turnstile (off unless CPAY_TURNSTILE_SITE_KEY is set); the
+    // token goes to Supabase Auth, which verifies it when captcha is enabled.
+    let captchaToken = null;
+    try { captchaToken = window.cpayTurnstileToken ? await window.cpayTurnstileToken('register') : null; }
+    catch (te) { err.textContent = te.message || 'Verification failed. Try again.'; err.hidden = false; btn.disabled = false; return; }
     ({ data, error } = await window.supabaseClient.auth.signUp({
       email, password,
-      options: { data: { display_name: displayName || undefined, requested_role: 'freelancer' } }
+      options: {
+        data: { display_name: displayName || undefined, requested_role: 'freelancer' },
+        ...(captchaToken ? { captchaToken } : {}),
+      }
     }));
   } catch (e) {
     error = { message: 'Could not reach the server. Check your connection and try again.' };

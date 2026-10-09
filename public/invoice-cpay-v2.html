@@ -25,6 +25,7 @@
 <script src="config.js"></script>
 <script src="theme.js"></script>
 <script src="wallets-config.js"></script>
+<script src="turnstile.js"></script>
 <script>
 /* Apply checkout design before first paint so the page colour does not flash. */
 (function(){
@@ -812,8 +813,11 @@ async function regenerate(){
   const btn = el('stateBtn');
   btn.disabled = true;
   btn.textContent = 'Creating new payment…';
+  const reqScope = 'regen:' + slug + ':' + base + ':' + (currentPaymentId || '');
   try {
-    const body = JSON.stringify({ slug, amount: base });
+    const requestId = window.cpayRequestId ? window.cpayRequestId(reqScope) : undefined;
+    const turnstileToken = window.cpayTurnstileToken ? await window.cpayTurnstileToken('pay') : null;
+    const body = JSON.stringify({ slug, amount: base, requestId, turnstileToken: turnstileToken || undefined });
     const post = (url) => withTimeout(fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }), CREATE_TIMEOUT_MS);
     let res;
     try {
@@ -825,8 +829,10 @@ async function regenerate(){
     }
     const result = await res.json().catch(() => ({}));
     if (!res.ok || !result.paymentId){
+      if (res.status === 409 && window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
       throw new Error(typeof result.error === 'string' ? result.error : 'Could not create a new payment.');
     }
+    if (window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
     sessionStorage.setItem('invoiceSession', JSON.stringify({
       paymentId: result.paymentId, payCode: result.payCode, payUrl: result.payUrl,
       cashAppUrl: result.cashAppUrl || '', returnUrl: '/' + slug, baseAmount: base,

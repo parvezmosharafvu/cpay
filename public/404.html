@@ -13,6 +13,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
     <script src="theme.js"></script>
+    <script src="turnstile.js"></script>
   </head>
   <body class="checkout">
     <a class="skip-link" href="#paymentCard">Skip to payment</a>
@@ -329,8 +330,15 @@ async function startPayment(){
   }
   setPaying(true, 'Creating payment…');
   setStatus('Setting up your payment request. This takes a few seconds.', 'loading');
+  // Same attempt (slug + amount) within 10 minutes reuses its request id,
+  // so a retry or the proxy-then-direct fallback returns the same invoice.
+  const reqScope = slug + ':' + amount;
   try {
-    const body = JSON.stringify({ slug, amount });
+    const requestId = window.cpayRequestId ? window.cpayRequestId(reqScope) : undefined;
+    let turnstileToken;
+    try { turnstileToken = window.cpayTurnstileToken ? await window.cpayTurnstileToken('pay') : null; }
+    catch (te) { setStatus(te.message || 'Verification failed. Try again.', 'err'); setPaying(false, 'Continue to payment'); return; }
+    const body = JSON.stringify({ slug, amount, requestId, turnstileToken: turnstileToken || undefined });
     const post = (url) => withTimeout(fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }), CREATE_TIMEOUT_MS);
     let res;
     try {
@@ -338,16 +346,18 @@ async function startPayment(){
       if (res.status === 404 || res.status === 405) throw new Error('proxy unavailable');
     } catch (e) {
       // A timeout may mean the first request is still being processed;
-      // don't fire a second one.
+      // don't fire a second one (a later retry reuses the request id).
       if (e && e.message === 'timeout') throw e;
       res = await post(`${window.SUPABASE_URL}/functions/v1/create-invoice`);
     }
     const result = await res.json().catch(() => ({}));
     if (!res.ok || !result.paymentId){
+      if (res.status === 409 && window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
       setStatus((typeof result.error === 'string' && result.error) || 'Something went wrong. Please try again.', 'err');
       setPaying(false, 'Continue to payment');
       return;
     }
+    if (window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
     sessionStorage.setItem('invoiceSession', JSON.stringify({
       paymentId: result.paymentId,
       payCode: result.payCode,

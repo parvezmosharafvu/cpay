@@ -95,5 +95,5 @@ test('resolveAdmin: token wins over body, mismatch and missing token refused whe
 
 test('signature vector shared with supabase/functions/_shared/service-auth_test.ts', () => {
   const v = signRequest({ secret: 'edge-secret-'.padEnd(48, 'e'), ts: '1760000000000', nonce: '0123456789abcdef0123', method: 'post', path: '/admin/wallet/send-confirm', body: Buffer.from('{"prepareId":"abc"}') });
-  assert.equal(v, '');
+  assert.equal(v, 'v1=c3589e353172c81e87fd2ee4a80065ee77e19b3e8ea3315b3f8c932872db56d8');
 });

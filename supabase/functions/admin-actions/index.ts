@@ -2,6 +2,7 @@
 // @ts-ignore The local TypeScript server cannot resolve URL imports without Deno's resolver.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createAdminVerifier } from "./admin-auth.ts";
+import { checkStepUp, STEP_UP_MESSAGE, stepUpWindow } from "../_shared/step-up.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -9,6 +10,7 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 const PAYMENT_SERVICE_URL = Deno.env.get("PAYMENT_SERVICE_URL") ?? "";
 const PAYMENT_SERVICE_SECRET = Deno.env.get("PAYMENT_SERVICE_SECRET") ?? "";
+const STEP_UP_SECONDS = stepUpWindow(Deno.env.get("STEP_UP_MAX_AGE_SECONDS"));
 // Only browser calls need CORS (server-to-server callers like pg_cron
 // ignore these headers entirely). The allowed-origin list is read
 // from the site_domains table — the same registry the admin panel manages —
@@ -200,6 +202,14 @@ Deno.serve(async (req) => {
         const forward: Record<string, unknown> = { adminId: auth.userId };
         for (const f of fields) if (body[f] !== undefined) forward[f] = body[f];
         const sends = action === "send-confirm" || action === "stable-confirm";
+        if (sends) {
+            // Step-up: moving platform money needs a real sign-in in the last
+            // few minutes (and aal2 when the admin has MFA), see _shared/step-up.ts.
+            const token = /^Bearer\s+(\S+)$/.exec((req.headers.get("Authorization") ?? "").trim())?.[1] ?? null;
+            const { data: { user: me } } = await auth.callerClient!.auth.getUser();
+            const stepUp = checkStepUp(token, me as { factors?: Array<{ status?: string }> } | null, STEP_UP_SECONDS);
+            if (!stepUp.ok) return json({ error: STEP_UP_MESSAGE, code: "reauth_required", reason: stepUp.reason }, 403, cors);
+        }
         try {
             const res = await fetch(`${PAYMENT_SERVICE_URL}/admin/wallet/${action}`, {
                 method: "POST",

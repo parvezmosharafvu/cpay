@@ -1,10 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { formatCents, parseAmountToCents, toCents } from "../_shared/money.ts";
+import { checkStepUp, STEP_UP_MESSAGE, stepUpWindow } from "../_shared/step-up.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const PAYMENT_SERVICE_URL = Deno.env.get("PAYMENT_SERVICE_URL") ?? "";
 const PAYMENT_SERVICE_SECRET = Deno.env.get("PAYMENT_SERVICE_SECRET") ?? "";
+const STEP_UP_SECONDS = stepUpWindow(Deno.env.get("STEP_UP_MAX_AGE_SECONDS"));
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 // Only browser calls need CORS (server-to-server callers like pg_cron
 // ignore these headers entirely). The allowed-origin list is read
@@ -118,6 +120,16 @@ function publicError(payload: Json | null | undefined, fallback = GENERIC_ERROR)
   return msg;
 }
 
+// Machine-readable reasons the dashboard may act on (allowlist).
+const PUBLIC_CODES = new Set(["address_not_saved", "address_cooling_down"]);
+function publicCode(payload: Json | null | undefined): Json {
+  const code = typeof payload?.code === "string" ? payload.code : "";
+  if (!PUBLIC_CODES.has(code)) return {};
+  const out: Json = { code };
+  if (typeof payload?.usableAfter === "string" && /^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(payload.usableAfter)) out.usableAfter = payload.usableAfter;
+  return out;
+}
+
 function publicRoute(r: Json) {
   return {
     id: str(r.id), asset: str(r.asset), chain: str(r.chain), family: str(r.family),
@@ -202,18 +214,22 @@ Deno.serve(async (req) => {
           method: "POST",
           body: { userId: user.id, routeId: String(body.routeId ?? ""), address: String(body.address ?? "").trim(), amountUsd: amount },
         }, 30000);
-        if (status !== 200) return json({ error: publicError(payload, "Could not get a quote. Try again.") }, status, cors);
+        if (status !== 200) return json({ error: publicError(payload, "Could not get a quote. Try again."), ...publicCode(payload) }, status, cors);
         return json(publicQuote(payload), 200, cors);
       }
       const quoteId = String(body.quoteId ?? "");
       if (!UUID.test(quoteId)) return json({ error: "Get a quote first" }, 400, cors);
+      // Step-up: a payout needs a real sign-in in the last few minutes.
+      const token = /^Bearer\s+(\S+)$/.exec(authHeader.trim())?.[1] ?? null;
+      const stepUp = checkStepUp(token, user as { factors?: Array<{ status?: string }> }, STEP_UP_SECONDS);
+      if (!stepUp.ok) return json({ error: STEP_UP_MESSAGE, code: "reauth_required", reason: stepUp.reason }, 403, cors);
       const { status, payload } = await paymentService("/withdraw/confirm", {
         method: "POST", body: { userId: user.id, quoteId },
       }, 45000);
       if (status === 200) return json(publicWithdrawal(payload), 200, cors);
       // An expired quote comes back with a fresh one to show.
       const fresh = payload?.quote ? { quote: publicQuote(payload.quote as Json) } : {};
-      return json({ error: publicError(payload, "The withdrawal did not go through. Try again."), ...fresh }, status, cors);
+      return json({ error: publicError(payload, "The withdrawal did not go through. Try again."), ...publicCode(payload), ...fresh }, status, cors);
     } catch (e) {
       console.error(`payment service ${action} failed:`, e);
       // A confirm that timed out may still have reserved and sent. The row

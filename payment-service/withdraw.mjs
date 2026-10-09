@@ -257,6 +257,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     const route = (await listRoutes()).find((r) => r.id === id);
     if (!route) throw new UserError(422, 'That coin and network is not available right now');
     const dest = await validateAddress(String(address ?? '').trim(), route.family);
+    await requireReadyDestination(userId, dest);
     const { sendCents, feeCents } = splitFee(amountCents, profile.fee_percent);
     if (route.minUsdCents != null && sendCents < route.minUsdCents) {
       throw new UserError(422, `The minimum for ${route.asset} on ${route.chain} is $${route.minUsd.toFixed(2)} after the platform fee`);
@@ -295,6 +296,20 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     quotes.set(quoteId, { userId, request: { userId, routeId: id, address: dest, amountUsd: cents(amountCents) }, prepared, expiresAtMs, view });
     for (const [k, q] of quotes) if (q.expiresAtMs < now() - 60_000) quotes.delete(k);
     return view;
+  }
+
+  // 20261009010000: a payout goes only to an address the account saved at
+  // least 24 hours ago. Checked at quote and again right before reserving,
+  // so an address deleted or changed after the quote cannot be paid.
+  async function requireReadyDestination(userId, address) {
+    const { rows } = await db.query('select withdraw_destination_status($1, $2) as s', [userId, address]);
+    const s = rows[0]?.s ?? { ok: false, reason: 'not_saved' };
+    if (s.ok === true) return;
+    if (s.reason === 'cooling_down') {
+      const until = new Date(s.usable_after).toISOString().replace('T', ' ').slice(0, 16);
+      throw new UserError(403, `This address was saved less than 24 hours ago. For your safety, withdrawals to it open at ${until} UTC.`, { code: 'address_cooling_down', usableAfter: new Date(s.usable_after).toISOString() });
+    }
+    throw new UserError(403, 'Save this address in Profile first. Withdrawals only go to an address saved at least 24 hours ago.', { code: 'address_not_saved' });
   }
 
   async function rowByQuote(quoteId, userId) {
@@ -381,6 +396,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     }
     if (!inflight.has(quoteId)) {
       const run = (async () => {
+        await requireReadyDestination(userId, q.view.address);
         const row = await reserve(q);
         quotes.delete(quoteId);
         if (row.status !== 'sending') return row;

@@ -318,6 +318,11 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/receipt_review_test.sql
 
+      - name: Payout address 24 h cooldown (20261009010000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/withdraw_address_cooldown_test.sql
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

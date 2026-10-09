@@ -15,6 +15,7 @@ async function walletFetch(path, payload) {
   if (!res.ok) {
     const err = new Error(data.error || data.message || `Wallet HTTP ${res.status}`);
     err.status = res.status;
+    if (typeof data.code === 'string') err.code = data.code;
     throw err;
   }
   return data;
@@ -26,7 +27,10 @@ async function walletFetch(path, payload) {
 const WALLET_ROUTE = 'admin-actions/admin-wallet';
 
 async function walletCall(action, body = {}) {
-  return walletFetch(WALLET_ROUTE, { action, ...body });
+  const run = () => walletFetch(WALLET_ROUTE, { action, ...body });
+  // Sends ask for the password again when the last sign-in is not recent.
+  if ((action === 'send-confirm' || action === 'stable-confirm') && window.cpayWithStepUp) return window.cpayWithStepUp(run);
+  return run();
 }
 
 function walletShell() {

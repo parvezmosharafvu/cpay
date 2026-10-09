@@ -120,3 +120,16 @@ reconcile, every `CATCH_UP_INTERVAL_SECS` (default 300) and at startup.
 Admin panel (emergency controls): **emergency payments stop** (create-invoice refuses
 new invoices) and **emergency withdrawals stop** (every withdrawal path
 refuses). Both are checked server-side.
+
+## Payout safety: step-up and address cooldown
+
+- **Step-up** (`_shared/step-up.ts`): confirming a payout needs a sign-in in
+  the last `STEP_UP_MAX_AGE_SECONDS` (default 10 minutes); the dashboard asks
+  for the password and retries once. Rollback: set the Edge secret to `0`.
+- **24 h address cooldown** (migration 20261009010000): payouts go only to a
+  saved address whose `usdt_wallets.usable_after` has passed. Any save or
+  change (user, direct table write, `admin_set_user_usdt_wallet()`) restarts
+  the 24 h and writes `payout_wallet.saved` to `audit_log`. The payment
+  service checks `withdraw_destination_status()` at quote and again at
+  confirm. A user who needs an urgent exception waits; there is no bypass
+  switch on purpose.

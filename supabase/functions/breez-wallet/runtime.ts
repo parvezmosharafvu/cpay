@@ -25,7 +25,7 @@ const WANTED = "select exists(select 1 from pg_locks where locktype = 'advisory'
 // so they need no wallet lease (ms instead of a lease handoff). Writes to the
 // wallet invalidate the balance entry.
 export const CACHE_TTL_MS: Record<string, number> = {
-  "/admin/wallet/info": 20_000,
+  "/admin/wallet/info": 120_000, // invalidated by wallet writes; incoming payments show within 2 min
   "/admin/wallet/fiat": 10 * 60_000,
   "/admin/wallet/stable-routes": 10 * 60_000,
   "/withdraw/routes": 10 * 60_000,

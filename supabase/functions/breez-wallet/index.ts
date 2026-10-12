@@ -47,7 +47,7 @@ function configError(): string | null {
 let host: ReturnType<typeof createHost> | null = null;
 function getHost() {
   if (host) return host;
-  const db = new pg.Pool({ connectionString: DB_URL, max: 3 });
+  const db = new pg.Pool({ connectionString: DB_URL, max: 2, idleTimeoutMillis: 10_000 });
   db.on("error", () => {});
   host = createHost({
     db,
@@ -60,7 +60,7 @@ function getHost() {
       if (network === "mainnet") (config as unknown as Record<string, unknown>).crossChainConfig = {};
       const seed = { type: "mnemonic" as const, mnemonic: env("BREEZ_MNEMONIC").split(/\s+/).join(" ") };
       const builder = SdkBuilder.new(config, seed).withStorageBackend(postgresStorage({
-        connectionString: walletDbUrl(DB_URL), maxPoolSize: 3, createTimeoutSecs: 10, recycleTimeoutSecs: 60,
+        connectionString: walletDbUrl(DB_URL), maxPoolSize: 2, createTimeoutSecs: 10, recycleTimeoutSecs: 60,
         runMigration: true,
       }));
       void connect; // connect() is the file-storage path the VM uses; Edge has no disk.

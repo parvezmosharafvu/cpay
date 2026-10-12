@@ -14,7 +14,9 @@ import { captureResponse, toNodeRequest } from "./node-shim.ts";
 (globalThis as Record<string, unknown>).Buffer ??= Buffer;
 
 export const LOCK_WAIT_MS = 20_000;
-export const WALLET_IDLE_MS = 5_000;
+// Stay warm between admin clicks and the 1-minute sync cron: a cold lease
+// costs an SDK build + connect (seconds), so idle close only after 45 s.
+export const WALLET_IDLE_MS = 45_000;
 export const SIGNATURE_WINDOW_MS = 5 * 60 * 1000;
 const NONCE = /^[A-Za-z0-9_-]{16,128}$/;
 const TS = /^\d{12,14}$/;
@@ -58,13 +60,15 @@ export function createHost(deps: HostDeps) {
     return Boolean(rows[0]?.enabled) && rows[0]?.owner === "supabase-edge";
   }
 
-  async function open(): Promise<Session> {
+  // full=true (cron): ensureSynced + catchUp. Requests only need a connected
+  // SDK; the cron does the heavy sync, so a cold admin request stays fast.
+  async function open(lockWaitMs: number, full: boolean): Promise<Session> {
     if (!(await enabled())) throw new WalletUnavailable(503, "wallet is not enabled on supabase");
     const client = await deps.lockClient();
     let locked = false;
     let leaseId: number | null = null;
     try {
-      const deadline = now() + LOCK_WAIT_MS;
+      const deadline = now() + lockWaitMs;
       while (!locked) {
         const { rows } = await client.query("select pg_try_advisory_lock(breez_wallet.lock_key()) as ok");
         locked = rows[0]?.ok === true;
@@ -87,9 +91,9 @@ export function createHost(deps: HostDeps) {
         requestAuthMode: "signed", adminJwtMode: deps.adminJwtMode, verifyAdminToken,
       });
       await sdk.addEventListener({ onEvent: app.onEvent });
-      await sdk.getInfo({ ensureSynced: true });
+      await sdk.getInfo({ ensureSynced: full });
       app.markSynced();
-      await app.catchUp();
+      if (full) await app.catchUp();
       app.markReady();
       deps.log({ event: "wallet-lease-acquired", holder });
       return { client, sdk, app, leaseId: Number(rows[0].id), requests: 0 };
@@ -107,11 +111,11 @@ export function createHost(deps: HostDeps) {
     }
   }
 
-  async function acquire(): Promise<Session> {
+  async function acquire(lockWaitMs = LOCK_WAIT_MS, full = false): Promise<Session> {
     if (closing) await closing;
     clearTimeout(idleTimer);
     if (session) return session;
-    opening ??= open().finally(() => { opening = null; });
+    opening ??= open(lockWaitMs, full).finally(() => { opening = null; });
     const s = await opening;
     session = s;
     return s;
@@ -173,6 +177,11 @@ export function createHost(deps: HostDeps) {
       return json(on ? 200 : 503, { ok: on, enabled: on, holder: session ? "this-instance" : null });
     }
     if (!(await claimSignedNonce(method, path, headers, body))) return json(401, { error: "unauthorized" });
+    // A warm lease obeys the off switch too (rollback safety).
+    if (session && !(await enabled().catch(() => false))) {
+      await close("disabled");
+      return json(503, { error: "wallet is not enabled on supabase" });
+    }
     busy++;
     try {
       const s = await acquire();
@@ -195,8 +204,20 @@ export function createHost(deps: HostDeps) {
   async function sync(): Promise<Response> {
     busy++;
     try {
-      const s = await acquire();
-      await s.app.catchUp();
+      if (session && !(await enabled().catch(() => false))) {
+        await close("disabled");
+        return json(503, { error: "wallet is not enabled on supabase" });
+      }
+      // Never queue behind another holder: if the wallet is busy elsewhere,
+      // skip this tick (that holder syncs, and the next tick retries).
+      const warm = Boolean(session);
+      let s: Session;
+      try { s = await acquire(0, true); }
+      catch (e) {
+        if (e instanceof WalletUnavailable && e.message === "wallet busy") return json(200, { ok: true, skipped: "busy" });
+        throw e;
+      }
+      if (warm) await s.app.catchUp();
       return json(200, { ok: true });
     } catch (e) {
       if (e instanceof WalletUnavailable) return json(e.status, { error: e.message });

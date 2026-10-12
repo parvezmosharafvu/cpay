@@ -5,7 +5,7 @@ database ("Payment service against the migrated database" step, `npm test`).
 
 | Invariant | Test |
 |---|---|
-| Duplicate settlement credits once (8 concurrent sessions, replayed and new Breez ids) | `payment-service/invariants.test.mjs` |
+| Duplicate settlement credits once (8 concurrent sessions, replayed and new provider payment ids) | `payment-service/invariants.test.mjs` |
 | Replayed settlement credits nothing | `payment-service/ledger.test.mjs`, `ci/financial_invariants_test.sql` |
 | Concurrent invoice creation returns one effective invoice | `payment-service/service.test.mjs` "concurrent invoice requests…", `ci/invoice_idempotency_test.sql` |
 | Concurrent withdrawal confirm reserves once | `invariants.test.mjs` (5 sessions, one quote), `withdraw.test.mjs` "confirming the same quote twice at once", "two database sessions reserving the same quote" |

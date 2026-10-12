@@ -31,7 +31,8 @@ function secretsRedactor(values: string[]) {
 }
 
 const DB_URL = env("BREEZ_DB_URL");
-const redact = secretsRedactor([env("BREEZ_MNEMONIC"), env("BREEZ_API_KEY"), env("PAYMENT_SERVICE_SECRET"), env("CRON_SECRET"), DB_URL]);
+const redactSecrets = secretsRedactor([env("BREEZ_MNEMONIC"), env("BREEZ_API_KEY"), env("PAYMENT_SERVICE_SECRET"), env("CRON_SECRET"), DB_URL]);
+const redact = (s: string) => redactSecrets(s).replace(/postgres(?:ql)?:\/\/\S+/g, "[db-url]");
 const log = (e: Record<string, unknown>) => console.log(redact(JSON.stringify({ at: new Date().toISOString(), ...e })));
 
 function configError(): string | null {
@@ -46,7 +47,7 @@ function configError(): string | null {
 let host: ReturnType<typeof createHost> | null = null;
 function getHost() {
   if (host) return host;
-  const db = new pg.Pool({ connectionString: DB_URL, max: 3 });
+  const db = new pg.Pool({ connectionString: DB_URL, max: 2, idleTimeoutMillis: 10_000 });
   db.on("error", () => {});
   host = createHost({
     db,
@@ -59,7 +60,7 @@ function getHost() {
       if (network === "mainnet") (config as unknown as Record<string, unknown>).crossChainConfig = {};
       const seed = { type: "mnemonic" as const, mnemonic: env("BREEZ_MNEMONIC").split(/\s+/).join(" ") };
       const builder = SdkBuilder.new(config, seed).withStorageBackend(postgresStorage({
-        connectionString: walletDbUrl(DB_URL), maxPoolSize: 3, createTimeoutSecs: 10, recycleTimeoutSecs: 60,
+        connectionString: walletDbUrl(DB_URL), maxPoolSize: 2, createTimeoutSecs: 10, recycleTimeoutSecs: 60,
         runMigration: true,
       }));
       void connect; // connect() is the file-storage path the VM uses; Edge has no disk.
@@ -70,6 +71,7 @@ function getHost() {
     supabaseUrl: env("SUPABASE_URL"),
     anonKey: env("SUPABASE_ANON_KEY"),
     log,
+    redact,
   });
   return host;
 }

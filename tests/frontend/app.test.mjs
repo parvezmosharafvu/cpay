@@ -102,6 +102,8 @@ async function loadWalletRoute(responder) {
       SUPABASE_ANON_KEY: 'anon',
       supabaseClient: { auth: { getSession: async () => ({ data: { session: { access_token: 't' } } }) } },
     },
+    // Mirror the browser globals the wallet route may use (AbortSignal.timeout).
+    AbortSignal,
     fetch: async (url, init) => { calls.push({ url, init }); return responder(url); },
   });
   vm.runInContext(readFileSync(new URL('../../public/admin-wallet-route.js', import.meta.url), 'utf8'), ctx);

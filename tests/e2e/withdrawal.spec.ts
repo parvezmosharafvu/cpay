@@ -77,3 +77,25 @@ test('changing the amount after a quote discards the quote', async ({ page }) =>
   await page.fill('#wAmt', '11');
   await expect(page.locator('#wBtn')).toHaveText('Get quote');
 });
+
+test('the network picker follows the saved address: preferred network first, and switching swaps the address', async ({ page }) => {
+  const u = await makeUser({ name: 'Two Nets', earned: 50 });
+  const EVM = '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063';
+  await readyAddress(u.id, 'tron', TRON);
+  await readyAddress(u.id, 'ethereum', EVM);
+  await db.query(`update profiles set preferred_usdt_network = 'tron' where id = $1`, [u.id]);
+  await login(page, u);
+  await page.waitForURL(/dashboard\.html/);
+  await page.click('.navi[data-tab="cash"]');
+  await expect(page.locator('#wNet option:checked')).toHaveText(/Tron/);
+  await expect(page.locator('#wDest')).toHaveValue(TRON);
+  const bsc = await page.locator('#wNet option', { hasText: 'BNB' }).getAttribute('value');
+  await page.selectOption('#wNet', bsc!);
+  await expect(page.locator('#wDest')).toHaveValue('');
+  const tron = await page.locator('#wNet option', { hasText: 'Tron' }).getAttribute('value');
+  await page.selectOption('#wNet', tron!);
+  await expect(page.locator('#wDest')).toHaveValue(TRON);
+  await page.fill('#wAmt', '10');
+  await page.click('#wBtn');
+  await expect(page.locator('#wBtn')).toHaveText(/Confirm and send/);
+});

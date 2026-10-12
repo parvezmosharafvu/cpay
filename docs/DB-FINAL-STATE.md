@@ -18,7 +18,7 @@ CI re-generates the replay inventory on every run (artifact `db-inventory`).
 | Leftover BTCPay / reseller / commission / moderator objects | 0 | 0 | yes |
 | pg_cron jobs | 0 | 5 | expected: jobs carry project URLs and are created out of band |
 
-Production cron jobs: `breez-wallet-sync` (every minute), `cpay-telegram-send`
+Production cron jobs: the wallet sync job (every minute), `cpay-telegram-send`
 (every minute), `daily-report-trigger`, `ledger-backup-trigger`,
 `receipt-review-sweep` (every 10 min).
 

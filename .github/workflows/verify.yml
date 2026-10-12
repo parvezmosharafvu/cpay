@@ -180,6 +180,12 @@ jobs:
           # signed-in users must refuse, or return none of the victim's data
           # and leave the victim's rows unchanged.
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/authenticated_rpc_sweep_test.sql
+          # Grant cleanup (20261013030000): anon has no table writes or
+          # TRUNCATE; production's extra constraints are codified.
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/grant_cleanup_test.sql
+          # Machine-readable final state of the replayed schema, kept as an
+          # artifact to diff against production (docs/DB-FINAL-STATE.md).
+          psql -h localhost -U postgres -d privcheck -Atq -v ON_ERROR_STOP=1 -f ci/db_inventory.sql > db-inventory.json
           # The account-type checks again, with production's grants. (The
           # drift fixes with production's grants run in the drift step above.)
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/role_removal_test.sql
@@ -325,6 +331,16 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/withdraw_address_cooldown_test.sql
+
+      - name: Upgrade from the pre-Breez schema keeps balances (audit P3)
+        env:
+          PGPASSWORD: postgres
+        run: bash ci/upgrade_from_pre_breez_test.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: db-inventory
+          path: db-inventory.json
 
       - uses: actions/setup-node@v4
         with:
@@ -522,3 +538,51 @@ jobs:
           # Wait until the server answers instead of a fixed sleep.
           curl -sSf --retry 30 --retry-delay 1 --retry-all-errors -o /dev/null http://127.0.0.1:8765/
           CPAY_BASE_URL=http://127.0.0.1:8765 npx playwright test -c tests/public-smoke/playwright.config.ts
+
+  e2e:
+    name: Playwright E2E on a disposable local stack
+    runs-on: ubuntu-latest
+    # Fresh Postgres + PostgREST (real RLS) + the real create-invoice and
+    # user-withdraw Edge Functions under Deno + the real payment service
+    # with a fake wallet SDK. See e2e/stack.mjs. No production access.
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports: ['5432:5432']
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      POSTGREST_BIN: /tmp/postgrest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Install psql and PostgREST
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          curl -sSfL https://github.com/PostgREST/postgrest/releases/download/v12.2.3/postgrest-v12.2.3-linux-static-x64.tar.xz | tar -xJ -C /tmp
+      - name: Install dependencies and build the site bundle
+        run: |
+          npm ci --no-audit --no-fund
+          (cd payment-service && npm ci --no-audit --no-fund)
+          npm run build && npm run prepare:upload
+          npx playwright install --with-deps chromium
+      - name: Run the eight E2E suites
+        run: npx playwright test -c tests/e2e/playwright.config.ts
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-results
+          path: test-results/

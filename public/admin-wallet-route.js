@@ -11,9 +11,14 @@ async function walletFetch(path, payload) {
     },
     body: JSON.stringify(payload),
     // A wallet handoff can take ~15 s; never leave a card waiting forever.
-    signal: AbortSignal.timeout(45_000),
+    // Guard: frontend tests run this file in a bare vm.Context with no
+    // AbortSignal, and very old browsers lack AbortSignal.timeout.
+    ...(typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+      ? { signal: AbortSignal.timeout(45_000) }
+      : {}),
   }).catch((e) => {
-    throw new Error(e?.name === 'TimeoutError' ? 'The wallet took too long to answer. Try again.' : 'Could not reach the wallet. Check your connection and try again.');
+    const timedOut = e?.name === 'TimeoutError' || e?.name === 'AbortError';
+    throw new Error(timedOut ? 'The wallet took too long to answer. Try again.' : 'Could not reach the wallet. Check your connection and try again.');
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

@@ -109,7 +109,16 @@ function renderBalance() {
 
 async function loadInfo() {
   try { walletState.info = await walletCall('info'); renderBalance(); }
-  catch (e) { $w('wbUsd').textContent = e.message; }
+  catch (e) {
+    const retry = document.createElement('button'); retry.className = 'btn ghost sm'; retry.textContent = 'Retry';
+    retry.onclick = () => {
+      $w('wbUsd').textContent = 'Loading…';
+      const opt = document.createElement('option'); opt.value = ''; opt.textContent = 'Loading networks…';
+      $w('wqNet').replaceChildren(opt);
+      Promise.allSettled([loadInfo(), loadFiat(), loadRoutes()]);
+    };
+    $w('wbUsd').replaceChildren(document.createTextNode(`${e.message} `), retry);
+  }
 }
 
 async function loadFiat() {
@@ -221,7 +230,11 @@ async function loadRoutes() {
       ? routes.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.asset)} · ${escapeHtml(chainLabel(r.chain))}</option>`).join('')
       : '<option value="">No networks available right now</option>';
     if (!routes.length) clearQuote('The wallet lists no stablecoin networks right now. They exist on mainnet only.');
-  } catch (e) { clearQuote(e.message); }
+  } catch (e) {
+    const opt = document.createElement('option'); opt.value = ''; opt.textContent = 'Networks did not load';
+    $w('wqNet').replaceChildren(opt);
+    clearQuote(`${e.message} Use Retry on the balance card.`);
+  }
 }
 
 async function getQuote() {

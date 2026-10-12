@@ -10,6 +10,15 @@ async function walletFetch(path, payload) {
       apikey: window.SUPABASE_ANON_KEY,
     },
     body: JSON.stringify(payload),
+    // A wallet handoff can take ~15 s; never leave a card waiting forever.
+    // Guard: frontend tests run this file in a bare vm.Context with no
+    // AbortSignal, and very old browsers lack AbortSignal.timeout.
+    ...(typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+      ? { signal: AbortSignal.timeout(45_000) }
+      : {}),
+  }).catch((e) => {
+    const timedOut = e?.name === 'TimeoutError' || e?.name === 'AbortError';
+    throw new Error(timedOut ? 'The wallet took too long to answer. Try again.' : 'Could not reach the wallet. Check your connection and try again.');
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -82,5 +91,6 @@ async function renderWallet() {
   }
   $w('whPrev').onclick = () => { walletState.page = Math.max(0, walletState.page - 1); loadHistory(); };
   $w('whNext').onclick = () => { walletState.page += 1; loadHistory(); };
-  await Promise.all([loadInfo(), loadFiat(), loadHistory(), loadRoutes()]);
+  // Each loader shows its own error in its card; one failing never blanks the rest.
+  await Promise.allSettled([loadInfo(), loadFiat(), loadHistory(), loadRoutes()]);
 }

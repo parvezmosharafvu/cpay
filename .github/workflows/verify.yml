@@ -572,7 +572,11 @@ jobs:
       - name: Install psql and PostgREST
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
-          curl -sSfL https://github.com/PostgREST/postgrest/releases/download/v12.2.3/postgrest-v12.2.3-linux-static-x64.tar.xz | tar -xJ -C /tmp
+          # Pinned like gitleaks above: the release publishes no checksum file, so
+          # this is the sha256 of the v12.2.3 linux-static asset as first fetched.
+          curl -sSfL -o /tmp/postgrest.tar.xz https://github.com/PostgREST/postgrest/releases/download/v12.2.3/postgrest-v12.2.3-linux-static-x64.tar.xz
+          echo "9f71269e61ac3a940281e93ff415760f5957e430e475ba4c3889f3ede7d5527c  /tmp/postgrest.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/postgrest.tar.xz -C /tmp postgrest
       - name: Install dependencies and build the site bundle
         run: |
           npm ci --no-audit --no-fund

@@ -23,8 +23,9 @@ name: Verify
 on:
   push:
     branches: [main]
+  # No branch filter on pull_request: stacked PRs (base is another PR's
+  # branch, e.g. watch fixes on top of an open PR) must be verified too.
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -498,7 +499,11 @@ jobs:
         # .gitleaksignore lists only the public-by-design anon key and the
         # Amplitude browser key. Anything else fails the build.
         run: |
-          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz | tar -xz -C /tmp gitleaks
+          # Pinned to the sha256 in gitleaks_8.28.0_checksums.txt, so a
+          # swapped release asset fails here instead of running in CI.
+          curl -sSfL -o /tmp/gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz
+          echo "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
           /tmp/gitleaks git --no-banner --redact --exit-code 1 .
       - name: Install npm dependencies
         run: npm ci --no-audit --no-fund
@@ -514,5 +519,6 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           (cd dist && python3 -m http.server 8765 >/tmp/http.log 2>&1 &)
-          sleep 1
+          # Wait until the server answers instead of a fixed sleep.
+          curl -sSf --retry 30 --retry-delay 1 --retry-all-errors -o /dev/null http://127.0.0.1:8765/
           CPAY_BASE_URL=http://127.0.0.1:8765 npx playwright test -c tests/public-smoke/playwright.config.ts

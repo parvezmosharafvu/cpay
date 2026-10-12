@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Fail on broken local links in tracked Markdown files.
 
-Checks [text](relative/path) and [text](relative/path#anchor) targets that
-point inside the repository. External (http/https/mailto) links are not
+Checks that [text](relative/path) targets inside the repository exist. For
+[text](relative/path#anchor) only the file is checked; the #anchor is not. External (http/https/mailto) links are not
 fetched: CI must not depend on third-party uptime.
 """
 import re, subprocess, sys, pathlib, urllib.parse

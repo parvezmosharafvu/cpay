@@ -21,7 +21,7 @@ browser (Vanilla HTML/CSS/JS, anon key + JWT, RLS)
 | Browser | Not trusted. Money rules live in SQL. |
 | Anon key | Public by design (`public/config.js`). |
 | Service role | Bypasses RLS; only payment-service + selected edge paths. |
-| Wallet mnemonic | Only on payment-service host (`BREEZ_MNEMONIC_FILE`). Never in Supabase. |
+| Wallet mnemonic | Since 2026-10-13: an Edge secret for the wallet Edge Function (owner-approved), plus the owner's offline copy. Never in git. |
 | Payout product | USDT/USDC to saved address only. `request_withdrawal` closed. `RECEIPT_RECORDING` default `off`. |
 | Roles | Freelancer (`creator`) and admin only after `20261005020000`. |
 

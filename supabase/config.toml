@@ -62,3 +62,9 @@ verify_jwt = false
 # daily-report; it refuses every request without it.
 [functions.telegram-notify]
 verify_jwt = false
+
+# Breez Spark wallet (supabase/functions/breez-wallet/README.md). Callers are
+# Edge Functions with an HMAC-signed request and pg_cron with x-cron-secret;
+# it refuses everything else, so the gateway JWT check is off.
+[functions.breez-wallet]
+verify_jwt = false

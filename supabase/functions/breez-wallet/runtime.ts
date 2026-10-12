@@ -17,6 +17,10 @@ export const LOCK_WAIT_MS = 20_000;
 // Stay warm between admin clicks and the 1-minute sync cron: a cold lease
 // costs an SDK build + connect (seconds), so idle close only after 45 s.
 export const WALLET_IDLE_MS = 45_000;
+export const HANDOFF_POLL_MS = 200;
+const WANT_LOCK = "select pg_advisory_lock_shared(73501, 2)";
+const WANT_UNLOCK = "select pg_advisory_unlock_shared(73501, 2)";
+const WANTED = "select exists(select 1 from pg_locks where locktype = 'advisory' and classid = 73501 and objid = 2 and granted and pid <> pg_backend_pid()) as w";
 export const SIGNATURE_WINDOW_MS = 5 * 60 * 1000;
 const NONCE = /^[A-Za-z0-9_-]{16,128}$/;
 const TS = /^\d{12,14}$/;
@@ -69,14 +73,23 @@ export function createHost(deps: HostDeps) {
     let leaseId: number | null = null;
     try {
       const deadline = now() + lockWaitMs;
+      // A waiting request announces itself with a shared "want" lock so an
+      // idle warm holder in another isolate hands the wallet over at once
+      // instead of keeping it for the whole idle window.
+      let wanting = false;
       while (!locked) {
         const { rows } = await client.query("select pg_try_advisory_lock(breez_wallet.lock_key()) as ok");
         locked = rows[0]?.ok === true;
         if (!locked) {
-          if (now() >= deadline) throw new WalletUnavailable(503, "wallet busy");
-          await sleep(250);
+          if (now() >= deadline) {
+            if (wanting) await client.query(WANT_UNLOCK).catch(() => {});
+            throw new WalletUnavailable(503, "wallet busy");
+          }
+          if (!wanting && lockWaitMs > 0) { await client.query(WANT_LOCK).catch(() => {}); wanting = true; }
+          await sleep(150);
         }
       }
+      if (wanting) await client.query(WANT_UNLOCK).catch(() => {});
       // Re-check after the lock: the owner may have switched back meanwhile.
       if (!(await enabled())) throw new WalletUnavailable(503, "wallet is not enabled on supabase");
       const { rows } = await client.query(
@@ -121,10 +134,20 @@ export function createHost(deps: HostDeps) {
     return s;
   }
 
+  // Idle: keep the wallet warm up to WALLET_IDLE_MS, but hand it over as
+  // soon as another isolate is waiting for it.
   function scheduleIdle() {
     clearTimeout(idleTimer);
     if (!session) return;
-    idleTimer = setTimeout(() => { if (!busy) void close("idle"); }, WALLET_IDLE_MS);
+    const until = now() + WALLET_IDLE_MS;
+    const tick = async () => {
+      if (!session || busy || closing) return;
+      if (now() >= until) return void close("idle");
+      const wanted = await session.client.query(WANTED).then((r: Any) => r.rows?.[0]?.w === true, () => false);
+      if (wanted && session && !busy) return void close("handoff");
+      idleTimer = setTimeout(tick, HANDOFF_POLL_MS);
+    };
+    idleTimer = setTimeout(tick, HANDOFF_POLL_MS);
   }
 
   async function close(outcome: string): Promise<void> {

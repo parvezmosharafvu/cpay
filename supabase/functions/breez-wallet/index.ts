@@ -31,7 +31,8 @@ function secretsRedactor(values: string[]) {
 }
 
 const DB_URL = env("BREEZ_DB_URL");
-const redact = secretsRedactor([env("BREEZ_MNEMONIC"), env("BREEZ_API_KEY"), env("PAYMENT_SERVICE_SECRET"), env("CRON_SECRET"), DB_URL]);
+const redactSecrets = secretsRedactor([env("BREEZ_MNEMONIC"), env("BREEZ_API_KEY"), env("PAYMENT_SERVICE_SECRET"), env("CRON_SECRET"), DB_URL]);
+const redact = (s: string) => redactSecrets(s).replace(/postgres(?:ql)?:\/\/\S+/g, "[db-url]");
 const log = (e: Record<string, unknown>) => console.log(redact(JSON.stringify({ at: new Date().toISOString(), ...e })));
 
 function configError(): string | null {
@@ -70,6 +71,7 @@ function getHost() {
     supabaseUrl: env("SUPABASE_URL"),
     anonKey: env("SUPABASE_ANON_KEY"),
     log,
+    redact,
   });
   return host;
 }

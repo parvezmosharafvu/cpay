@@ -31,6 +31,7 @@ export type HostDeps = {
   supabaseUrl: string;
   anonKey: string;
   log: (e: Record<string, unknown>) => void;
+  redact?: (s: string) => string;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
   holder?: string;
@@ -61,6 +62,7 @@ export function createHost(deps: HostDeps) {
     if (!(await enabled())) throw new WalletUnavailable(503, "wallet is not enabled on supabase");
     const client = await deps.lockClient();
     let locked = false;
+    let leaseId: number | null = null;
     try {
       const deadline = now() + LOCK_WAIT_MS;
       while (!locked) {
@@ -75,6 +77,7 @@ export function createHost(deps: HostDeps) {
       if (!(await enabled())) throw new WalletUnavailable(503, "wallet is not enabled on supabase");
       const { rows } = await client.query(
         "insert into breez_wallet.lease_log (holder) values ($1) returning id", [holder]);
+      leaseId = Number(rows[0].id);
       const sdk = await deps.connectSdk();
       const verifyAdminToken = deps.verifyAdminToken ??
         createAdminTokenVerifier({ supabaseUrl: deps.supabaseUrl, anonKey: deps.anonKey });
@@ -91,6 +94,13 @@ export function createHost(deps: HostDeps) {
       deps.log({ event: "wallet-lease-acquired", holder });
       return { client, sdk, app, leaseId: Number(rows[0].id), requests: 0 };
     } catch (e) {
+      // Edge function logs are not always queryable: keep a short, redacted
+      // reason on the lease row (no secrets: deps.redact strips them).
+      if (leaseId !== null) {
+        const why = (deps.redact ?? ((x: string) => x))(String((e as Error)?.message ?? e)).slice(0, 300);
+        await client.query("update breez_wallet.lease_log set released_at = now(), outcome = $2 where id = $1",
+          [leaseId, `open-failed: ${why}`]).catch(() => {});
+      }
       if (locked) await client.query("select pg_advisory_unlock(breez_wallet.lock_key())").catch(() => {});
       client.release?.(true);
       throw e;

@@ -1,25 +1,23 @@
 // The Deno build of @breeztech/breez-sdk-spark calls JS globals for its
 // PostgreSQL storage (createPostgresPool, createPostgres*WithPool). The
 // package only installs them from its Node entry, which would also load a
-// second copy of the WASM, so load just the four pg-backed stores here.
-import { createRequire } from "node:module";
-// Pull the package into the npm graph so require.resolve can find it.
-import "npm:@breeztech/breez-sdk-spark@0.26.0/deno";
-import "npm:pg@8.18.0";
+// second copy of the WASM, so install just the four pg-backed stores here.
+//
+// They are vendored as ES modules (scripts/vendor-breez-pg-stores.py) and
+// imported statically: the Supabase Edge bundler only ships modules in the
+// static import graph, so the earlier require.resolve() of the package's
+// nodejs/ directory failed in production with "Cannot find module".
 
-const require = createRequire(import.meta.url);
+import * as storage from "./vendor/postgres-storage/index.mjs";
+import * as tree from "./vendor/postgres-tree-store/index.mjs";
+import * as token from "./vendor/postgres-token-store/index.mjs";
+import * as session from "./vendor/postgres-session-store/index.mjs";
+
 let installed = false;
 
 export function installPostgresGlobals(): void {
   if (installed) return;
-  const entry = require.resolve("@breeztech/breez-sdk-spark/nodejs");
-  const dir = entry.replace(/index\.js$/, "");
-  const g = globalThis as Record<string, unknown>;
-  const storage = require(dir + "postgres-storage/index.cjs");
-  const tree = require(dir + "postgres-tree-store/index.cjs");
-  const token = require(dir + "postgres-token-store/index.cjs");
-  const session = require(dir + "postgres-session-store/index.cjs");
-  Object.assign(g, {
+  Object.assign(globalThis as Record<string, unknown>, {
     createPostgresPool: storage.createPostgresPool,
     createPostgresStorage: storage.createPostgresStorage,
     createPostgresStorageWithPool: storage.createPostgresStorageWithPool,

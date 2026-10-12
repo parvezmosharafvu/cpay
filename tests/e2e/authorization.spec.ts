@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { makeUser, makeLink, login, db, ORIGIN, type User } from './helpers';
-import { ANON_KEY } from '../../e2e/stack.mjs';
+
+let ANON_KEY = '';
+test.beforeAll(async () => { ANON_KEY = (await (await fetch(`${ORIGIN}/__e2e/anon-key`)).json()).anonKey; });
 
 async function token(u: User) {
   const r = await fetch(`${ORIGIN}/auth/v1/token?grant_type=password`, {
@@ -8,10 +10,10 @@ async function token(u: User) {
   });
   return (await r.json()).access_token as string;
 }
-const rest = (path: string, jwt = ANON_KEY, init: RequestInit = {}) => fetch(`${ORIGIN}/rest/v1/${path}`, {
-  ...init, headers: { apikey: ANON_KEY, authorization: `Bearer ${jwt}`, 'content-type': 'application/json', prefer: 'return=representation', ...(init.headers || {}) },
+const rest = (path: string, jwt?: string, init: RequestInit = {}) => fetch(`${ORIGIN}/rest/v1/${path}`, {
+  ...init, headers: { apikey: ANON_KEY, authorization: `Bearer ${jwt ?? ANON_KEY}`, 'content-type': 'application/json', prefer: 'return=representation', ...(init.headers || {}) },
 });
-const rpc = (fn: string, jwt = ANON_KEY, body = {}) => rest(`rpc/${fn}`, jwt, { method: 'POST', body: JSON.stringify(body) });
+const rpc = (fn: string, jwt?: string, body = {}) => rest(`rpc/${fn}`, jwt, { method: 'POST', body: JSON.stringify(body) });
 
 test('anonymous: no private table rows, no admin RPCs, no table writes', async () => {
   const victim = await makeUser({ earned: 10 });
@@ -22,7 +24,7 @@ test('anonymous: no private table rows, no admin RPCs, no table writes', async (
     else expect([401, 403]).toContain(r.status);
   }
   expect((await rpc('admin_list_creators')).ok).toBe(false);
-  const w = await rest('site_domains', ANON_KEY, { method: 'POST', body: JSON.stringify({}) });
+  const w = await rest('site_domains', undefined, { method: 'POST', body: JSON.stringify({}) });
   expect([401, 403]).toContain(w.status);
 });
 

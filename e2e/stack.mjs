@@ -230,7 +230,7 @@ async function main() {
     PAYMENT_SERVICE_URL: pay.url, PAYMENT_SERVICE_SECRET: SERVICE_SECRET, PAYMENT_SERVICE_AUTH_MODE: 'bearer',
     PUBLIC_SITE_URL: ORIGIN, SITE_URL: ORIGIN,
   };
-  const fn = (name, port) => run(DENO, ['run', '--quiet', '--allow-net', '--allow-env', '--allow-read', 'e2e/fn-wrapper.ts'],
+  const fn = (name, port) => run(DENO, ['run', '--quiet', '--no-lock', '--allow-net', '--allow-env', '--allow-read', 'e2e/fn-wrapper.ts'],
     { ...fnEnv, FN_PORT: String(port), FN_ENTRY: `../supabase/functions/${name}/index.ts` }, name);
   fn('create-invoice', INVOICE_FN_PORT);
   fn('user-withdraw', WITHDRAW_FN_PORT);
@@ -249,6 +249,7 @@ async function main() {
       if (url.pathname.startsWith('/functions/v1/user-withdraw')) return await proxy(req, res, `http://127.0.0.1:${WITHDRAW_FN_PORT}${url.pathname.slice('/functions/v1/user-withdraw'.length) || '/'}${url.search}`, raw);
       if (url.pathname.startsWith('/functions/v1/')) return send(res, 503, { error: 'not available in e2e' });
       if (url.pathname === '/__e2e/health') return send(res, 200, { ok: true });
+      if (url.pathname === '/__e2e/anon-key') return send(res, 200, { anonKey: ANON_KEY });
       if (url.pathname === '/__e2e/mailbox') return send(res, 200, mailbox.filter((m) => !url.searchParams.get('to') || m.to === url.searchParams.get('to')));
       if (url.pathname === '/__e2e/pay' && req.method === 'POST') {
         // A simulated incoming Lightning payment, delivered to the real

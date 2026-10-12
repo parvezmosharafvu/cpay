@@ -9,7 +9,31 @@ function show(tab) {
   document.querySelectorAll('.navi[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   if (location.hash !== '#' + tab) history.replaceState(null, '', '#' + tab);
   try { localStorage.setItem('cpay-admin-tab', tab); } catch (e) {}
-  if (tab === 'wallet' && me?.role === 'admin' && !walletShown) { walletShown = true; renderWallet(); }
+  if (tab === 'wallet') mountWallet();
+}
+
+// The Wallet tab renders once the admin profile is known. On a reload the
+// tab is restored (hash / remembered tab) before boot() has loaded the
+// profile, so boot() calls this again; until then the section shows a
+// loading state, and a failed render shows an error with Retry, never a
+// blank section.
+function walletSectionVisible() {
+  const el = document.getElementById('wallet');
+  return Boolean(el && !el.hidden);
+}
+function mountWallet() {
+  const root = document.getElementById('wallet');
+  if (!root || walletShown) return;
+  if (me?.role !== 'admin') {
+    if (!root.innerHTML.trim()) root.innerHTML = '<div class="card"><p class="muted">Loading wallet…</p></div>';
+    return;
+  }
+  walletShown = true;
+  Promise.resolve().then(() => renderWallet()).catch((e) => {
+    walletShown = false;
+    root.innerHTML = `<div class="card"><p class="err">The wallet did not load: ${escapeHtml(String(e?.message || e))}</p><button class="btn ghost" id="walletRetry">Retry</button></div>`;
+    document.getElementById('walletRetry').onclick = () => mountWallet();
+  });
 }
 document.querySelectorAll('.navi[data-tab]').forEach((b) => {
   b.addEventListener('click', (e) => { e.preventDefault(); show(b.dataset.tab); });
@@ -19,11 +43,14 @@ window.addEventListener('hashchange', () => {
   if (tab) show(tab);
 });
 
+if (walletSectionVisible() || location.hash === '#wallet') mountWallet();
+
 async function boot() {
   me = await loadProfile();
   if (!me) return;
   // UI redirect only — admin RPCs and admin-actions still require role=admin server-side.
   if (me.role !== 'admin') { location.href = roleHome(me.role); return; }
+  if (walletSectionVisible() || location.hash === '#wallet') mountWallet();
   ['home','people','apps','payouts','chat','daily'].forEach((id) => {
     const el = document.getElementById(id);
     if (el && !el.innerHTML) el.innerHTML = typeof deskSkeleton === 'function' ? deskSkeleton(3) : '<p class="muted">Loading…</p>';

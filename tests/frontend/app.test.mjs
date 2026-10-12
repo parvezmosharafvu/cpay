@@ -94,7 +94,7 @@ test('admin payment rows render user-controlled values as DOM text', async () =>
 
 // The admin-actions root has no handler (404); the wallet must go straight
 // to the /admin-wallet route, once, with no root probe or fallback.
-async function loadWalletRoute(responder) {
+async function loadWalletRoute(responder, abortSignal = AbortSignal) {
   const calls = [];
   const ctx = vm.createContext({
     window: {
@@ -103,7 +103,7 @@ async function loadWalletRoute(responder) {
       supabaseClient: { auth: { getSession: async () => ({ data: { session: { access_token: 't' } } }) } },
     },
     // Mirror the browser globals the wallet route may use (AbortSignal.timeout).
-    AbortSignal,
+    AbortSignal: abortSignal,
     fetch: async (url, init) => { calls.push({ url, init }); return responder(url); },
   });
   vm.runInContext(readFileSync(new URL('../../public/admin-wallet-route.js', import.meta.url), 'utf8'), ctx);
@@ -125,6 +125,23 @@ test('walletCall surfaces an error without retrying another path', async () => {
   const { ctx, calls } = await loadWalletRoute(() => ({ ok: false, status: 404, json: async () => ({ error: 'Not found' }) }));
   await assert.rejects(ctx.walletCall('info'), (e) => e.status === 404 && /Not found/.test(e.message));
   assert.equal(calls.length, 1);
+});
+
+// A send the browser stops waiting for may already have gone out, so it is
+// never reported as "try again"; sends also outwait admin-actions' 45 s.
+test('walletCall: sends wait longer than reads and never invite a blind retry', async () => {
+  const timeouts = [];
+  const fakeSignal = { timeout: (ms) => { timeouts.push(ms); return { ms }; } };
+  const timeout = () => { throw Object.assign(new Error('timed out'), { name: 'TimeoutError' }); };
+  const { ctx } = await loadWalletRoute(timeout, fakeSignal);
+  await assert.rejects(ctx.walletCall('send-confirm', { prepareId: 'p' }), /may still be going through\. Check the history/);
+  await assert.rejects(ctx.walletCall('stable-confirm', { quoteId: 'q' }), /may still be going through\. Check the history/);
+  await assert.rejects(ctx.walletCall('info'), /took too long to answer\. Try again/);
+  assert.deepEqual(timeouts, [60_000, 60_000, 45_000]);
+  const offline = () => { throw new TypeError('Failed to fetch'); };
+  const { ctx: ctx2 } = await loadWalletRoute(offline, fakeSignal);
+  await assert.rejects(ctx2.walletCall('send-confirm', { prepareId: 'p' }), /may still be going through/);
+  await assert.rejects(ctx2.walletCall('payments'), /Could not reach the wallet/);
 });
 
 test('no page script calls the bare admin-actions root', () => {

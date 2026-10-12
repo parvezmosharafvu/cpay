@@ -1,6 +1,6 @@
 # Breez wallet on Supabase (Spark) — design and cutover
 
-Status: **built, not deployed, off.** The VM (cpay-pay-ci-vm) still runs the wallet.
+Status: **deployed (v1), off.** Control `enabled=false` / `owner=azure-vm`. The VM (cpay-pay-ci-vm) still runs the wallet.
 
 ## Problem
 The owner wants the platform's Breez Lightning wallet to run on Supabase
@@ -109,8 +109,11 @@ smoke-loaded, but **not connected to a real wallet** (no seed used).
 5. Add `[functions.breez-wallet] verify_jwt = false` to config.toml and deploy.
 6. `update breez_wallet.control set enabled = true, owner = 'supabase-edge', updated_at = now();`
    then `select breez_wallet.schedule_sync();`
-7. Set Edge `PAYMENT_SERVICE_URL=https://riumaeihemgznvgattoc.supabase.co/functions/v1/breez-wallet`.
-8. Check /metrics (signed), the admin wallet balance vs. the VM's last
+7. Set Edge secret `PAYMENT_SERVICE_AUTH_MODE=signed` (callers default to
+   `bearer`; breez-wallet only accepts HMAC-signed requests). Confirm
+   Admin → Health shows `authSigned` growing before the URL switch.
+8. Set Edge `PAYMENT_SERVICE_URL=https://riumaeihemgznvgattoc.supabase.co/functions/v1/breez-wallet`.
+9. Check /metrics (signed), the admin wallet balance vs. the VM's last
    value, and one small owner-run invoice.
 
 ## Rollback

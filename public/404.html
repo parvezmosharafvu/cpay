@@ -265,7 +265,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     prefillAmount();
     showPaymentCard();
     renderAmount();
-    findOpenInvoice();
+    // Hold the pay button until we know whether an open invoice belongs
+    // on this link; otherwise a fast tap can create a second payable one.
+    el('payBtn').disabled = true;
+    await findOpenInvoice();
+    el('payBtn').disabled = false;
   } catch (e){
     console.error('link lookup failed:', e);
     // A timeout or network failure is not "link not found": offer a retry.
@@ -340,6 +344,14 @@ async function findOpenInvoice(){
     const { data } = await withTimeout(window.supabaseClient.rpc('get_invoice_public', { p_payment_id: saved.paymentId }), LOOKUP_TIMEOUT_MS);
     const row = Array.isArray(data) ? data[0] : data;
     if (!row || !['new', 'pending'].includes(row.status) || Date.parse(row.expires_at) - Date.now() < 60000) return;
+    // Soft-delete rewrites the old link's slug (…--deleted-…) and frees the
+    // original for a new link. Match the live link_slug so a reused slug
+    // never resumes another link's invoice.
+    const rowSlug = String(row.link_slug || '').replace(/^\/|\/$/g, '');
+    if (rowSlug !== slug) {
+      try { sessionStorage.removeItem('invoiceSession'); } catch {}
+      return;
+    }
     openInvoice = { id: saved.paymentId, baseAmount: Number(saved.baseAmount), amount: Number(row.amount_requested) };
     el('resumeText').textContent = 'You have an open payment of $' + openInvoice.amount.toFixed(2) + ' on this link.';
     el('resumeBtn').onclick = () => { window.location.href = invoiceUrl(openInvoice.id); };

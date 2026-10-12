@@ -265,11 +265,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     prefillAmount();
     showPaymentCard();
     renderAmount();
-    // Hold the pay button until we know whether an open invoice belongs
-    // on this link; otherwise a fast tap can create a second payable one.
-    el('payBtn').disabled = true;
-    await findOpenInvoice();
-    el('payBtn').disabled = false;
   } catch (e){
     console.error('link lookup failed:', e);
     // A timeout or network failure is not "link not found": offer a retry.
@@ -321,6 +316,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     else if (e.key === 'Backspace') pressKey('back');
     else if (e.key === 'Enter') startPayment();
   });
+  // Hold only the pay button (not the keypad) until we know whether an open
+  // invoice belongs on this link; otherwise a fast tap can create a second
+  // payable one. Input listeners are attached above first, so an amount
+  // typed during the check (up to LOOKUP_TIMEOUT_MS) is kept, not dropped.
+  el('payBtn').disabled = true;
+  try { await findOpenInvoice(); } finally { el('payBtn').disabled = false; }
 });
 function pickChip(e){
   const chip = e.target.closest('.classic-chip');

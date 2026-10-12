@@ -70,5 +70,5 @@ verify_jwt = false
 verify_jwt = false
 # Too large for the GitHub integration / Preview upload (413 'request entity
 # too large': the Breez WASM). Deployed by hand with the CLI instead:
-#   supabase functions deploy breez-wallet --no-verify-jwt --project-ref <ref>
+#   scripts/deploy-breez-wallet.sh <project-ref>
 enabled = false

@@ -236,3 +236,50 @@ Deno.test("a request that joins a cron tick's no-wait open waits its own LOCK_WA
   assertEquals((await req).status, 200);
   await b.h.close("test");
 });
+
+// The SDK's own pg pool outlived disconnect() by recycleTimeoutSecs, so quick
+// handoffs ran the session pooler out of clients (EMAXCONNSESSION).
+Deno.test("closing a lease ends the SDK's pg pool before the lock is released", async () => {
+  const pg = fakePg();
+  const order: string[] = [];
+  const sdk = fakeBreez();
+  const a = host(pg, sdk, {
+    releaseSdk: async () => { order.push(`release:lock=${pg.state.lockHolder !== null}`); },
+  });
+  const r = signed("GET", "/metrics");
+  assertEquals((await a.h.serve("GET", "/metrics", r.headers, r.body)).status, 200);
+  await a.h.close("handoff");
+  assertEquals(sdk.calls.disconnect, 1);
+  assertEquals(order, ["release:lock=true"]);
+  assertEquals(pg.state.lockHolder, null);
+});
+
+Deno.test("a failed open disconnects the half-open SDK and ends its pool before unlocking", async () => {
+  const pg = fakePg();
+  const order: string[] = [];
+  const sdk = fakeBreez();
+  sdk.getInfo = async () => { throw new Error("Failed to initialize PostgreSQL database: (EMAXCONNSESSION)"); };
+  const disconnect = sdk.disconnect.bind(sdk);
+  sdk.disconnect = async () => { order.push(`disconnect:lock=${pg.state.lockHolder !== null}`); await disconnect(); };
+  const a = host(pg, sdk, {
+    releaseSdk: async () => { order.push(`release:lock=${pg.state.lockHolder !== null}`); },
+  });
+  const r = signed("GET", "/metrics");
+  assertEquals((await a.h.serve("GET", "/metrics", r.headers, r.body)).status, 500);
+  assertEquals(order, ["disconnect:lock=true", "release:lock=true"]);
+  assertEquals(pg.state.lockHolder, null);
+  assertEquals(a.h.holding, false);
+});
+
+Deno.test("an SDK build that fails still ends whatever pool it made; a throwing release never keeps the lock", async () => {
+  const pg = fakePg();
+  let released = 0;
+  const a = host(pg, fakeBreez(), {
+    connectSdk: async () => { throw new Error("max clients reached in session mode"); },
+    releaseSdk: async () => { released++; throw new Error("pool end failed"); },
+  });
+  const r = signed("GET", "/metrics");
+  assertEquals((await a.h.serve("GET", "/metrics", r.headers, r.body)).status, 500);
+  assertEquals(released, 1);
+  assertEquals(pg.state.lockHolder, null);
+});

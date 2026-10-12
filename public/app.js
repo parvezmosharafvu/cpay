@@ -185,7 +185,7 @@ async function loadWithdrawRoutes(){
   return withdrawRoutes;
 }
 function shortAddress(a){ return a && a.length > 16 ? `${a.slice(0, 8)}...${a.slice(-6)}` : (a || ''); }
-function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => {}, blocked = null } = {}){
+function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => {}, blocked = null, saved = [], preferredNetwork = null } = {}){
   let routes = { routes: [], error: null, loading: true };
   let quote = null;
   let busy = false;
@@ -302,6 +302,25 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
     clearQuote();
     return getQuote();
   };
+  // Saved payout addresses: the network picker starts on the preferred (or
+  // first) saved network, and switching network swaps in that network's
+  // saved address, so the address and the network always agree.
+  const savedFor = (r) => (r ? saved.find((w) => String(w.network).toLowerCase() === String(r.chain).toLowerCase()) : null);
+  const isSavedAddress = (a) => !a || saved.some((w) => w.address === a);
+  const syncSaved = () => {
+    const w = savedFor(route());
+    if (w && isSavedAddress($('wDest').value.trim())) $('wDest').value = w.address;
+    else if (!w && isSavedAddress($('wDest').value.trim())) $('wDest').value = '';
+  };
+  const pickSavedNetwork = () => {
+    const want = [preferredNetwork, ...saved.map((w) => w.network)].filter(Boolean).map((n) => String(n).toLowerCase());
+    for (const n of want) {
+      const r = routes.routes.find((x) => String(x.chain).toLowerCase() === n);
+      if (r) { $('wNet').value = r.id; break; }
+    }
+    syncSaved();
+  };
+  $('wNet').addEventListener('change', syncSaved);
   ['wNet', 'wAmt', 'wDest'].forEach((id) => {
     const changed = () => { clearQuote(); render(); };
     $(id).addEventListener('input', changed);
@@ -317,7 +336,7 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
   }
   fillNetworks();
   render();
-  loadWithdrawRoutes().then((r) => { routes = { ...r, loading: false }; fillNetworks(); render(); });
+  loadWithdrawRoutes().then((r) => { routes = { ...r, loading: false }; fillNetworks(); if (saved.length) pickSavedNetwork(); render(); });
   return () => { clearQuote(); render(); };
 }
 window.CPAY_APP = { $, escapeHtml, money, when, layoutLabel, badge, toast, requireSession, loadProfile, roleHome, signOut, layoutPicker, bindExperience, withdrawForm, bindWithdraw, deskSkeleton, deskError, deskEmpty, deskFilterBar };

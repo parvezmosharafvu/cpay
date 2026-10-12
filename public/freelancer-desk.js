@@ -274,6 +274,8 @@ async function renderCash() {
     + savedNote)
     + '<div id="wHist"></div>';
   bindWithdraw(() => fee, {
+    saved: wallets,
+    preferredNetwork: book?.preferred_usdt_network || null,
     onDone: async () => {
       renderHome();
       renderWithdrawHistory();
@@ -284,9 +286,6 @@ async function renderCash() {
     },
   });
   renderWithdrawHistory();
-  const dest = document.getElementById('wDest');
-  const preferred = wallets.find((w) => w.network === book?.preferred_usdt_network) || wallets[0];
-  if (dest && preferred && !dest.value) dest.value = preferred.address;
 }
 
 async function renderChat() {

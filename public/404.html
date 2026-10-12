@@ -101,6 +101,10 @@
           <button class="quick-chip" data-amount="200" aria-label="Set amount to 200 dollars">$200</button>
         </div>
         <button class="quick-btn" id="quickToggle" aria-expanded="false" aria-controls="quickAmounts">Quick amounts</button>
+        <div class="resume-box" id="resumeBox" role="status" hidden>
+          <span id="resumeText">You have an open payment on this link.</span>
+          <button class="quick-btn" id="resumeBtn" type="button">Continue that payment</button>
+        </div>
         <div class="status-msg" id="statusMsg" role="status" aria-live="polite"></div>
         <div id="walletHint">Pay with Lightning, Cash App or another Lightning wallet</div>
         <button class="pay-btn" id="payBtn" type="button">
@@ -261,6 +265,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     prefillAmount();
     showPaymentCard();
     renderAmount();
+    findOpenInvoice();
   } catch (e){
     console.error('link lookup failed:', e);
     // A timeout or network failure is not "link not found": offer a retry.
@@ -320,9 +325,35 @@ function pickChip(e){
   clearStatus();
   renderAmount();
 }
+// An open invoice this browser made on this link (refresh, back button, or a
+// second tap after returning) is offered again instead of silently making a
+// second one. The server is asked whether it is still payable.
+let openInvoice = null;
+function invoiceUrl(id){
+  return '/invoice-cpay-v2.html?id=' + encodeURIComponent(id) + '&wallet=' + encodeURIComponent(window.CPAY_WALLET_MODE || 'all_wallets') + '&theme=' + encodeURIComponent(window.CPAY_INVOICE_DESIGN || window.CPAY_LAYOUT);
+}
+async function findOpenInvoice(){
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem('invoiceSession') || 'null'); } catch {}
+  if (!saved || !saved.paymentId || String(saved.returnUrl || '').replace(/^\/|\/$/g, '') !== slug) return;
+  try {
+    const { data } = await withTimeout(window.supabaseClient.rpc('get_invoice_public', { p_payment_id: saved.paymentId }), LOOKUP_TIMEOUT_MS);
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row || !['new', 'pending'].includes(row.status) || Date.parse(row.expires_at) - Date.now() < 60000) return;
+    openInvoice = { id: saved.paymentId, baseAmount: Number(saved.baseAmount), amount: Number(row.amount_requested) };
+    el('resumeText').textContent = 'You have an open payment of $' + openInvoice.amount.toFixed(2) + ' on this link.';
+    el('resumeBtn').onclick = () => { window.location.href = invoiceUrl(openInvoice.id); };
+    el('resumeBox').hidden = false;
+  } catch {}
+}
 async function startPayment(){
   if (el('payBtn').disabled) return;
   const amount = currentAmount();
+  if (openInvoice && openInvoice.baseAmount === amount){
+    setPaying(true, 'Opening your payment…');
+    window.location.href = invoiceUrl(openInvoice.id);
+    return;
+  }
   clearStatus();
   if (!amount || amount < MIN_AMOUNT || amount > MAX_AMOUNT){
     setStatus('Enter an amount between $' + MIN_AMOUNT + ' and $' + MAX_AMOUNT.toLocaleString() + '.', 'err');
@@ -368,7 +399,7 @@ async function startPayment(){
       // can be re-created with the same server-side pricing.
       baseAmount: amount,
     }));
-    window.location.href = '/invoice-cpay-v2.html?id=' + encodeURIComponent(result.paymentId) + '&wallet=' + encodeURIComponent(window.CPAY_WALLET_MODE || 'all_wallets') + '&theme=' + encodeURIComponent(window.CPAY_INVOICE_DESIGN || window.CPAY_LAYOUT);
+    window.location.href = invoiceUrl(result.paymentId);
   } catch (e){
     console.error('create-invoice failed:', e);
     setStatus(e && e.message === 'timeout'

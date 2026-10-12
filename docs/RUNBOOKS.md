@@ -29,6 +29,12 @@ Owner cutover steps for orphan Edge Functions and Telegram secrets:
 
 ## Restart the payment service
 
+Note: production no longer runs `payment-service` on a VM. Since 2026-10-13
+the wallet is an Edge Function and the Azure VM is deleted;
+this section applies only to a self-hosted payment-service (for example after a
+seed restore on a new host, see the wallet function's README under
+`supabase/functions/`).
+
 Safe at any time; nothing is lost.
 
 1. Stop it (`SIGTERM`; it closes the listener, disconnects the SDK and the

@@ -1,6 +1,6 @@
 # Breez wallet on Supabase (Spark) — design and cutover
 
-Status: **deployed (v1), off.** Control `enabled=false` / `owner=azure-vm`. The VM (cpay-pay-ci-vm) still runs the wallet.
+Status: **live since 2026-10-13.** Control `enabled=true` / `owner=supabase-edge`; Edge `PAYMENT_SERVICE_URL` points here. The Azure VM that ran the wallet before has been deleted, so there is no VM to fall back to (see Rollback).
 
 ## Problem
 The owner wants the platform's Breez Lightning wallet to run on Supabase
@@ -98,7 +98,7 @@ smoke-loaded, but **not connected to a real wallet** (no seed used).
 5. Events between leases are not live; settlement latency is up to the cron
    interval (1 min) unless a request holds the lease.
 
-## Cutover (owner, in this order)
+## Cutover (done 2026-10-13; kept for reference)
 1. Regtest dry run with a throwaway seed on a branch project.
 2. Merge this PR (migration only; the function stays undeployed and off).
 3. Stop the VM wallet: `systemctl stop` / `docker stop` payment-service on
@@ -116,11 +116,24 @@ smoke-loaded, but **not connected to a real wallet** (no seed used).
 9. Check /metrics (signed), the admin wallet balance vs. the VM's last
    value, and one small owner-run invoice.
 
-## Rollback
-1. `select breez_wallet.unschedule_sync();`
-2. `update breez_wallet.control set enabled=false, owner='azure-vm';`
-3. Wait for `lease_log.released_at`, i.e. no lock holder
-   (`select * from pg_locks where locktype='advisory'`).
-4. Restore PAYMENT_SERVICE_URL to the VM and start the VM payment-service.
+## Rollback / disaster recovery
 
-Never run both at once.
+The Azure VM (cpay-pay-ci-vm) and its disks were deleted after the cutover,
+so there is no warm standby. To move the wallet off Supabase (or recover it
+after losing the project), restore it from the seed on a new host:
+
+1. Stop the Supabase wallet: `select breez_wallet.unschedule_sync();`,
+   `update breez_wallet.control set enabled=false, owner='new-host';`, then
+   wait until `select * from pg_locks where locktype='advisory'` shows no
+   holder. Never run two wallets on one seed at once.
+2. Run `payment-service/` (same API) on the new host
+   (`docs/payment-service-deploy.md`) with the offline mnemonic, `BREEZ_API_KEY`,
+   `BREEZ_NETWORK=mainnet`, `DATABASE_URL`, `PAYMENT_SERVICE_SECRET`,
+   `REQUEST_AUTH_MODE=signed`, `ADMIN_JWT_MODE=required`, `RECEIPT_RECORDING=off`.
+   The SDK re-derives the balance from the Spark operators by seed; local
+   payment history may be partial.
+3. Check its /health and signed /metrics, then point Edge `PAYMENT_SERVICE_URL`
+   at it.
+
+If only the function misbehaves (not the project), redeploy a known-good
+commit with `scripts/deploy-breez-wallet.sh <project-ref>` instead.

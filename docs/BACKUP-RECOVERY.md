@@ -6,7 +6,7 @@
 |---|---|---|
 | Postgres ledger | Supabase project backups / PITR | Confirm schedule; keep a recent snapshot before migrations |
 | Ledger git snapshot | `ledger-backup` edge → private GitHub repo | `GITHUB_*` secrets; never on a public repo |
-| Platform wallet | Mnemonic offline + `BREEZ_DATA_DIR` on payment-service host | Mnemonic never in Supabase or git |
+| Platform wallet | Mnemonic offline (owner) + an Edge secret; wallet SDK state in its own locked Postgres schema | Mnemonic never in git; the Azure VM host is gone |
 | Orphan function source | Audit box copies under `cpay-audit/orphan-functions/` | Before deleting prod orphans |
 
 ## Daily / automated
@@ -20,8 +20,10 @@
 only migrations that are missing. Reconcile payment-service catch-up after DB
 restore (startup catch-up settles wallet receives and reconciles `sending`).
 
-**payment-service host.** Redeploy binary/image; restore `BREEZ_DATA_DIR` if
-available; otherwise restore from mnemonic and wait for full sync. Open quotes
+**Platform wallet.** Since 2026-10-13 it runs as the wallet Edge Function
+(see that function's README under `supabase/functions/`). The Azure VM host was
+deleted; there is no standby. Recovery = seed restore on a new host (that
+README, "Rollback / disaster recovery") and wait for full sync. Open quotes
 are memory-only and drop on restart — users re-quote. Confirmed withdrawals
 reconcile from the DB + SDK idempotency keys.
 

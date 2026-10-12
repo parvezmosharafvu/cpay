@@ -5,6 +5,7 @@ test('customer-entered amount creates one invoice through the real Edge Function
   const u = await makeUser();
   const slug = await makeLink(u.id, { name: 'Amount Typed' });
   await page.goto(`/${slug}`);
+  await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('12.50');
   await expect(page.locator('#amountDisplay')).toHaveText('$12.50');
   await page.click('#payBtn');
@@ -34,6 +35,7 @@ test('out-of-range amounts are refused before any request', async ({ page }) => 
   let calls = 0;
   page.on('request', (r) => { if (r.url().includes('create-invoice')) calls++; });
   await page.goto(`/${slug}`);
+  await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('0.5');
   await page.click('#payBtn');
   await expect(page.locator('#statusMsg')).toHaveText(/between \$1 and \$5,000/);
@@ -45,6 +47,7 @@ test('double-clicking pay creates exactly one invoice', async ({ page }) => {
   const u = await makeUser();
   const slug = await makeLink(u.id);
   await page.goto(`/${slug}`);
+  await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('7');
   await page.locator('#payBtn').dblclick();
   await page.keyboard.press('Enter');
@@ -57,6 +60,7 @@ test('a link cost is shown to the payer before paying and charged on the invoice
   const slug = await makeLink(u.id);
   await db.query(`update payment_links set cost_percent = 10 where slug = $1`, [slug]);
   await page.goto(`/${slug}`);
+  await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('20');
   await expect(page.locator('#chargeSummary')).toHaveText(/You pay \$22\.00 · includes 10% service fee/);
   await page.click('#payBtn');
@@ -71,6 +75,7 @@ test('payments paused by the operator are refused with a plain message and no in
                   on conflict (key) do update set value = excluded.value`);
   try {
     await page.goto(`/${slug}`);
+    await expect(page.locator('#payBtn')).toBeEnabled();
     await page.keyboard.type('9');
     await page.click('#payBtn');
     await expect(page.locator('#statusMsg')).toHaveText(/paused|unavailable/i);

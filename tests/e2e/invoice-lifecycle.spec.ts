@@ -5,6 +5,7 @@ async function startInvoice(page: Page, amount = '10') {
   const u = await makeUser({ name: 'Life Cycle' });
   const slug = await makeLink(u.id, { name: 'Life Cycle' });
   await page.goto(`/${slug}`);
+  await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type(amount);
   await page.click('#payBtn');
   await page.waitForURL(/invoice-cpay-v2\.html\?id=/);
@@ -75,6 +76,8 @@ test('going back to the link offers the open payment, and the same amount reopen
   await page.goto(`/${slug}`);
   await expect(page.locator('#resumeBox')).toBeVisible();
   await expect(page.locator('#resumeText')).toHaveText(/open payment of \$11\.00/);
+  // Keys typed while the resume check holds the page are not handled yet.
+  await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('11');
   await page.click('#payBtn');
   await page.waitForURL(/invoice-cpay-v2/);
@@ -82,6 +85,9 @@ test('going back to the link offers the open payment, and the same amount reopen
   expect(await paymentsFor(u.id)).toHaveLength(1);
   // A different amount is a new, deliberate payment.
   await page.goto(`/${slug}`);
+  await expect(page.locator('#payBtn')).toBeEnabled();
+  await expect(page.locator('#resumeBox')).toBeVisible();
+  await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('12');
   await page.click('#payBtn');
   await page.waitForURL((url) => url.searchParams.get('id') !== id && /invoice-cpay-v2/.test(url.href));
@@ -112,6 +118,7 @@ test('pay stays disabled until the resume check finishes, then same-amount reope
   await expect(page.locator('#payBtn')).toBeEnabled({ timeout: 15_000 });
   await expect(page.locator('#resumeBox')).toBeVisible();
   await page.unroute('**/rest/v1/rpc/get_invoice_public');
+  await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('9');
   await page.click('#payBtn');
   await page.waitForURL(/invoice-cpay-v2/);
@@ -132,6 +139,7 @@ test('a reused slug does not resume another link open invoice', async ({ page })
   await expect(page.locator('#paymentCard')).toBeVisible();
   await expect(page.locator('#payBtn')).toBeEnabled({ timeout: 15_000 });
   await expect(page.locator('#resumeBox')).toBeHidden();
+  await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('8');
   await page.click('#payBtn');
   await page.waitForURL(/invoice-cpay-v2/);

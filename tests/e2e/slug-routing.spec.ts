@@ -40,6 +40,7 @@ test('a link of a suspended Freelancer does not take payments', async ({ page })
   await page.goto(`/${slug}`);
   // Either not found, or the server refuses the invoice; never a payment request.
   if (await page.locator('#paymentCard').isVisible()) {
+    await expect(page.locator('#payBtn')).toBeEnabled();
     await page.keyboard.type('5');
     await page.click('#payBtn');
     await expect(page.locator('#statusMsg')).toBeVisible();

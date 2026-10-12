@@ -9,10 +9,9 @@ test('register creates a pending Freelancer application', async ({ page }) => {
   await page.fill('#email', email);
   await page.fill('#password', PASSWORD);
   await page.click('#submitBtn');
-  await page.waitForURL(/dashboard\.html|login\.html|register\.html/);
-  const { rows: [p] } = await db.query('select role, account_status from profiles where email = $1', [email]);
-  expect(p.role).toBe('creator');
-  expect(p.account_status).toBe('pending');
+  // The URL can already match before sign-up finishes; wait for the row.
+  await expect.poll(async () => (await db.query('select role, account_status from profiles where email = $1', [email])).rows[0] ?? null,
+    { timeout: 15_000 }).toEqual({ role: 'creator', account_status: 'pending' });
 });
 
 test('register rejects a short password before calling the server', async ({ page }) => {

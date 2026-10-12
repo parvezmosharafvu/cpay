@@ -18,3 +18,5 @@ ledger-backups/
 supabase/.temp/
 
 __pycache__/
+test-results/
+playwright-report/

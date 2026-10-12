@@ -51,6 +51,7 @@ export function createHost(deps: HostDeps) {
   let busy = 0;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   let closing: Promise<void> | null = null;
+  let switchedOff = false;
 
   async function enabled(): Promise<boolean> {
     const { rows } = await deps.db.query("select enabled, owner from breez_wallet.control where id");
@@ -100,7 +101,17 @@ export function createHost(deps: HostDeps) {
   async function acquire(): Promise<Session> {
     if (closing) await closing;
     clearTimeout(idleTimer);
-    if (session) return session;
+    if (session) {
+      // A warm lease must obey the off switch too. Without this check a
+      // holder that keeps getting requests inside WALLET_IDLE_MS never
+      // re-reads control, so rollback step 2 (enabled=false) would not stop
+      // it and the lock would never clear.
+      if (!(await enabled())) {
+        switchedOff = true;
+        throw new WalletUnavailable(503, "wallet is not enabled on supabase");
+      }
+      return session;
+    }
     opening ??= open().finally(() => { opening = null; });
     const s = await opening;
     session = s;
@@ -110,6 +121,12 @@ export function createHost(deps: HostDeps) {
   function scheduleIdle() {
     clearTimeout(idleTimer);
     if (!session) return;
+    if (switchedOff) {
+      // Off switch seen: release now (close() drains in-flight work first).
+      switchedOff = false;
+      void close("disabled");
+      return;
+    }
     idleTimer = setTimeout(() => { if (!busy) void close("idle"); }, WALLET_IDLE_MS);
   }
 

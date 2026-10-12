@@ -111,6 +111,26 @@ Deno.test("only one instance holds the wallet; the other gets 503 'wallet busy'"
   await b.h.close("test");
 });
 
+Deno.test("switch turned off while a lease is held: 503 and the lease is released", async () => {
+  const pg = fakePg();
+  const a = host(pg);
+  const r1 = signed("GET", "/metrics");
+  assertEquals((await a.h.serve("GET", "/metrics", r1.headers, r1.body)).status, 200);
+  assert(a.h.holding);
+  pg.state.enabled = false; // rollback step 2, while requests keep arriving
+  const r2 = signed("GET", "/metrics");
+  const res = await a.h.serve("GET", "/metrics", r2.headers, r2.body);
+  assertEquals(res.status, 503);
+  assertEquals((await res.json()).error, "wallet is not enabled on supabase");
+  await a.h.idle();
+  assert(!a.h.holding);
+  assertEquals(pg.state.lockHolder, null);
+  assertEquals(a.sdk.calls.disconnect, 1);
+  const r3 = signed("GET", "/metrics");
+  assertEquals((await a.h.serve("GET", "/metrics", r3.headers, r3.body)).status, 503);
+  assertEquals(a.connects(), 1);
+});
+
 Deno.test("admin wallet routes need a verified admin token (ADMIN_JWT_MODE=required)", async () => {
   const pg = fakePg();
   const { h } = host(pg);

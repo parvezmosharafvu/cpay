@@ -37,8 +37,10 @@ Request/Response to the Node handler.
   lock. Other isolates wait up to 20 s, then answer 503 `wallet busy`.
   `lease_log` records each holder.
 - **Off switch:** every wallet call checks `breez_wallet.control`
-  (`enabled=true AND owner='supabase-edge'`) before and after taking the
-  lock. The default is off, owner `azure-vm`.
+  (`enabled=true AND owner='supabase-edge'`): before and after taking the
+  lock, and again on each request while a lease is held. A holder that sees
+  the switch off answers 503 and releases the lease once in-flight work
+  drains. The default is off, owner `azure-vm`.
 - **Idempotency:** unchanged from the VM. Invoices use a per-payment
   advisory xact lock plus attach-once. Sends use `idempotencyKey = withdrawal id`,
   and `sending` rows are reconciled after a completed sync.
@@ -56,7 +58,8 @@ Request/Response to the Node handler.
 - `supabase/migrations/20261013010000_breez_wallet_spark_schema.sql`
 - `supabase/functions/breez-wallet/{index,runtime,node-shim,pg-globals}.ts`, `core/*.mjs`, `runtime_test.ts`
 - `scripts/sync-breez-core.sh`, CI step in `.github/workflows/verify.yml`
-- **Not** in `supabase/config.toml`, so the GitHub integration will not deploy it on merge.
+- `supabase/config.toml` has `[functions.breez-wallet] verify_jwt = false` (#49, cutover step 5).
+  Whether or not it is deployed, it stays off until `breez_wallet.control` is switched on.
 
 ## Security
 No secret lives in the repo, the migration, or logs (log lines are redacted
@@ -75,6 +78,7 @@ admin Supabase session.
 - a second instance → 503 `wallet busy` while the first holds the lease,
   then served after release
 - admin send without a verified token → 401
+- switch turned off while a lease is held → 503 and the lease is released
 - /health never takes the lease
 - core/ drift check
 

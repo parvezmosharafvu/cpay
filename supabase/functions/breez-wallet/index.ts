@@ -1,5 +1,5 @@
 // breez-wallet: the Breez SDK (Spark) wallet as a Supabase Edge Function,
-// serving the same API as payment-service (see docs/SUPABASE_BREEZ.md).
+// serving the same API as payment-service (see README.md in this folder).
 //
 // OFF by default. It answers 503 until breez_wallet.control.enabled is true
 // with owner 'supabase-edge', which the owner sets only after the VM wallet

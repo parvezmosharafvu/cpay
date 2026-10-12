@@ -69,3 +69,31 @@ test('an unknown invoice id says the payment is gone instead of spinning', async
   await expect(page.locator('#stateTitle')).toHaveText(/no longer available/);
   await expect(page.locator('#stateBtn')).toHaveText('Start over');
 });
+
+test('going back to the link offers the open payment, and the same amount reopens it instead of a second invoice', async ({ page }) => {
+  const { u, slug, id } = await startInvoice(page, '11');
+  await page.goto(`/${slug}`);
+  await expect(page.locator('#resumeBox')).toBeVisible();
+  await expect(page.locator('#resumeText')).toHaveText(/open payment of \$11\.00/);
+  await page.keyboard.type('11');
+  await page.click('#payBtn');
+  await page.waitForURL(/invoice-cpay-v2/);
+  expect(new URL(page.url()).searchParams.get('id')).toBe(id);
+  expect(await paymentsFor(u.id)).toHaveLength(1);
+  // A different amount is a new, deliberate payment.
+  await page.goto(`/${slug}`);
+  await page.keyboard.type('12');
+  await page.click('#payBtn');
+  await page.waitForURL((url) => url.searchParams.get('id') !== id && /invoice-cpay-v2/.test(url.href));
+  expect(await paymentsFor(u.id)).toHaveLength(2);
+});
+
+test('no resume offer once the open payment is paid', async ({ page }) => {
+  const { slug, id } = await startInvoice(page, '6');
+  expect(await simulatePayment(id)).toBe('settled');
+  await expect(page.locator('#step3')).toBeVisible({ timeout: 15_000 });
+  await page.goto(`/${slug}`);
+  await expect(page.locator('#paymentCard')).toBeVisible();
+  await page.waitForTimeout(500);
+  await expect(page.locator('#resumeBox')).toBeHidden();
+});

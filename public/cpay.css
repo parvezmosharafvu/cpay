@@ -307,6 +307,8 @@ body.checkout .brand .mark,body.store .brand .mark,.theme-stage .brand .mark{bac
 [data-entry="field"] .quick-amounts,
 [data-entry="field"] #quickToggle{display:none!important}
 [data-entry="field"] .classic-body{display:block}
+.resume-box{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;margin:8px 0;padding:10px 12px;border-radius:12px;background:var(--surface-2);font-size:14px;text-align:center}
+.resume-box[hidden]{display:none}
 .status-msg{display:none;font-size:14px;text-align:center;margin:8px 0}
 .status-msg.err{color:var(--danger)}
 .status-msg.loading{color:var(--muted)}

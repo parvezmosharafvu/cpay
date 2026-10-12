@@ -30,9 +30,10 @@ Owner cutover steps for orphan Edge Functions and Telegram secrets:
 ## Restart the payment service
 
 Note: production no longer runs `payment-service` on a VM. Since 2026-10-13
-the wallet is the `breez-wallet` Edge Function and the Azure VM is deleted;
+the wallet is an Edge Function and the Azure VM is deleted;
 this section applies only to a self-hosted payment-service (for example after a
-seed restore on a new host, see `supabase/functions/breez-wallet/README.md`).
+seed restore on a new host, see the wallet function's README under
+`supabase/functions/`).
 
 Safe at any time; nothing is lost.
 

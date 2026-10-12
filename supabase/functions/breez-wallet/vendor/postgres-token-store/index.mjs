@@ -2,6 +2,7 @@
 import pg from "npm:pg@8.18.0";
 import crypto from "node:crypto";
 import * as __fs from "node:fs";
+import { Buffer } from "node:buffer";
 /**
  * CommonJS implementation for Node.js PostgreSQL Token Store
  */

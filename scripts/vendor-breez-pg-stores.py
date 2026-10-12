@@ -24,6 +24,8 @@ for pkg in ["postgres-storage", "postgres-tree-store", "postgres-token-store", "
             head.append('import crypto from "node:crypto";')
         if 'require("fs")' in s:
             s = s.replace('require("fs")', "__fs"); head.append('import * as __fs from "node:fs";')
+        if re.search(r"\bBuffer\b", s):
+            head.append('import { Buffer } from "node:buffer";')  # not a global on Supabase Edge
         s = re.sub(r'^const (\{[^}]*\}) = require\("\./(\w+)\.cjs"\);', r'import \1 from "./\2.mjs";', s, flags=re.M)
         s = re.sub(r'^module\.exports = (\{.*?\});', lambda m: "export " + m.group(1) + ";", s, flags=re.M | re.S)
         assert "require(" not in s and "module.exports" not in s, (pkg, f.name)

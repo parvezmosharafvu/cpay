@@ -177,6 +177,12 @@ jobs:
           # signed-in users must refuse, or return none of the victim's data
           # and leave the victim's rows unchanged.
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/authenticated_rpc_sweep_test.sql
+          # Grant cleanup (20261013030000): anon has no table writes or
+          # TRUNCATE; production's extra constraints are codified.
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/grant_cleanup_test.sql
+          # Machine-readable final state of the replayed schema, kept as an
+          # artifact to diff against production (docs/DB-FINAL-STATE.md).
+          psql -h localhost -U postgres -d privcheck -Atq -v ON_ERROR_STOP=1 -f ci/db_inventory.sql > db-inventory.json
           # The account-type checks again, with production's grants. (The
           # drift fixes with production's grants run in the drift step above.)
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/role_removal_test.sql
@@ -322,6 +328,16 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/withdraw_address_cooldown_test.sql
+
+      - name: Upgrade from the pre-Breez schema keeps balances (audit P3)
+        env:
+          PGPASSWORD: postgres
+        run: bash ci/upgrade_from_pre_breez_test.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: db-inventory
+          path: db-inventory.json
 
       - uses: actions/setup-node@v4
         with:

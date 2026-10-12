@@ -43,7 +43,7 @@ update payments set status = 'settled', amount_settled = 50, settled_at = now() 
 insert into support_messages(id, user_id, sender, message)
 values ('5b000000-0000-0000-0000-0000000003f1', '5b000000-0000-0000-0000-0000000000f1', 'creator', 'sweep victim message');
 insert into usdt_wallets(id, user_id, network, address)
-values ('5b000000-0000-0000-0000-0000000004f1', '5b000000-0000-0000-0000-0000000000f1', 'trc20', 'TSweepVictimWa11etAddressXXXXXXXXX');
+values ('5b000000-0000-0000-0000-0000000004f1', '5b000000-0000-0000-0000-0000000000f1', 'tron', 'TSweepVictimWa11etAddressXXXXXXXXX');
 
 -- Strings that must never come back to an attacker.
 create temp table sweep_markers(m text primary key);

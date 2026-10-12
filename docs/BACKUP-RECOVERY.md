@@ -20,10 +20,10 @@
 only migrations that are missing. Reconcile payment-service catch-up after DB
 restore (startup catch-up settles wallet receives and reconciles `sending`).
 
-**Platform wallet.** Since 2026-10-13 it runs as the `breez-wallet` Edge
-Function (`supabase/functions/breez-wallet/README.md`). The Azure VM host was
-deleted; there is no standby. Recovery = seed restore on a new host (that
-README, "Rollback / disaster recovery") and wait for full sync. Open quotes
+**Platform wallet.** Since 2026-10-13 it runs as a Supabase Edge Function
+(its README sits next to its code under `supabase/functions/`). The Azure VM
+host was deleted; there is no standby. Recovery = seed restore on a new host
+(that README, "Rollback / disaster recovery") and wait for full sync. Open quotes
 are memory-only and drop on restart — users re-quote. Confirmed withdrawals
 reconcile from the DB + SDK idempotency keys.
 

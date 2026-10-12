@@ -48,7 +48,7 @@ export function createHost(deps: HostDeps) {
   const now = deps.now ?? (() => Date.now());
   const sleep = deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const holder = deps.holder ?? `edge-${crypto.randomUUID()}`;
-  type Session = { client: Any; sdk: Any; app: Any; leaseId: number; requests: number };
+  type Session = { client: Any; sdk: Any; app: Any; leaseId: number; requests: number; full: boolean };
   let session: Session | null = null;
   let opening: Promise<Session> | null = null;
   let busy = 0;
@@ -96,7 +96,7 @@ export function createHost(deps: HostDeps) {
       if (full) await app.catchUp();
       app.markReady();
       deps.log({ event: "wallet-lease-acquired", holder });
-      return { client, sdk, app, leaseId: Number(rows[0].id), requests: 0 };
+      return { client, sdk, app, leaseId: Number(rows[0].id), requests: 0, full };
     } catch (e) {
       // Edge function logs are not always queryable: keep a short, redacted
       // reason on the lease row (no secrets: deps.redact strips them).
@@ -115,8 +115,18 @@ export function createHost(deps: HostDeps) {
     if (closing) await closing;
     clearTimeout(idleTimer);
     if (session) return session;
+    // Concurrent callers share one open. A request that joined the cron's
+    // no-wait open must not fail fast with "wallet busy": retry with its own wait.
+    const joined = opening !== null;
     opening ??= open(lockWaitMs, full).finally(() => { opening = null; });
-    const s = await opening;
+    let s: Session;
+    try { s = await opening; }
+    catch (e) {
+      if (joined && lockWaitMs > 0 && e instanceof WalletUnavailable && e.message === "wallet busy") {
+        return acquire(lockWaitMs, full);
+      }
+      throw e;
+    }
     session = s;
     return s;
   }
@@ -199,8 +209,8 @@ export function createHost(deps: HostDeps) {
     }
   }
 
-  // Cron: incoming payments, expiry, withdrawal reconcile (app.catchUp runs
-  // on every acquire; run it once more so a warm session also syncs).
+  // Cron: incoming payments, expiry, withdrawal reconcile. A cold tick opens
+  // full (ensureSynced + catchUp); otherwise it runs catchUp on the session.
   async function sync(): Promise<Response> {
     busy++;
     try {
@@ -217,7 +227,9 @@ export function createHost(deps: HostDeps) {
         if (e instanceof WalletUnavailable && e.message === "wallet busy") return json(200, { ok: true, skipped: "busy" });
         throw e;
       }
-      if (warm) await s.app.catchUp();
+      // A fresh full open already synced. A warm session, or a light one a
+      // request was opening when this tick joined it, has not: catch up now.
+      if (warm || !s.full) await s.app.catchUp();
       return json(200, { ok: true });
     } catch (e) {
       if (e instanceof WalletUnavailable) return json(e.status, { error: e.message });

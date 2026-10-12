@@ -29,6 +29,7 @@ test.describe('320px wide phone', () => {
       await noHorizontalOverflow(page, p);
     }
     await page.goto(`/${slug}`);
+    await expect(page.locator('#payBtn')).toBeEnabled();
     await page.keyboard.type('12');
     await page.click('#payBtn');
     await page.waitForURL(/invoice-cpay-v2/);
@@ -55,6 +56,7 @@ test('keyboard only: type an amount and pay from the payment page', async ({ pag
   await page.goto(`/${slug}`);
   await page.keyboard.press('Tab');
   await expect(page.locator('.skip-link')).toBeFocused();
+  await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('9');
   await page.keyboard.press('Enter');
   await page.waitForURL(/invoice-cpay-v2/);
@@ -64,6 +66,7 @@ test('wallet dialog: focus moves in, Escape closes it, focus returns to the open
   const u = await makeUser();
   const slug = await makeLink(u.id);
   await page.goto(`/${slug}`);
+  await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('9');
   await page.click('#payBtn');
   await page.waitForURL(/invoice-cpay-v2/);

@@ -43,6 +43,7 @@ test('a payment made on my link raises my available balance after reload', async
   const slug = await makeLink(u.id);
   const payer = await (await browser.newContext()).newPage();
   await payer.goto(`/${slug}`);
+  await expect(payer.locator('#payBtn')).toBeEnabled();
   await payer.keyboard.type('20');
   await payer.click('#payBtn');
   await payer.waitForURL(/invoice-cpay-v2/);

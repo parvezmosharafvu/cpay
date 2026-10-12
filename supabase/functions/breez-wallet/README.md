@@ -79,6 +79,7 @@ admin Supabase session.
   then served after release
 - admin send without a verified token → 401
 - switch turned off while a lease is held → 503 and the lease is released
+- SDK connect fails → 500, lock released, lease row closed `open-failed`
 - /health never takes the lease
 - core/ drift check
 
@@ -120,8 +121,10 @@ smoke-loaded, but **not connected to a real wallet** (no seed used).
 ## Rollback
 1. `select breez_wallet.unschedule_sync();`
 2. `update breez_wallet.control set enabled=false, owner='azure-vm';`
-3. Wait for `lease_log.released_at`, i.e. no lock holder
-   (`select * from pg_locks where locktype='advisory'`).
+3. Wait until no instance holds the lock
+   (`select * from pg_locks where locktype='advisory'` is empty). Rely on
+   pg_locks, not only on `lease_log.released_at`: an isolate killed mid-lease
+   never writes released_at. A failed SDK connect writes outcome `open-failed`.
 4. Restore PAYMENT_SERVICE_URL to the VM and start the VM payment-service.
 
 Never run both at once.

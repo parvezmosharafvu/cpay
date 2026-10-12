@@ -8,7 +8,7 @@ const SECRET = "s".repeat(40);
 
 // A shared fake Postgres: the control row, the nonce table and one advisory lock.
 function fakePg({ enabled = true } = {}) {
-  const state = { enabled, owner: "supabase-edge", nonces: new Set<string>(), lockHolder: null as null | number, locks: 0, leases: 0 };
+  const state = { enabled, owner: "supabase-edge", nonces: new Set<string>(), lockHolder: null as null | number, locks: 0, leases: 0, outcomes: [] as string[] };
   let next = 1;
   const query = (who: number) => async (sql: string, params: unknown[] = []) => {
     if (sql.includes("from breez_wallet.control")) return { rows: [{ enabled: state.enabled, owner: state.owner }] };
@@ -23,6 +23,7 @@ function fakePg({ enabled = true } = {}) {
     }
     if (sql.includes("pg_advisory_unlock")) { if (state.lockHolder === who) state.lockHolder = null; return { rows: [{ ok: true }] }; }
     if (sql.includes("insert into breez_wallet.lease_log")) { state.leases++; return { rows: [{ id: state.leases }] }; }
+    if (sql.includes("update breez_wallet.lease_log")) { state.outcomes.push(String(params[2])); return { rows: [], rowCount: 1 }; }
     if (sql.includes("as since")) return { rows: [{ since: null }] };
     return { rows: [], rowCount: 0 };
   };
@@ -129,6 +130,17 @@ Deno.test("switch turned off while a lease is held: 503 and the lease is release
   const r3 = signed("GET", "/metrics");
   assertEquals((await a.h.serve("GET", "/metrics", r3.headers, r3.body)).status, 503);
   assertEquals(a.connects(), 1);
+});
+
+Deno.test("SDK connect fails: 500, lock released, lease row closed as open-failed", async () => {
+  const pg = fakePg();
+  const sdk = fakeBreez();
+  const a = host(pg, sdk, { connectSdk: async () => { throw new Error("connect failed"); } });
+  const r = signed("GET", "/metrics");
+  assertEquals((await a.h.serve("GET", "/metrics", r.headers, r.body)).status, 500);
+  assert(!a.h.holding);
+  assertEquals(pg.state.lockHolder, null);
+  assertEquals(pg.state.outcomes, ["open-failed"]);
 });
 
 Deno.test("admin wallet routes need a verified admin token (ADMIN_JWT_MODE=required)", async () => {

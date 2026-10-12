@@ -62,6 +62,7 @@ export function createHost(deps: HostDeps) {
     if (!(await enabled())) throw new WalletUnavailable(503, "wallet is not enabled on supabase");
     const client = await deps.lockClient();
     let locked = false;
+    let leaseId: number | null = null;
     try {
       const deadline = now() + LOCK_WAIT_MS;
       while (!locked) {
@@ -76,6 +77,7 @@ export function createHost(deps: HostDeps) {
       if (!(await enabled())) throw new WalletUnavailable(503, "wallet is not enabled on supabase");
       const { rows } = await client.query(
         "insert into breez_wallet.lease_log (holder) values ($1) returning id", [holder]);
+      leaseId = Number(rows[0].id);
       const sdk = await deps.connectSdk();
       const verifyAdminToken = deps.verifyAdminToken ??
         createAdminTokenVerifier({ supabaseUrl: deps.supabaseUrl, anonKey: deps.anonKey });
@@ -90,8 +92,16 @@ export function createHost(deps: HostDeps) {
       await app.catchUp();
       app.markReady();
       deps.log({ event: "wallet-lease-acquired", holder });
-      return { client, sdk, app, leaseId: Number(rows[0].id), requests: 0 };
+      return { client, sdk, app, leaseId, requests: 0 };
     } catch (e) {
+      // Close the lease row too, so a failed connect does not look like a
+      // live holder (released_at null) during cutover or rollback checks.
+      if (leaseId !== null) {
+        await client.query(
+          "update breez_wallet.lease_log set released_at = now(), requests = $2, outcome = $3 where id = $1",
+          [leaseId, 0, "open-failed"],
+        ).catch(() => {});
+      }
       if (locked) await client.query("select pg_advisory_unlock(breez_wallet.lock_key())").catch(() => {});
       client.release?.(true);
       throw e;

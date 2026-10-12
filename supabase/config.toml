@@ -68,3 +68,7 @@ verify_jwt = false
 # it refuses everything else, so the gateway JWT check is off.
 [functions.breez-wallet]
 verify_jwt = false
+# Too large for the GitHub integration / Preview upload (413 'request entity
+# too large': the Breez WASM). Deployed by hand with the CLI instead:
+#   supabase functions deploy breez-wallet --no-verify-jwt --project-ref <ref>
+enabled = false

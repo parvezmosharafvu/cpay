@@ -135,3 +135,104 @@ Deno.test("core/ matches payment-service byte for byte", async () => {
     assertEquals(a, b, `${m}.mjs drifted; run scripts/sync-breez-core.sh`);
   }
 });
+
+// Records getInfo({ ensureSynced }) so tests can tell a light open from a full one.
+function recordingSdk() {
+  const ensureSynced: unknown[] = [];
+  const sdk = Object.assign(fakeBreez(), { ensureSynced });
+  const getInfo = sdk.getInfo.bind(sdk);
+  // deno-lint-ignore no-explicit-any
+  (sdk as any).getInfo = async (o?: { ensureSynced?: boolean }) => { ensureSynced.push(o?.ensureSynced); return await getInfo(); };
+  return sdk;
+}
+
+async function catchUps(h: ReturnType<typeof host>["h"]): Promise<number> {
+  const r = signed("GET", "/metrics");
+  return (await (await h.serve("GET", "/metrics", r.headers, r.body)).json()).catchUps;
+}
+
+Deno.test("requests open light (no ensureSynced); a cold cron tick opens full", async () => {
+  const pg = fakePg();
+  const sdkA = recordingSdk();
+  const a = host(pg, sdkA);
+  const r = signed("GET", "/metrics");
+  assertEquals((await a.h.serve("GET", "/metrics", r.headers, r.body)).status, 200);
+  assertEquals(sdkA.ensureSynced[0], false);
+  await a.h.close("test");
+  const sdkB = recordingSdk();
+  const b = host(pg, sdkB);
+  assertEquals((await b.h.sync()).status, 200);
+  assertEquals(sdkB.ensureSynced[0], true);
+  await b.h.close("test");
+});
+
+Deno.test("cron tick skips (200 skipped:busy) instead of queueing behind another holder", async () => {
+  const pg = fakePg();
+  const a = host(pg);
+  const b = host(pg);
+  const r = signed("GET", "/metrics");
+  assertEquals((await a.h.serve("GET", "/metrics", r.headers, r.body)).status, 200);
+  const res = await b.h.sync();
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).skipped, "busy");
+  assertEquals(b.connects(), 0);
+  await a.h.close("test");
+});
+
+Deno.test("a warm lease closes and answers 503 when the off switch flips (request and cron)", async () => {
+  const pg = fakePg();
+  const a = host(pg);
+  const r1 = signed("GET", "/metrics");
+  assertEquals((await a.h.serve("GET", "/metrics", r1.headers, r1.body)).status, 200);
+  assert(a.h.holding);
+  pg.state.enabled = false;
+  const r2 = signed("GET", "/metrics");
+  assertEquals((await a.h.serve("GET", "/metrics", r2.headers, r2.body)).status, 503);
+  assert(!a.h.holding);
+  assertEquals(pg.state.lockHolder, null);
+  assertEquals(a.sdk.calls.disconnect, 1);
+  pg.state.enabled = true;
+  assertEquals((await a.h.sync()).status, 200);
+  pg.state.enabled = false;
+  assertEquals((await a.h.sync()).status, 503);
+  assert(!a.h.holding);
+  assertEquals(pg.state.lockHolder, null);
+});
+
+Deno.test("a cron tick that joins a request's light open still catches up", async () => {
+  const pg = fakePg();
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  let entered!: () => void;
+  const inOpen = new Promise<void>((r) => { entered = r; });
+  const sdk = fakeBreez();
+  const a = host(pg, sdk, { connectSdk: async () => { entered(); await gate; return sdk; } });
+  const r = signed("GET", "/metrics");
+  const req = a.h.serve("GET", "/metrics", r.headers, r.body);
+  await inOpen; // the request is mid-open (light)
+  const tick = a.h.sync();
+  release();
+  assertEquals((await req).status, 200);
+  assertEquals((await tick).status, 200);
+  assertEquals(await catchUps(a.h), 1);
+  await a.h.close("test");
+});
+
+Deno.test("a request that joins a cron tick's no-wait open waits its own LOCK_WAIT_MS", async () => {
+  const pg = fakePg();
+  const a = host(pg);
+  const r1 = signed("GET", "/metrics");
+  assertEquals((await a.h.serve("GET", "/metrics", r1.headers, r1.body)).status, 200); // a holds the wallet
+  let t = 1_800_000_000_000;
+  let tries = 0;
+  const b = host(pg, fakeBreez(), {
+    now: () => t,
+    sleep: async (ms: number) => { t += ms; tries++; if (tries === 4) await a.h.close("test"); },
+  });
+  const tick = b.h.sync(); // opens with no wait: busy
+  const r2 = signed("GET", "/metrics");
+  const req = b.h.serve("GET", "/metrics", r2.headers, r2.body); // joins, then retries with its own wait
+  assertEquals((await (await tick).json()).skipped, "busy");
+  assertEquals((await req).status, 200);
+  await b.h.close("test");
+});

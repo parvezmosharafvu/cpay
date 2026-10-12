@@ -87,13 +87,16 @@ def main() -> int:
     src.add_argument("--project-ref")
     ap.add_argument("--repo", type=Path, default=Path(__file__).resolve().parent.parent)
     ap.add_argument("--allow", action="append", default=[])
+    ap.add_argument("--undeployed", action="append", default=[],
+                    help="a repo function intentionally not deployed yet (reported, not drift)")
     args = ap.parse_args()
 
     deployed = parse_deployed(json.loads(args.deployed_json.read_text())) if args.deployed_json else live_deployed(args.project_ref)
     repo = repo_functions(args.repo)
 
     only_deployed = sorted(set(deployed) - repo)
-    only_repo = sorted(repo - set(deployed))
+    pending = sorted(s for s in repo - set(deployed) if s in args.undeployed)
+    only_repo = sorted(s for s in repo - set(deployed) if s not in args.undeployed)
     allowed = [s for s in only_deployed if s in args.allow]
     drift = [s for s in only_deployed if s not in args.allow]
 
@@ -106,6 +109,8 @@ def main() -> int:
         print(f"  allowed   {s}  deployed, not in repo (--allow)  {describe(deployed[s])}")
     for s in only_repo:
         print(f"  MISSING   {s}  in repo, not deployed")
+    for s in pending:
+        print(f"  pending   {s}  in repo, intentionally not deployed (--undeployed)")
     if drift or only_repo:
         print("DRIFT: deployed functions and supabase/functions differ")
         return 1

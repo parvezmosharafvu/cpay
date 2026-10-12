@@ -25,14 +25,22 @@ function mountWallet() {
   const root = document.getElementById('wallet');
   if (!root || walletShown) return;
   if (me?.role !== 'admin') {
-    if (!root.innerHTML.trim()) root.innerHTML = '<div class="card"><p class="muted">Loading wallet…</p></div>';
+    if (!root.firstElementChild) {
+      const card = document.createElement('div'); card.className = 'card';
+      const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Loading wallet…';
+      card.append(p); root.replaceChildren(card);
+    }
     return;
   }
   walletShown = true;
   Promise.resolve().then(() => renderWallet()).catch((e) => {
     walletShown = false;
-    root.innerHTML = `<div class="card"><p class="err">The wallet did not load: ${escapeHtml(String(e?.message || e))}</p><button class="btn ghost" id="walletRetry">Retry</button></div>`;
-    document.getElementById('walletRetry').onclick = () => mountWallet();
+    const card = document.createElement('div'); card.className = 'card';
+    const msg = document.createElement('p'); msg.className = 'err';
+    msg.textContent = `The wallet did not load: ${String(e?.message || e)}`;
+    const retry = document.createElement('button'); retry.className = 'btn ghost'; retry.textContent = 'Retry';
+    retry.onclick = () => mountWallet();
+    card.append(msg, retry); root.replaceChildren(card);
   });
 }
 document.querySelectorAll('.navi[data-tab]').forEach((b) => {

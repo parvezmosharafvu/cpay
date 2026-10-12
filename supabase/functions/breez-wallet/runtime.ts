@@ -17,6 +17,21 @@ export const LOCK_WAIT_MS = 20_000;
 // Stay warm between admin clicks and the 1-minute sync cron: a cold lease
 // costs an SDK build + connect (seconds), so idle close only after 45 s.
 export const WALLET_IDLE_MS = 45_000;
+export const HANDOFF_POLL_MS = 200;
+const WANT_LOCK = "select pg_advisory_lock_shared(73501, 2)";
+const WANT_UNLOCK = "select pg_advisory_unlock_shared(73501, 2)";
+const WANTED = "select exists(select 1 from pg_locks where locktype = 'advisory' and classid = 73501 and objid = 2 and granted and pid <> pg_backend_pid()) as w";
+// Read-only responses served from breez_wallet.response_cache when fresh,
+// so they need no wallet lease (ms instead of a lease handoff). Writes to the
+// wallet invalidate the balance entry.
+export const CACHE_TTL_MS: Record<string, number> = {
+  "/admin/wallet/info": 120_000, // invalidated by wallet writes; incoming payments show within 2 min
+  "/admin/wallet/fiat": 10 * 60_000,
+  "/admin/wallet/stable-routes": 10 * 60_000,
+  "/withdraw/routes": 10 * 60_000,
+};
+const INVALIDATES_INFO = new Set(["/admin/wallet/receive", "/admin/wallet/send-confirm", "/admin/wallet/stable-confirm", "/withdraw/confirm", "/invoices"]);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const SIGNATURE_WINDOW_MS = 5 * 60 * 1000;
 const NONCE = /^[A-Za-z0-9_-]{16,128}$/;
 const TS = /^\d{12,14}$/;
@@ -69,14 +84,23 @@ export function createHost(deps: HostDeps) {
     let leaseId: number | null = null;
     try {
       const deadline = now() + lockWaitMs;
+      // A waiting request announces itself with a shared "want" lock so an
+      // idle warm holder in another isolate hands the wallet over at once
+      // instead of keeping it for the whole idle window.
+      let wanting = false;
       while (!locked) {
         const { rows } = await client.query("select pg_try_advisory_lock(breez_wallet.lock_key()) as ok");
         locked = rows[0]?.ok === true;
         if (!locked) {
-          if (now() >= deadline) throw new WalletUnavailable(503, "wallet busy");
-          await sleep(250);
+          if (now() >= deadline) {
+            if (wanting) await client.query(WANT_UNLOCK).catch(() => {});
+            throw new WalletUnavailable(503, "wallet busy");
+          }
+          if (!wanting && lockWaitMs > 0) { await client.query(WANT_LOCK).catch(() => {}); wanting = true; }
+          await sleep(150);
         }
       }
+      if (wanting) await client.query(WANT_UNLOCK).catch(() => {});
       // Re-check after the lock: the owner may have switched back meanwhile.
       if (!(await enabled())) throw new WalletUnavailable(503, "wallet is not enabled on supabase");
       const { rows } = await client.query(
@@ -121,10 +145,20 @@ export function createHost(deps: HostDeps) {
     return s;
   }
 
+  // Idle: keep the wallet warm up to WALLET_IDLE_MS, but hand it over as
+  // soon as another isolate is waiting for it.
   function scheduleIdle() {
     clearTimeout(idleTimer);
     if (!session) return;
-    idleTimer = setTimeout(() => { if (!busy) void close("idle"); }, WALLET_IDLE_MS);
+    const until = now() + WALLET_IDLE_MS;
+    const tick = async () => {
+      if (!session || busy || closing) return;
+      if (now() >= until) return void close("idle");
+      const wanted = await session.client.query(WANTED).then((r: Any) => r.rows?.[0]?.w === true, () => false);
+      if (wanted && session && !busy) return void close("handoff");
+      idleTimer = setTimeout(tick, HANDOFF_POLL_MS);
+    };
+    idleTimer = setTimeout(tick, HANDOFF_POLL_MS);
   }
 
   async function close(outcome: string): Promise<void> {
@@ -166,6 +200,29 @@ export function createHost(deps: HostDeps) {
     return rows[0]?.ok === true;
   }
 
+  // A cache hit still needs the same caller checks as the live route:
+  // signed request (done by the caller), and for /admin/wallet/* a POST with a
+  // verified admin session token whose user is an active admin.
+  let tokenVerifier: ((t: string) => Promise<string | null>) | null = null;
+  async function cached(key: string, ttl: number, method: string, headers: Headers, body: Uint8Array): Promise<Response | null> {
+    if (key.startsWith("/admin/wallet/")) {
+      if (method !== "POST") return null;
+      tokenVerifier ??= deps.verifyAdminToken ?? createAdminTokenVerifier({ supabaseUrl: deps.supabaseUrl, anonKey: deps.anonKey });
+      const token = headers.get("x-cpay-admin-token");
+      let adminId: string | null = token ? await tokenVerifier(token) : null;
+      if (!adminId && deps.adminJwtMode === "optional") {
+        try { adminId = String(JSON.parse(new TextDecoder().decode(body))?.adminId ?? ""); } catch { adminId = null; }
+      }
+      if (!adminId || !UUID_RE.test(adminId)) return null; // live path answers 401/403
+      const { rows } = await deps.db.query("select role, account_status from profiles where id = $1", [adminId]);
+      if (rows[0]?.role !== "admin" || rows[0]?.account_status !== "active") return null;
+    } else if (method !== "GET") return null;
+    const { rows } = await deps.db.query(
+      "select status, body from breez_wallet.response_cache where key = $1 and updated_at > now() - make_interval(secs => $2::float8 / 1000)", [key, ttl]);
+    if (!rows[0]) return null;
+    return new Response(rows[0].body, { status: rows[0].status, headers: { "content-type": "application/json", "x-cpay-cache": "hit" } });
+  }
+
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -182,13 +239,28 @@ export function createHost(deps: HostDeps) {
       await close("disabled");
       return json(503, { error: "wallet is not enabled on supabase" });
     }
+    const cacheKey = path.split("?")[0];
+    const ttl = CACHE_TTL_MS[cacheKey];
+    if (ttl) {
+      const hit = await cached(cacheKey, ttl, method, headers, body).catch(() => null);
+      if (hit) return hit;
+    }
     busy++;
     try {
       const s = await acquire();
       s.requests++;
       const { res, done } = captureResponse();
       await s.app.handle(toNodeRequest(method, path, headers, body), res);
-      return await done;
+      const out = await done;
+      if (ttl && out.status === 200) {
+        const text = await out.clone().text();
+        await deps.db.query(
+          "insert into breez_wallet.response_cache (key, status, body, updated_at) values ($1, 200, $2, now()) on conflict (key) do update set status = 200, body = excluded.body, updated_at = now()",
+          [cacheKey, text]).catch(() => {});
+      } else if (INVALIDATES_INFO.has(cacheKey)) {
+        await deps.db.query("delete from breez_wallet.response_cache where key = '/admin/wallet/info'").catch(() => {});
+      }
+      return out;
     } catch (e) {
       if (e instanceof WalletUnavailable) return json(e.status, { error: e.message });
       deps.log({ event: "request-failed", path, error: String((e as Error)?.message ?? e).slice(0, 300) });

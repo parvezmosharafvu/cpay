@@ -11,7 +11,7 @@
 // PAYMENT_SERVICE_SECRET, CRON_SECRET, ADMIN_JWT_MODE (default required).
 import pg from "npm:pg@8.18.0";
 import { connect, defaultConfig, postgresStorage, SdkBuilder } from "npm:@breeztech/breez-sdk-spark@0.26.0/deno";
-import { installPostgresGlobals } from "./pg-globals.ts";
+import { endPostgresPools, installPostgresGlobals } from "./pg-globals.ts";
 import { createHost, WALLET_IDLE_MS } from "./runtime.ts";
 
 const env = (k: string) => (Deno.env.get(k) ?? "").trim();
@@ -66,6 +66,7 @@ function getHost() {
       void connect; // connect() is the file-storage path the VM uses; Edge has no disk.
       return await builder.build();
     },
+    releaseSdk: () => endPostgresPools(),
     secret: env("PAYMENT_SERVICE_SECRET"),
     adminJwtMode: env("ADMIN_JWT_MODE").toLowerCase() === "optional" ? "optional" : "required",
     supabaseUrl: env("SUPABASE_URL"),

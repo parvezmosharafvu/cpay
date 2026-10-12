@@ -43,6 +43,7 @@ export type HostDeps = {
   db: Any;                       // pg.Pool for the ledger (same role as the VM's DATABASE_URL)
   lockClient: () => Promise<Any>; // a dedicated pg client (session mode, NOT the transaction pooler)
   connectSdk: () => Promise<Any>; // builds + connects the Breez SDK with postgres storage
+  releaseSdk?: () => Promise<unknown>; // after disconnect: end the SDK's own pg pool (session clients)
   secret: string;
   adminJwtMode: "optional" | "required";
   supabaseUrl: string;
@@ -73,6 +74,10 @@ export function createHost(deps: HostDeps) {
   let idleGen = 0;
   let closing: Promise<void> | null = null;
 
+  // The SDK's pool is not ended by disconnect(); without this its idle
+  // session clients outlive every handoff (see pg-globals.ts).
+  const releaseSdk = () => Promise.resolve().then(() => deps.releaseSdk?.()).catch(() => {});
+
   async function enabled(): Promise<boolean> {
     const { rows } = await deps.db.query("select enabled, owner from breez_wallet.control where id");
     return Boolean(rows[0]?.enabled) && rows[0]?.owner === "supabase-edge";
@@ -85,6 +90,8 @@ export function createHost(deps: HostDeps) {
     const client = await deps.lockClient();
     let locked = false;
     let leaseId: number | null = null;
+    let sdkStarted = false;
+    let sdk: Any = null;
     try {
       const deadline = now() + lockWaitMs;
       // A waiting request announces itself with a shared "want" lock so an
@@ -109,7 +116,8 @@ export function createHost(deps: HostDeps) {
       const { rows } = await client.query(
         "insert into breez_wallet.lease_log (holder) values ($1) returning id", [holder]);
       leaseId = Number(rows[0].id);
-      const sdk = await deps.connectSdk();
+      sdkStarted = true;
+      sdk = await deps.connectSdk();
       const verifyAdminToken = deps.verifyAdminToken ??
         createAdminTokenVerifier({ supabaseUrl: deps.supabaseUrl, anonKey: deps.anonKey });
       const app = createApp({
@@ -132,6 +140,10 @@ export function createHost(deps: HostDeps) {
         await client.query("update breez_wallet.lease_log set released_at = now(), outcome = $2 where id = $1",
           [leaseId, `open-failed: ${why}`]).catch(() => {});
       }
+      // A half-open SDK must not keep running (or keep its pool) once the
+      // lock is gone, or a second isolate could hold the wallet alongside it.
+      if (sdk) { try { await sdk.disconnect(); } catch { /* already down */ } }
+      if (sdkStarted) await releaseSdk();
       if (locked) await client.query("select pg_advisory_unlock(breez_wallet.lock_key())").catch(() => {});
       client.release?.(true);
       throw e;
@@ -190,6 +202,7 @@ export function createHost(deps: HostDeps) {
       const { drained } = await s.app.drain(90_000);
       let disconnected = true;
       try { await s.sdk.disconnect(); } catch { disconnected = false; }
+      await releaseSdk();
       await s.client.query(
         "update breez_wallet.lease_log set released_at = now(), requests = $2, outcome = $3 where id = $1",
         [s.leaseId, s.requests, `${outcome}${drained ? "" : ",undrained"}${disconnected ? "" : ",disconnect-failed"}`],

@@ -387,6 +387,12 @@ jobs:
         # route (/admin-mark-settled, /process-withdrawal, /admin-wallet)
         # goes through the gate before any work.
         run: deno test --allow-net=127.0.0.1 --allow-read=supabase/functions/admin-actions supabase/functions/admin-actions/
+      - name: breez-wallet lease, signed auth and core drift (fake SDK, fake Postgres)
+        # No wallet, no network to Breez, no secrets. Covers: off unless
+        # breez_wallet.control is enabled, one holder at a time (advisory
+        # lock), cross-isolate nonce replay refused, admin routes need a
+        # verified token, core/ identical to payment-service/.
+        run: deno test --allow-read --allow-env --allow-net=127.0.0.1 supabase/functions/breez-wallet/
       - name: telegram-notify against a mock Telegram API
         # Local mock server only: no message reaches Telegram. Covers the
         # cron secret, message wording and escaping, retry and failure
@@ -400,7 +406,7 @@ jobs:
         # and pass once they are allowed. This also lists the repo set.
         run: |
           set +e
-          out=$(python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json)
+          out=$(python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet)
           code=$?
           set -e
           echo "$out"
@@ -408,12 +414,14 @@ jobs:
           [ "$(echo "$out" | grep -c '^  ORPHAN')" -eq 3 ] || { echo "expected exactly 3 orphans"; exit 1; }
           for f in reconcile reseller-digest telegram-report; do echo "$out" | grep -q "ORPHAN    $f " || { echo "missing orphan $f"; exit 1; }; done
           ! echo "$out" | grep -q '^  MISSING' || { echo "a repo function is missing from the fixture"; exit 1; }
-          python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json \
+          python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet \
             --allow reconcile --allow reseller-digest --allow telegram-report
       - name: deployed-vs-repo drift check (2026-10-07 list, after orphan deletes)
         # Production list saved after reconcile, reseller-digest and
         # telegram-report were deleted (2026-10-07). Must report no drift.
-        run: python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-07.json
+        # breez-wallet stays undeployed until the wallet cutover
+        # (supabase/functions/breez-wallet/README.md).
+        run: python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-07.json --undeployed breez-wallet
 
   frontend:
     name: Pages parse and reference real things

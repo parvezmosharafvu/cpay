@@ -413,7 +413,9 @@ jobs:
           [ "$code" -eq 1 ] || { echo "expected exit 1 (drift), got $code"; exit 1; }
           [ "$(echo "$out" | grep -c '^  ORPHAN')" -eq 3 ] || { echo "expected exactly 3 orphans"; exit 1; }
           for f in reconcile reseller-digest telegram-report; do echo "$out" | grep -q "ORPHAN    $f " || { echo "missing orphan $f"; exit 1; }; done
-          ! echo "$out" | grep -q '^  MISSING' || { echo "a repo function is missing from the fixture"; exit 1; }
+          # breez-wallet is intentionally undeployed until the wallet cutover
+          # (supabase/functions/breez-wallet/README.md).
+          ! echo "$out" | grep '^  MISSING' | grep -vq 'MISSING   breez-wallet ' || { echo "a repo function is missing from the fixture"; exit 1; }
           python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json \
             --allow reconcile --allow reseller-digest --allow telegram-report
       - name: deployed-vs-repo drift check (2026-10-07 list, after orphan deletes)

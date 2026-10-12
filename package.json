@@ -9,6 +9,7 @@
     "@amplitude/unified": "^1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "esbuild": "0.25.9"
   }
 }

@@ -1,0 +1,6 @@
+# Public-by-design values, reviewed 2026-10-13: the Supabase anon (role=anon) key in browser config
+# and the OG worker, and the Amplitude browser ingestion key. None grants privileged access.
+0096f233d6ef13afccdb858d98fdc04680d37763:public/config.js:jwt:4
+d14b708ee88e9d31c6fd47efb5457258cfbe3950:public/config.js:jwt:4
+d14b708ee88e9d31c6fd47efb5457258cfbe3950:src/home-analytics.js:generic-api-key:4
+d14b708ee88e9d31c6fd47efb5457258cfbe3950:worker/og-preview-worker.js:jwt:13

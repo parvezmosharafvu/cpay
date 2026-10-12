@@ -68,6 +68,9 @@ export function createHost(deps: HostDeps) {
   let opening: Promise<Session> | null = null;
   let busy = 0;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  // Bumped whenever the idle poll must stop (new request, close, reschedule),
+  // so a tick still awaiting its WANTED query never keeps an older chain alive.
+  let idleGen = 0;
   let closing: Promise<void> | null = null;
 
   async function enabled(): Promise<boolean> {
@@ -138,6 +141,7 @@ export function createHost(deps: HostDeps) {
   async function acquire(lockWaitMs = LOCK_WAIT_MS, full = false): Promise<Session> {
     if (closing) await closing;
     clearTimeout(idleTimer);
+    idleGen++;
     if (session) return session;
     // Concurrent callers share one open. A request that joined the cron's
     // no-wait open must not fail fast with "wallet busy": retry with its own wait.
@@ -159,13 +163,19 @@ export function createHost(deps: HostDeps) {
   // soon as another isolate is waiting for it.
   function scheduleIdle() {
     clearTimeout(idleTimer);
-    if (!session) return;
+    const s = session;
+    if (!s) return;
+    const gen = ++idleGen;
     const until = now() + WALLET_IDLE_MS;
+    const current = () => gen === idleGen && session === s && !busy && !closing;
     const tick = async () => {
-      if (!session || busy || closing) return;
+      if (!current()) return;
       if (now() >= until) return void close("idle");
-      const wanted = await session.client.query(WANTED).then((r: Any) => r.rows?.[0]?.w === true, () => false);
-      if (wanted && session && !busy) return void close("handoff");
+      const wanted = await s.client.query(WANTED).then((r: Any) => r.rows?.[0]?.w === true, () => false);
+      // Re-check after the await: a request may have come and gone meanwhile
+      // and started a newer chain with a later deadline.
+      if (!current()) return;
+      if (wanted) return void close("handoff");
       idleTimer = setTimeout(tick, HANDOFF_POLL_MS);
     };
     idleTimer = setTimeout(tick, HANDOFF_POLL_MS);
@@ -175,6 +185,7 @@ export function createHost(deps: HostDeps) {
     if (!session || closing) return closing ?? undefined;
     const s = session;
     clearTimeout(idleTimer);
+    idleGen++;
     closing = (async () => {
       const { drained } = await s.app.drain(90_000);
       let disconnected = true;

@@ -1,7 +1,16 @@
+// Reads give up after 45 s. Sends wait longer than admin-actions' own 45 s
+// send timeout, so its answer ("may still be going through, check the
+// history") reaches the admin; a send the browser gives up on is never
+// reported as "try again", because it may already have gone out.
+const WALLET_TIMEOUT_MS = 45_000;
+const WALLET_SEND_TIMEOUT_MS = 60_000;
+const WALLET_SENDS = new Set(['send-confirm', 'stable-confirm']);
+
 async function walletFetch(path, payload) {
   const { data: sess } = await window.supabaseClient.auth.getSession();
   const token = sess?.session?.access_token;
   if (!token) throw new Error('Sign in again');
+  const sends = WALLET_SENDS.has(payload?.action);
   const res = await fetch(`${window.SUPABASE_URL}/functions/v1/${path}`, {
     method: 'POST',
     headers: {
@@ -14,10 +23,12 @@ async function walletFetch(path, payload) {
     // Guard: frontend tests run this file in a bare vm.Context with no
     // AbortSignal, and very old browsers lack AbortSignal.timeout.
     ...(typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
-      ? { signal: AbortSignal.timeout(45_000) }
+      ? { signal: AbortSignal.timeout(sends ? WALLET_SEND_TIMEOUT_MS : WALLET_TIMEOUT_MS) }
       : {}),
   }).catch((e) => {
     const timedOut = e?.name === 'TimeoutError' || e?.name === 'AbortError';
+    // A send that did not answer may still have gone out: never invite a blind retry.
+    if (sends) throw new Error('The send may still be going through. Check the history before trying again.');
     throw new Error(timedOut ? 'The wallet took too long to answer. Try again.' : 'Could not reach the wallet. Check your connection and try again.');
   });
   const data = await res.json().catch(() => ({}));

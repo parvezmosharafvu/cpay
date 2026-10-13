@@ -236,8 +236,23 @@ function routesRetryButton(show) {
   if (b) b.hidden = !show;
 }
 
+// Last-known-good catalog served while the wallet is busy: say how old it is
+// rather than presenting it as live.
+function routesStaleNote(ageSec) {
+  let n = document.getElementById('wqNetStale');
+  if (!n && ageSec == null) return;
+  if (!n) {
+    n = document.createElement('small');
+    n.id = 'wqNetStale'; n.className = 'muted'; n.setAttribute('role', 'status');
+    $w('wqNet').insertAdjacentElement('afterend', n);
+  }
+  n.hidden = ageSec == null;
+  n.textContent = ageSec == null ? '' : `Network list from ${Math.max(1, Math.round(ageSec / 60))} min ago (live refresh pending).`;
+}
+
 async function loadRoutes() {
   routesRetryButton(false);
+  routesStaleNote(null);
   const loading = document.createElement('option'); loading.value = ''; loading.textContent = 'Loading networks…';
   $w('wqNet').replaceChildren(loading);
   let error = null;
@@ -245,7 +260,9 @@ async function loadRoutes() {
   for (const d of WALLET_ROUTE_RETRY_DELAYS) {
     if (d) await new Promise((r) => setTimeout(r, d));
     try {
-      ({ routes } = await walletCall('stable-routes'));
+      const res = await walletCall('stable-routes');
+      routes = res?.routes;
+      walletState.routesStale = res?.stale === true ? Number(res.cacheAgeSec) || 0 : null;
       routes = Array.isArray(routes) ? routes : [];
       error = null;
       if (routes.length) break;
@@ -254,6 +271,7 @@ async function loadRoutes() {
   walletState.routes = routes;
   if (routes.length) {
     $w('wqNet').innerHTML = routes.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.asset)} · ${escapeHtml(chainLabel(r.chain))}</option>`).join('');
+    routesStaleNote(walletState.routesStale);
     return;
   }
   const opt = document.createElement('option'); opt.value = '';

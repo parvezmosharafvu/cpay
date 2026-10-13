@@ -188,7 +188,7 @@ async function loadWithdrawRoutes({ fresh = false } = {}){
     if (!r.ok) { last = { routes: [], error: r.message || 'Could not load networks' }; continue; }
     const routes = (r.data?.routes || []).filter((x) => String(x.asset || '').toUpperCase() === 'USDT');
     if (!routes.length) { last = { routes: [], error: null }; continue; }
-    withdrawRoutes = { routes, error: null };
+    withdrawRoutes = { routes, error: null, stale: r.data?.stale === true, cacheAgeSec: Number(r.data?.cacheAgeSec) || 0 };
     return withdrawRoutes;
   }
   return last;
@@ -208,6 +208,14 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
       ? routes.routes.map((r) => `<option value="${escapeHtml(r.id)}">USDT · ${escapeHtml(chainLabel(r.chain))}</option>`).join('')
       : `<option value="">${routes.loading ? 'Loading networks...' : (routes.error ? 'Networks did not load' : 'No USDT networks available right now')}</option>`;
     if (routes.routes.some((r) => r.id === keep)) $('wNet').value = keep;
+    let staleNote = document.getElementById('wNetStale');
+    if (!staleNote) {
+      staleNote = document.createElement('small');
+      staleNote.id = 'wNetStale'; staleNote.className = 'muted'; staleNote.setAttribute('role', 'status');
+      $('wNetField').appendChild(staleNote);
+    }
+    staleNote.hidden = !(routes.stale && routes.routes.length);
+    staleNote.textContent = routes.stale ? `Network list from ${Math.max(1, Math.round((routes.cacheAgeSec || 0) / 60))} min ago; it refreshes automatically.` : '';
     let retry = document.getElementById('wNetRetry');
     if (!routes.loading && !routes.routes.length) {
       if (!retry) {

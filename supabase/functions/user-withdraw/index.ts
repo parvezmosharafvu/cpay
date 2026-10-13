@@ -199,7 +199,8 @@ Deno.serve(async (req) => {
       if (action === "routes") {
         const { status, payload } = await paymentService("/withdraw/routes", { method: "GET" }, 15000);
         const routes = Array.isArray(payload.routes) ? payload.routes.map(publicRoute) : [];
-        return json(status === 200 ? { routes } : { error: "Could not load networks" }, status === 200 ? 200 : 502, cors);
+        const meta = payload.stale === true ? { stale: true, cacheAgeSec: Number(payload.cacheAgeSec) || 0 } : {};
+        return json(status === 200 ? { routes, ...meta } : { error: "Could not load networks" }, status === 200 ? 200 : 502, cors);
       }
       if (action === "quote") {
         const amount = String(body.amount ?? "").trim();

@@ -343,7 +343,10 @@ test('payload allowlist: secrets and unknown fields never stored, sizes bounded'
   const out = sanitizePayload(p);
   for (const k of Object.keys(out)) assert.ok(PAYLOAD_KEYS.includes(k), k);
   const json = JSON.stringify(out);
-  assert.doesNotMatch(json, /abandon|aaaa|bbbb|cccc|dddd|ffff|secretinvoice|tip|lnurl|conversion|from/);
+  // Look for the planted secrets themselves, not short hex runs: the random
+  // paymentHash and run id can contain 'aaaa' etc. by chance (flaky ~0.5%).
+  for (const secret of ['aa'.repeat(64), 'bb'.repeat(32), 'cc'.repeat(32), 'dd'.repeat(32), 'ff'.repeat(32)]) assert.ok(!json.includes(secret), 'secret hex leaked');
+  assert.doesNotMatch(json, /abandon|secretinvoice|tip|lnurl|conversion|from/);
   assert.equal(out.paymentHash, hash);
   assert.equal(out.droppedFields, 3); // fees, timestamp, htlcStatus failed validation
   for (const v of Object.values(out)) assert.ok(['string', 'number'].includes(typeof v));

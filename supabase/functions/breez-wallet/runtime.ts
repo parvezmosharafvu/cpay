@@ -30,6 +30,13 @@ export const CACHE_TTL_MS: Record<string, number> = {
   "/admin/wallet/stable-routes": 10 * 60_000,
   "/withdraw/routes": 10 * 60_000,
 };
+// The routes catalog changes rarely. Past its TTL it is still served (up to
+// a day, marked x-cpay-cache: stale) rather than queueing the caller behind
+// the wallet lease, where admin-actions/user-withdraw time out and the page
+// showed "not available". The cron tick refreshes it once it is past TTL.
+const ROUTES_KEYS = ["/admin/wallet/stable-routes", "/withdraw/routes"];
+export const ROUTES_STALE_MAX_MS = 24 * 60 * 60_000;
+const hasRoutes = (text: string) => { try { return (JSON.parse(text)?.routes?.length ?? 0) > 0; } catch { return false; } };
 const INVALIDATES_INFO = new Set(["/admin/wallet/receive", "/admin/wallet/send-confirm", "/admin/wallet/stable-confirm", "/withdraw/confirm", "/invoices"]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const SIGNATURE_WINDOW_MS = 5 * 60 * 1000;
@@ -238,7 +245,7 @@ export function createHost(deps: HostDeps) {
   // signed request (done by the caller), and for /admin/wallet/* a POST with a
   // verified admin session token whose user is an active admin.
   let tokenVerifier: ((t: string) => Promise<string | null>) | null = null;
-  async function cached(key: string, ttl: number, method: string, headers: Headers, body: Uint8Array): Promise<Response | null> {
+  async function cached(key: string, ttl: number, method: string, headers: Headers, body: Uint8Array, staleMs = 0): Promise<Response | null> {
     if (key.startsWith("/admin/wallet/")) {
       if (method !== "POST") return null;
       tokenVerifier ??= deps.verifyAdminToken ?? createAdminTokenVerifier({ supabaseUrl: deps.supabaseUrl, anonKey: deps.anonKey });
@@ -252,9 +259,10 @@ export function createHost(deps: HostDeps) {
       if (rows[0]?.role !== "admin" || rows[0]?.account_status !== "active") return null;
     } else if (method !== "GET") return null;
     const { rows } = await deps.db.query(
-      "select status, body from breez_wallet.response_cache where key = $1 and updated_at > now() - make_interval(secs => $2::float8 / 1000)", [key, ttl]);
+      "select status, body, (updated_at > now() - make_interval(secs => $2::float8 / 1000)) as fresh from breez_wallet.response_cache where key = $1 and updated_at > now() - make_interval(secs => $3::float8 / 1000)",
+      [key, ttl, Math.max(ttl, staleMs)]);
     if (!rows[0]) return null;
-    return new Response(rows[0].body, { status: rows[0].status, headers: { "content-type": "application/json", "x-cpay-cache": "hit" } });
+    return new Response(rows[0].body, { status: rows[0].status, headers: { "content-type": "application/json", "x-cpay-cache": rows[0].fresh === false ? "stale" : "hit" } });
   }
 
   const json = (status: number, body: unknown) =>
@@ -276,7 +284,7 @@ export function createHost(deps: HostDeps) {
     const cacheKey = path.split("?")[0];
     const ttl = CACHE_TTL_MS[cacheKey];
     if (ttl) {
-      const hit = await cached(cacheKey, ttl, method, headers, body).catch(() => null);
+      const hit = await cached(cacheKey, ttl, method, headers, body, ROUTES_KEYS.includes(cacheKey) ? ROUTES_STALE_MAX_MS : 0).catch(() => null);
       if (hit) return hit;
     }
     busy++;
@@ -286,8 +294,9 @@ export function createHost(deps: HostDeps) {
       const { res, done } = captureResponse();
       await s.app.handle(toNodeRequest(method, path, headers, body), res);
       const out = await done;
-      if (ttl && out.status === 200) {
-        const text = await out.clone().text();
+      const text = ttl && out.status === 200 ? await out.clone().text() : "";
+      // An empty routes list (provider hiccup) is never cached over a good one.
+      if (ttl && out.status === 200 && (!ROUTES_KEYS.includes(cacheKey) || hasRoutes(text))) {
         await deps.db.query(
           "insert into breez_wallet.response_cache (key, status, body, updated_at) values ($1, 200, $2, now()) on conflict (key) do update set status = 200, body = excluded.body, updated_at = now()",
           [cacheKey, text]).catch(() => {});
@@ -302,6 +311,24 @@ export function createHost(deps: HostDeps) {
     } finally {
       busy--;
       if (!busy) scheduleIdle();
+    }
+  }
+
+  // Keep the routes catalog warm from the cron tick, which already holds the
+  // lease: only when past TTL, and never overwrite with an empty list.
+  async function refreshRoutes(s: Session): Promise<void> {
+    if (typeof s.app.withdrawRoutes !== "function") return;
+    const ttl = CACHE_TTL_MS["/withdraw/routes"];
+    const { rows } = await deps.db.query(
+      "select count(*)::int as n from breez_wallet.response_cache where key = any($1) and updated_at > now() - make_interval(secs => $2::float8 / 1000)",
+      [ROUTES_KEYS, ttl / 2]);
+    if (Number(rows[0]?.n ?? 0) >= ROUTES_KEYS.length) return;
+    const text = JSON.stringify(await s.app.withdrawRoutes());
+    if (!hasRoutes(text)) return;
+    for (const key of ROUTES_KEYS) {
+      await deps.db.query(
+        "insert into breez_wallet.response_cache (key, status, body, updated_at) values ($1, 200, $2, now()) on conflict (key) do update set status = 200, body = excluded.body, updated_at = now()",
+        [key, text]);
     }
   }
 
@@ -326,6 +353,7 @@ export function createHost(deps: HostDeps) {
       // A fresh full open already synced. A warm session, or a light one a
       // request was opening when this tick joined it, has not: catch up now.
       if (warm || !s.full) await s.app.catchUp();
+      await refreshRoutes(s).catch((e) => deps.log({ event: "routes-refresh-failed", error: String((e as Error)?.message ?? e).slice(0, 300) }));
       return json(200, { ok: true });
     } catch (e) {
       if (e instanceof WalletUnavailable) return json(e.status, { error: e.message });

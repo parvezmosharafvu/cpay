@@ -176,13 +176,22 @@ function withdrawForm(whoHtml){
   </div>`;
 }
 let withdrawRoutes = null;
-async function loadWithdrawRoutes(){
-  if (withdrawRoutes) return withdrawRoutes;
-  const r = await callFunction('user-withdraw', { action: 'routes' });
-  if (!r.ok) return { routes: [], error: r.message || 'Could not load networks' };
-  const routes = (r.data?.routes || []).filter((x) => String(x.asset || '').toUpperCase() === 'USDT');
-  withdrawRoutes = { routes, error: null };
-  return withdrawRoutes;
+// Retries with backoff before giving up: the networks list can be slow while
+// the wallet is busy. Only a list that loaded with networks is remembered.
+const ROUTE_RETRY_DELAYS = [0, 1500, 4000];
+async function loadWithdrawRoutes({ fresh = false } = {}){
+  if (withdrawRoutes && !fresh) return withdrawRoutes;
+  let last = { routes: [], error: 'Could not load networks' };
+  for (const d of ROUTE_RETRY_DELAYS) {
+    if (d) await new Promise((r) => setTimeout(r, d));
+    const r = await callFunction('user-withdraw', { action: 'routes' });
+    if (!r.ok) { last = { routes: [], error: r.message || 'Could not load networks' }; continue; }
+    const routes = (r.data?.routes || []).filter((x) => String(x.asset || '').toUpperCase() === 'USDT');
+    if (!routes.length) { last = { routes: [], error: null }; continue; }
+    withdrawRoutes = { routes, error: null };
+    return withdrawRoutes;
+  }
+  return last;
 }
 function shortAddress(a){ return a && a.length > 16 ? `${a.slice(0, 8)}...${a.slice(-6)}` : (a || ''); }
 function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => {}, blocked = null, saved = [], preferredNetwork = null } = {}){
@@ -197,8 +206,23 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
     const keep = $('wNet').value;
     $('wNet').innerHTML = routes.routes.length
       ? routes.routes.map((r) => `<option value="${escapeHtml(r.id)}">USDT · ${escapeHtml(chainLabel(r.chain))}</option>`).join('')
-      : `<option value="">${routes.loading ? 'Loading networks...' : 'No USDT networks available right now'}</option>`;
+      : `<option value="">${routes.loading ? 'Loading networks...' : (routes.error ? 'Networks did not load' : 'No USDT networks available right now')}</option>`;
     if (routes.routes.some((r) => r.id === keep)) $('wNet').value = keep;
+    let retry = document.getElementById('wNetRetry');
+    if (!routes.loading && !routes.routes.length) {
+      if (!retry) {
+        retry = document.createElement('button');
+        retry.type = 'button'; retry.id = 'wNetRetry'; retry.className = 'btn ghost sm'; retry.textContent = 'Retry';
+        retry.addEventListener('click', reloadNetworks);
+        $('wNetField').appendChild(retry);
+      }
+      retry.hidden = false;
+    } else if (retry) retry.hidden = true;
+  };
+  const reloadNetworks = () => {
+    routes = { routes: [], error: null, loading: true };
+    fillNetworks(); render();
+    loadWithdrawRoutes({ fresh: true }).then((r) => { routes = { ...r, loading: false }; fillNetworks(); if (saved.length) pickSavedNetwork(); render(); });
   };
   const render = () => {
     const m = method();

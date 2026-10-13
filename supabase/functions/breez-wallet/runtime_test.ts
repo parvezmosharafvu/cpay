@@ -8,7 +8,7 @@ const SECRET = "s".repeat(40);
 
 // A shared fake Postgres: the control row, the nonce table and one advisory lock.
 function fakePg({ enabled = true } = {}) {
-  const state = { enabled, owner: "supabase-edge", nonces: new Set<string>(), lockHolder: null as null | number, locks: 0, leases: 0 };
+  const state = { enabled, owner: "supabase-edge", nonces: new Set<string>(), lockHolder: null as null | number, locks: 0, leases: 0, cache: new Map<string, { body: string; ageMs: number }>(), cacheWrites: 0 };
   let next = 1;
   const query = (who: number) => async (sql: string, params: unknown[] = []) => {
     if (sql.includes("from breez_wallet.control")) return { rows: [{ enabled: state.enabled, owner: state.owner }] };
@@ -24,6 +24,17 @@ function fakePg({ enabled = true } = {}) {
     if (sql.includes("pg_advisory_unlock")) { if (state.lockHolder === who) state.lockHolder = null; return { rows: [{ ok: true }] }; }
     if (sql.includes("insert into breez_wallet.lease_log")) { state.leases++; return { rows: [{ id: state.leases }] }; }
     if (sql.includes("as since")) return { rows: [{ since: null }] };
+    // response_cache: ageMs per key stands in for now() - updated_at.
+    if (sql.includes("from breez_wallet.response_cache where key = $1")) {
+      const e = state.cache.get(String(params[0]));
+      if (!e || e.ageMs > Number(params[2] ?? params[1])) return { rows: [] };
+      return { rows: [{ status: 200, body: e.body, fresh: e.ageMs <= Number(params[1]) }] };
+    }
+    if (sql.includes("from breez_wallet.response_cache where key = any")) {
+      const keys = params[0] as string[];
+      return { rows: [{ n: keys.filter((k) => (state.cache.get(k)?.ageMs ?? Infinity) <= Number(params[1])).length }] };
+    }
+    if (sql.includes("insert into breez_wallet.response_cache")) { state.cache.set(String(params[0]), { body: String(params[1]), ageMs: 0 }); state.cacheWrites++; return { rows: [] }; }
     return { rows: [], rowCount: 0 };
   };
   const db = { query: query(0), connect: async () => ({ query: query(0), release() {} }) };
@@ -282,4 +293,71 @@ Deno.test("an SDK build that fails still ends whatever pool it made; a throwing 
   assertEquals((await a.h.serve("GET", "/metrics", r.headers, r.body)).status, 500);
   assertEquals(released, 1);
   assertEquals(pg.state.lockHolder, null);
+});
+
+// Routes catalog: served from the shared cache past its TTL (stale) instead of
+// queueing behind the lease; never replaced by an empty list; the cron tick
+// refreshes it.
+const GOOD = JSON.stringify({ routes: [{ id: "orchestra:arbitrum:usdt", asset: "USDT", chain: "arbitrum" }], cache: {} });
+
+Deno.test("routes: a stale cached catalog is served while another instance holds the wallet", async () => {
+  const pg = fakePg();
+  const a = host(pg);
+  const b = host(pg);
+  const r1 = signed("GET", "/metrics");
+  assertEquals((await a.h.serve("GET", "/metrics", r1.headers, r1.body)).status, 200); // a holds the lease
+  pg.state.cache.set("/withdraw/routes", { body: GOOD, ageMs: 3 * 60 * 60_000 }); // 3 h old, past the 10 min TTL
+  const r2 = signed("GET", "/withdraw/routes");
+  const res = await b.h.serve("GET", "/withdraw/routes", r2.headers, r2.body);
+  assertEquals(res.status, 200);
+  assertEquals(res.headers.get("x-cpay-cache"), "stale");
+  assertEquals((await res.json()).routes.length, 1);
+  assertEquals(b.connects(), 0, "no lease needed");
+  // older than a day: not served, the live path answers (here: busy)
+  pg.state.cache.set("/withdraw/routes", { body: GOOD, ageMs: 25 * 60 * 60_000 });
+  const r3 = signed("GET", "/withdraw/routes");
+  assertEquals((await b.h.serve("GET", "/withdraw/routes", r3.headers, r3.body)).status, 503);
+  await a.h.close("test");
+});
+
+Deno.test("routes: an empty live list is returned but never cached over a good one", async () => {
+  const pg = fakePg();
+  const sdk = fakeBreez();
+  sdk.getCrossChainRoutes = async () => [];
+  pg.state.cache.set("/withdraw/routes", { body: GOOD, ageMs: 60 * 60_000 }); // stale but good
+  pg.state.cache.set("/admin/wallet/stable-routes", { body: GOOD, ageMs: 60 * 60_000 });
+  const { h } = host(pg, sdk);
+  await h.sync(); // the cron tick must not overwrite with an empty list
+  assertEquals(pg.state.cache.get("/withdraw/routes")?.body, GOOD);
+  pg.state.cache.delete("/withdraw/routes");
+  const r = signed("GET", "/withdraw/routes");
+  const res = await h.serve("GET", "/withdraw/routes", r.headers, r.body);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).routes.length, 0);
+  assertEquals(pg.state.cache.has("/withdraw/routes"), false, "empty list not cached");
+  await h.close("test");
+});
+
+Deno.test("routes: the cron tick refreshes a catalog past half its TTL, for both keys", async () => {
+  const pg = fakePg();
+  const sdk = fakeBreez();
+  let calls = 0;
+  sdk.getCrossChainRoutes = async (req: unknown) => {
+    calls++;
+    const fam = (req as { addressDetails: { addressFamily: string } }).addressDetails.addressFamily;
+    return fam === "evm" ? [{ provider: "orchestra", chain: "arbitrum", asset: "USDT", decimals: 6, exactOutEligible: true, deliveryMethods: ["spark"],
+      acceptedAssets: [{ asset: { type: "bitcoin" }, limits: { minUsdCents: 100, maxUsdCents: 1_000_000 } }] }] : [];
+  };
+  const c = host(pg, sdk);
+  assertEquals((await c.h.sync()).status, 200);
+  const w = pg.state.cache.get("/withdraw/routes");
+  const s = pg.state.cache.get("/admin/wallet/stable-routes");
+  assert(w && s, "both keys written");
+  assert(JSON.parse(w.body).routes.length > 0);
+  assertEquals(w.body, s.body);
+  // fresh now: the next tick does not call the provider again
+  const before = calls;
+  assertEquals((await c.h.sync()).status, 200);
+  assertEquals(calls, before);
+  await c.h.close("test");
 });

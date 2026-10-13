@@ -99,3 +99,35 @@ test('the network picker follows the saved address: preferred network first, and
   await page.click('#wBtn');
   await expect(page.locator('#wBtn')).toHaveText(/Confirm and send/);
 });
+
+test('networks: a failing routes call is retried with backoff; after the retries a Retry button loads them', async ({ page }) => {
+  const u = await makeUser({ name: 'Routes Retry', earned: 50 });
+  await readyAddress(u.id);
+  let failLeft = 2;
+  let failAll = false;
+  await page.route('**/functions/v1/user-withdraw', async (route) => {
+    const body = route.request().postDataJSON?.() ?? {};
+    if (route.request().method() === 'POST' && body.action === 'routes' && (failAll || failLeft > 0)) {
+      failLeft--;
+      return route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'Could not load networks' }) });
+    }
+    return route.continue();
+  });
+  await login(page, u);
+  await page.waitForURL(/dashboard\.html/);
+  await page.click('.navi[data-tab="cash"]');
+  // two failures, then success on the third try: no error shown
+  await expect(page.locator('#wNet option', { hasText: 'Tron' })).toHaveCount(1, { timeout: 15_000 });
+  await expect(page.locator('#wNetRetry')).toHaveCount(0);
+
+  // every try fails: only then the error and a Retry button
+  failAll = true;
+  await page.reload();
+  await page.click('.navi[data-tab="cash"]');
+  await expect(page.locator('#wNet option')).toHaveText('Networks did not load', { timeout: 15_000 });
+  await expect(page.locator('#wNetRetry')).toBeVisible();
+  failAll = false; failLeft = 0;
+  await page.click('#wNetRetry');
+  await expect(page.locator('#wNet option', { hasText: 'Tron' })).toHaveCount(1, { timeout: 15_000 });
+  await expect(page.locator('#wNetRetry')).toBeHidden();
+});

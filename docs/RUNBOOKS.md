@@ -172,10 +172,10 @@ fails when `breez_wallet.lease_log` shows an `open-failed` outcome in the last
 over 10 minutes. The alert goes to `ALERT_TELEGRAM_BOT_TOKEN` +
 `ALERT_TELEGRAM_CHAT_ID` and/or `ALERT_WEBHOOK_URL`.
 
-What to do: open the breez-wallet function logs. EMAXCONNSESSION means the
+What to do: open the wallet Edge Function logs. EMAXCONNSESSION means the
 session pooler is out of clients: wait for idle leases to release, check for
 an isolate storm, and consider the transaction pooler or a bigger pool_size.
-A missing module means a bad deploy: redeploy with `scripts/deploy-breez-wallet.sh`.
+A missing module means a bad deploy: redeploy the wallet function with the deploy script in `scripts/`.
 
 **The health function is not scheduled in production** (no `cron.job` row as of
 2026-10-13). Owner action, after the alert secrets are set:

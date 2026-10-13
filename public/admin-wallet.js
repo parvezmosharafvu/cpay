@@ -222,19 +222,45 @@ function clearQuote(note) {
   if (note) $w('wqNote').textContent = note;
 }
 
-async function loadRoutes() {
-  try {
-    const { routes } = await walletCall('stable-routes');
-    walletState.routes = routes;
-    $w('wqNet').innerHTML = routes.length
-      ? routes.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.asset)} · ${escapeHtml(chainLabel(r.chain))}</option>`).join('')
-      : '<option value="">No networks available right now</option>';
-    if (!routes.length) clearQuote('The wallet lists no stablecoin networks right now. They exist on mainnet only.');
-  } catch (e) {
-    const opt = document.createElement('option'); opt.value = ''; opt.textContent = 'Networks did not load';
-    $w('wqNet').replaceChildren(opt);
-    clearQuote(`${e.message} Use Retry on the balance card.`);
+// The networks list can be slow while the wallet is busy: retry with backoff
+// and only then say it did not load, with a Retry button.
+const ROUTE_RETRY_DELAYS = [0, 1500, 4000];
+function routesRetryButton(show) {
+  let b = document.getElementById('wqNetRetry');
+  if (!b && show) {
+    b = document.createElement('button');
+    b.type = 'button'; b.id = 'wqNetRetry'; b.className = 'btn ghost sm'; b.textContent = 'Retry';
+    b.addEventListener('click', () => loadRoutes());
+    $w('wqNet').insertAdjacentElement('afterend', b);
   }
+  if (b) b.hidden = !show;
+}
+
+async function loadRoutes() {
+  routesRetryButton(false);
+  const loading = document.createElement('option'); loading.value = ''; loading.textContent = 'Loading networks…';
+  $w('wqNet').replaceChildren(loading);
+  let error = null;
+  let routes = [];
+  for (const d of ROUTE_RETRY_DELAYS) {
+    if (d) await new Promise((r) => setTimeout(r, d));
+    try {
+      ({ routes } = await walletCall('stable-routes'));
+      routes = Array.isArray(routes) ? routes : [];
+      error = null;
+      if (routes.length) break;
+    } catch (e) { error = e; }
+  }
+  walletState.routes = routes;
+  if (routes.length) {
+    $w('wqNet').innerHTML = routes.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.asset)} · ${escapeHtml(chainLabel(r.chain))}</option>`).join('');
+    return;
+  }
+  const opt = document.createElement('option'); opt.value = '';
+  opt.textContent = error ? 'Networks did not load' : 'No networks available right now';
+  $w('wqNet').replaceChildren(opt);
+  clearQuote(error ? `${error.message} Use Retry next to the network list.` : 'The wallet lists no stablecoin networks right now. Use Retry to check again.');
+  routesRetryButton(true);
 }
 
 async function getQuote() {

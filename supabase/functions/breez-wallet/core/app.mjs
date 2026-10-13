@@ -439,6 +439,8 @@ export function createApp({
   return {
     handle: (req, res) => track(handle(req, res)),
     onEvent, catchUp, drain, health, readiness, track,
+    // The routes catalog, for hosts that pre-warm a shared cache (Edge cron).
+    withdrawRoutes: async () => ({ routes: await withdrawals.listRoutes(), cache: withdrawals.routeCacheInfo() }),
     markSynced: () => { lastSyncedAt = now(); },
     markReady: () => { ready = true; },
     noteStuck: () => { metrics.withdrawalStuck += 1; },

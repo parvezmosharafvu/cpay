@@ -18,6 +18,9 @@ Checks, in order of how often each has actually caught something here:
      named anywhere in public/; plain "bank" is a word match
   9. wallets-config.js entries are well formed: verified entries cite a
      source and date, and handoff links use an allowed scheme
+ 10. no product analytics or session replay: no page or script loads a
+     tracker, the CSP allows no tracker host, and no tracker SDK is a
+     dependency (the privacy policy says CPAY runs none)
 """
 import glob
 import re
@@ -463,6 +466,38 @@ def check_cdn_scripts_pinned():
         print("ok   CDN scripts pinned with SRI; CSP allows Turnstile")
 
 
+# Product analytics and session-replay vendors. CPAY ships none of them; the
+# privacy policy is written on that basis, so adding one must be a
+# deliberate change to this list, the CSP and the policy together.
+TRACKERS = re.compile(
+    r"amplitude|hotjar|fullstory|logrocket|mouseflow|smartlook|clarity\.ms|"
+    r"posthog|mixpanel|heap(analytics)?\.(io|js)|segment\.(io|com)|"
+    r"googletagmanager|google-analytics|gtag\(|sessionreplay|session[-_ ]replay",
+    re.I,
+)
+
+
+def check_no_trackers() -> None:
+    files = [
+        p for p in sorted(glob.glob("public/**/*", recursive=True))
+        if os.path.isfile(p)
+        and os.path.splitext(p)[1] in (".html", ".js", ".mjs", ".css", ".json", ".map", ".txt", ".webmanifest")
+    ] + [os.path.join(ROOT_PUBLIC, "_headers"), "package.json"]
+    files += sorted(glob.glob("src/**/*", recursive=True))
+    hits = []
+    for path in files:
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for n, line in enumerate(fh, 1):
+                if TRACKERS.search(line):
+                    hits.append(f"{path}:{n}")
+    if hits:
+        failures.append(f"analytics / session replay present (privacy policy says none): {hits[:10]}")
+    else:
+        print(f"ok   no analytics or session-replay code, host or dependency in {len(files)} files")
+
+
 check_js_syntax()
 check_dom_references()
 check_rpc_signatures()
@@ -477,6 +512,7 @@ check_reseller_commission_removed()
 check_reseller_role_removed()
 check_manual_payout_closed()
 check_cdn_scripts_pinned()
+check_no_trackers()
 
 if failures:
     text = "\n".join(f"FAIL {f}" for f in failures)

@@ -98,6 +98,10 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/revenue_desk_access_test.sql
 
+      - name: Payment state transitions match docs/PAYMENT-STATES.md
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/payment_transitions_test.sql
       - name: admin_wallet_health() is admins and service role only
         env:
           PGPASSWORD: postgres

@@ -5,14 +5,18 @@ on:
   schedule:
     - cron: '30 18 * * *'
 
+# Least privilege: no job writes to the repo, issues or packages.
+permissions:
+  contents: read
+
 jobs:
   e2e:
     name: Admin smoke against live site
     runs-on: ubuntu-latest
     if: ${{ vars.CPAY_E2E == 'on' || github.event_name == 'workflow_dispatch' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
@@ -26,7 +30,7 @@ jobs:
         run: |
           export CPAY_BASE_URL="${CPAY_BASE_URL:-https://pay-cashapp.buzz}"
           npx playwright test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: playwright-output

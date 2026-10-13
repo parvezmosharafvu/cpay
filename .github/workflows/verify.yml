@@ -610,6 +610,16 @@ jobs:
           (cd payment-service && npm ci --no-audit --no-fund)
           npm run build && npm run prepare:upload
           npx playwright install --with-deps chromium
+      - name: Keep the stack's fixed ports out of the ephemeral range
+        # e2e/stack.mjs listens on 54321-54324, inside Linux's ephemeral range
+        # (32768-60999). If an outbound socket (Postgres/PostgREST pools) or a
+        # port-0 listener (payment service) happens to get one of them first,
+        # an Edge Function dies with AddrInUse and the stack times out
+        # (main 58dc1ec, Verify run 38437889611). Reserved ports are never
+        # handed out automatically but can still be bound explicitly.
+        run: |
+          sudo sysctl -w net.ipv4.ip_local_reserved_ports=54321-54324
+          cat /proc/sys/net/ipv4/ip_local_port_range
       - name: Run the eight E2E suites
         run: npx playwright test -c tests/e2e/playwright.config.ts
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

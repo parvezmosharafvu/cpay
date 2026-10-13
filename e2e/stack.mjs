@@ -18,6 +18,7 @@ import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { stackPorts, assertPortsFree, waitReady } from './ports.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(path.join(root, 'payment-service', 'package.json'));
@@ -34,7 +35,12 @@ const REST_PORT = PORT + 1, INVOICE_FN_PORT = PORT + 2, WITHDRAW_FN_PORT = PORT 
 const JWT_SECRET = 'e2e-only-jwt-secret-'.padEnd(48, 'x');
 const SERVICE_SECRET = 'e2e-only-service-secret-'.padEnd(48, 'y');
 const ORIGIN = `http://127.0.0.1:${PORT}`;
+// Tagged on every Edge Function response (e2e/fn-wrapper.ts), so readiness
+// can tell this run's functions from a stale process holding the port.
+const RUN_ID = randomUUID();
 const children = [];
+// Only ever stop what this run started, on any exit path.
+process.on('exit', () => { for (const c of children) if (c.exitCode === null && c.signalCode === null) c.kill('SIGKILL'); });
 
 const b64u = (b) => Buffer.from(b).toString('base64url');
 export function signJwt(claims) {
@@ -69,15 +75,6 @@ function run(cmd, args, env, name) {
   c.stdout.on('data', tag); c.stderr.on('data', (d) => process.stderr.write(`[${name}] ${d}`));
   children.push(c);
   return c;
-}
-
-async function waitFor(url, ms = 60_000) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    try { const r = await fetch(url, { method: 'OPTIONS' }); if (r.status < 500) return; } catch { /* not yet */ }
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  throw new Error(`timeout waiting for ${url}`);
 }
 
 // ── payment service with a fake wallet SDK ─────────────────────────────
@@ -218,9 +215,10 @@ function serveStatic(req, res, url) {
 }
 
 async function main() {
+  await assertPortsFree(stackPorts(PORT));
   buildDatabase();
   pool = new pg.Pool({ connectionString: `postgres://${PGUSER}:${PGPASSWORD}@${PGHOST}:5432/${DB}`, max: 5 });
-  run(POSTGREST, [], {
+  const rest = run(POSTGREST, [], {
     PGRST_DB_URI: `postgres://authenticator:postgres@${PGHOST}:5432/${DB}`, PGRST_DB_SCHEMAS: 'public', PGRST_DB_ANON_ROLE: 'anon',
     PGRST_JWT_SECRET: JWT_SECRET, PGRST_SERVER_PORT: String(REST_PORT), PGRST_SERVER_HOST: '127.0.0.1', PGRST_DB_POOL: '10',
   }, 'postgrest');
@@ -228,12 +226,12 @@ async function main() {
   const fnEnv = {
     SUPABASE_URL: ORIGIN, SUPABASE_ANON_KEY: ANON_KEY, SUPABASE_SERVICE_ROLE_KEY: SERVICE_KEY,
     PAYMENT_SERVICE_URL: pay.url, PAYMENT_SERVICE_SECRET: SERVICE_SECRET, PAYMENT_SERVICE_AUTH_MODE: 'bearer',
-    PUBLIC_SITE_URL: ORIGIN, SITE_URL: ORIGIN,
+    PUBLIC_SITE_URL: ORIGIN, SITE_URL: ORIGIN, E2E_RUN_ID: RUN_ID,
   };
   const fn = (name, port) => run(DENO, ['run', '--quiet', '--no-lock', '--allow-net', '--allow-env', '--allow-read', 'e2e/fn-wrapper.ts'],
     { ...fnEnv, FN_PORT: String(port), FN_ENTRY: `../supabase/functions/${name}/index.ts` }, name);
-  fn('create-invoice', INVOICE_FN_PORT);
-  fn('user-withdraw', WITHDRAW_FN_PORT);
+  const invoiceFn = fn('create-invoice', INVOICE_FN_PORT);
+  const withdrawFn = fn('user-withdraw', WITHDRAW_FN_PORT);
 
   const server = http.createServer(async (req, res) => {
     const chunks = []; for await (const c of req) chunks.push(c);
@@ -275,9 +273,10 @@ async function main() {
       if (!res.headersSent) send(res, 502, { error: 'gateway error' });
     }
   });
-  await waitFor(`http://127.0.0.1:${REST_PORT}/`);
-  await waitFor(`http://127.0.0.1:${INVOICE_FN_PORT}/`, 120_000);
-  await waitFor(`http://127.0.0.1:${WITHDRAW_FN_PORT}/`, 120_000);
+  const ours = (r) => r.headers.get('x-e2e-run') === RUN_ID;
+  await waitReady(rest, 'postgrest', `http://127.0.0.1:${REST_PORT}/`);
+  await waitReady(invoiceFn, 'create-invoice', `http://127.0.0.1:${INVOICE_FN_PORT}/`, { ok: ours, ms: 120_000 });
+  await waitReady(withdrawFn, 'user-withdraw', `http://127.0.0.1:${WITHDRAW_FN_PORT}/`, { ok: ours, ms: 120_000 });
   server.listen(PORT, '127.0.0.1', () => console.log(`e2e stack ready on ${ORIGIN}`));
   const stop = async () => { for (const c of children) c.kill('SIGTERM'); await pay.service.stop('e2e-end').catch(() => {}); process.exit(0); };
   process.on('SIGTERM', stop); process.on('SIGINT', stop);

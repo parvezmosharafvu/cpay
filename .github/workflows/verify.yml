@@ -28,6 +28,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least privilege: no job writes to the repo, issues or packages.
+permissions:
+  contents: read
+
 jobs:
   migrations:
     name: Migrations apply to an empty database
@@ -50,7 +54,7 @@ jobs:
           --health-retries 5
         ports: ['5432:5432']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Migration numbers are unique
         run: |
@@ -342,12 +346,12 @@ jobs:
           PGPASSWORD: postgres
         run: bash ci/upgrade_from_pre_breez_test.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: db-inventory
           path: db-inventory.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
 
@@ -383,8 +387,8 @@ jobs:
     name: Edge functions type-check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: denoland/setup-deno@11b63cf76cfcafb4e43f97b6cad24d8e8438f62d # v1.5.2
         with:
           deno-version: v1.x
       - name: deno check every function
@@ -451,8 +455,8 @@ jobs:
     name: Pages parse and reference real things
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # 22 rather than 20: GitHub now warns that actions targeting
           # Node 20 are deprecated, and node --check behaves identically.
@@ -465,6 +469,8 @@ jobs:
         run: python3 ci/check_frontend.py
       - name: Draft legal pages stay unlinked and noindex
         run: python3 ci/check_legal.py
+      - name: Workflows pinned and least-privilege
+        run: python3 ci/check_workflows.py
       - name: Public copy (README, SECURITY, docs, pages)
         # No payment-processor name, no bKash/Nagad/Binance/bank, no
         # "any Lightning wallet" promise. See ci/check_public_copy.py.
@@ -488,7 +494,7 @@ jobs:
     # made public, those files become the most sensitive thing in it.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Report tracked ledger snapshots
         run: |
           if git ls-files | grep -q '^ledger-backups/'; then
@@ -512,10 +518,10 @@ jobs:
     name: Secrets, dependency audit, bundle, links, browser smoke
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
       - name: Secret scan (gitleaks, full history)
@@ -569,11 +575,11 @@ jobs:
       PGPASSWORD: postgres
       POSTGREST_BIN: /tmp/postgrest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.x
       - name: Install psql and PostgREST
@@ -592,7 +598,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Run the eight E2E suites
         run: npx playwright test -c tests/e2e/playwright.config.ts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: e2e-results

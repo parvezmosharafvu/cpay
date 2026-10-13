@@ -12,7 +12,9 @@
 //   node scripts/release-gate.mjs [--sha <sha>] [--drill-max-days 90] [--skip-legal]
 // Exit 0 = GO for this SHA, 1 = refused (reasons printed).
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export function latestDrill(md) {
   const rows = md.split('\n').filter((l) => /^\|\s*\d{4}-\d{2}-\d{2}/.test(l));
@@ -41,6 +43,11 @@ export function drillProblem(md, maxDays, nowMs = Date.now()) {
 const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 
 function main(argv) {
+  // Check the repository this script lives in (canonical, symlinks resolved),
+  // never whatever directory it happens to be launched from.
+  const root = realpathSync(join(dirname(fileURLToPath(import.meta.url)), '..'));
+  process.chdir(root);
+  console.log(`release gate: repository ${root}`);
   const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
   const fails = [];
   sh('git', ['fetch', '-q', 'origin', 'main']);
@@ -60,8 +67,27 @@ function main(argv) {
   if (!argv.includes('--skip-legal')) {
     try { sh('python3', ['ci/check_legal.py', '--release']); } catch { fails.push('legal pages still contain DRAFT/placeholder text'); }
   }
+  console.log(`checked: sha=origin/main, clean worktree, Verify, Workers Builds: cpay, restore drill, blockers${argv.includes('--skip-legal') ? '' : ', legal'}`);
   console.log(fails.length ? `RELEASE REFUSED for ${sha}:\n- ${fails.join('\n- ')}` : `RELEASE GATE PASSED for ${sha}`);
   return fails.length ? 1 : 0;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) process.exit(main(process.argv.slice(2)));
+// Any failed command (git, gh, a missing file) refuses the release with a
+// reason instead of a bare stack trace; it can never fall through to exit 0.
+function run(argv) {
+  try { return main(argv); } catch (e) {
+    console.log(`RELEASE REFUSED: ${String(e.message || e).split('\n')[0]}`);
+    return 1;
+  }
+}
+
+// Compare real filesystem paths, not a hand-built file:// string: a checkout
+// path with a space (URL-encoded in import.meta.url) or a symlink would never
+// match, main() would not run, and the gate would exit 0 with no output.
+export function isEntrypoint(metaUrl, argv1) {
+  if (!argv1) return false;
+  const real = (p) => { try { return realpathSync(p); } catch { return p; } };
+  return real(fileURLToPath(metaUrl)) === real(argv1);
+}
+
+if (isEntrypoint(import.meta.url, process.argv[1])) process.exit(run(process.argv.slice(2)));

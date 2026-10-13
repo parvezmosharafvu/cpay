@@ -24,6 +24,17 @@ Pinned by `ci/payment_transitions_test.sql`. Documented as of main c6ec4a4 (2026
 
 Never: `settled` → anything through any production writer; anything → `new`; `invalid` → `settled` through settlement (admin only).
 
-## Why there is no DB trigger yet
+## Enforcement (trigger, 20261013090000)
 
-A trigger that forbids `settled` → other states would match every production writer above. It was deliberately not added because existing regression tests (`ci/telegram_test.sql`) model an admin marking a settled payment invalid and settling it again, and a trigger on the money table that raises inside `settle_breez_payment()` would turn an unexpected edge case into a failed settlement. Enforcement needs an owner decision on reversals first. Until then the transitions are pinned by tests, not enforced.
+Owner decision 2026-10-13: only an admin may reverse a settled payment. `payments_status_transition` (BEFORE UPDATE OF status) raises on any status change outside this table; same-status updates are no-ops and always pass.
+
+| From → To | Who |
+|---|---|
+| `new` → `pending`/`expired`/`settled`/`invalid` | any writer |
+| `pending` → `expired`/`settled`/`invalid` | any writer |
+| `expired` → `settled` (late payment) / `invalid` | any writer |
+| `settled` → `invalid` (reversal) | admin only |
+| `invalid` → `settled`/`expired` (re-settle / undo) | admin only |
+| anything else (→ `new`, → `pending` from non-new, `settled` → `new`/`pending`/`expired`) | nobody (check_violation) |
+
+Admin means `is_admin()` (active admin JWT) or a server-side role (not anon/authenticated) that ran `set_config('cpay.payment_admin_context', 'on', true)` in the same transaction. Non-admin attempts fail with insufficient_privilege. `admin_mark_payment()` is unchanged and still refuses settled payments; a reversal is a deliberate admin action, never a settlement-path side effect. Settlement (`settle_breez_payment`: new/pending/expired → settled, duplicate and already-settled no-ops), the expiry loop (new → expired) and late payment are all inside the always-allowed set; `ci/payment_transitions_test.sql` runs them with the trigger active.

@@ -26,6 +26,7 @@ import sys
 import tempfile
 import os
 
+ROOT_PUBLIC = "public"
 failures: list[str] = []
 
 
@@ -441,6 +442,25 @@ def check_manual_payout_closed() -> None:
     else:
         print("ok   manual payout path closed (user-withdraw + freelancer desk)")
 
+def check_cdn_scripts_pinned():
+    """Every third-party <script> is an exact version with SRI, so a CDN or
+    npm compromise cannot swap the code that handles payments and logins."""
+    import glob
+    hits = []
+    for f in sorted(glob.glob(os.path.join(ROOT_PUBLIC, "*.html"))):
+        for tag in re.findall(r"<script[^>]+src=\"https://[^>]*>", open(f, encoding="utf-8").read()):
+            name = os.path.basename(f)
+            if "integrity=\"sha384-" not in tag or "crossorigin=" not in tag:
+                hits.append(f"{name}: no SRI: {tag[:90]}")
+            if re.search(r"@\d+(\.\d+)?[\"/]", tag):
+                hits.append(f"{name}: floating version: {tag[:90]}")
+    hdr = open(os.path.join(ROOT_PUBLIC, "_headers"), encoding="utf-8").read()
+    if "frame-src https://challenges.cloudflare.com" not in hdr:
+        hits.append("_headers: CSP lacks Turnstile frame-src")
+    if hits:
+        failures.append("unpinned CDN scripts / CSP: " + "; ".join(hits[:8]))
+    else:
+        print("ok   CDN scripts pinned with SRI; CSP allows Turnstile")
 
 
 check_js_syntax()
@@ -456,6 +476,7 @@ check_provider_name_hidden()
 check_reseller_commission_removed()
 check_reseller_role_removed()
 check_manual_payout_closed()
+check_cdn_scripts_pinned()
 
 if failures:
     text = "\n".join(f"FAIL {f}" for f in failures)

@@ -44,3 +44,7 @@ Stack tip at release packaging time: branch `release/chat5-qa` from Chat 4 tip.
 
 See `docs/OPS_OWNER_CUTOVER.md` and `docs/PRODUCTION-READINESS.md`. Open High
 **ops** (orphans, Telegram, prod migrate) ⇒ **CONDITIONAL GO** at best.
+
+## Legal pages release gate
+
+Before a public launch run `python3 ci/check_legal.py --release`. It exits non-zero while any of terms/privacy/refund/contact still contains DRAFT, TODO or `[placeholder]` text. Every PR runs the non-release mode, which only requires draft pages to stay `noindex` and unlinked. Legal approval is an owner task.

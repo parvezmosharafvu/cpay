@@ -467,6 +467,8 @@ jobs:
         run: npm run build
       - name: Static checks
         run: python3 ci/check_frontend.py
+      - name: Draft legal pages stay unlinked and noindex
+        run: python3 ci/check_legal.py
       - name: Workflows pinned and least-privilege
         run: python3 ci/check_workflows.py
       - name: Public copy (README, SECURITY, docs, pages)

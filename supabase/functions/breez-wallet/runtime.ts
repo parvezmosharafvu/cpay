@@ -259,10 +259,18 @@ export function createHost(deps: HostDeps) {
       if (rows[0]?.role !== "admin" || rows[0]?.account_status !== "active") return null;
     } else if (method !== "GET") return null;
     const { rows } = await deps.db.query(
-      "select status, body, (updated_at > now() - make_interval(secs => $2::float8 / 1000)) as fresh from breez_wallet.response_cache where key = $1 and updated_at > now() - make_interval(secs => $3::float8 / 1000)",
+      "select status, body, (updated_at > now() - make_interval(secs => $2::float8 / 1000)) as fresh, floor(extract(epoch from now() - updated_at))::int as age_s from breez_wallet.response_cache where key = $1 and updated_at > now() - make_interval(secs => $3::float8 / 1000)",
       [key, ttl, Math.max(ttl, staleMs)]);
     if (!rows[0]) return null;
-    return new Response(rows[0].body, { status: rows[0].status, headers: { "content-type": "application/json", "x-cpay-cache": rows[0].fresh === false ? "stale" : "hit" } });
+    const stale = rows[0].fresh === false;
+    const ageSec = Number.isFinite(Number(rows[0].age_s)) ? Number(rows[0].age_s) : null;
+    let out: string = rows[0].body;
+    // Routes: tell the caller how old the last-known-good catalog is, so the
+    // page can say so instead of presenting it as live. Never invents routes.
+    if (ROUTES_KEYS.includes(key)) {
+      try { out = JSON.stringify({ ...JSON.parse(out), cacheAgeSec: ageSec, stale }); } catch { /* serve as stored */ }
+    }
+    return new Response(out, { status: rows[0].status, headers: { "content-type": "application/json", "x-cpay-cache": stale ? "stale" : "hit", "x-cpay-cache-age": String(ageSec ?? "") } });
   }
 
   const json = (status: number, body: unknown) =>

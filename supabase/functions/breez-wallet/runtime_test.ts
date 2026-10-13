@@ -28,7 +28,7 @@ function fakePg({ enabled = true } = {}) {
     if (sql.includes("from breez_wallet.response_cache where key = $1")) {
       const e = state.cache.get(String(params[0]));
       if (!e || e.ageMs > Number(params[2] ?? params[1])) return { rows: [] };
-      return { rows: [{ status: 200, body: e.body, fresh: e.ageMs <= Number(params[1]) }] };
+      return { rows: [{ status: 200, body: e.body, fresh: e.ageMs <= Number(params[1]), age_s: Math.floor(e.ageMs / 1000) }] };
     }
     if (sql.includes("from breez_wallet.response_cache where key = any")) {
       const keys = params[0] as string[];
@@ -311,7 +311,11 @@ Deno.test("routes: a stale cached catalog is served while another instance holds
   const res = await b.h.serve("GET", "/withdraw/routes", r2.headers, r2.body);
   assertEquals(res.status, 200);
   assertEquals(res.headers.get("x-cpay-cache"), "stale");
-  assertEquals((await res.json()).routes.length, 1);
+  const staleBody = await res.json();
+  assertEquals(staleBody.routes.length, 1);
+  assertEquals(staleBody.stale, true, "stale catalog is labelled stale");
+  assertEquals(staleBody.cacheAgeSec, 3 * 60 * 60, "age reported in seconds");
+  assertEquals(res.headers.get("x-cpay-cache-age"), String(3 * 60 * 60));
   assertEquals(b.connects(), 0, "no lease needed");
   // older than a day: not served, the live path answers (here: busy)
   pg.state.cache.set("/withdraw/routes", { body: GOOD, ageMs: 25 * 60 * 60_000 });

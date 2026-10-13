@@ -56,6 +56,7 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('admin_live_payments()',                                                   'admin',         'admin: live payments; refuses without an active admin'),
   ('admin_mark_payment(uuid, text, numeric)',                                 'admin',         'admin: mark payment; refuses without an active admin'),
   ('admin_ops_release_gates()',                                               'admin',         'admin: ops release gates; refuses without an active admin'),
+  ('admin_wallet_health()',                                                   'admin',         'admin: Health cards (states/ages/counts only); refuses without an active admin'),
   ('admin_ops_snapshot()',                                                    'admin',         'admin: ops snapshot; refuses without an active admin'),
   ('admin_set_auto_approval(text, boolean)',                                  'admin',         'admin: set auto approval; refuses without an active admin'),
   ('admin_set_cost_percent(uuid, numeric)',                                   'admin',         'admin: set cost percent; refuses without an active admin'),

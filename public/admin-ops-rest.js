@@ -44,12 +44,39 @@ const FLAG_ROWS = [
 async function renderFlagsLive() {
   if (typeof renderFlags === 'function') return renderFlags();
 }
+// Per-subsystem cards from admin_wallet_health(): state, age, runbook.
+const HEALTH_STATE_LABEL = { ok: 'OK', warn: 'Check', fail: 'Failing', unknown: 'Unknown' };
+function healthAgeText(sec) {
+  if (sec == null || !Number.isFinite(Number(sec))) return '\u2014';
+  const s = Math.max(0, Number(sec));
+  if (s < 90) return `${s}s ago`;
+  if (s < 5400) return `${Math.round(s / 60)} min ago`;
+  if (s < 172800) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} d ago`;
+}
+async function walletHealthCards() {
+  const { data, error } = await sb.rpc('admin_wallet_health');
+  if (error) return `<div class="card"><p class="err" role="alert">Subsystem health did not load: ${escapeHtml(error.message)}</p></div>`;
+  const cards = (data && data.cards) || [];
+  const repo = 'https://github.com/parvezmosharafvu/cpay/blob/main/';
+  const items = cards.map((c) => {
+    const st = HEALTH_STATE_LABEL[c.state] ? c.state : 'unknown';
+    return `<div class="card health-card" data-state="${escapeHtml(st)}">
+      <h3>${escapeHtml(c.label || c.key || '')}</h3>
+      <p><strong class="health-state">${escapeHtml(HEALTH_STATE_LABEL[st])}</strong> \u00b7 <span class="faint">${escapeHtml(healthAgeText(c.age_sec))}</span></p>
+      <p class="faint">${escapeHtml(c.detail || '')}</p>
+      ${c.runbook ? `<a href="${escapeHtml(repo + c.runbook)}" target="_blank" rel="noopener noreferrer">Runbook</a>` : ''}
+    </div>`;
+  }).join('');
+  return `<div class="health-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">${items}</div><p class="faint">Checked ${escapeHtml(data && data.checked_at ? (typeof when === 'function' ? when(data.checked_at) : data.checked_at) : '')}</p>`;
+}
 async function renderHealth() {
   const el = document.getElementById('health'); if (!el) return;
+  const subsystems = await walletHealthCards().catch(() => '');
   const { data, error } = await sb.rpc('admin_ops_snapshot');
   if (error) { el.innerHTML = typeof deskError === 'function' ? deskError(error.message) : `<p class="err" role="alert">${escapeHtml(error.message)}</p>`; return; }
   const s = data || {};
-  el.innerHTML = `<div class="card"><h3>Health</h3><p class="faint">Can payments and payouts run right now?</p></div>${kvCard('Switches', s.flags)}${kvCard('Payouts', s.withdrawals)}${kvCard('Pipeline', s.pipeline)}${kvCard('Receiving', s.receiving)}${kvCard('Accounts', s.profiles)}${kvCard('Domains', s.domains)}`;
+  el.innerHTML = `<div class="card"><h3>Health</h3><p class="faint">Can payments and payouts run right now?</p></div>${subsystems}${kvCard('Switches', s.flags)}${kvCard('Payouts', s.withdrawals)}${kvCard('Pipeline', s.pipeline)}${kvCard('Receiving', s.receiving)}${kvCard('Accounts', s.profiles)}${kvCard('Domains', s.domains)}`;
 }
 async function renderSystem() {
   const el = document.getElementById('system'); if (!el) return;

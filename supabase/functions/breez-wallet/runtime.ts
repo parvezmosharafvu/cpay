@@ -264,13 +264,15 @@ export function createHost(deps: HostDeps) {
     if (!rows[0]) return null;
     const stale = rows[0].fresh === false;
     const ageSec = Number.isFinite(Number(rows[0].age_s)) ? Number(rows[0].age_s) : null;
-    let body = rows[0].body;
+    // Local name must not shadow the request `body` param (Uint8Array) — that
+    // duplicate-id error failed Edge type-check on #89.
+    let cachedBody: string = String(rows[0].body ?? "");
     // Routes: tell the caller how old the last-known-good catalog is, so the
     // page can say so instead of presenting it as live. Never invents routes.
     if (ROUTES_KEYS.includes(key)) {
-      try { body = JSON.stringify({ ...JSON.parse(body), cacheAgeSec: ageSec, stale }); } catch { /* serve as stored */ }
+      try { cachedBody = JSON.stringify({ ...JSON.parse(cachedBody), cacheAgeSec: ageSec, stale }); } catch { /* serve as stored */ }
     }
-    return new Response(body, { status: rows[0].status, headers: { "content-type": "application/json", "x-cpay-cache": stale ? "stale" : "hit", "x-cpay-cache-age": String(ageSec ?? "") } });
+    return new Response(cachedBody, { status: rows[0].status, headers: { "content-type": "application/json", "x-cpay-cache": stale ? "stale" : "hit", "x-cpay-cache-age": String(ageSec ?? "") } });
   }
 
   const json = (status: number, body: unknown) =>

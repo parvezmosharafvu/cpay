@@ -79,6 +79,10 @@ type Check = {
   name: string;
   ok: boolean;
   detail: string;
+  /** seconds since the subsystem last succeeded, when known */
+  ageSec?: number | null;
+  /** docs/RUNBOOKS.md section for this subsystem */
+  runbook?: string;
   /** false = worth waking someone; true = informational only */
   informational?: boolean;
 };
@@ -246,15 +250,71 @@ Deno.serve(async (req) => {
     });
   }
 
+  // ---------- 6. Wallet ops: routes cache, sync, settlement, cron ----------
+  // Read-only RPC (service role). The routes catalog is refreshed by the
+  // breez-wallet cron tick every ~5 min; one older than 2h means the live
+  // refresh has failed repeatedly (pages are serving the last-known-good
+  // list, which expires at 24h). No lease in 15 min means the cron sync is
+  // not running. Invoices still new/pending 30 min past expiry mean the
+  // settlement/expiry loop is not processing them.
+  const { data: ops, error: opsErr } = await supabase.rpc("wallet_ops_health").maybeSingle();
+  if (opsErr) {
+    checks.push({ name: "wallet_ops", ok: false, detail: `wallet_ops_health failed: ${opsErr.message}` });
+  } else {
+    const o = (ops ?? {}) as Record<string, unknown>;
+    const age = (t: unknown) => (t ? Math.round((now - new Date(String(t)).getTime()) / 1000) : null);
+    const routesAge = age(o.routes_oldest_at);
+    const keys = Number(o.routes_keys ?? 0);
+    checks.push({
+      name: "wallet_routes_cache",
+      ok: keys > 0 && routesAge !== null && routesAge < 2 * 3600,
+      informational: keys === 0,
+      ageSec: routesAge,
+      runbook: "docs/RUNBOOKS.md#wallet-routes-cache",
+      detail: keys === 0
+        ? "routes catalog not cached yet"
+        : `oldest routes catalog ${Math.round((routesAge ?? 0) / 60)}m old${(routesAge ?? 0) >= 2 * 3600 ? " — live refresh failing repeatedly" : ""}`,
+    });
+    const syncAge = age(o.last_lease_at);
+    checks.push({
+      name: "wallet_sync",
+      ok: syncAge !== null && syncAge < 15 * 60,
+      ageSec: syncAge,
+      runbook: "docs/RUNBOOKS.md#wallet-sync",
+      detail: syncAge === null ? "wallet has never been opened" : `last wallet lease ${Math.round(syncAge / 60)}m ago`,
+    });
+    const overdue = Number(o.overdue_unsettled ?? 0);
+    checks.push({
+      name: "settlement_loop",
+      ok: overdue === 0,
+      ageSec: age(o.oldest_overdue_at),
+      runbook: "docs/RUNBOOKS.md#settlement-loop",
+      detail: overdue === 0 ? "no invoice left unsettled past expiry" : `${overdue} invoice(s) still new/pending 30m+ past expiry, oldest expired ${o.oldest_overdue_at}`,
+    });
+    if (o.cron_failed_1h !== null && o.cron_failed_1h !== undefined) {
+      const cf = Number(o.cron_failed_1h);
+      checks.push({
+        name: "scheduled_jobs",
+        ok: cf === 0,
+        runbook: "docs/RUNBOOKS.md#scheduled-jobs",
+        detail: cf === 0 ? "no failed pg_cron run in the last hour" : `${cf} failed pg_cron run(s) in the last hour (cron.job_run_details)`,
+      });
+    }
+  }
+
   const failing = checks.filter((c) => !c.ok && !c.informational);
   const healthy = failing.length === 0;
 
+  // Correlation id ties this run's alert to its JSON and log line.
+  const checkId = crypto.randomUUID();
+  let alertDelivery: Delivery | "not needed" | "suppressed" = healthy ? "not needed" : "suppressed";
   if (!healthy && alertsOn) {
-    await sendAlert(failing.map((c) => `${c.name}: ${c.detail}`).join("\n"));
+    alertDelivery = await sendAlert(`[${checkId.slice(0, 8)}] ` + failing.map((c) => `${c.name}: ${c.detail}`).join("\n"));
   }
+  console.log(JSON.stringify({ event: "health", checkId, healthy, failing: failing.map((c) => c.name), alertDelivery }));
 
   return new Response(
-    JSON.stringify({ healthy, checkedAt: new Date().toISOString(), checks }, null, 2),
+    JSON.stringify({ healthy, checkId, checkedAt: new Date().toISOString(), alertDelivery, checks }, null, 2),
     {
       // 503 when unhealthy so an uptime monitor pointed at this URL can
       // page on the status code alone, without parsing the body.

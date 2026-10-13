@@ -341,6 +341,11 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/wallet_lease_health_test.sql
 
+      - name: Wallet ops health probe (20261013070000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/wallet_ops_health_test.sql
+
       - name: Upgrade from the pre-Breez schema keeps balances (audit P3)
         env:
           PGPASSWORD: postgres

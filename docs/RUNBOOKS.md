@@ -195,3 +195,19 @@ $$);
 
 An external uptime monitor can also call `health?alert=0` with the cron
 secret header: it answers 503 when anything fails.
+
+## Wallet routes cache
+
+Health check `wallet_routes_cache` fails when the oldest cached routes catalog is over 2h old: the wallet cron tick has failed to refresh it repeatedly. Pages keep serving the last-known-good list (marked stale) for up to 24h, then show "not available". Check the wallet function logs for `routes-refresh-failed` and `sync-failed`, and check `wallet_sync`. Do not insert routes by hand.
+
+## Wallet sync
+
+Health check `wallet_sync` fails when no wallet lease was taken in 15 min, so the per-minute sync cron is not running or every open fails. Check the wallet sync cron job, the wallet control row (enabled flag) and `wallet_lease` failures (EMAXCONNSESSION). Never start a second wallet instance; redeploy only with the wallet deploy script in scripts/.
+
+## Settlement loop
+
+Health check `settlement_loop` fails when an invoice is still new/pending 30 min past its expiry: the sync is not expiring or settling it. Check `wallet_sync` first. Never mark a payment settled or edit the ledger by hand; a paid-but-unmatched receipt goes through receipt review.
+
+## Scheduled jobs
+
+Health check `scheduled_jobs` fails on any failed pg_cron run in the last hour. Inspect `cron.job_run_details` (status = 'failed') for the job name and error.

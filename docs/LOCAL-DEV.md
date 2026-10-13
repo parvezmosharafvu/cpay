@@ -15,8 +15,9 @@ npx wrangler dev          # reads wrangler.jsonc: assets = public/, 404-page fal
 
 `public/config.js` holds the Supabase URL and anon key (public by design).
 For local work point it at a staging project, never at production, and do
-not commit that change. The only build step is the home-page analytics
-bundle: `npm install && npm run build`.
+not commit that change. There is no build step: `npm run build` is a
+no-op kept because Cloudflare Workers Builds and CI call it. CPAY loads no
+product analytics or session replay (enforced by `ci/check_frontend.py`).
 
 ## Database
 

@@ -71,7 +71,7 @@ browser (Vanilla HTML/CSS/JS, anon key + JWT, RLS)
 |---|---|---|
 | L1 | RLS enabled, no policies on service-only tables (`telegram_outbox`, `webhook_events`, `lightning_receipts`, …) | Intentional deny-all for browser roles (advisor INFO) |
 | L2 | `is_admin()` executable by anon (returns false without session) | Allowlisted; intentional |
-| L3 | Amplitude write key in `src/home-analytics.js` | Public analytics key by design; not a ledger secret |
+| L3 | Amplitude write key in `src/home-analytics.js` | Public analytics key by design; not a ledger secret. The dormant bundle (never loaded by any page) and the SDK were removed on 2026-10-14; `ci/check_frontend.py` now fails on any analytics or session-replay code, host or dependency. |
 | L4 | payment-service `engines.node >=22` vs local Node 20 for some unit runs | CI/production use Node 22 |
 
 ## Security impact of this PR

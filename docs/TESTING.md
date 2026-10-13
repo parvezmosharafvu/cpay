@@ -14,7 +14,7 @@ Timezone for evidence stamps: **Asia/Dhaka (UTC+6)**.
 | Frontend syntax / DOM / RPC / a11y / payout-closed | `python3 ci/check_frontend.py` | Required |
 | Public copy hygiene | `python3 ci/check_public_copy.py` | No processor names / traditional payout ads |
 | Frontend unit | `node --test tests/frontend/*.mjs` | Desk + design system |
-| Analytics bundle | `npm run build` | |
+| No analytics / session replay | `python3 ci/check_frontend.py` | No tracker code, CSP host or SDK dependency |
 | Public Playwright smoke | Serve `public/` then `npx playwright test -c tests/public-smoke/playwright.config.ts` | Static only |
 | payment-service | `DATABASE_URL=postgres://… npm test` in `payment-service/` | Needs Node ≥22 and migrated schema; concurrency 1 |
 | Financial invariants | `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ci/financial_invariants_test.sql` | Settle once, available ≥ 0, `request_withdrawal` closed |

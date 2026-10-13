@@ -2,15 +2,11 @@
   "name": "cpay",
   "private": true,
   "scripts": {
-    "build": "esbuild src/home-analytics.js --bundle --minify --format=iife --outfile=public/assets/home-analytics.js",
+    "build": "node -e \"console.log('build: static site in public/, nothing to bundle')\"",
     "prepare:upload": "node scripts/prepare-direct-upload.mjs"
-  },
-  "dependencies": {
-    "@amplitude/unified": "^1"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.1",
-    "esbuild": "0.25.9",
     "pg": "^8.23.1"
   }
 }

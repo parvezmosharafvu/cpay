@@ -163,3 +163,31 @@ Functions out:
 
 Rollback at any step: unset the variable just set (Edge or host) and
 restart; each step only narrows what is accepted.
+
+## Wallet lease alerts (health check `wallet_lease`)
+
+`health` now calls `public.wallet_lease_health(15)` (service role only) and
+fails when `breez_wallet.lease_log` shows an `open-failed` outcome in the last
+15 minutes (EMAXCONNSESSION, missing module after a deploy) or a lease held
+over 10 minutes. The alert goes to `ALERT_TELEGRAM_BOT_TOKEN` +
+`ALERT_TELEGRAM_CHAT_ID` and/or `ALERT_WEBHOOK_URL`.
+
+What to do: open the wallet Edge Function logs. EMAXCONNSESSION means the
+session pooler is out of clients: wait for idle leases to release, check for
+an isolate storm, and consider the transaction pooler or a bigger pool_size.
+A missing module means a bad deploy: redeploy the wallet function with the deploy script in `scripts/`.
+
+**The health function is not scheduled in production** (no `cron.job` row as of
+2026-10-13). Owner action, after the alert secrets are set:
+
+```sql
+select cron.schedule('cpay-health', '*/5 * * * *', $$
+  select net.http_post(
+    url := 'https://riumaeihemgznvgattoc.supabase.co/functions/v1/health',
+    headers := jsonb_build_object('x-cron-secret',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'cpay_cron_secret')))
+$$);
+```
+
+An external uptime monitor can also call `health?alert=0` with the cron
+secret header: it answers 503 when anything fails.

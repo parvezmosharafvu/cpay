@@ -12,7 +12,16 @@
 ## Daily / automated
 
 - `ledger-backup` cron (Vault `cpay_cron_secret`) commits a ledger dump.
-- `cpay-health` every 15 minutes; failures → webhook / Telegram when configured.
+- `cpay-health` (cron job `cpay-health`, `*/15 * * * *`, secret read from Vault
+  `cpay_cron_secret`). **Scheduled in production on 2026-10-13 11:48 Dhaka.**
+  Before that date no health job existed, although an earlier version of this
+  page said it did. Failures go to Telegram (`ALERT_TELEGRAM_*`) and/or
+  `ALERT_WEBHOOK_URL`. Check the alert path with `health?test_alert=1`, which
+  sends one message labelled [TEST] and returns the delivery status.
+- `ledger-backup` writes `ledger-backups/YYYY-MM-DD.json` to the private repo
+  named by the `GITHUB_OWNER`/`GITHUB_REPO` secrets. It answers 200 only after
+  the GitHub commit succeeds, and 500 plus an alert on an incomplete snapshot
+  or a failed commit. The function edge log is the proof of a run.
 
 ## Recovery sketches
 
@@ -37,3 +46,21 @@ deleted).
 
 Run a restore drill on **staging** before relying on production backups. Record
 date (Asia/Dhaka) and who performed it in the staging sign-off ledger.
+
+### Drill log
+
+| Date (Dhaka) | Who | Source | Target | Result |
+|---|---|---|---|---|
+| 2026-10-13 11:50 | Grok Bot (audit agent) | Read-only JSON export from production of auth.users (id, email, created_at), profiles, payment_links, payments, withdrawals, daily_stats | Disposable local Postgres: CI bootstrap + every migration in the repo, rows loaded with triggers off | **Pass.** Rows: users 18, profiles 18, links 1, payments 4, withdrawals 0, daily_stats 24, all equal to production. Every payment field round-tripped with no differences. `get_balance_for()` matched production for **18/18** accounts. Settled: 3 payments, $21.63, fees $0.32, 25,940 sat. Total available $21.31 on both sides. The repo schema had no column drift against production. The DB and the export were destroyed afterwards. |
+
+**Gaps found by the drill:**
+- The private ledger-backup repo is not readable with the audit's GitHub
+  access. The drill therefore used a fresh export, not the backup file. The last
+  run (2026-10-13 00:15 Dhaka) answered 200, which the code returns only after
+  the GitHub commit succeeds. The owner should open
+  `ledger-backups/2026-10-13.json` once to confirm.
+- The ledger backup omits the wallet schema and the audit, receipt and webhook
+  tables. Wallet recovery relies on the seed plus SDK sync. A full-database
+  restore relies on Supabase backups/PITR (owner to confirm the plan).
+- Restoring into staging Supabase (Auth, Edge) is not covered. This drill
+  checked data and ledger math only.

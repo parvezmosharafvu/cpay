@@ -7,7 +7,7 @@
 //   ALERT_TELEGRAM_CHAT_ID    optional: the admin group
 //   ALERT_ON_SETTLED          optional: false stops payment messages to the
 //                             admin group
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { createHandler, outboxFromSupabase } from "./handler.ts";
 
 const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);

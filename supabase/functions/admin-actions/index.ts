@@ -1,6 +1,6 @@
 // The Supabase Edge Runtime resolves this remote Deno import at deployment time.
 // @ts-ignore The local TypeScript server cannot resolve URL imports without Deno's resolver.
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { createAdminVerifier } from "./admin-auth.ts";
 import { checkStepUp, STEP_UP_MESSAGE, stepUpWindow } from "../_shared/step-up.ts";
 import { bearerToken, serviceAuthHeaders, serviceAuthMode } from "../_shared/service-auth.ts";

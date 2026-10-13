@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 
 /**
 * CPAY — health monitor
@@ -30,25 +30,38 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-function sendAlert(message: string) {
-  const text = `🚨 CPAY health: ${message}`;
+type Delivery = { telegram: string; webhook: string };
+
+/** Sends to every configured channel and reports per-channel status
+ *  ("sent", "not configured", or "failed: <HTTP status/error>"); never
+ *  includes the token, chat id or webhook URL in the result. */
+async function sendAlert(message: string, prefix = "🚨 CPAY health"): Promise<Delivery> {
+  const text = `${prefix}: ${message}`;
+  const out: Delivery = { telegram: "not configured", webhook: "not configured" };
+  const jobs: Promise<void>[] = [];
   const webhook = Deno.env.get("ALERT_WEBHOOK_URL");
   if (webhook) {
-    fetch(webhook, {
+    jobs.push(fetch(webhook, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: text }),
-    }).catch((e) => console.error("Alert delivery failed:", e));
+      signal: AbortSignal.timeout(10000),
+    }).then((r) => { out.webhook = r.ok ? "sent" : `failed: HTTP ${r.status}`; })
+      .catch((e) => { out.webhook = "failed: network"; console.error("Alert delivery failed:", e); }));
   }
   const tgToken = Deno.env.get("ALERT_TELEGRAM_BOT_TOKEN");
   const tgChat = Deno.env.get("ALERT_TELEGRAM_CHAT_ID");
   if (tgToken && tgChat) {
-    fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+    jobs.push(fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: tgChat, text }),
-    }).catch((e) => console.error("Telegram alert delivery failed:", e));
+      signal: AbortSignal.timeout(10000),
+    }).then((r) => { out.telegram = r.ok ? "sent" : `failed: HTTP ${r.status}`; })
+      .catch(() => { out.telegram = "failed: network"; console.error("Telegram alert delivery failed"); }));
   }
+  await Promise.all(jobs);
+  return out;
 }
 
 const MIN = 60 * 1000;
@@ -71,6 +84,19 @@ Deno.serve(async (req) => {
   // Alerts are suppressed for manual runs unless explicitly asked for, so
   // checking the dashboard by hand does not spam the alert channel.
   const alertsOn = url.searchParams.get("alert") !== "0";
+
+  // ?test_alert=1 (cron secret still required): send one clearly labelled
+  // test message through the real alert channels and report delivery,
+  // without running any checks.
+  if (url.searchParams.get("test_alert") === "1") {
+    const delivery = await sendAlert(
+      "this is a TEST of the alert path, no action needed.",
+      "🧪 [TEST] CPAY health",
+    );
+    return new Response(JSON.stringify({ test: true, delivery }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const checks: Check[] = [];
   const now = Date.now();
@@ -216,7 +242,7 @@ Deno.serve(async (req) => {
   const healthy = failing.length === 0;
 
   if (!healthy && alertsOn) {
-    sendAlert(failing.map((c) => `${c.name}: ${c.detail}`).join("\n"));
+    await sendAlert(failing.map((c) => `${c.name}: ${c.detail}`).join("\n"));
   }
 
   return new Response(

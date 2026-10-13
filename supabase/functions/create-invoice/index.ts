@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { invoiceChargeCents } from "./invoice-amount.ts";
 import { formatCents, parseAmountToCents, toCents } from "../_shared/money.ts";
 import {

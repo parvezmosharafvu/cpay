@@ -9,7 +9,7 @@
 // /process-withdrawal, /admin-wallet) goes through this one gate, which
 // the last step checks in index.ts.
 // @ts-ignore The local TypeScript server cannot resolve URL imports without Deno's resolver.
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { createAdminVerifier, isActiveAdmin } from "./admin-auth.ts";
 
 function eq<T>(a: T, b: T, msg: string) {

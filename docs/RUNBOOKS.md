@@ -127,6 +127,10 @@ Admin panel (emergency controls): **emergency payments stop** (create-invoice re
 new invoices) and **emergency withdrawals stop** (every withdrawal path
 refuses). Both are checked server-side.
 
+Change emergency-stop settings only through the CPAY admin panel. During every
+freeze test, verify that jsonb_typeof(value) returns boolean for the relevant
+app_settings rows. Do not set emergency-stop values manually as JSON strings.
+
 ## Payout safety: step-up and address cooldown
 
 - **Step-up** (`_shared/step-up.ts`): confirming a payout needs a sign-in in

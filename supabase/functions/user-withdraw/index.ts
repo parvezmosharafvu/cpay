@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { formatCents, parseAmountToCents, toCents } from "../_shared/money.ts";
 import { checkStepUp, STEP_UP_MESSAGE, stepUpWindow } from "../_shared/step-up.ts";
 import { serviceAuthHeaders, serviceAuthMode } from "../_shared/service-auth.ts";

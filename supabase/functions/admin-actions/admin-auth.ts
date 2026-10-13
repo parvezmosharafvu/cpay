@@ -6,7 +6,7 @@
 // that act with the service role (/process-withdrawal) or forward to the
 // payment service (/admin-wallet), where no is_admin() check would run.
 // @ts-ignore The local TypeScript server cannot resolve URL imports without Deno's resolver.
-import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 
 export type AdminProfile = { role?: string | null; account_status?: string | null } | null | undefined;
 

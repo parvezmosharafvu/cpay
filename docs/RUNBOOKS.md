@@ -177,15 +177,19 @@ session pooler is out of clients: wait for idle leases to release, check for
 an isolate storm, and consider the transaction pooler or a bigger pool_size.
 A missing module means a bad deploy: redeploy the wallet function with the deploy script in `scripts/`.
 
-**The health function is not scheduled in production** (no `cron.job` row as of
-2026-10-13). Owner action, after the alert secrets are set:
+**Scheduled in production on 2026-10-13 (job `cpay-health`, every 15 minutes).**
+On 2026-10-13 one labelled test alert (`health?test_alert=1`) returned
+`telegram: sent`. The SQL used:
 
 ```sql
-select cron.schedule('cpay-health', '*/5 * * * *', $$
+select cron.schedule('cpay-health', '*/15 * * * *', $$
   select net.http_post(
     url := 'https://riumaeihemgznvgattoc.supabase.co/functions/v1/health',
-    headers := jsonb_build_object('x-cron-secret',
-      (select decrypted_secret from vault.decrypted_secrets where name = 'cpay_cron_secret')))
+    headers := jsonb_build_object(
+      'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'cpay_cron_secret'),
+      'Content-Type', 'application/json'),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 30000)
 $$);
 ```
 

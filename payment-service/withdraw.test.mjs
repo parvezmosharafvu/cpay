@@ -809,3 +809,63 @@ test('cooldown: an address changed after the quote is not paid at confirm', asyn
   assert.equal((await rows(user)).length, 0);
   assert.equal((await balance(user)).available, '100.00000000');
 });
+
+// Edge isolates hand the wallet over between requests, so the instance that
+// quoted is often not the one that confirms. Two services on one database
+// stand in for two isolates.
+test('multi-instance: a quote from one instance confirms on another and sends once', async () => {
+  const user = await makeUser({ earned: 100 });
+  const breez = fakeBreez();
+  const a = service(breez);
+  const b = service(breez);
+  const q = await a.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '25' });
+  const r = await b.confirm({ userId: user, quoteId: q.quoteId });
+  assert.equal(r.status, 'sending');
+  // the quoting instance sees the same withdrawal, never a second send
+  const again = await a.confirm({ userId: user, quoteId: q.quoteId });
+  assert.equal(again.withdrawalId, r.withdrawalId);
+  assert.equal(breez.calls.send, 1);
+  assert.equal((await rows(user)).length, 1);
+  assert.equal((await balance(user)).available, '75.00000000');
+});
+
+test('multi-instance: confirming at once on two instances sends once', async () => {
+  const user = await makeUser({ earned: 100 });
+  const breez = fakeBreez();
+  const a = service(breez);
+  const b = service(breez);
+  const q = await a.quote({ userId: user, routeId: 'orchestra:bsc:usdt', address: EVM, amountUsd: '30' });
+  const res = await Promise.allSettled([a.confirm({ userId: user, quoteId: q.quoteId }), b.confirm({ userId: user, quoteId: q.quoteId })]);
+  assert.ok(res.some((x) => x.status === 'fulfilled'));
+  for (const x of res) if (x.status === 'rejected') assert.match(String(x.reason.message), /Quote not found/);
+  assert.equal(breez.calls.send, 1);
+  assert.equal((await rows(user)).length, 1);
+  assert.equal((await balance(user)).available, '70.00000000');
+});
+
+test('multi-instance: another user, an expired quote, or a worse fresh price is refused and nothing is sent', async () => {
+  const user = await makeUser({ earned: 100 });
+  const other = await makeUser({ earned: 100 });
+  const breez = fakeBreez();
+  const a = service(breez);
+  const b = service(breez);
+  const q1 = await a.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '25' });
+  await assert.rejects(b.confirm({ userId: other, quoteId: q1.quoteId }), /Quote not found/);
+
+  await db.query(`update breez_wallet.withdraw_quotes set expires_at = now() - interval '1 second' where id = $1`, [q1.quoteId]);
+  await assert.rejects(b.confirm({ userId: user, quoteId: q1.quoteId }), (e) => e.status === 409 && e.extra.quote.quoteId !== q1.quoteId);
+
+  const q2 = await a.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: TRON, amountUsd: '25' });
+  const orig = breez.prepareSendPayment.bind(breez);
+  breez.prepareSendPayment = async (req) => {
+    const r = await orig(req);
+    const m = r.paymentMethod;
+    if (m?.estimatedOut) m.estimatedOut = String((BigInt(m.estimatedOut) * 95n) / 100n);
+    return r;
+  };
+  await assert.rejects(b.confirm({ userId: user, quoteId: q2.quoteId }), /quote changed/);
+  breez.prepareSendPayment = orig;
+  assert.equal(breez.calls.send, 0);
+  assert.equal((await rows(user)).length, 0);
+  assert.equal((await balance(user)).available, '100.00000000');
+});

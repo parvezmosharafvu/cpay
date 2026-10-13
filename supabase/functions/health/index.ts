@@ -187,6 +187,31 @@ Deno.serve(async (req) => {
       : `${stuckSendingCount} stablecoin withdrawal(s) still sending over 30m, oldest ${stuckSending![0].id} from ${stuckSending![0].requested_at}. Check the payment service log and the Breez payment with that id.`,
   });
 
+  // ---------- 5. Wallet failed to open (Supabase Edge wallet) ----------
+  // breez-wallet records every lease in breez_wallet.lease_log. An
+  // "open-failed" outcome means a request or the cron sync could not start
+  // the wallet: EMAXCONNSESSION (pooler out of session clients), a missing
+  // module after a bad deploy, and so on. Payments may not settle while this
+  // persists. A lease held over 10 minutes is a wedged isolate.
+  const { data: lease, error: leaseErr } = await supabase
+    .rpc("wallet_lease_health", { p_window_minutes: 15 })
+    .maybeSingle();
+  if (leaseErr) {
+    checks.push({ name: "wallet_lease", ok: false, detail: `wallet_lease_health failed: ${leaseErr.message}` });
+  } else {
+    const l = (lease ?? {}) as Record<string, unknown>;
+    const failed = Number(l.open_failed ?? 0);
+    const emax = Number(l.emaxconn ?? 0);
+    const wedged = Number(l.unreleased_stale ?? 0);
+    checks.push({
+      name: "wallet_lease",
+      ok: failed === 0 && wedged === 0,
+      detail: failed === 0 && wedged === 0
+        ? "wallet opened cleanly in the last 15m"
+        : `${failed} wallet open failure(s) in 15m (${emax} EMAXCONNSESSION), ${wedged} lease(s) held over 10m; last: ${l.last_failure ?? "n/a"}`,
+    });
+  }
+
   const failing = checks.filter((c) => !c.ok && !c.informational);
   const healthy = failing.length === 0;
 

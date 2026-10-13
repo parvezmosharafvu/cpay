@@ -492,3 +492,73 @@ test('paymentView handles a payment without details', () => {
     description: null, invoice: null, lightningAddress: null, conversion: null,
   });
 });
+
+// Edge isolates hand the wallet over between requests: the instance that
+// quoted is often not the one that confirms. Two wallets on one database
+// stand in for two isolates.
+test('a send quoted on one instance confirms on another, once, with the same idempotency key', async () => {
+  const breez = fakeBreez();
+  const a = setup(breez);
+  const b = setup(breez);
+  const admin = await makeUser({ role: 'admin' });
+  const [, prep] = await a.route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 });
+
+  const other = await makeUser({ role: 'admin' });
+  await assert.rejects(b.route('POST', '/admin/wallet/send-confirm', { adminId: other, prepareId: prep.prepareId }), /Nothing to confirm/);
+
+  const [code, sent] = await b.route('POST', '/admin/wallet/send-confirm', { adminId: admin, prepareId: prep.prepareId });
+  assert.equal(code, 200);
+  assert.equal(sent.status, 'completed');
+  // single use across instances: the quoting instance cannot send it again
+  await assert.rejects(a.route('POST', '/admin/wallet/send-confirm', { adminId: admin, prepareId: prep.prepareId }), /already confirmed/);
+  assert.deepEqual(breez.calls.filter((c) => c[0] === 'sendPayment'), [['sendPayment', prep.prepareId]]);
+  assert.deepEqual((await auditRows(prep.prepareId)).map((r) => r.new_value.status), ['sending', 'completed']);
+});
+
+test('a stablecoin quote from another instance is re-prepared and sent once', async () => {
+  const breez = fakeBreez();
+  const a = setup(breez);
+  const b = setup(breez);
+  const admin = await makeUser({ role: 'admin' });
+  const [, q] = await a.route('POST', '/admin/wallet/stable-quote', { adminId: admin, routeId: 'orchestra:arbitrum:usdc', address: EVM, amountUsd: '20' });
+  const [, [sentA, sentB]] = [null, await Promise.allSettled([
+    b.route('POST', '/admin/wallet/stable-confirm', { adminId: admin, quoteId: q.quoteId }),
+    b.route('POST', '/admin/wallet/stable-confirm', { adminId: admin, quoteId: q.quoteId }),
+  ])];
+  assert.equal(sentA.status, 'fulfilled');
+  assert.deepEqual(sentA.value, sentB.value, 'a double click on the same instance gets the same answer');
+  assert.equal(breez.calls.filter((c) => c[0] === 'sendPayment').length, 1);
+  assert.equal(await withdrawalCount(admin), 0);
+});
+
+test('a cross-instance confirm refuses when the fresh quote costs more than approved', async () => {
+  const breez = fakeBreez();
+  const a = setup(breez);
+  const b = setup(breez);
+  const admin = await makeUser({ role: 'admin' });
+  const [, prep] = await a.route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 });
+  const orig = breez.prepareSendPayment;
+  breez.prepareSendPayment = async (req) => {
+    const r = await orig(req);
+    r.paymentMethod.lightningFeeSats = 500;
+    return r;
+  };
+  await assert.rejects(b.route('POST', '/admin/wallet/send-confirm', { adminId: admin, prepareId: prep.prepareId }), /quote changed/);
+  assert.equal(breez.calls.filter((c) => c[0] === 'sendPayment').length, 0, 'nothing sent');
+  // the approved quote is spent; it cannot be retried at the new price
+  await assert.rejects(b.route('POST', '/admin/wallet/send-confirm', { adminId: admin, prepareId: prep.prepareId }), /already confirmed/);
+});
+
+test('an expired quote is refused on another instance and nothing is sent', async () => {
+  const breez = fakeBreez();
+  let t = Date.now();
+  const a = setup(breez, { now: () => t });
+  const b = setup(breez, { now: () => t });
+  const admin = await makeUser({ role: 'admin' });
+  const [, prep] = await a.route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 });
+  await db.query(`update breez_wallet.admin_send_quotes set expires_at = now() - interval '1 second' where id = $1`, [prep.prepareId]);
+  await assert.rejects(b.route('POST', '/admin/wallet/send-confirm', { adminId: admin, prepareId: prep.prepareId }), /expired/);
+  t += 11 * 60 * 1000;
+  await assert.rejects(a.route('POST', '/admin/wallet/send-confirm', { adminId: admin, prepareId: prep.prepareId }), /already confirmed/);
+  assert.equal(breez.calls.filter((c) => c[0] === 'sendPayment').length, 0);
+});

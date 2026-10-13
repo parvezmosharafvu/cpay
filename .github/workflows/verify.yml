@@ -102,6 +102,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/payment_transitions_test.sql
+      - name: admin_wallet_health() is admins and service role only
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/admin_wallet_health_access_test.sql
 
       - name: Two account types, freelancer and admin (20261005020000)
         env:

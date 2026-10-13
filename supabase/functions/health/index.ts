@@ -32,6 +32,14 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 type Delivery = { telegram: string; webhook: string };
 
+/** Error name only (TypeError, TimeoutError, ...). Deno's fetch error
+ *  carries the full request URL in its cause, and both alert URLs hold a
+ *  secret (the Telegram bot token, the webhook token), so the error
+ *  object itself must never reach the function log. */
+function errName(e: unknown): string {
+  return e instanceof Error ? e.name : "error";
+}
+
 /** Sends to every configured channel and reports per-channel status
  *  ("sent", "not configured", or "failed: <HTTP status/error>"); never
  *  includes the token, chat id or webhook URL in the result. */
@@ -47,7 +55,7 @@ async function sendAlert(message: string, prefix = "🚨 CPAY health"): Promise<
       body: JSON.stringify({ content: text }),
       signal: AbortSignal.timeout(10000),
     }).then((r) => { out.webhook = r.ok ? "sent" : `failed: HTTP ${r.status}`; })
-      .catch((e) => { out.webhook = "failed: network"; console.error("Alert delivery failed:", e); }));
+      .catch((e) => { out.webhook = "failed: network"; console.error("Alert webhook delivery failed:", errName(e)); }));
   }
   const tgToken = Deno.env.get("ALERT_TELEGRAM_BOT_TOKEN");
   const tgChat = Deno.env.get("ALERT_TELEGRAM_CHAT_ID");
@@ -58,7 +66,7 @@ async function sendAlert(message: string, prefix = "🚨 CPAY health"): Promise<
       body: JSON.stringify({ chat_id: tgChat, text }),
       signal: AbortSignal.timeout(10000),
     }).then((r) => { out.telegram = r.ok ? "sent" : `failed: HTTP ${r.status}`; })
-      .catch(() => { out.telegram = "failed: network"; console.error("Telegram alert delivery failed"); }));
+      .catch((e) => { out.telegram = "failed: network"; console.error("Telegram alert delivery failed:", errName(e)); }));
   }
   await Promise.all(jobs);
   return out;

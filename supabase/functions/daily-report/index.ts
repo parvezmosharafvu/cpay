@@ -103,31 +103,42 @@ async function computeDay(dateStr: string) {
 *   ALERT_WEBHOOK_URL         — Discord or Slack incoming webhook
 *   ALERT_TELEGRAM_BOT_TOKEN  — from @BotFather (/newbot)
 *   ALERT_TELEGRAM_CHAT_ID    — chat/group id (see docs/ENV_VARS.md)
-* Never awaited in a way that can break the money path — every call site
-* uses .catch(), and an alert failure only ever lands in the function log.
+* Awaited by every caller, with a 10 s timeout per channel, so the alert
+* is actually sent before the function returns (an un-awaited fetch can be
+* cut off when the response goes out). It never throws: a delivery failure
+* only lands in the function log, and only as the error name, because
+* Deno's fetch error carries the full URL, and both alert URLs hold a
+* secret (the bot token, the webhook token).
 */
-function sendAlert(message: string) {
+async function sendAlert(message: string): Promise<void> {
 const text = `🚨 CPAY: ${message}`;
+const errName = (e: unknown) => (e instanceof Error ? e.name : "error");
+const jobs: Promise<unknown>[] = [];
 const webhook = Deno.env.get("ALERT_WEBHOOK_URL");
 if (webhook) {
-fetch(webhook, {
+jobs.push(fetch(webhook, {
 method: "POST",
 headers: { "Content-Type": "application/json" },
 body: JSON.stringify({ content: text }),
-}).catch((e) => console.error("Discord/Slack alert delivery failed:", e));
+signal: AbortSignal.timeout(10000),
+}).then((r) => { if (!r.ok) console.error(`Discord/Slack alert delivery failed: HTTP ${r.status}`); })
+.catch((e) => console.error("Discord/Slack alert delivery failed:", errName(e))));
 }
 const tgToken = Deno.env.get("ALERT_TELEGRAM_BOT_TOKEN");
 const tgChat = Deno.env.get("ALERT_TELEGRAM_CHAT_ID");
 if (tgToken && tgChat) {
-fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+jobs.push(fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
 method: "POST",
 headers: { "Content-Type": "application/json" },
 body: JSON.stringify({ chat_id: tgChat, text }),
-}).catch((e) => console.error("Telegram alert delivery failed:", e));
+signal: AbortSignal.timeout(10000),
+}).then((r) => { if (!r.ok) console.error(`Telegram alert delivery failed: HTTP ${r.status}`); })
+.catch((e) => console.error("Telegram alert delivery failed:", errName(e))));
 }
 if (!webhook && !(tgToken && tgChat)) {
 console.warn("sendAlert called but no alert channel is configured.");
 }
+await Promise.all(jobs);
 }
 
 Deno.serve(async (req) => {
@@ -169,7 +180,7 @@ Deno.serve(async (req) => {
   }
 
   if (failures.length) {
-    sendAlert(`daily-report failed for ${failures.length} day(s): ${failures.map((f) => f.date).join(", ")}`);
+    await sendAlert(`daily-report failed for ${failures.length} day(s): ${failures.map((f) => f.date).join(", ")}`);
   }
 
   return new Response(

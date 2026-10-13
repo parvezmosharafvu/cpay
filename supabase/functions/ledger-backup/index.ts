@@ -12,31 +12,42 @@ const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 *   ALERT_WEBHOOK_URL         — Discord or Slack incoming webhook
 *   ALERT_TELEGRAM_BOT_TOKEN  — from @BotFather (/newbot)
 *   ALERT_TELEGRAM_CHAT_ID    — chat/group id (see docs/ENV_VARS.md)
-* Never awaited in a way that can break the money path — every call site
-* uses .catch(), and an alert failure only ever lands in the function log.
+* Awaited by every caller, with a 10 s timeout per channel, so the alert
+* is actually sent before the function returns (an un-awaited fetch can be
+* cut off when the response goes out). It never throws: a delivery failure
+* only lands in the function log, and only as the error name, because
+* Deno's fetch error carries the full URL, and both alert URLs hold a
+* secret (the bot token, the webhook token).
 */
-function sendAlert(message: string) {
+async function sendAlert(message: string): Promise<void> {
 const text = `🚨 CPAY: ${message}`;
+const errName = (e: unknown) => (e instanceof Error ? e.name : "error");
+const jobs: Promise<unknown>[] = [];
 const webhook = Deno.env.get("ALERT_WEBHOOK_URL");
 if (webhook) {
-fetch(webhook, {
+jobs.push(fetch(webhook, {
 method: "POST",
 headers: { "Content-Type": "application/json" },
 body: JSON.stringify({ content: text }),
-}).catch((e) => console.error("Discord/Slack alert delivery failed:", e));
+signal: AbortSignal.timeout(10000),
+}).then((r) => { if (!r.ok) console.error(`Discord/Slack alert delivery failed: HTTP ${r.status}`); })
+.catch((e) => console.error("Discord/Slack alert delivery failed:", errName(e))));
 }
 const tgToken = Deno.env.get("ALERT_TELEGRAM_BOT_TOKEN");
 const tgChat = Deno.env.get("ALERT_TELEGRAM_CHAT_ID");
 if (tgToken && tgChat) {
-fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+jobs.push(fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
 method: "POST",
 headers: { "Content-Type": "application/json" },
 body: JSON.stringify({ chat_id: tgChat, text }),
-}).catch((e) => console.error("Telegram alert delivery failed:", e));
+signal: AbortSignal.timeout(10000),
+}).then((r) => { if (!r.ok) console.error(`Telegram alert delivery failed: HTTP ${r.status}`); })
+.catch((e) => console.error("Telegram alert delivery failed:", errName(e))));
 }
 if (!webhook && !(tgToken && tgChat)) {
 console.warn("sendAlert called but no alert channel is configured.");
 }
+await Promise.all(jobs);
 }
 
 
@@ -145,7 +156,7 @@ fetchAll("daily_stats", "*", { column: "stat_date", ascending: true }),
 } catch (e) {
 const detail = e instanceof Error ? e.message : String(e);
 console.error("Ledger export failed:", detail);
-sendAlert(`Ledger backup FAILED while reading the database: ${detail}`);
+await sendAlert(`Ledger backup FAILED while reading the database: ${detail}`);
 return new Response(JSON.stringify({ error: "Export failed", detail }), { status: 500 });
 }
 
@@ -168,7 +179,7 @@ if (links.length < expected.payment_links) shortfall.push(`payment_links ${links
 if (shortfall.length) {
 const detail = shortfall.join(", ");
 console.error("Ledger snapshot incomplete:", detail);
-sendAlert(`Ledger backup ABORTED — snapshot incomplete (${detail}). Nothing was committed.`);
+await sendAlert(`Ledger backup ABORTED — snapshot incomplete (${detail}). Nothing was committed.`);
 return new Response(JSON.stringify({ error: "Incomplete snapshot", detail }), { status: 500 });
 }
 
@@ -217,7 +228,7 @@ content: btoa(unescape(encodeURIComponent(jsonContent))),
 if (!commitRes.ok) {
 const errText = await commitRes.text();
 console.error("GitHub commit failed:", errText);
-sendAlert(`Ledger backup FAILED to commit to GitHub (${today}).`);
+await sendAlert(`Ledger backup FAILED to commit to GitHub (${today}).`);
 return new Response(JSON.stringify({ error: "Backup failed", detail: errText }), { status: 500 });
 }
 return new Response(JSON.stringify({

@@ -48,3 +48,7 @@ See `docs/OPS_OWNER_CUTOVER.md` and `docs/PRODUCTION-READINESS.md`. Open High
 ## Legal pages release gate
 
 Before a public launch run `python3 ci/check_legal.py --release`. It exits non-zero while any of terms/privacy/refund/contact still contains DRAFT, TODO or `[placeholder]` text. Every PR runs the non-release mode, which only requires draft pages to stay `noindex` and unlinked. Legal approval is an owner task.
+
+## Release gate
+
+`node scripts/release-gate.mjs` must print RELEASE GATE PASSED before a production release. It refuses when the SHA is not origin/main, Verify is not green for it, the site deploy (Workers Builds) did not succeed for it, the latest restore drill failed or is over 90 days old, docs/RELEASE-BLOCKERS.md has an open Critical/High row, or legal pages are still drafts. The wallet deploy script in scripts/ refuses to deploy a SHA that is not origin/main with a green Verify run (override only for a documented rollback).

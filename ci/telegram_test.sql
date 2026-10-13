@@ -111,6 +111,8 @@ end $$;
 do $$
 declare v_before int := (select count(*) from telegram_outbox);
 begin
+  -- settled -> invalid -> settled is an admin reversal (20261013090000).
+  perform set_config('cpay.payment_admin_context', 'on', true);
   update payments set status = 'invalid' where id = 'e2000000-0000-0000-0000-000000000001';
   update payments set status = 'settled' where id = 'e2000000-0000-0000-0000-000000000001';
   update payments set amount_settled = amount_settled where id = 'e2000000-0000-0000-0000-000000000001';
@@ -129,6 +131,7 @@ begin
   v_id := pg_temp.pay(11, 'd2000000-0000-0000-0000-000000000003', 15, now());
   if (select status from payments where id = v_id) <> 'settled' then raise exception 'settle blocked'; end if;
   alter table telegram_outbox drop constraint t_break;
+  perform set_config('cpay.payment_admin_context', 'on', true);
   update payments set status = 'invalid' where id = v_id;
   raise notice 'PASS a broken outbox leaves the payment settled';
 end $$;

@@ -3,6 +3,10 @@
 -- enforcement, no ledger change. BEGIN/ROLLBACK.
 \set ON_ERROR_STOP on
 begin;
+-- auth.uid() from the request claim, as PostgREST sets it (same as revenue_desk test).
+create or replace function auth.uid() returns uuid
+language sql stable
+as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 do $$
 declare
   v_user uuid := gen_random_uuid(); v_link uuid := gen_random_uuid();
@@ -66,6 +70,74 @@ begin
   exception when raise_exception then
     if sqlerrm not like '%Invalid status%' then raise; end if;
   end;
+
+  -- ---- trigger 20261013090000 ----
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('cpay.payment_admin_context', '', true);
+  -- idempotent no-op on a settled row is fine
+  update payments set status = 'settled' where id = p_new;
+  -- non-admin reversal blocked
+  begin
+    update payments set status = 'invalid' where id = p_new;
+    raise exception 'non-admin settled->invalid was allowed';
+  exception when insufficient_privilege then null;
+  end;
+  -- never back to new / pending / expired from settled, even as admin
+  perform set_config('cpay.payment_admin_context', 'on', true);
+  begin
+    update payments set status = 'expired' where id = p_new;
+    raise exception 'settled->expired was allowed';
+  exception when check_violation then null;
+  end;
+  begin
+    update payments set status = 'new' where id = p_fut;
+    raise exception 'invalid->new was allowed';
+  exception when check_violation then null;
+  end;
+end $$;
+
+-- admin JWT (is_admin()) reversal allowed; re-settle allowed; settlement
+-- paths unaffected with the trigger in place
+do $$
+declare v_admin uuid := gen_random_uuid(); v_user uuid := gen_random_uuid(); v_link uuid := gen_random_uuid();
+        p uuid; q uuid; r text; h text := repeat('e5', 32); h2 text := repeat('f6', 32);
+begin
+  insert into auth.users(id, email) values (v_admin, 'st-admin-' || v_admin || '@example.test'), (v_user, 'st-u-' || v_user || '@example.test');
+  update profiles set role = 'admin', account_status = 'active' where id = v_admin;
+  update profiles set account_status = 'active' where id = v_user;
+  insert into payment_links(id, user_id, slug, is_active) values (v_link, v_user, 'st2-' || left(v_user::text, 8), true);
+  insert into payments(payment_link_id, user_id, amount_requested, status, expires_at, invoice_ref, amount_sat)
+    values (v_link, v_user, 10, 'new', now() + interval '1 hour', h, 1000) returning id into p;
+  insert into payments(payment_link_id, user_id, amount_requested, status, expires_at, invoice_ref, amount_sat)
+    values (v_link, v_user, 10, 'expired', now() - interval '2 hours', h2, 1000) returning id into q;
+  perform set_config('cpay.payment_admin_context', '', true);
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  -- settle loop + late payment + duplicate with the trigger active
+  r := settle_breez_payment('st2-1', h, 1000); if r <> 'settled' then raise exception 'settle with trigger: %', r; end if;
+  r := settle_breez_payment('st2-1', h, 1000); if r <> 'duplicate' then raise exception 'dup with trigger: %', r; end if;
+  r := settle_breez_payment('st2-1b', h, 1000); if r <> 'already_settled' then raise exception 'resettle with trigger: %', r; end if;
+  r := settle_breez_payment('st2-2', h2, 1000); if r <> 'settled' then raise exception 'late pay with trigger: %', r; end if;
+  -- signed-in non-admin JWT still blocked
+  perform set_config('request.jwt.claim.sub', v_user::text, true);
+  perform set_config('request.jwt.claims', json_build_object('role','authenticated','sub',v_user)::text, true);
+  begin
+    update payments set status = 'invalid' where id = p;
+    raise exception 'creator reversed a payment';
+  exception when insufficient_privilege then null;
+  end;
+  -- admin JWT: reversal and re-settle allowed
+  perform set_config('request.jwt.claim.sub', v_admin::text, true);
+  perform set_config('request.jwt.claims', json_build_object('role','authenticated','sub',v_admin)::text, true);
+  update payments set status = 'invalid' where id = p;
+  if (select status from payments where id = p) <> 'invalid' then raise exception 'admin reversal failed'; end if;
+  update payments set status = 'settled' where id = p;
+  if (select status from payments where id = p) <> 'settled' then raise exception 'admin re-settle failed'; end if;
+  -- admin_mark_payment path still works for non-settled rows
+  insert into payments(payment_link_id, user_id, amount_requested, status, expires_at)
+    values (v_link, v_user, 10, 'new', now() + interval '1 hour') returning id into q;
+  perform admin_mark_payment(q, 'settled', null);
+  if (select status from payments where id = q) <> 'settled' then raise exception 'admin_mark_payment settle failed'; end if;
 end $$;
 rollback;
 select 'payment transitions match docs/PAYMENT-STATES.md' as result;

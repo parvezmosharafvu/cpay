@@ -20,7 +20,7 @@ stack (#28–#33) is merged.
 - [x] `npm run build` passes. *(Chat 5)*
 - [ ] A backup or snapshot exists for the new CPAY Supabase project. **OPEN (owner)**
 - [x] Migrations apply in order on empty/CI DB (122 files; uniqueness check). *(CI + Chat 1/5 local)*
-- [x] Migration history and the live **production** schema agree (incl. `20261007040000`). *(read-only check 2026-10-14: latest applied = latest in repo, `20261013090000`)*
+- [x] Migration history and the live **production** schema agree (incl. `20261007040000`). *(read-only check 2026-10-14: latest applied = latest in repo, `20261013090000`; re-check whenever a new migration merges)*
 - [x] RLS / allowlist / search-path checks pass on privcheck-style DB. *(Chat 5: anon + authenticated allowlists, sweep)*
 - [x] Rollback / restore plan documented. *(docs/BACKUP-RECOVERY.md, RELEASE-CHECKLIST.md)*
 

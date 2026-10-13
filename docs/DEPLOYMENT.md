@@ -48,9 +48,11 @@
 
 ## 2. Payment provider
 
-- [ ] Run the payment service (`payment-service/README.md`) on a host with
-      a persistent disk, and set `PAYMENT_SERVICE_URL` and
-      `PAYMENT_SERVICE_SECRET` as Edge Function secrets.
+- [ ] Deploy the wallet Edge Function (its README under
+      `supabase/functions/`; production runs it since 2026-10-13), or, as a
+      fallback, run `payment-service/` on a host with a persistent disk
+      (`payment-service/README.md`). Set `PAYMENT_SERVICE_URL` and
+      `PAYMENT_SERVICE_SECRET` as Edge Function secrets either way.
 - [ ] Mainnet needs the wallet SDK API key (`BREEZ_API_KEY`). cpay holds
       freelancers' money in that one wallet. Payout is USDT to a saved address
       (quote, then confirm). No other payout method is offered.

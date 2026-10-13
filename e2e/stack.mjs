@@ -19,6 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { stackPorts, assertPortsFree, waitReady } from './ports.mjs';
+import { totp, b32encode } from './totp.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(path.join(root, 'payment-service', 'package.json'));
@@ -108,20 +109,40 @@ async function startPaymentService() {
 const mailbox = [];
 let pool;
 const refreshTokens = new Map();
-async function session(userRow, method = 'password') {
+// Like Supabase Auth: a sign-in is aal1 with its method in amr; a verified
+// TOTP challenge upgrades to aal2 and adds {method:'totp'}; a refresh keeps
+// the aal and amr it was issued with (it is not a new sign-in).
+async function session(userRow, method = 'password', { aal = 'aal1', amr } = {}) {
   const now = Math.floor(Date.now() / 1000);
+  const methods = amr || [{ method, timestamp: now }];
   const claims = {
     sub: userRow.id, role: 'authenticated', aud: 'authenticated', email: userRow.email, iat: now, exp: now + 3600,
-    aal: 'aal1', amr: [{ method, timestamp: now }], session_id: randomUUID(),
+    aal, amr: methods, session_id: randomUUID(),
   };
   const refresh = randomBytes(16).toString('hex');
-  refreshTokens.set(refresh, userRow.id);
-  return { access_token: signJwt(claims), token_type: 'bearer', expires_in: 3600, expires_at: now + 3600, refresh_token: refresh, user: userJson(userRow) };
+  refreshTokens.set(refresh, { id: userRow.id, aal, amr: methods });
+  return { access_token: signJwt(claims), token_type: 'bearer', expires_in: 3600, expires_at: now + 3600, refresh_token: refresh, user: await userJson(userRow) };
 }
-const userJson = (u) => ({
+const factorsFor = async (id) => (await pool.query(
+  `select id, friendly_name, factor_type, status, created_at, updated_at from auth.mfa_factors where user_id = $1 order by created_at`, [id])).rows;
+const userJson = async (u) => ({
   id: u.id, aud: 'authenticated', role: 'authenticated', email: u.email, email_confirmed_at: u.email_confirmed_at,
-  user_metadata: u.raw_user_meta_data || {}, app_metadata: { provider: 'email' }, factors: [], created_at: u.created_at,
+  user_metadata: u.raw_user_meta_data || {}, app_metadata: { provider: 'email' }, factors: await factorsFor(u.id), created_at: u.created_at,
 });
+
+const challenges = new Map(); // challenge id -> factor id
+// Factor writes run as Supabase Auth's own role, as in production, so the
+// audit trigger tells them apart from an operator's break-glass delete.
+async function asAuth(sql, params) {
+  const c = await pool.connect();
+  try {
+    await c.query('begin');
+    await c.query('set local session authorization supabase_auth_admin');
+    const r = await c.query(sql, params);
+    await c.query('commit');
+    return r;
+  } catch (e) { await c.query('rollback').catch(() => {}); throw e; } finally { c.release(); }
+}
 const userById = async (id) => (await pool.query('select * from auth.users where id = $1', [id])).rows[0];
 const authError = (res, status, msg, code) => send(res, status, { error: code || 'invalid_grant', error_description: msg, msg, code: status, error_code: code });
 
@@ -146,21 +167,65 @@ async function handleAuth(req, res, url, body) {
       return send(res, 200, await session(u));
     }
     if (grant === 'refresh_token') {
-      const id = refreshTokens.get(body.refresh_token);
-      if (!id) return authError(res, 400, 'Invalid Refresh Token', 'refresh_token_not_found');
-      return send(res, 200, await session(await userById(id)));
+      const prev = refreshTokens.get(body.refresh_token);
+      if (!prev) return authError(res, 400, 'Invalid Refresh Token', 'refresh_token_not_found');
+      return send(res, 200, await session(await userById(prev.id), 'password', { aal: prev.aal, amr: prev.amr }));
     }
   }
   const claims = verifyJwt((req.headers.authorization || '').replace(/^Bearer /i, ''));
   if (p === '/user' && req.method === 'GET') {
     if (!claims?.sub) return authError(res, 401, 'invalid JWT', 'bad_jwt');
     const u = await userById(claims.sub);
-    return u ? send(res, 200, userJson(u)) : authError(res, 404, 'User not found', 'user_not_found');
+    return u ? send(res, 200, await userJson(u)) : authError(res, 404, 'User not found', 'user_not_found');
   }
   if (p === '/user' && req.method === 'PUT') {
     if (!claims?.sub) return authError(res, 401, 'invalid JWT', 'bad_jwt');
     if (body.password) await pool.query(`update auth.users set encrypted_password = crypt($2, gen_salt('bf', 4)) where id = $1`, [claims.sub, body.password]);
-    return send(res, 200, userJson(await userById(claims.sub)));
+    return send(res, 200, await userJson(await userById(claims.sub)));
+  }
+  // MFA (TOTP), mirroring Supabase Auth: enrolling another factor or
+  // removing a verified one needs an aal2 session once a factor is verified.
+  const fm = p.match(/^\/factors(?:\/([0-9a-f-]{36}))?(?:\/(challenge|verify))?$/);
+  if (fm) {
+    if (!claims?.sub) return authError(res, 401, 'invalid JWT', 'bad_jwt');
+    const [, fid, step] = fm;
+    const mine = await factorsFor(claims.sub);
+    const hasVerified = mine.some((f) => f.status === 'verified');
+    if (!fid && req.method === 'POST') {
+      if (body.factor_type !== 'totp') return authError(res, 422, 'only totp in e2e', 'validation_failed');
+      if (hasVerified && claims.aal !== 'aal2') return authError(res, 403, 'AAL2 required to enroll a new factor', 'insufficient_aal');
+      if (mine.some((f) => f.friendly_name === body.friendly_name)) return authError(res, 422, 'A factor with the friendly name already exists', 'mfa_factor_name_conflict');
+      const secret = b32encode(randomBytes(20));
+      const { rows: [f] } = await asAuth(
+        `insert into auth.mfa_factors(user_id, friendly_name, factor_type, status, secret) values ($1, $2, 'totp', 'unverified', $3) returning id`,
+        [claims.sub, body.friendly_name || null, secret]);
+      return send(res, 200, { id: f.id, type: 'totp', friendly_name: body.friendly_name,
+        totp: { qr_code: '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>', secret, uri: `otpauth://totp/${body.issuer || 'CPAY'}:${claims.email}?secret=${secret}` } });
+    }
+    const { rows: [f] } = await pool.query('select * from auth.mfa_factors where id = $1 and user_id = $2', [fid, claims.sub]);
+    if (!f) return authError(res, 404, 'Factor not found', 'mfa_factor_not_found');
+    if (step === 'challenge' && req.method === 'POST') {
+      const id = randomUUID(); challenges.set(id, f.id);
+      await asAuth('update auth.mfa_factors set last_challenged_at = now() where id = $1', [f.id]);
+      return send(res, 200, { id, type: 'totp', expires_at: Math.floor(Date.now() / 1000) + 300 });
+    }
+    if (step === 'verify' && req.method === 'POST') {
+      if (challenges.get(body.challenge_id) !== f.id) return authError(res, 422, 'Challenge not found', 'mfa_challenge_expired');
+      challenges.delete(body.challenge_id);
+      const now = Date.now();
+      if (![now - 30000, now, now + 30000].some((t) => totp(f.secret, t) === String(body.code))) {
+        return authError(res, 422, 'Invalid TOTP code entered', 'mfa_verification_failed');
+      }
+      if (f.status !== 'verified') await asAuth(`update auth.mfa_factors set status = 'verified', updated_at = now() where id = $1`, [f.id]);
+      const ts = Math.floor(now / 1000);
+      return send(res, 200, await session(await userById(claims.sub), 'totp',
+        { aal: 'aal2', amr: [{ method: 'totp', timestamp: ts }, ...(claims.amr || [])] }));
+    }
+    if (!step && req.method === 'DELETE') {
+      if (f.status === 'verified' && claims.aal !== 'aal2') return authError(res, 403, 'AAL2 required to unenroll a verified factor', 'insufficient_aal');
+      await asAuth('delete from auth.mfa_factors where id = $1', [f.id]);
+      return send(res, 200, { id: f.id });
+    }
   }
   if (p === '/logout') return send(res, 204, null);
   if (p === '/recover') {

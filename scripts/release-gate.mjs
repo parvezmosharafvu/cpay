@@ -13,6 +13,7 @@
 // Exit 0 = GO for this SHA, 1 = refused (reasons printed).
 import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export function latestDrill(md) {
@@ -42,6 +43,11 @@ export function drillProblem(md, maxDays, nowMs = Date.now()) {
 const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 
 function main(argv) {
+  // Check the repository this script lives in (canonical, symlinks resolved),
+  // never whatever directory it happens to be launched from.
+  const root = realpathSync(join(dirname(fileURLToPath(import.meta.url)), '..'));
+  process.chdir(root);
+  console.log(`release gate: repository ${root}`);
   const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
   const fails = [];
   sh('git', ['fetch', '-q', 'origin', 'main']);
@@ -61,8 +67,18 @@ function main(argv) {
   if (!argv.includes('--skip-legal')) {
     try { sh('python3', ['ci/check_legal.py', '--release']); } catch { fails.push('legal pages still contain DRAFT/placeholder text'); }
   }
+  console.log(`checked: sha=origin/main, clean worktree, Verify, Workers Builds: cpay, restore drill, blockers${argv.includes('--skip-legal') ? '' : ', legal'}`);
   console.log(fails.length ? `RELEASE REFUSED for ${sha}:\n- ${fails.join('\n- ')}` : `RELEASE GATE PASSED for ${sha}`);
   return fails.length ? 1 : 0;
+}
+
+// Any failed command (git, gh, a missing file) refuses the release with a
+// reason instead of a bare stack trace; it can never fall through to exit 0.
+function run(argv) {
+  try { return main(argv); } catch (e) {
+    console.log(`RELEASE REFUSED: ${String(e.message || e).split('\n')[0]}`);
+    return 1;
+  }
 }
 
 // Compare real filesystem paths, not a hand-built file:// string: a checkout
@@ -74,4 +90,4 @@ export function isEntrypoint(metaUrl, argv1) {
   return real(fileURLToPath(metaUrl)) === real(argv1);
 }
 
-if (isEntrypoint(import.meta.url, process.argv[1])) process.exit(main(process.argv.slice(2)));
+if (isEntrypoint(import.meta.url, process.argv[1])) process.exit(run(process.argv.slice(2)));

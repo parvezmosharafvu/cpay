@@ -41,3 +41,43 @@ test('entrypoint check survives spaces and symlinks in the path', () => {
   assert.equal(isEntrypoint(url, join(dir, 'other.mjs')), false);
   assert.equal(isEntrypoint(url, undefined), false);
 });
+
+// End to end: run the real script from paths that used to skip main() and
+// exit 0 silently. The copy sits outside any git repo, so a gate that runs
+// must refuse (git fails) and say so; exit 0 or empty output is the old bug.
+test('gate never exits 0 silently: spaces, unicode, symlinks, missing path, failing command', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { mkdirSync, copyFileSync, realpathSync } = await import('node:fs');
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'gate-e2e-')));
+  const tree = join(base, 'repo with spaces ü');
+  mkdirSync(join(tree, 'scripts'), { recursive: true });
+  copyFileSync('scripts/release-gate.mjs', join(tree, 'scripts', 'release-gate.mjs'));
+  symlinkSync(tree, join(base, 'linked repo'));
+  mkdirSync(join(base, 'nested', 'deeper'), { recursive: true });
+  symlinkSync(join(base, 'linked repo'), join(base, 'nested', 'deeper', 'link2'));
+  symlinkSync(join(tree, 'scripts', 'release-gate.mjs'), join(base, 'gate-link.mjs'));
+  const env = { ...process.env, GIT_CEILING_DIRECTORIES: base };
+  const run = (script, cwd = base) => spawnSync(process.execPath, [script, '--skip-legal'], { cwd, env, encoding: 'utf8' });
+  for (const script of [
+    join(tree, 'scripts', 'release-gate.mjs'),
+    join(base, 'linked repo', 'scripts', 'release-gate.mjs'),
+    join(base, 'nested', 'deeper', 'link2', 'scripts', 'release-gate.mjs'),
+    join(base, 'gate-link.mjs'),
+    './repo with spaces ü/scripts/release-gate.mjs',
+  ]) {
+    const r = run(script);
+    assert.equal(r.status, 1, `${script}: exit ${r.status}\n${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, /RELEASE REFUSED/, script);
+    // Anchored to the script's own canonical repository, not the launch cwd.
+    assert.match(r.stdout, new RegExp(`repository ${tree.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n`), script);
+  }
+  // Launched from inside this (real) repository it still checks its own tree.
+  const fromRepo = run(join(tree, 'scripts', 'release-gate.mjs'), process.cwd());
+  assert.equal(fromRepo.status, 1);
+  assert.match(fromRepo.stdout, /repository .*repo with spaces ü\n/);
+  const missing = run(join(base, 'does not exist.mjs'));
+  assert.notEqual(missing.status, 0);
+  const broken = join(base, 'broken.mjs');
+  symlinkSync(join(base, 'gone.mjs'), broken);
+  assert.notEqual(run(broken).status, 0);
+});

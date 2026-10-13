@@ -144,7 +144,45 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     return prepareId;
   }
 
+  // Edge isolates hand the wallet over between requests, so a quote held
+  // only in this process can be gone by the time the admin confirms. Every
+  // quote is also stored in breez_wallet.admin_send_quotes: tied to the
+  // admin, expiring with the quote, and claimed once (consumed_at). A
+  // confirm on another instance re-prepares the same send and refuses if it
+  // now costs more than what the admin approved.
+  async function persist(prepareId, adminId, kind, request, view, expiresAtMs) {
+    await db.query(`delete from breez_wallet.admin_send_quotes where created_at < now() - interval '7 days'`);
+    await db.query(
+      `insert into breez_wallet.admin_send_quotes (id, admin_id, kind, request, view, expires_at)
+       values ($1, $2, $3, $4::jsonb, $5::jsonb, to_timestamp($6::double precision / 1000))`,
+      [prepareId, adminId, kind, JSON.stringify(request), JSON.stringify(view), expiresAtMs],
+    );
+  }
+
+  async function claim(prepareId, adminId) {
+    const { rows } = await db.query(
+      `update breez_wallet.admin_send_quotes set consumed_at = now()
+        where id = $1 and admin_id = $2 and consumed_at is null
+        returning kind, request, view, (extract(epoch from expires_at) * 1000)::float8 as expires_ms`,
+      [prepareId, adminId],
+    );
+    if (rows[0]) return rows[0];
+    const { rows: used } = await db.query(
+      `select 1 from breez_wallet.admin_send_quotes where id = $1 and admin_id = $2 and consumed_at is not null`,
+      [prepareId, adminId],
+    );
+    if (used[0]) throw new UserError(409, 'This send was already confirmed. Check the wallet history before sending again.');
+    throw new UserError(404, 'Nothing to confirm. Prepare the send again.');
+  }
+
   async function sendPrepare({ adminId, destination, amountSat }) {
+    const built = await buildSend({ destination, amountSat });
+    const prepareId = remember({ adminId, ...built });
+    await persist(prepareId, adminId, built.kind, { destination: built.view.destination, amountSat: amountSat ?? null }, built.view, built.expiresAtMs);
+    return { prepareId, ...built.view };
+  }
+
+  async function buildSend({ destination, amountSat }) {
     const input = String(destination ?? '').trim();
     if (!input) throw new UserError(400, 'Paste a Lightning invoice, Lightning address or Spark address');
     let parsed;
@@ -185,11 +223,17 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
       kind, destination: input, amountSat: sat, feeSat, totalSat: sat + feeSat,
       totalUsd: formatCents(satsToUsdCents(sat + feeSat, s.rate)), expiresAt: new Date(expiresAtMs).toISOString(),
     };
-    const prepareId = remember({ adminId, kind, lnurl, res, view, expiresAtMs });
-    return { prepareId, ...view };
+    return { kind, lnurl, res, view, expiresAtMs };
   }
 
   async function stableQuote({ adminId, routeId, address, amountUsd }) {
+    const built = await buildStable({ routeId, address, amountUsd });
+    const prepareId = remember({ adminId, ...built });
+    await persist(prepareId, adminId, 'stablecoin', { routeId, address: built.view.destination, amountUsd: built.view.amountUsd }, built.view, built.expiresAtMs);
+    return { prepareId, quoteId: prepareId, ...built.view };
+  }
+
+  async function buildStable({ routeId, address, amountUsd }) {
     const amountCents = parseAmountCents(amountUsd);
     if (amountCents === null) throw new UserError(400, 'Enter an amount in dollars and cents');
     const route = (await withdrawals.listRoutes()).find((r) => r.id === String(routeId ?? ''));
@@ -213,8 +257,26 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
       networkFeeUsd: networkFeeUsd(amountCents, q.estimatedOutBase, q.pair.decimals),
       expiresAt: new Date(q.expiresAtMs).toISOString(),
     };
-    const prepareId = remember({ adminId, kind: 'stablecoin', lnurl: false, res: q.prepared, view, expiresAtMs: q.expiresAtMs - QUOTE_MARGIN_MS });
-    return { prepareId, quoteId: prepareId, ...view };
+    return { kind: 'stablecoin', lnurl: false, res: q.prepared, view, expiresAtMs: q.expiresAtMs - QUOTE_MARGIN_MS };
+  }
+
+  // The quote was made on another instance: prepare the same send here and
+  // accept it only if it costs no more than 1% (and 1 sat) over the approved
+  // total, and a stablecoin receive is not more than 1% lower.
+  async function rebuild(prepareId, adminId, row) {
+    const shown = row.view;
+    const fresh = row.kind === 'stablecoin'
+      ? await buildStable(row.request)
+      : await buildSend(row.request);
+    const v = fresh.view;
+    const costlier = v.totalSat > Math.floor(shown.totalSat * 1.01) + 1 || (row.kind !== 'stablecoin' && v.amountSat !== shown.amountSat);
+    const lessReceived = row.kind === 'stablecoin' && Number.isFinite(Number(shown.receive)) && Number(v.receive) < Number(shown.receive) * 0.99;
+    if (fresh.kind !== row.kind || costlier || lessReceived) {
+      log({ event: 'admin-send-requote-changed', prepareId, shownTotalSat: shown.totalSat, freshTotalSat: v.totalSat });
+      throw new UserError(409, 'The quote changed since you reviewed it. Prepare the send again.');
+    }
+    log({ event: 'admin-send-requoted', prepareId, kind: row.kind });
+    return { adminId, ...fresh, prepareId };
   }
 
   async function audit(adminId, action, prepareId, value) {
@@ -255,16 +317,22 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
   }
 
   async function sendConfirm({ adminId, prepareId }) {
-    if (inflight.has(prepareId)) return inflight.get(prepareId);
-    const p = prepared.get(prepareId);
-    if (!p || p.adminId !== adminId) throw new UserError(404, 'Nothing to confirm. Prepare the send again.');
-    if (now() >= p.expiresAtMs) {
+    const key = `${adminId}:${prepareId}`;
+    if (inflight.has(key)) return inflight.get(key);
+    const job = (async () => {
+      const row = await claim(prepareId, adminId);
+      const mem = prepared.get(prepareId);
       prepared.delete(prepareId);
-      throw new UserError(409, 'The fee quote expired. Prepare the send again.');
-    }
-    prepared.delete(prepareId);
-    const job = track(run(p)).finally(() => setTimeout(() => inflight.delete(prepareId), 60_000).unref?.());
-    inflight.set(prepareId, job);
+      const expiresAtMs = mem?.adminId === adminId ? mem.expiresAtMs : Number(row.expires_ms);
+      if (now() >= expiresAtMs) throw new UserError(409, 'The fee quote expired. Prepare the send again.');
+      const p = mem?.adminId === adminId ? mem : await rebuild(prepareId, adminId, row);
+      return track(run(p));
+    })();
+    inflight.set(key, job);
+    job.then(
+      () => setTimeout(() => inflight.delete(key), 60_000).unref?.(),
+      () => inflight.delete(key),
+    );
     return job;
   }
 

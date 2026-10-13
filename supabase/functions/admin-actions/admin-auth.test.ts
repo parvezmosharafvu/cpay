@@ -10,7 +10,7 @@
 // the last step checks in index.ts.
 // @ts-ignore The local TypeScript server cannot resolve URL imports without Deno's resolver.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
-import { createAdminVerifier, isActiveAdmin } from "./admin-auth.ts";
+import { createAdminVerifier, isActiveAdmin, mfaFlagOn } from "./admin-auth.ts";
 
 function eq<T>(a: T, b: T, msg: string) {
     if (JSON.stringify(a) !== JSON.stringify(b)) {
@@ -30,6 +30,18 @@ const PEOPLE: Record<string, [string, { role: string; account_status: string } |
 };
 const profileSelects: string[] = [];
 
+// Signed-looking tokens for the admin-MFA cases: the gate reads only the aal
+// claim, after auth/v1/user (mocked below) accepted the token.
+const b64u = (o: unknown) => btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const tok = (aal: string) => `${b64u({ alg: "ES256" })}.${b64u({ sub: "admin", aal })}.sig`;
+const ADMIN_AAL1 = tok("aal1"), ADMIN_AAL2 = tok("aal2"), SUSPENDED_AAL2 = `${tok("aal2")}x`;
+PEOPLE[ADMIN_AAL1] = ["00000000-0000-4000-8000-0000000000a1", { role: "admin", account_status: "active" }];
+PEOPLE[ADMIN_AAL2] = ["00000000-0000-4000-8000-0000000000a1", { role: "admin", account_status: "active" }];
+PEOPLE[SUSPENDED_AAL2] = ["00000000-0000-4000-8000-0000000000a2", { role: "admin", account_status: "suspended" }];
+// app_settings.admin_mfa_required as the fake database holds it:
+// undefined = no row, "error" = the read fails.
+let mfaSetting: unknown = undefined;
+
 const sb = Deno.serve({ hostname: "127.0.0.1", port: 0, onListen() {} }, (req) => {
     const url = new URL(req.url);
     const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer /, "");
@@ -44,6 +56,14 @@ const sb = Deno.serve({ hostname: "127.0.0.1", port: 0, onListen() {} }, (req) =
         const row = Object.values(PEOPLE).find(([uid]) => uid === id)?.[1];
         if (!row) return Response.json({ code: "PGRST116", message: "no rows" }, { status: 406 });
         return Response.json(row);
+    }
+    if (url.pathname === "/rest/v1/app_settings") {
+        if (mfaSetting === "error") return Response.json({ message: "boom" }, { status: 500 });
+        const rows = mfaSetting === undefined ? [] : [{ value: mfaSetting }];
+        if ((req.headers.get("Accept") ?? "").includes("vnd.pgrst.object")) {
+            return rows.length ? Response.json(rows[0]) : Response.json({ code: "PGRST116", message: "no rows" }, { status: 406 });
+        }
+        return Response.json(rows);
     }
     return Response.json({ message: "not mocked: " + url.pathname }, { status: 404 });
 });
@@ -99,6 +119,45 @@ Deno.test({
             eq((await call("forged-jwt")).ok, false, "bad jwt");
         });
 
+        await t.step("admin MFA flag: JSON true or \"true\" is on; anything else is off", () => {
+            eq(mfaFlagOn(true), true, "true");
+            eq(mfaFlagOn("true"), true, "string true (fail closed)");
+            for (const v of [false, "false", null, undefined, 1, "yes"]) eq(mfaFlagOn(v), false, String(v));
+        });
+
+        await t.step("admin MFA off (no row, or false): an aal1 admin passes as before", async () => {
+            for (const v of [undefined, false]) {
+                mfaSetting = v;
+                eq((await call(ADMIN_AAL1)).ok, true, `flag ${String(v)}`);
+            }
+            mfaSetting = undefined;
+        });
+
+        await t.step("admin MFA on: aal1 is refused with mfa_required, aal2 passes", async () => {
+            for (const v of [true, "true"]) {
+                mfaSetting = v;
+                const r1 = await call(ADMIN_AAL1);
+                eq([r1.ok, r1.reason, r1.callerClient], [false, "mfa_required", undefined], `flag ${JSON.stringify(v)}: aal1`);
+                eq((await call(ADMIN_AAL2)).ok, true, `flag ${JSON.stringify(v)}: aal2`);
+                eq((await call("active-admin-jwt")).ok, false, `flag ${JSON.stringify(v)}: token without aal`);
+            }
+            mfaSetting = undefined;
+        });
+
+        await t.step("admin MFA on: aal2 does not make a suspended admin an admin", async () => {
+            mfaSetting = true;
+            const r = await call(SUSPENDED_AAL2);
+            eq([r.ok, r.reason], [false, undefined], "suspended, aal2");
+            mfaSetting = undefined;
+        });
+
+        await t.step("a failed settings read fails closed (aal1 refused, aal2 passes)", async () => {
+            mfaSetting = "error";
+            eq((await call(ADMIN_AAL1)).reason, "mfa_required", "aal1");
+            eq((await call(ADMIN_AAL2)).ok, true, "aal2");
+            mfaSetting = undefined;
+        });
+
         await t.step("the profile lookup reads role and account_status", () => {
             eq(profileSelects.length > 0 && profileSelects.every((s) => s === "role,account_status" || s === "role, account_status"), true,
                 `selects: ${JSON.stringify([...new Set(profileSelects)])}`);
@@ -111,7 +170,7 @@ Deno.test({
             eq(routes.map((m) => m[1]).sort(), ["/admin-mark-settled", "/admin-wallet", "/process-withdrawal"], "routes");
             for (const m of routes) {
                 eq(m[2].trim(), "const auth = await verifyAdminCaller(req);", `${m[1]}: first line is the gate`);
-                eq(m[3].trim(), 'if (!auth.ok) return json({ error: "Unauthorized" }, 401, cors);', `${m[1]}: refused before any work`);
+                eq(m[3].trim(), "if (!auth.ok) return refuse(auth, cors);", `${m[1]}: refused before any work`);
             }
         });
 

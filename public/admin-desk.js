@@ -312,6 +312,7 @@ async function renderFlags() {
     ['manual_withdrawals_enabled', 'Manual withdrawals enabled'],
     ['auto_withdraw_enabled', 'Auto-queue USDT payouts when a threshold is set'],
     ['hide_small_payments_enabled', 'Global hide-small-payments'],
+    ['admin_mfa_required', 'Require two-step sign-in for admins (enrol in Security first)'],
   ];
   const { data, error } = await sb.from('app_settings').select('key, value').in('key', keys.map((r) => r[0]));
   const map = {};

@@ -12,7 +12,8 @@
 //   node scripts/release-gate.mjs [--sha <sha>] [--drill-max-days 90] [--skip-legal]
 // Exit 0 = GO for this SHA, 1 = refused (reasons printed).
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 export function latestDrill(md) {
   const rows = md.split('\n').filter((l) => /^\|\s*\d{4}-\d{2}-\d{2}/.test(l));
@@ -64,4 +65,13 @@ function main(argv) {
   return fails.length ? 1 : 0;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) process.exit(main(process.argv.slice(2)));
+// Compare real filesystem paths, not a hand-built file:// string: a checkout
+// path with a space (URL-encoded in import.meta.url) or a symlink would never
+// match, main() would not run, and the gate would exit 0 with no output.
+export function isEntrypoint(metaUrl, argv1) {
+  if (!argv1) return false;
+  const real = (p) => { try { return realpathSync(p); } catch { return p; } };
+  return real(fileURLToPath(metaUrl)) === real(argv1);
+}
+
+if (isEntrypoint(import.meta.url, process.argv[1])) process.exit(main(process.argv.slice(2)));

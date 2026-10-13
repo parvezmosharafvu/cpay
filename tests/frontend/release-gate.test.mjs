@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { latestDrill, drillProblem, openBlockers } from '../../scripts/release-gate.mjs';
+import { latestDrill, drillProblem, openBlockers, isEntrypoint } from '../../scripts/release-gate.mjs';
+import { mkdtempSync, writeFileSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const log = (rows) => `| Date (Dhaka) | Who | Source | Target | Result |\n|---|---|---|---|---|\n${rows.join('\n')}\n`;
 const now = Date.parse('2026-10-14T00:00:00+06:00');
@@ -24,4 +28,16 @@ test('open Critical/High blockers are found, closed and Medium are not', () => {
 test('repository blockers file has no open Critical/High today', async () => {
   const { readFileSync } = await import('node:fs');
   assert.equal(openBlockers(readFileSync('docs/RELEASE-BLOCKERS.md', 'utf8')).length, 0);
+});
+test('entrypoint check survives spaces and symlinks in the path', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'release gate '));
+  const file = join(dir, 'gate.mjs');
+  writeFileSync(file, '');
+  const link = join(dir, 'link.mjs');
+  symlinkSync(file, link);
+  const url = pathToFileURL(file).href;
+  assert.equal(isEntrypoint(url, file), true);
+  assert.equal(isEntrypoint(url, link), true);
+  assert.equal(isEntrypoint(url, join(dir, 'other.mjs')), false);
+  assert.equal(isEntrypoint(url, undefined), false);
 });

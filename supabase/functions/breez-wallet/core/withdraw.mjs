@@ -242,7 +242,25 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     };
   }
 
-  async function quote({ userId, routeId: id, address, amountUsd }) {
+  async function quote(request) {
+    const built = await buildQuote(request);
+    const quoteId = randomUUID();
+    const view = { quoteId, ...built.view };
+    const stored = { userId: request.userId, request: built.request, prepared: built.prepared, expiresAtMs: built.expiresAtMs, view };
+    quotes.set(quoteId, stored);
+    for (const [k, q] of quotes) if (q.expiresAtMs < now() - 60_000) quotes.delete(k);
+    // Edge isolates hand the wallet over between requests, so the quote is
+    // also stored where any instance can claim it once (consumed_at).
+    await db.query(`delete from breez_wallet.withdraw_quotes where created_at < now() - interval '7 days'`);
+    await db.query(
+      `insert into breez_wallet.withdraw_quotes (id, user_id, request, view, expires_at)
+       values ($1, $2, $3::jsonb, $4::jsonb, to_timestamp($5::double precision / 1000))`,
+      [quoteId, request.userId, JSON.stringify(built.request), JSON.stringify(view), built.expiresAtMs],
+    );
+    return view;
+  }
+
+  async function buildQuote({ userId, routeId: id, address, amountUsd }) {
     const amountCents = parseAmountCents(amountUsd);
     if (amountCents === null) throw new UserError(400, 'Enter an amount in dollars and cents');
     if (amountCents < 500) throw new UserError(422, 'Minimum withdrawal is $5');
@@ -274,9 +292,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
       failMessage: 'This withdrawal could not be quoted right now. Try another amount or network.',
     });
     const fee = networkFeeUsd(sendCents, estimatedOutBase, pair.decimals);
-    const quoteId = randomUUID();
     const view = {
-      quoteId,
       expiresAt: new Date(expiresAtMs).toISOString(),
       route: { id, asset: pair.asset, chain: pair.chain, family: route.family, provider: pair.provider },
       address: dest,
@@ -293,9 +309,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
       asset: pair.asset,
       maxSlippageBps: MAX_SLIPPAGE_BPS,
     };
-    quotes.set(quoteId, { userId, request: { userId, routeId: id, address: dest, amountUsd: cents(amountCents) }, prepared, expiresAtMs, view });
-    for (const [k, q] of quotes) if (q.expiresAtMs < now() - 60_000) quotes.delete(k);
-    return view;
+    return { request: { userId, routeId: id, address: dest, amountUsd: cents(amountCents) }, prepared, expiresAtMs, view };
   }
 
   // 20261009010000: a payout goes only to an address the account saved at
@@ -384,21 +398,74 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     return rows[0];
   }
 
+  // Claim the stored quote once. Throws 404 for an unknown quote or one that
+  // belongs to someone else.
+  async function claim(quoteId, userId) {
+    const { rows } = await db.query(
+      `update breez_wallet.withdraw_quotes set consumed_at = now()
+        where id = $1 and user_id = $2 and consumed_at is null
+        returning request, view, (extract(epoch from expires_at) * 1000)::float8 as expires_ms`,
+      [quoteId, userId],
+    );
+    if (!rows[0]) throw new UserError(404, 'Quote not found. Get a new quote.');
+    return rows[0];
+  }
+
+  // The quote was made on another instance: quote the same withdrawal here
+  // and accept it only if it sends no more than 1% (+1 sat) more sats and the
+  // expected receive is not more than 1% lower. Same fee, route and address.
+  async function rebuild(quoteId, row) {
+    const shown = row.view;
+    const fresh = await buildQuote(row.request);
+    const v = fresh.view;
+    const same = v.route.id === shown.route.id && v.address === shown.address && v.sendUsd === shown.sendUsd
+      && v.platformFeeUsd === shown.platformFeeUsd && v.amountUsd === shown.amountUsd;
+    const costlier = v.amountSat > Math.floor(shown.amountSat * 1.01) + 1;
+    const lessReceived = Number.isFinite(Number(shown.receive)) && Number(v.receive) < Number(shown.receive) * 0.99;
+    if (!same || costlier || lessReceived) {
+      log({ event: 'withdraw-requote-changed', quoteId, shownSat: shown.amountSat, freshSat: v.amountSat });
+      throw new UserError(409, 'The quote changed since you reviewed it. Get a new quote.');
+    }
+    log({ event: 'withdraw-requoted', quoteId });
+    return { userId: row.request.userId, request: fresh.request, prepared: fresh.prepared, expiresAtMs: fresh.expiresAtMs, view: { quoteId, ...v } };
+  }
+
   async function confirm({ userId, quoteId }) {
     const existing = await rowByQuote(quoteId, userId);
     if (existing) return rowView(existing);
-    const q = quotes.get(quoteId);
-    if (!q || q.userId !== userId) throw new UserError(404, 'Quote not found. Get a new quote.');
-    if (now() >= q.expiresAtMs - QUOTE_MARGIN_MS) {
-      quotes.delete(quoteId);
-      const fresh = await quote(q.request);
-      throw new UserError(409, 'The quote expired. Review the new quote and confirm again.', { quote: fresh });
-    }
-    if (!inflight.has(quoteId)) {
+    const key = `${userId}:${quoteId}`;
+    if (!inflight.has(key)) {
       const run = (async () => {
-        await requireReadyDestination(userId, q.view.address);
-        const row = await reserve(q);
+        let stored;
+        try {
+          stored = await claim(quoteId, userId);
+        } catch (e) {
+          // Claimed by another instance that may already have reserved it.
+          const done = await rowByQuote(quoteId, userId);
+          if (done) return done;
+          throw e;
+        }
+        const mem = quotes.get(quoteId);
         quotes.delete(quoteId);
+        const expiresAtMs = mem?.userId === userId ? mem.expiresAtMs : Number(stored.expires_ms);
+        if (now() >= expiresAtMs - QUOTE_MARGIN_MS) {
+          const fresh = await quote(stored.request);
+          throw new UserError(409, 'The quote expired. Review the new quote and confirm again.', { quote: fresh });
+        }
+        let row;
+        try {
+          const q0 = mem?.userId === userId ? mem : await rebuild(quoteId, stored);
+          await requireReadyDestination(userId, q0.view.address);
+          row = await reserve(q0);
+          row.__q = q0;
+        } catch (e) {
+          // Nothing was reserved: give the quote back so a retry can use it.
+          await db.query('update breez_wallet.withdraw_quotes set consumed_at = null where id = $1', [quoteId]).catch(() => {});
+          if (mem?.userId === userId) quotes.set(quoteId, mem);
+          throw e;
+        }
+        const q = row.__q;
+        delete row.__q;
         if (row.status !== 'sending') return row;
         sendingIds.add(row.id);
         const sending = track(send(row, q.prepared).catch((e) => {
@@ -408,12 +475,12 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
         await Promise.race([sending, wait(confirmWaitMs)]);
         return currentRow(row.id);
       })().then(
-        (row) => { setTimeout(() => inflight.delete(quoteId), 60_000).unref?.(); return row; },
-        (e) => { inflight.delete(quoteId); throw e; },
+        (row) => { setTimeout(() => inflight.delete(key), 60_000).unref?.(); return row; },
+        (e) => { inflight.delete(key); throw e; },
       );
-      inflight.set(quoteId, run);
+      inflight.set(key, run);
     }
-    return rowView(await inflight.get(quoteId));
+    return rowView(await inflight.get(key));
   }
 
   // Settle every 'sending' row against Breez. Called at startup, on payment

@@ -224,7 +224,7 @@ function clearQuote(note) {
 
 // The networks list can be slow while the wallet is busy: retry with backoff
 // and only then say it did not load, with a Retry button.
-const ROUTE_RETRY_DELAYS = [0, 1500, 4000];
+const WALLET_ROUTE_RETRY_DELAYS = [0, 1500, 4000];
 function routesRetryButton(show) {
   let b = document.getElementById('wqNetRetry');
   if (!b && show) {
@@ -242,7 +242,7 @@ async function loadRoutes() {
   $w('wqNet').replaceChildren(loading);
   let error = null;
   let routes = [];
-  for (const d of ROUTE_RETRY_DELAYS) {
+  for (const d of WALLET_ROUTE_RETRY_DELAYS) {
     if (d) await new Promise((r) => setTimeout(r, d));
     try {
       ({ routes } = await walletCall('stable-routes'));

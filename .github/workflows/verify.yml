@@ -463,6 +463,8 @@ jobs:
         run: npm run build
       - name: Static checks
         run: python3 ci/check_frontend.py
+      - name: Draft legal pages stay unlinked and noindex
+        run: python3 ci/check_legal.py
       - name: Public copy (README, SECURITY, docs, pages)
         # No payment-processor name, no bKash/Nagad/Binance/bank, no
         # "any Lightning wallet" promise. See ci/check_public_copy.py.

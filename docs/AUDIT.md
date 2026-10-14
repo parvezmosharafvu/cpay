@@ -63,7 +63,7 @@ browser (Vanilla HTML/CSS/JS, anon key + JWT, RLS)
 | M2 | Trigger SECURITY DEFINER helpers still `EXECUTE` for anon/authenticated (PostgREST cannot call `RETURNS trigger`, but advisors flag them). | production advisors + migration | **FIXED** revoke in `20261007040000_…` |
 | M3 | Historical `profiles.wallet_*` traditional-rail columns remain (unused by queue path). | schema | OPEN — leave for history; no public UI ads (copy checks pass) |
 | M4 | Admin `process-withdrawal` still supports `mark_paid_manual` for legacy rows. | `supabase/functions/admin-actions/index.ts` | OPEN — keep for old pending rows; do not expose in freelancer UI |
-| M5 | Repo is public; hygiene job comment still assumes private. | `.github/workflows/verify.yml`, `docs/OPS_DRIFT_2026-10.md` | OPEN — docs/comment only |
+| M5 | Repo is public; hygiene job comment still assumes private. | `.github/workflows/verify.yml`, `docs/OPS_DRIFT_2026-10.md` | FIXED 2026-10-14 — comment corrected, job now blocking; SECURITY.md history note corrected |
 
 ### Low
 

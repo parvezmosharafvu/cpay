@@ -64,3 +64,55 @@ date (Asia/Dhaka) and who performed it in the staging sign-off ledger.
   restore relies on Supabase backups/PITR (owner to confirm the plan).
 - Restoring into staging Supabase (Auth, Edge) is not covered. This drill
   checked data and ledger math only.
+
+## Closing the gaps (owner checklist)
+
+None of these can be done from the repository; each needs the Supabase
+dashboard or the private backup repo. Record each in the drill log above.
+
+1. **Confirm PITR / backup plan.** Supabase dashboard → Project → Database →
+   Backups. Note the plan, whether *Point in time* is enabled, and the
+   retention window. Without PITR the restore point is the last daily
+   backup, so a bad event late in the day loses up to 24 h of ledger rows;
+   then the ledger git snapshot is the only finer-grained copy of
+   payments and withdrawals.
+   *Checked read-only on 2026-10-14:* the organisation is on the Supabase
+   **Free plan** (Management API). Free projects have no point-in-time
+   recovery and no downloadable daily backups, so today the git snapshot
+   below is the **only** copy of the ledger, and nothing backs up
+   `auth.users`, the audit log, receipts, webhooks or the wallet schema.
+   Owner decision (budget): upgrade to Pro (daily backups, 7 days) and, for
+   a money ledger, add PITR. Until then, take a manual dump before every
+   migration: Dashboard → Database → Backups is not available on Free, so
+   use `supabase db dump --db-url <connection string>` from a trusted
+   machine and store the file privately.
+   The ledger-backup run itself: the 18:15 UTC run answered
+   `backed up`, `verified: true` (payments 4, withdrawals 0, payment links 1,
+   profiles 18, daily stats 26). No repository visible to the audit's GitHub
+   access received that commit, so the target repo's visibility could not be
+   checked from here: the owner confirms it is **private** (step 2).
+2. **Open the latest snapshot.** In the private repo named by
+   `GITHUB_OWNER`/`GITHUB_REPO`, open `ledger-backups/<today>.json` and
+   check that the counts match the admin dashboard, and that the repo's
+   visibility is **Private** (repo → Settings → General). Do not copy it
+   anywhere public.
+3. **Staging restore drill (Auth + Edge).** On a staging project only:
+   restore the latest backup (or PITR to a chosen time); deploy the Edge
+   functions from the git SHA that production runs; set staging's own
+   secrets (never production's); sign in as a test user and an admin; check
+   `get_my_balance()` and the admin totals match the snapshot. Delete or
+   pause the staging project afterwards.
+4. **Coverage decision for the git snapshot.** Today it holds payments,
+   withdrawals (destination last 4 only), payment links, profiles and
+   daily stats. Audit, receipt and webhook tables and the wallet SDK schema
+   are not in it, by design: they are large, contain more personal data,
+   and the wallet schema is rebuilt from the seed. If PITR is **not**
+   available (step 1), extend `ledger-backup` to add the audit table with
+   the same redaction rules, as a separate reviewed change.
+
+### Standalone CPAY Wallet (users' own wallets)
+
+Nothing to back up on CPAY's side: CPAY never holds those keys or that
+data. Recovery is the user's 12-word phrase (plus, for an operator
+outage, the exit backup file); see `docs/WALLET-APP.md` (added with the
+wallet, PR #104).

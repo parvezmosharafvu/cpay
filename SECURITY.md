@@ -93,15 +93,25 @@ All of the above belong in Supabase Edge Function secrets. See `docs/ENV_VARS.md
 
 ## After cloning or forking
 
-Rotate every secret. The repository history contains a `CRON_SECRET` that was
-committed in `ledger-backup-trigger.sql`, and the `ledger-backups/*.json`
-snapshots contain real customer email addresses from the original deployment.
-Treat both as public.
+Rotate every secret you inherit. **This repository** was started on
+2026-09-25 from a GitHub archive of the original cpay-main (baseline commit
+`d14b708`). Checked on 2026-10-14 across every commit on every branch:
 
-**Update (Aug 2026):** the `ledger-backups/` snapshots have been removed from
-the working tree and the path is now in `.gitignore`. The nightly backup still
-runs — it commits straight to the private GitHub repo configured via
-`GITHUB_OWNER`/`GITHUB_REPO`, never into this one. If your fork's Git history
-still contains either the snapshots or the old CRON_SECRET, purge the history
-(`git filter-repo`) and rotate the secret per `docs/ENV_VARS.md` — deleting
-the files from the latest commit does NOT remove them from history.
+- no `ledger-backups/` snapshot was ever committed here, and
+- no version of `supabase/functions/*/…-trigger.sql` holds a literal secret;
+  every one reads `cpay_cron_secret` from Vault or shows a placeholder.
+
+The **original** upstream repository, before that archive, did have both: a
+`CRON_SECRET` written inline in `ledger-backup-trigger.sql`, and
+`ledger-backups/*.json` snapshots with real customer email addresses. Treat
+that secret as public. If production's `CRON_SECRET` / Vault
+`cpay_cron_secret` has not been rotated since the upstream days, rotate it
+per `docs/ENV_VARS.md` (owner action; nothing in this repo can confirm it).
+If you hold a clone or fork of the **upstream** history, purge it with
+`git filter-repo` — deleting files from the latest commit does NOT remove
+them from history.
+
+This repository is **public**. The nightly backup commits straight to the
+private repo named by `GITHUB_OWNER`/`GITHUB_REPO`, never into this one, and
+`ledger-backups/` is in `.gitignore`; the CI `hygiene` job reports if a
+snapshot is ever tracked here.

@@ -57,8 +57,8 @@ Release-check separation, as the repository works today:
 
 ## Operator outage / unilateral exit
 
-The wallet's money is on Spark. If the Spark operators (Lightspark, Breez,
-Flashnet) stop co-signing, payments stop but the money is not lost: Spark
+The wallet's money is on Spark. If the Spark operators (listed in
+`wallet/SECURITY.md`) stop co-signing, payments stop but the money is not lost: Spark
 keeps pre-signed Bitcoin transactions that let the owner exit to the
 Bitcoin blockchain alone.
 
@@ -87,6 +87,6 @@ If an outage happens before that milestone ships, CPAY's response:
 
 ## Vendor data sync
 
-Real-time sync to `datasync.breez.technology` is off in CPAY builds and
+The wallet library's real-time sync service (host in `wallet/SECURITY.md`) is off in CPAY builds and
 blocked by the CSP. Turning it on (`WALLET_SYNC=on`) needs a written
 review of what the service stores and how it is encrypted.

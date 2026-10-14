@@ -1,0 +1,18 @@
+// CPAY Wallet: a separate Workers static-assets site on its OWN hostname
+// (for example wallet.<your-domain>), never a path on the CPAY website.
+// A separate origin keeps the wallet's encrypted vault and session storage
+// out of reach of any script running on the website.
+//
+// Not deployed by merging: it needs its own Workers Builds project with
+// root directory "wallet", build command
+//   npm ci --ignore-scripts && npm run build
+// and the WALLET_API_KEY build variable. See wallet/README.md.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cpay-wallet",
+  "compatibility_date": "2026-08-20",
+  "assets": {
+    "directory": "dist",
+    "not_found_handling": "single-page-application"
+  }
+}

@@ -52,3 +52,61 @@ test('login form has 44px touch targets', async ({ page }) => {
   const email = await page.locator('#email').boundingBox();
   expect(email!.height).toBeGreaterThanOrEqual(44);
 });
+
+// Download wallet page (/assets/wallet.html). With no published release it
+// must say so and show no link; a link appears only for a published
+// release on the wallet's own https hostname.
+test('download wallet page: not available until published, no fake link', async ({ page }) => {
+  const res = await page.goto('/assets/wallet.html', { waitUntil: 'domcontentloaded' });
+  expect(res && res.status()).toBe(200);
+  await expect(page).toHaveTitle(/Download wallet/);
+  await expect(page.locator('#relOff')).toContainText('Not available yet');
+  await expect(page.locator('#relOn')).toBeHidden();
+  await expect(page.locator('#curVer')).toHaveText('0.1.0');
+  await expect(page.getByRole('heading', { name: 'Security and recovery' })).toBeVisible();
+  const hrefs = await page.locator('a[href]:visible').evaluateAll((as) => as.map((a) => a.getAttribute('href')));
+  expect(hrefs.every((h) => h === '/' || h === '/dashboard.html' || h === '#walletMain')).toBe(true);
+  const body = (await page.locator('body').innerText()).toLowerCase();
+  expect(body).not.toMatch(/breez|bkash|nagad|binance/);
+  expect(body).toContain('separate from your cpay account');
+});
+
+const release = (r: Record<string, unknown>) => `window.CPAY_WALLET_RELEASE = Object.freeze(${JSON.stringify({ version: '0.1.0', ...r })});`;
+
+test('download wallet page: a published release links to its own https host', async ({ page }) => {
+  await page.route('**/wallet-release.js', (route) => route.fulfill({
+    contentType: 'text/javascript',
+    body: release({ url: 'https://wallet.example.test/', publishedAt: '2026-10-20', versionJsonSha256: 'ab'.repeat(32) }),
+  }));
+  await page.goto('/assets/wallet.html');
+  await expect(page.locator('#relOff')).toBeHidden();
+  await expect(page.locator('#relLink')).toHaveAttribute('href', 'https://wallet.example.test/');
+  await expect(page.locator('#relHost')).toHaveText('wallet.example.test');
+  await expect(page.locator('#relHash')).toHaveText('ab'.repeat(32));
+  await expect(page.locator('#secLink')).toHaveAttribute('href', 'https://wallet.example.test/security.html');
+});
+
+for (const [name, r] of Object.entries({
+  'http url': { url: 'http://wallet.example.test/', publishedAt: '2026-10-20' },
+  'this site\'s own host': { url: 'https://127.0.0.1/', publishedAt: '2026-10-20' },
+  'not published yet': { url: 'https://wallet.example.test/', publishedAt: null },
+  'javascript: url': { url: 'javascript:alert(1)', publishedAt: '2026-10-20' },
+  'credentials in url': { url: 'https://a:b@wallet.example.test/', publishedAt: '2026-10-20' },
+})) {
+  test(`download wallet page: no link for ${name}`, async ({ page }) => {
+    await page.route('**/wallet-release.js', (route) => route.fulfill({ contentType: 'text/javascript', body: release(r) }));
+    await page.goto('/assets/wallet.html');
+    await expect(page.locator('#relOff')).toBeVisible();
+    await expect(page.locator('#relOn')).toBeHidden();
+  });
+}
+
+test('freelancer desk lists Download wallet without changing its tabs', async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  await page.goto('/dashboard.html', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.side a.navi[href="/assets/wallet.html"]')).toHaveText('Download wallet');
+  const tabs = await page.locator('.side .navi[data-tab]').evaluateAll((b) => b.map((x) => x.getAttribute('data-tab')));
+  expect(tabs).toEqual(['home', 'links', 'pay', 'cash', 'chat', 'profile']);
+  await context.close();
+});

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f6f7f9">
+<meta name="color-scheme" content="light">
+<title>Download wallet · CPAY</title>
+<link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/cpay.css">
+<link rel="stylesheet" href="/a11y.css">
+<script src="/wallet-release.js"></script>
+</head>
+<body class="auth">
+  <a class="skip-link" href="#walletMain">Skip to content</a>
+  <main class="auth-card" id="walletMain">
+    <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
+
+    <div class="card">
+      <div class="kicker">Optional</div>
+      <h1>CPAY Wallet</h1>
+      <p class="sub">A Lightning wallet for your own phone. Its keys are made and kept on your phone, so only you control the money in it. CPAY cannot see, move or recover it.</p>
+      <p class="hint">It is separate from your CPAY account. Your CPAY balance, deposits, earnings and USDT withdrawals stay on the website and work as before. Nothing moves between the two on its own.</p>
+
+      <div id="relOff" class="alert" role="status">
+        <strong>Not available yet.</strong> CPAY Wallet is not published yet. This page will show the download link once it is. There is nothing to install for now.
+      </div>
+      <div id="relOn" hidden>
+        <p><a class="btn primary block lg" id="relLink" href="#" rel="noopener">Open CPAY Wallet</a></p>
+        <p class="hint">Version <span id="relVer"></span>, published <span id="relDate"></span>. It opens on its own address, <strong id="relHost"></strong>, not on this website.</p>
+        <p class="hint" id="relHashRow" hidden>Release file (version.json) sha256: <code id="relHash"></code></p>
+      </div>
+      <p class="hint">Current version: <span id="curVer"></span></p>
+    </div>
+
+    <div class="card">
+      <h2>What you need</h2>
+      <ul>
+        <li>Android phone: a current version of Chrome.</li>
+        <li>iPhone: iOS 16.4 or later, with Safari.</li>
+        <li>An internet connection to send and receive. The wallet opens and unlocks without one.</li>
+        <li>Paper and a pen for your 12-word recovery phrase.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Install</h2>
+      <p class="hint">CPAY Wallet installs from the browser. There is no app store download and no APK file.</p>
+      <h3>Android (Chrome)</h3>
+      <ol>
+        <li>Tap <strong>Open CPAY Wallet</strong> above.</li>
+        <li>Tap the menu (three dots), then <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li>
+        <li>Open it from the new icon on your home screen.</li>
+      </ol>
+      <h3>iPhone (Safari)</h3>
+      <ol>
+        <li>Tap <strong>Open CPAY Wallet</strong> above, in Safari.</li>
+        <li>Tap the Share button, then <strong>Add to Home Screen</strong>.</li>
+        <li>Open it from the new icon. Use it from the icon, not from a Safari tab, so the phone keeps its data.</li>
+      </ol>
+    </div>
+
+    <div class="card" id="security">
+      <h2>Security and recovery</h2>
+      <ul>
+        <li>When you create the wallet it shows 12 words. Write them on paper, in order, and keep the paper safe. They are the only way to recover the wallet if your phone is lost, broken or reset.</li>
+        <li>Anyone with the 12 words can take the money. CPAY will never ask for them. Never type them into a website, a form, a chat or an email.</li>
+        <li>The wallet asks for its own passphrase to unlock on your phone. Do not reuse your CPAY password.</li>
+        <li>To recover on a new phone, open CPAY Wallet there, choose <strong>Restore with a recovery phrase</strong> and type the 12 words.</li>
+        <li>Linking your CPAY account inside the wallet is optional. It only shows your CPAY balance there, labelled as held by CPAY. It never shares the 12 words, and you can unlink at any time.</li>
+      </ul>
+      <p class="hint" id="secMore" hidden>Full details: <a id="secLink" href="#" rel="noopener">Security and recovery</a> in the wallet.</p>
+    </div>
+
+    <p class="foot"><a href="/dashboard.html">Back to your desk</a></p>
+  </main>
+<script>
+(function () {
+  const r = window.CPAY_WALLET_RELEASE || {};
+  const $ = (id) => document.getElementById(id);
+  $('curVer').textContent = r.version || 'unknown';
+  // A link is shown only for a published release on the wallet's own
+  // https hostname. Anything else (missing, http, this site's own host,
+  // credentials or a path trick) keeps the "Not available yet" notice.
+  let u = null;
+  try { u = r.url ? new URL(r.url) : null; } catch (e) { u = null; }
+  const ok = u && u.protocol === 'https:' && !u.username && !u.password
+    && u.hostname !== location.hostname && /^[a-z0-9.-]+$/.test(u.hostname) && r.publishedAt;
+  if (!ok) return;
+  const base = u.origin + '/';
+  $('relLink').href = base;
+  $('relHost').textContent = u.hostname;
+  $('relVer').textContent = r.version;
+  $('relDate').textContent = String(r.publishedAt);
+  if (r.versionJsonSha256) { $('relHash').textContent = r.versionJsonSha256; $('relHashRow').hidden = false; }
+  $('secLink').href = base + 'security.html';
+  $('secMore').hidden = false;
+  $('relOff').hidden = true;
+  $('relOn').hidden = false;
+})();
+</script>
+</body>
+</html>

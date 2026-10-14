@@ -13,6 +13,7 @@ import pg from "npm:pg@8.18.0";
 import { connect, defaultConfig, postgresStorage, SdkBuilder } from "npm:@breeztech/breez-sdk-spark@0.26.0/deno";
 import { endPostgresPools, installPostgresGlobals } from "./pg-globals.ts";
 import { createHost, WALLET_IDLE_MS } from "./runtime.ts";
+import { secretMatches } from "../_shared/secret-compare.ts";
 
 const env = (k: string) => (Deno.env.get(k) ?? "").trim();
 const PREFIX = /^\/(?:functions\/v1\/)?breez-wallet/;
@@ -96,7 +97,7 @@ Deno.serve(async (req) => {
   try {
     if (url.pathname.endsWith("/cron/sync")) {
       const s = env("CRON_SECRET");
-      if (req.method !== "POST" || req.headers.get("x-cron-secret") !== s) {
+      if (req.method !== "POST" || !secretMatches(req.headers.get("x-cron-secret"), s)) {
         return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
       }
       return await h.sync();

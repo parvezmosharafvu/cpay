@@ -255,6 +255,12 @@ end $$;
 -- ------------------------------------------------------------
 insert into usdt_wallets (user_id, network, address)
 values ('5c000000-0000-0000-0000-0000000000fa', 'tron', 'TRoleFreelancerAWa11etXXXXXXXXXXXX');
+-- Past its 24-hour wait (20261014050000 checks it on every payout path);
+-- the trigger refuses backdating, so the clock is moved with triggers off.
+set local session_replication_role = replica;
+update usdt_wallets set usable_after = now() - interval '1 hour' where user_id = '5c000000-0000-0000-0000-0000000000fa';
+set local session_replication_role = origin;
+
 do $$ begin perform pg_temp.act('5c000000-0000-0000-0000-0000000000fa'); end $$;
 set local role authenticated;
 do $$

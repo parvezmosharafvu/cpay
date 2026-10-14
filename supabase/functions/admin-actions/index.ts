@@ -163,14 +163,33 @@ Deno.serve(async (req) => {
             const { data: withdrawal } = await supabaseAdmin
                 .from("withdrawals").select("*").eq("id", withdrawalId).single();
             if (!withdrawal) return json({ error: "Not found" }, 404, cors);
+            // The claim runs with the service role, where auth.uid() is null,
+            // so the database audit trigger cannot name the admin. Record who
+            // did it here (best effort: a failed audit write never undoes the
+            // status change, and is logged).
+            const audit = async (what: string) => {
+                const { error: auditError } = await supabaseAdmin.from("audit_log").insert({
+                    actor_id: auth.userId, action: what, subject_type: "withdrawal", subject_id: String(withdrawalId),
+                    old_value: { status: withdrawal.status },
+                    new_value: { amount_requested: withdrawal.amount_requested, chain: withdrawal.chain ?? null },
+                });
+                if (auditError) console.error("admin withdrawal audit write failed:", auditError.message);
+            };
             if (action === "reject") {
                 const { data: claimed } = await supabaseAdmin.rpc("system_claim_withdrawal", {
                     p_withdrawal_id: withdrawalId, p_next_status: "rejected",
                 });
                 if (claimed !== true) return json({ error: "Already processed" }, 409, cors);
+                await audit("withdrawal.rejected_by_admin");
                 return json({ status: "rejected" }, 200, cors);
             }
             if (action === "mark_paid_manual") {
+                // Closing a payout as paid without sending money is as
+                // sensitive as a send: same step-up (recent sign-in, aal2 with MFA).
+                const token = /^Bearer\s+(\S+)$/.exec((req.headers.get("Authorization") ?? "").trim())?.[1] ?? null;
+                const { data: { user: me } } = await auth.callerClient!.auth.getUser();
+                const stepUp = checkStepUp(token, me as { factors?: Array<{ status?: string }> } | null, STEP_UP_SECONDS);
+                if (!stepUp.ok) return json({ error: STEP_UP_MESSAGE, code: "reauth_required", reason: stepUp.reason }, 403, cors);
                 const { data: claimed } = await supabaseAdmin.rpc("system_claim_withdrawal", {
                     p_withdrawal_id: withdrawalId, p_next_status: "paid",
                 });
@@ -178,6 +197,7 @@ Deno.serve(async (req) => {
                 await supabaseAdmin.from("withdrawals").update({
                     admin_note: `Manually paid via ${withdrawal.method}`,
                 }).eq("id", withdrawalId);
+                await audit("withdrawal.marked_paid_manual");
                 return json({ status: "paid" }, 200, cors);
             }
             if (action === "approve") {

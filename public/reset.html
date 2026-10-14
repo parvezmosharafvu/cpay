@@ -50,6 +50,9 @@ document.getElementById('saveBtn').onclick = async () => {
     error = { message: 'Could not reach the server. Check your connection and try again.' };
   }
   if (error){ showErr(error.message); btn.disabled = false; return; }
+  // End every session for the account, so a session stolen before the
+  // reset does not keep working. The user signs in again with the new password.
+  try { await window.supabaseClient.auth.signOut({ scope: 'global' }); } catch (e) { /* still go to sign-in */ }
   location.href = 'login.html';
 };
 </script>

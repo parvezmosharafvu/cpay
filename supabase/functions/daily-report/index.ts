@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
+import { secretMatches } from "../_shared/secret-compare.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -143,7 +144,7 @@ await Promise.all(jobs);
 
 Deno.serve(async (req) => {
   const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
-  if (!cronSecret || req.headers.get("x-cron-secret") !== cronSecret) {
+  if (!secretMatches(req.headers.get("x-cron-secret"), cronSecret)) {
     return new Response("Unauthorized", { status: 401 });
   }
 

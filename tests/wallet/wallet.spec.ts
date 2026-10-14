@@ -42,6 +42,7 @@ function assertNoLeak(phrase: string) {
 }
 
 async function readWords(page: Page): Promise<string> {
+  await expect(page.locator('#words li')).toHaveCount(12); // rendered after the click resolves
   const items = await page.locator('#words li').allTextContents();
   expect(items).toHaveLength(12);
   return items.join(' ');

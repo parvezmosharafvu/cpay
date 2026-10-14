@@ -15,8 +15,10 @@ restructured are in `docs/UI.md`.
 
 - **Frontend:** Vanilla HTML/CSS/JS + Supabase JS v2 (no build step)
 - **Backend:** Supabase — Postgres, Row Level Security, Edge Functions
-- **Payments:** a Lightning/Spark wallet SDK, through `payment-service/`
-  (a small Node 22 process holding the cpay wallet). Customers pay a
+- **Payments:** a Lightning/Spark wallet SDK, run in production by the
+  wallet Edge Function under `supabase/functions/` (same core as
+  `payment-service/`, the self-hosted Node 22 fallback; not a warm
+  standby, it needs a seed restore on a new host), holding the cpay wallet. Customers pay a
   standard Lightning invoice (BOLT11) from a wallet that supports it; Cash
   App is tested. Not every wallet can pay every invoice. Payouts are cross-chain
   USDT/USDC sends from that wallet (mainnet only). Stable Balance is not

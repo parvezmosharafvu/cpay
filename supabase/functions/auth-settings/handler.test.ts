@@ -30,11 +30,28 @@ function eq<T>(a: T, b: T, msg: string) {
 // ---------- fake Supabase ----------
 const auditRows: Record<string, unknown>[] = [];
 let auditFails = false;
+// Admin two-step sign-in (20261014030000): app_settings.admin_mfa_required
+// as the fake database holds it (undefined = no row, "error" = read fails),
+// and admin tokens carrying an aal claim.
+let mfaSetting: unknown = undefined;
+const b64u = (o: unknown) => btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const ADMIN_AAL1 = `${b64u({ alg: "ES256" })}.${b64u({ sub: ADMIN.id, aal: "aal1" })}.sig`;
+const ADMIN_AAL2 = `${b64u({ alg: "ES256" })}.${b64u({ sub: ADMIN.id, aal: "aal2" })}.sig`;
+
 const sb = Deno.serve({ hostname: "127.0.0.1", port: 0, onListen() {} }, async (req) => {
     const url = new URL(req.url);
     const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer /, "");
+    if (url.pathname === "/rest/v1/app_settings") {
+        if (mfaSetting === "error") return Response.json({ message: "boom" }, { status: 500 });
+        const rows = mfaSetting === undefined ? [] : [{ value: mfaSetting }];
+        if ((req.headers.get("Accept") ?? "").includes("vnd.pgrst.object")) {
+            return rows.length ? Response.json(rows[0]) : Response.json({ code: "PGRST116", message: "no rows" }, { status: 406 });
+        }
+        return Response.json(rows);
+    }
     if (url.pathname === "/auth/v1/user") {
-        const user = bearer === "admin-jwt" ? ADMIN : bearer === "creator-jwt" ? CREATOR : INACTIVE_ADMINS[bearer] ?? null;
+        const user = bearer === "admin-jwt" || bearer === ADMIN_AAL1 || bearer === ADMIN_AAL2 ? ADMIN
+            : bearer === "creator-jwt" ? CREATOR : INACTIVE_ADMINS[bearer] ?? null;
         if (!user) return Response.json({ code: 401, msg: "invalid JWT" }, { status: 401 });
         return Response.json({ ...user, aud: "authenticated", role: "authenticated" });
     }
@@ -188,6 +205,25 @@ Deno.test({
             eq(r.json, { email_confirmation_required: true, changed: false }, "body");
             eq(mgmtCalls.map((c) => c.method), ["GET"], "no patch");
             eq(auditRows.length, 0, "no audit");
+        });
+
+        await t.step("admin MFA required: an aal1 admin is refused before any management call; aal2 works", async () => {
+            for (const v of [true, "true", "error"]) {
+                mfaSetting = v;
+                resetMgmt(false);
+                auditRows.length = 0;
+                const g = await call(handler, "GET", ADMIN_AAL1);
+                eq(g.status, 403, `flag ${JSON.stringify(v)}: GET status`);
+                const p = await call(handler, "POST", ADMIN_AAL1, { email_confirmation_required: false });
+                eq(p.status, 403, `flag ${JSON.stringify(v)}: POST status`);
+                eq(mgmtCalls.length, 0, `flag ${JSON.stringify(v)}: management API never called`);
+                eq(auditRows.length, 0, `flag ${JSON.stringify(v)}: nothing audited`);
+                eq((await call(handler, "GET", ADMIN_AAL2)).status, 200, `flag ${JSON.stringify(v)}: aal2 GET`);
+            }
+            mfaSetting = false;
+            resetMgmt(false);
+            eq((await call(handler, "GET", ADMIN_AAL1)).status, 200, "flag false: aal1 GET as before");
+            mfaSetting = undefined;
         });
 
         await t.step("non-admin (creator) is refused for GET and POST before any management call", async () => {

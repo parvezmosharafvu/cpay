@@ -145,6 +145,59 @@ where key in ('emergency_payments_stop', 'emergency_withdrawals_stop');
 During a freeze test also try one withdrawal and one new invoice, and check
 that both are refused.
 
+## Two-step sign-in (admin MFA)
+
+Admin → **Security** turns on two-step sign-in (TOTP authenticator apps).
+After that, signing in and every payout confirm ask for the 6-digit code;
+the payout step-up asks for the password, then the code (aal2).
+
+- **Enrol two authenticators**: your phone and a backup device kept
+  offline. CPAY shows no recovery codes, so the second authenticator is the
+  recovery path.
+- **Audit**: enrol, verify and remove write `security.mfa.*` rows to
+  `audit_log`; wrong codes write `security.mfa.challenge_failed` (at most
+  20 an hour per user). The factor secret is never stored there.
+- **Never** paste a code, QR image or authenticator key into a ticket or chat.
+
+**Break-glass (every authenticator lost).** Only the owner, from the
+Supabase dashboard, whose own login must have MFA. Do not disable security
+globally instead.
+
+```sql
+select id, friendly_name, status, created_at from auth.mfa_factors
+ where user_id = (select id from auth.users where email = '<admin email>');
+delete from auth.mfa_factors where id = '<factor id>';
+-- audit_log: security.mfa.factor_removed_by_operator
+```
+
+Then sign in with the password and enrol two new authenticators at once.
+
+**Requiring it (owner rollout, migration 20261014030000).** Admin → Settings
+→ "Require two-step sign-in for admins" (`app_settings.admin_mfa_required`,
+JSON boolean, ships `false`). Turn it on only after every active admin has
+enrolled, signed in with a code and confirmed a payout; the database refuses
+otherwise (and refuses an aal1 session). When on: `is_admin()`, the
+admin-actions and auth-settings gates and every admin RLS policy need aal2,
+so a password-only session (including a direct RPC) gets no admin access;
+an admin's last authenticator cannot be removed from Security (break-glass
+above still works). Afterwards set the Edge secret `ADMIN_MFA_EXPECTED=true`
+so health alerts if it is ever switched off. Health also alerts if
+`STEP_UP_MAX_AGE_SECONDS` is `0` or if it is on while an active admin has
+no authenticator. To roll back, switch it off in Settings (needs aal2) or,
+as the owner in the SQL editor:
+`update app_settings set value = 'false'::jsonb where key = 'admin_mfa_required';`
+After a break-glass removal with it on, the admin signs in with the
+password and enrols from Security (allowed at aal1), which restores access.
+
+**Deploy.** A merge to main deploys this by itself: the Supabase GitHub
+integration applies the migrations and redeploys the changed functions, and
+Workers Builds deploys the pages. Observed on 2026-10-14 for #102: both
+migrations were applied and `admin-actions`, `auth-settings` and `health`
+redeployed within a minute of the merge; the next `health` run was 200. If
+deploying by hand, apply migrations `20261014020000` and `20261014030000`
+before the functions. The pages work before the migrations too (enrolment
+is Supabase Auth; the wrong-code audit note is best effort).
+
 ## Payout safety: step-up and address cooldown
 
 - **Step-up** (`_shared/step-up.ts`): confirming a payout needs a sign-in in

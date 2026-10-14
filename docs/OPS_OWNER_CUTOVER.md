@@ -12,6 +12,8 @@ backup copies under `/workspace/cpay-audit/orphan-functions/` on the audit box.
 
 ## A. Orphan Edge Functions (AUDIT H3)
 
+**Done 2026-10-07** (AUDIT H3 CLOSED): all three deleted; drift check reports no drift.
+
 | Slug | Why orphan | Risk if left |
 |---|---|---|
 | `reconcile` | BTCPay path removed; broken deps | `verify_jwt: false` surface |
@@ -78,6 +80,12 @@ Project-level secrets survive deletes unless you unset them.
 
 ## B. Telegram alert secrets / stuck outbox (AUDIT H4)
 
+**Status 2026-10-14 (read-only production evidence):** the secrets are set:
+the stale 2026-09-30 row was sent on 2026-10-07, later rows send on the first
+attempt, nothing is pending, and a labelled `health?test_alert=1` on
+2026-10-13 returned `telegram: sent`. H4 stays open until the owner confirms
+that test message reached the intended admin group.
+
 **Symptom:** `telegram-notify` returns 503 when `ALERT_TELEGRAM_BOT_TOKEN` is unset;
 pending outbox rows are never claimed → cron storms.
 
@@ -133,11 +141,18 @@ Confirm 503 rate on `telegram-notify` drops in logs.
 
 ---
 
-## C. Migration + user-withdraw redeploy (still owner)
+## C. Migration + user-withdraw redeploy
+
+**Done (verified read-only 2026-10-14):** `20261007040000` is applied in
+production (and every later migration through `20261013090000`), and
+`user-withdraw` was redeployed afterwards.
 
 1. Apply `20261007040000_close_manual_payout_residue.sql` on production (forward-only).
 2. Redeploy `user-withdraw` so closed manual methods stay HTTP 410 in prod.
-3. Confirm Azure payment-service host: `RECEIPT_RECORDING` unset or `off` (read-only check).
+3. ~~Confirm Azure payment-service host: `RECEIPT_RECORDING` unset or `off`.~~
+   The Azure VM is gone. The wallet Edge Function sets receipt recording to
+   `off` in code, so there is nothing to check; it matters again only for a
+   self-hosted `payment-service/` (set `RECEIPT_RECORDING` unset or `off` there).
 
 ---
 

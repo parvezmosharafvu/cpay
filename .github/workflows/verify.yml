@@ -196,6 +196,9 @@ jobs:
           # Grant cleanup (20261013030000): anon has no table writes or
           # TRUNCATE; production's extra constraints are codified.
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/grant_cleanup_test.sql
+          # The MFA audit trail with production's grants as well.
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/mfa_audit_test.sql
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/admin_mfa_enforcement_test.sql
           # Machine-readable final state of the replayed schema, kept as an
           # artifact to diff against production (docs/DB-FINAL-STATE.md).
           psql -h localhost -U postgres -d privcheck -Atq -v ON_ERROR_STOP=1 -f ci/db_inventory.sql > db-inventory.json
@@ -325,6 +328,21 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/financial_invariants_test.sql
 
+      - name: Two-step sign-in audit trail (20261014020000)
+        # Enrol / verify / remove on auth.mfa_factors are audited (operator
+        # break-glass marked as such), the factor secret never reaches
+        # audit_log, a failing audit never blocks Supabase Auth, and
+        # wrong-code reports are the caller's own and capped.
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/mfa_audit_test.sql
+      - name: Admin two-step sign-in enforcement (20261014030000)
+        # Ships off; when on, is_admin() needs aal2 (direct RPC and RLS too),
+        # enabling needs aal2 and every admin enrolled, the last factor is
+        # kept, break-glass works, and no admin check bypasses is_admin().
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/admin_mfa_enforcement_test.sql
       - name: Money is exact (no float columns or float casts in public)
         env:
           PGPASSWORD: postgres

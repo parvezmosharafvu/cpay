@@ -24,6 +24,10 @@ Used by `create-invoice`, `user-withdraw`, `admin-actions` and `health`:
       service reports `requestAuthMode` in `/metrics`. See
       [`RUNBOOKS.md`](RUNBOOKS.md#service-auth-rollout).
 
+- [ ] `ADMIN_MFA_EXPECTED` — optional. Set to `true` once admin two-step
+      sign-in is required (RUNBOOKS "Two-step sign-in"); `health` then alerts
+      if `admin_mfa_required` is ever switched off.
+
 - [ ] `STEP_UP_MAX_AGE_SECONDS` — optional, default `600`. A payout confirm
       (`user-withdraw` confirm, admin wallet `send-confirm`/`stable-confirm`)
       needs a real sign-in (the `amr` claim) within this many seconds, and an

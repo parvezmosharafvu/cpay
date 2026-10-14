@@ -23,12 +23,16 @@ browser ──► public/ (static, Cloudflare Workers assets)
    │           │                    health, daily-report, ledger-backup, og-image,
    │           │                    telegram-notify, auth-settings
    │           ▼  Bearer PAYMENT_SERVICE_SECRET
-   └──────► payment-service/ (Node 22, one long-running process)
+   └──────► wallet Edge Function (production since 2026-10-13; its core/
+               is the same code as payment-service/), or payment-service/
+               (Node 22, self-hosted fallback after a seed restore)
                holds the one platform wallet (Lightning/Spark SDK)
-               writes the ledger through DATABASE_URL (service role)
+               writes the ledger through the service role
 ```
 
-- **payment-service** is the only process that holds the wallet mnemonic.
+- **The wallet service** (the wallet Edge Function in production;
+  `payment-service/` only when self-hosted, see RUNBOOKS "Restart the payment
+  service") is the only process that holds the wallet mnemonic.
   Routes: `POST /invoices`, `GET /health`, `GET /ready` (startup catch-up gate),
   `GET /metrics` (bearer; process counters only), `/withdraw/{routes,quote,confirm}`,
   `/admin/wallet/*`.

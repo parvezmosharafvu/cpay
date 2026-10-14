@@ -8,7 +8,7 @@ const SECRET = "s".repeat(40);
 
 // A shared fake Postgres: the control row, the nonce table and one advisory lock.
 function fakePg({ enabled = true } = {}) {
-  const state = { enabled, owner: "supabase-edge", nonces: new Set<string>(), lockHolder: null as null | number, locks: 0, leases: 0, cache: new Map<string, { body: string; ageMs: number }>(), cacheWrites: 0 };
+  const state = { enabled, owner: "supabase-edge", nonces: new Set<string>(), lockHolder: null as null | number, locks: 0, leases: 0, abandonSweeps: [] as boolean[], cache: new Map<string, { body: string; ageMs: number }>(), cacheWrites: 0 };
   let next = 1;
   const query = (who: number) => async (sql: string, params: unknown[] = []) => {
     if (sql.includes("from breez_wallet.control")) return { rows: [{ enabled: state.enabled, owner: state.owner }] };
@@ -22,6 +22,7 @@ function fakePg({ enabled = true } = {}) {
       return { rows: [{ ok: false }] };
     }
     if (sql.includes("pg_advisory_unlock")) { if (state.lockHolder === who) state.lockHolder = null; return { rows: [{ ok: true }] }; }
+    if (sql.includes("outcome = 'abandoned")) { state.abandonSweeps.push(state.lockHolder === who); return { rows: [], rowCount: 0 }; }
     if (sql.includes("insert into breez_wallet.lease_log")) { state.leases++; return { rows: [{ id: state.leases }] }; }
     if (sql.includes("as since")) return { rows: [{ since: null }] };
     // response_cache: ageMs per key stands in for now() - updated_at.
@@ -364,4 +365,15 @@ Deno.test("routes: the cron tick refreshes a catalog past half its TTL, for both
   assertEquals((await c.h.sync()).status, 200);
   assertEquals(calls, before);
   await c.h.close("test");
+});
+
+Deno.test("taking the lock closes lease rows left open by a dead isolate, only while holding the lock", async () => {
+  const pg = fakePg();
+  const { h } = host(pg);
+  const r = signed("GET", "/metrics");
+  const res = await h.serve("GET", "/metrics", r.headers, r.body);
+  assertEquals(res.status, 200);
+  assert(pg.state.abandonSweeps.length >= 1, "sweep ran on acquire");
+  assert(pg.state.abandonSweeps.every((held) => held), "sweep only runs while the advisory lock is held");
+  await h.close("test");
 });

@@ -87,7 +87,8 @@ async function renderHomeLive() {
     btn.onclick = async () => {
       btn.disabled = true;
       try {
-        await adminFn('process-withdrawal', { withdrawalId: btn.dataset.wdh, action: 'mark_paid_manual' });
+        const run = () => adminFn('process-withdrawal', { withdrawalId: btn.dataset.wdh, action: 'mark_paid_manual' });
+        await (window.cpayWithStepUp ? window.cpayWithStepUp(run) : run());
         toast('Marked paid', true);
         renderHomeLive();
         if (typeof renderPayouts === 'function') renderPayouts();

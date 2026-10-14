@@ -24,9 +24,25 @@ async function requireSession(){
   if (!session) { location.href = 'login.html'; return null; }
   return session;
 }
+// A session that still owes its two-step code (a verified authenticator,
+// signed in at aal1) must finish it before any desk loads: otherwise a
+// second tab or a reload would skip the code prompt on login.html. Pages
+// that do not load mfa.js have nothing to finish here.
+async function requireSecondStep(){
+  if (!window.cpayMfa) return true;
+  let ok = false;
+  try {
+    ok = await window.cpayMfa.ensureAal2('Enter the 6-digit code from your authenticator app to finish signing in.');
+  } catch (e) { ok = false; }
+  if (ok) return true;
+  await window.supabaseClient.auth.signOut();
+  location.href = 'login.html';
+  return false;
+}
 async function loadProfile(){
   const session = await requireSession();
   if (!session) return null;
+  if (!(await requireSecondStep())) return null;
   const { data, error } = await window.supabaseClient.from('profiles')
     .select('*').eq('id', session.user.id).single();
   if (error || !data) { location.href = 'login.html'; return null; }

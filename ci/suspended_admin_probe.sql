@@ -68,6 +68,18 @@ select id, 100, 100, 'settled', now(), now() + interval '1 hour'
 insert into usdt_wallets (user_id, network, address) values
   ('5a000000-0000-0000-0000-0000000000a5', 'tron', 'TProbeSuspendedAdminXXXXXXXXXXXXXX'),
   ('5a000000-0000-0000-0000-0000000000f1', 'tron', 'TProbeFreelancerXXXXXXXXXXXXXXXXXX');
+-- Both addresses past their 24-hour wait (enforced on every payout path
+-- since 20261014050000), so only the admin's own status decides.
+-- The probe also runs on schemas from before the wait existed.
+do $$ begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'usdt_wallets' and column_name = 'usable_after') then
+    perform set_config('session_replication_role', 'replica', true);
+    update usdt_wallets set usable_after = now() - interval '1 hour'
+     where user_id in ('5a000000-0000-0000-0000-0000000000a5', '5a000000-0000-0000-0000-0000000000f1');
+    perform set_config('session_replication_role', 'origin', true);
+  end if;
+end $$;
 insert into withdrawals (id, user_id, amount_requested, fee_percent, amount_after_fee, method, destination, status, coin, chain)
 values ('5a000000-0000-0000-0000-0000000003f1', '5a000000-0000-0000-0000-0000000000f1', 10, 0, 10,
         'stablecoin', 'TProbeFreelancerXXXXXXXXXXXXXXXXXX', 'pending', 'USDT', 'tron');

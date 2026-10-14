@@ -1,4 +1,4 @@
--- Emergency stops are JSON booleans only (20261014010000). The SQL
+-- Emergency stops are JSON booleans only (20261014040000). The SQL
 -- withdrawal paths compare value::text = 'true', so a JSON string "true"
 -- would leave withdrawals running while the admin panel showed "On".
 -- BEGIN/ROLLBACK.

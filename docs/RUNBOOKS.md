@@ -154,6 +154,28 @@ delete from auth.mfa_factors where id = '<factor id>';
 
 Then sign in with the password and enrol two new authenticators at once.
 
+**Requiring it (owner rollout, migration 20261014030000).** Admin → Settings
+→ "Require two-step sign-in for admins" (`app_settings.admin_mfa_required`,
+JSON boolean, ships `false`). Turn it on only after every active admin has
+enrolled, signed in with a code and confirmed a payout; the database refuses
+otherwise (and refuses an aal1 session). When on: `is_admin()`, the
+admin-actions and auth-settings gates and every admin RLS policy need aal2,
+so a password-only session (including a direct RPC) gets no admin access;
+an admin's last authenticator cannot be removed from Security (break-glass
+above still works). Afterwards set the Edge secret `ADMIN_MFA_EXPECTED=true`
+so health alerts if it is ever switched off. Health also alerts if
+`STEP_UP_MAX_AGE_SECONDS` is `0` or if it is on while an active admin has
+no authenticator. To roll back, switch it off in Settings (needs aal2) or,
+as the owner in the SQL editor:
+`update app_settings set value = 'false'::jsonb where key = 'admin_mfa_required';`
+After a break-glass removal with it on, the admin signs in with the
+password and enrols from Security (allowed at aal1), which restores access.
+
+**Deploy order.** Apply migrations `20261014020000` and `20261014030000`,
+then deploy `admin-actions`, `auth-settings` and `health`. The pages deploy
+with the site; before the migrations they still work (enrolment is Supabase
+Auth; the wrong-code audit note is best effort).
+
 ## Payout safety: step-up and address cooldown
 
 - **Step-up** (`_shared/step-up.ts`): confirming a payout needs a sign-in in

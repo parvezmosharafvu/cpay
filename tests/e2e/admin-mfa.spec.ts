@@ -193,6 +193,33 @@ test('an aal1 session cannot confirm a payout for an account with an authenticat
   expect((await db.query('select count(*)::int n from withdrawals where user_id = $1', [u.id])).rows[0].n).toBe(0);
 });
 
+test('with admin two-step sign-in required, admin data needs aal2 even through direct RPC', async ({ page }) => {
+  const u = await makeUser({ role: 'admin', name: 'MFA Enforced' });
+  await login(page, u);
+  await page.waitForURL(/admin\.html/);
+  await enrolFromSecurity(page);
+  // Set directly: other suites' admins have no authenticator, so the
+  // Settings toggle would (rightly) refuse in this shared database.
+  await db.query(`update app_settings set value = 'true'::jsonb where key = 'admin_mfa_required'`);
+  try {
+    const rpc = () => page.evaluate(async () => {
+      const { error } = await (window as any).supabaseClient.rpc('admin_wallet_health');
+      return error ? error.message : 'ok';
+    });
+    expect((await aal(page)).currentLevel).toBe('aal2');
+    expect(await rpc()).toBe('ok');
+    // The last authenticator cannot be removed while it is required.
+    await page.click('.navi[data-tab="security"]');
+    await expect(page.locator('#security')).toContainText('Required for every admin');
+    await expect(page.locator('[data-factor]')).toBeDisabled();
+    await page.evaluate(async (c) => { await (window as any).supabaseClient.auth.signInWithPassword(c); }, { email: u.email, password: u.password });
+    expect((await aal(page)).currentLevel).toBe('aal1');
+    expect(await rpc()).not.toBe('ok');
+  } finally {
+    await db.query(`update app_settings set value = 'false'::jsonb where key = 'admin_mfa_required'`);
+  }
+});
+
 test('a freelancer without an authenticator signs in as before (no code prompt)', async ({ page }) => {
   const u = await makeUser({ name: 'No MFA' });
   await login(page, u);

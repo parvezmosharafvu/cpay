@@ -19,11 +19,20 @@
     for (const f of all) if (f.status !== 'verified') await sb.auth.mfa.unenroll({ factorId: f.id }).catch(() => {});
   }
 
+  // app_settings.admin_mfa_required (Admin → Settings). While it is on, an
+  // admin's last authenticator cannot be removed (the database refuses too).
+  async function required() {
+    const { data } = await sb.from('app_settings').select('value').eq('key', 'admin_mfa_required').maybeSingle();
+    return data?.value === true || data?.value === 'true';
+  }
+
   async function render() {
     const sec = root();
     if (!sec || !window.cpayMfa) return;
     let verified = [];
     let all = [];
+    let enforced = false;
+    try { enforced = await required(); } catch (e) { enforced = false; }
     try { ({ verified, all } = await window.cpayMfa.factors()); } catch (e) {
       sec.replaceChildren(el('div', 'card', 'Two-step sign-in settings did not load. Reload the page to try again.'));
       return;
@@ -33,6 +42,7 @@
     card.append(el('p', verified.length ? 'ok' : 'muted', verified.length
       ? `On: ${verified.length} authenticator${verified.length > 1 ? 's' : ''}. Sign-in and payouts ask for a code.`
       : 'Off. Signing in needs only your password.'));
+    if (enforced) card.append(el('p', 'ok', 'Required for every admin (Admin → Settings).'));
     card.append(el('p', 'hint', 'Add two authenticators (your phone and a backup device kept somewhere safe). CPAY cannot show recovery codes: if you lose every authenticator, recovery is the owner break-glass procedure in the runbooks.'));
 
     if (verified.length) {
@@ -43,6 +53,10 @@
         li.append(el('span', null, `${f.friendly_name || 'Authenticator'}${added ? ` (added ${added})` : ''} `));
         const rm = el('button', 'btn ghost sm', 'Remove');
         rm.dataset.factor = f.id;
+        if (enforced && verified.length <= 1) {
+          rm.disabled = true;
+          rm.title = 'Two-step sign-in is required for admins: add another authenticator before removing this one.';
+        }
         rm.onclick = () => removeFactor(f, verified.length);
         li.append(rm);
         list.append(li);

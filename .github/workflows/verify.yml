@@ -521,14 +521,10 @@ jobs:
   hygiene:
     name: Ledger snapshots are where you expect
     runs-on: ubuntu-latest
-    # Advisory. Keeping snapshots in this repo is a deliberate choice
-    # here — the repository is private, so the exposure is limited to
-    # people who already have access to everything else in it.
-    #
-    # It still reports, because the tradeoff is worth re-reading
-    # occasionally: the moment this repo gains a collaborator or is ever
-    # made public, those files become the most sensitive thing in it.
-    continue-on-error: true
+    # Blocking. This repository is PUBLIC, so a tracked ledger snapshot
+    # would publish withdrawal destinations and payment references.
+    # Snapshots belong in the private repo named by the
+    # GITHUB_OWNER/GITHUB_REPO Edge secrets; ledger-backups/ is ignored.
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Report tracked ledger snapshots
@@ -537,15 +533,13 @@ jobs:
             count=$(git ls-files | grep -c '^ledger-backups/')
             echo "NOTE: $count ledger snapshot(s) are tracked in this repository."
             echo
-            echo "They contain withdrawal destinations and payment references."
-            echo "That is acceptable while this repo stays private and access"
-            echo "stays limited to you."
-            echo
-            echo "Before adding a collaborator, or ever making this public:"
+            echo "They contain withdrawal destinations and payment references,"
+            echo "and this repository is public. Remove them now:"
             echo "  1. Create a private repo, e.g. cpay-ledger"
             echo "  2. Supabase > Edge Functions > Secrets:  GITHUB_REPO = cpay-ledger"
             echo "  3. git rm -r --cached ledger-backups/"
             echo "  4. git filter-repo --path ledger-backups/ --invert-paths"
+            exit 1
           else
             echo "No ledger snapshots tracked."
           fi

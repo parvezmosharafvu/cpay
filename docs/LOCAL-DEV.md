@@ -74,7 +74,7 @@ Details and rotation: `docs/ENV_VARS.md`, `payment-service/.env.example`.
 | Migrations | unique migration numbers; `ci/bootstrap.sql` then every migration applies to an empty Postgres 15; `ci/cloudai_regression.sql`; 0096 onward re-apply and `ci/dashboards_test.sql`; `ci/telegram_test.sql`; `npm test` in `payment-service/` against that database |
 | Edge functions | `deno check` on every `supabase/functions/*/index.ts`; `deno test` for auth-settings and telegram-notify against local mock servers |
 | Frontend | `npm install`, `npm run build`, `python3 ci/check_frontend.py` (inline JS parses, element ids and handlers exist, every `rpc()` matches its SQL signature, payment-page accessibility, release gates, direct-upload guard, processor name absent from non-admin pages) |
-| Hygiene (advisory) | reports tracked ledger snapshots |
+| Hygiene (blocking) | fails if any ledger snapshot is tracked (repo is public) |
 
 The same locally, from the repo root, with a scratch Postgres 15 on
 `$PGPORT` and Node 22 and Deno on `PATH`:

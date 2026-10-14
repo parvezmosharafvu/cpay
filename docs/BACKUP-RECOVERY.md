@@ -64,3 +64,39 @@ date (Asia/Dhaka) and who performed it in the staging sign-off ledger.
   restore relies on Supabase backups/PITR (owner to confirm the plan).
 - Restoring into staging Supabase (Auth, Edge) is not covered. This drill
   checked data and ledger math only.
+
+## Closing the gaps (owner checklist)
+
+None of these can be done from the repository; each needs the Supabase
+dashboard or the private backup repo. Record each in the drill log above.
+
+1. **Confirm PITR / backup plan.** Supabase dashboard → Project → Database →
+   Backups. Note the plan, whether *Point in time* is enabled, and the
+   retention window. Without PITR the restore point is the last daily
+   backup, so a bad event late in the day loses up to 24 h of ledger rows;
+   then the ledger git snapshot is the only finer-grained copy of
+   payments and withdrawals.
+2. **Open the latest snapshot.** In the private repo named by
+   `GITHUB_OWNER`/`GITHUB_REPO`, open `ledger-backups/<today>.json` and
+   check that the counts match the admin dashboard. Do not copy it
+   anywhere public.
+3. **Staging restore drill (Auth + Edge).** On a staging project only:
+   restore the latest backup (or PITR to a chosen time); deploy the Edge
+   functions from the git SHA that production runs; set staging's own
+   secrets (never production's); sign in as a test user and an admin; check
+   `get_my_balance()` and the admin totals match the snapshot. Delete or
+   pause the staging project afterwards.
+4. **Coverage decision for the git snapshot.** Today it holds payments,
+   withdrawals (destination last 4 only), payment links, profiles and
+   daily stats. Audit, receipt and webhook tables and the wallet SDK schema
+   are not in it, by design: they are large, contain more personal data,
+   and the wallet schema is rebuilt from the seed. If PITR is **not**
+   available (step 1), extend `ledger-backup` to add the audit table with
+   the same redaction rules, as a separate reviewed change.
+
+### Standalone CPAY Wallet (users' own wallets)
+
+Nothing to back up on CPAY's side: CPAY never holds those keys or that
+data. Recovery is the user's 12-word phrase (plus, for an operator
+outage, the exit backup file); see `docs/WALLET-APP.md` (added with the
+wallet, PR #104).

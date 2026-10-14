@@ -5,7 +5,7 @@ Read by `scripts/release-gate.mjs`: any row with severity Critical or High and s
 | Finding | Severity | Status | Owner / PR |
 |---|---|---|---|
 | Draft legal pages (terms, privacy, refund, contact) | Medium | open | Owner legal sign-off; gate also checks text |
-| Admin MFA: the app has no MFA login challenge and payout re-auth gives only aal1, so enrolling a factor today blocks payouts without protecting sign-in; needs implementation (enrolment + challenge, then aal2 enforcement behind a flag), then owner enrolment and enabling the flag | Medium | open | Code PRs, then owner |
+| Admin MFA: implemented (#101 enrolment + challenge, #102 aal2 enforcement behind `admin_mfa_required`, off); still needs the owner to enrol two authenticators, test sign-in and a payout at aal2, then turn the flag on and set `ADMIN_MFA_EXPECTED=true` | Medium | open | Owner (RUNBOOKS "Two-step sign-in") |
 | Real low-value receive → withdraw reconciliation | Medium | open | Owner |
 | Workflows unpinned / no permissions | High | closed | #86 |
 | main not branch-protected | High | closed | repo setting 2026-10-13 |

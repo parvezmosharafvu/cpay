@@ -171,10 +171,14 @@ as the owner in the SQL editor:
 After a break-glass removal with it on, the admin signs in with the
 password and enrols from Security (allowed at aal1), which restores access.
 
-**Deploy order.** Apply migrations `20261014020000` and `20261014030000`,
-then deploy `admin-actions`, `auth-settings` and `health`. The pages deploy
-with the site; before the migrations they still work (enrolment is Supabase
-Auth; the wrong-code audit note is best effort).
+**Deploy.** A merge to main deploys this by itself: the Supabase GitHub
+integration applies the migrations and redeploys the changed functions, and
+Workers Builds deploys the pages. Observed on 2026-10-14 for #102: both
+migrations were applied and `admin-actions`, `auth-settings` and `health`
+redeployed within a minute of the merge; the next `health` run was 200. If
+deploying by hand, apply migrations `20261014020000` and `20261014030000`
+before the functions. The pages work before the migrations too (enrolment
+is Supabase Auth; the wrong-code audit note is best effort).
 
 ## Payout safety: step-up and address cooldown
 

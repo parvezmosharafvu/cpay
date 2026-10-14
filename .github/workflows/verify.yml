@@ -543,6 +543,38 @@ jobs:
         # (the admin/freelancer desk checks) never ran on a PR.
         run: node --test tests/frontend/*.test.mjs
 
+  wallet:
+    name: Standalone wallet builds, keeps keys on the device
+    runs-on: ubuntu-latest
+    # CPAY Wallet (wallet/): the optional, separately hosted, non-custodial
+    # wallet. Nothing here touches the website, its ledger or its backend.
+    # See wallet/SECURITY.md.
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Install (root for Playwright; wallet without install scripts)
+        run: |
+          npm ci --no-audit --no-fund
+          cd wallet && npm ci --ignore-scripts --no-audit --no-fund
+      - name: Wallet dependency audit (high and above fails)
+        run: cd wallet && npm audit --omit=dev --audit-level=high
+      - name: Build rules (no fake engine in production, hashes, strict CSP)
+        run: node --test tests/wallet/build.test.mjs
+      - name: Browser tests (phrase never leaves the page, link is optional and revocable, offline unlock, real library under CSP)
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test -c tests/wallet/playwright.config.ts
+      - name: Live regtest session with the real library (informational)
+        # Needs the third-party Spark regtest network, which this repo does
+        # not control, so its availability must not decide a merge. The
+        # result is visible in the job log either way.
+        continue-on-error: true
+        env:
+          WALLET_LIVE: '1'
+        run: npx playwright test -c tests/wallet/playwright.config.ts -g "live regtest"
+
   hygiene:
     name: Ledger snapshots are where you expect
     runs-on: ubuntu-latest

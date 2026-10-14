@@ -67,3 +67,9 @@ not a current payout path.
 
 Spendable is wallet balance minus what creators are owed. Do not send the
 creator portion from the admin wallet form.
+
+## CPAY Wallet (separate product)
+
+`wallet/` is an optional, non-custodial phone wallet on its own hostname.
+It does not touch anything above: no table, function, ledger row or
+deploy of the website. See [WALLET-APP.md](WALLET-APP.md).

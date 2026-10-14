@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0f172a">
+<title>CPAY Wallet</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+<script src="vendor/supabase.js" defer></script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="top">
+  <strong>CPAY Wallet</strong>
+  <span class="tag" id="netTag"></span>
+  <button type="button" class="ghost" id="lockBtn" hidden>Lock</button>
+</header>
+<main id="main">
+  <p class="banner beta" id="betaBanner" role="note"><strong>Beta.</strong> CPAY Wallet is new. Only use small amounts you can afford to lose while it is being tested. <span id="testNetNote" hidden>This copy runs on the <strong>test network</strong>: its coins have no value.</span></p>
+  <p class="banner" id="offline" hidden>You are offline. Your keys stay on this device; payments need a connection.</p>
+
+  <section id="s-loading"><p class="muted">Loading…</p></section>
+
+  <section id="s-notconfigured" hidden>
+    <h1>Not available yet</h1>
+    <p>This copy of CPAY Wallet is not configured (<span id="cfgProblem"></span>). Nothing has been created on this device.</p>
+  </section>
+
+  <section id="s-welcome" hidden>
+    <h1>Your own wallet</h1>
+    <p>CPAY Wallet keeps its keys on this phone. CPAY cannot see, move or recover the money in it. It is separate from your CPAY website account and its balance.</p>
+    <ul class="points">
+      <li>Payments run on the Spark network. Each transfer needs your phone's signature <strong>and</strong> co-signing by Spark operators (two of Lightspark, Breez and Flashnet). They cannot move your money without you, but while they are working, payments depend on them. <a href="security.html">How this works</a></li>
+      <li>You get a 12-word recovery phrase. Write it on paper. It is the only way back in if this phone is lost or reset.</li>
+      <li>Never type it into a website, a chat or an email. CPAY staff will never ask for it.</li>
+    </ul>
+    <div class="row">
+      <button type="button" class="primary" id="createBtn">Create a new wallet</button>
+      <button type="button" id="restoreStartBtn">Restore with a recovery phrase</button>
+    </div>
+  </section>
+
+  <section id="s-backup" hidden>
+    <h1>Write down your recovery phrase</h1>
+    <p>Write these 12 words, in order, on paper. Keep the paper somewhere safe and private. Do not take a screenshot.</p>
+    <ol class="words" id="words"></ol>
+    <label class="check"><input type="checkbox" id="wroteIt"> I wrote the 12 words down on paper.</label>
+    <div class="row"><button type="button" class="primary" id="backupNext" disabled>Next</button></div>
+  </section>
+
+  <section id="s-confirm" hidden>
+    <h1>Check your paper</h1>
+    <p>Type the words at these positions from your paper.</p>
+    <form id="confirmForm" autocomplete="off">
+      <div id="confirmFields"></div>
+      <p class="err" id="confirmErr" role="alert" hidden></p>
+      <div class="row"><button type="button" id="confirmBack">Show the words again</button><button class="primary" type="submit">Continue</button></div>
+    </form>
+  </section>
+
+  <section id="s-restore" hidden>
+    <h1>Restore a wallet</h1>
+    <form id="restoreForm" autocomplete="off">
+      <label for="restoreWords">Recovery phrase (12 or 24 words)</label>
+      <textarea id="restoreWords" rows="4" spellcheck="false" autocapitalize="none" autocomplete="off" required></textarea>
+      <p class="err" id="restoreErr" role="alert" hidden></p>
+      <div class="row"><button type="button" id="restoreCancel">Back</button><button class="primary" type="submit">Continue</button></div>
+    </form>
+  </section>
+
+  <section id="s-setpass" hidden>
+    <h1>Choose a passphrase</h1>
+    <p>The passphrase unlocks the wallet on this phone. It encrypts the recovery phrase stored here. It is not your CPAY website password: use a different one.</p>
+    <form id="passForm" autocomplete="off">
+      <label for="pass1">Passphrase (at least 10 characters)</label>
+      <input id="pass1" type="password" minlength="10" autocomplete="new-password" required>
+      <label for="pass2">Same passphrase again</label>
+      <input id="pass2" type="password" minlength="10" autocomplete="new-password" required>
+      <p class="err" id="passErr" role="alert" hidden></p>
+      <div class="row"><button class="primary" type="submit" id="passBtn">Create wallet</button></div>
+    </form>
+  </section>
+
+  <section id="s-unlock" hidden>
+    <h1>Unlock</h1>
+    <form id="unlockForm" autocomplete="off">
+      <label for="unlockPass">Passphrase</label>
+      <input id="unlockPass" type="password" autocomplete="current-password" required>
+      <p class="err" id="unlockErr" role="alert" hidden></p>
+      <div class="row"><button class="primary" type="submit" id="unlockBtn">Unlock</button></div>
+    </form>
+    <p class="muted small">Forgot the passphrase? Use <a href="#" id="forgotLink">Restore with your recovery phrase</a>. That replaces the wallet stored on this phone.</p>
+  </section>
+
+  <section id="s-home" hidden>
+    <div class="card own">
+      <p class="label">This wallet · your keys</p>
+      <p class="big"><span id="balSats">0</span> sats</p>
+      <p class="muted small">Held by the keys on this phone. Not part of your CPAY website balance.</p>
+      <div class="row">
+        <button type="button" class="primary" id="receiveBtn">Receive</button>
+        <button type="button" id="sendBtn">Send</button>
+      </div>
+    </div>
+
+    <div class="card" id="receivePanel" hidden>
+      <h2>Receive</h2>
+      <form id="receiveForm">
+        <label for="rcvAmount">Amount in sats (optional)</label>
+        <input id="rcvAmount" type="number" min="1" step="1" inputmode="numeric">
+        <label for="rcvNote">Note (optional)</label>
+        <input id="rcvNote" type="text" maxlength="80">
+        <p class="err" id="rcvErr" role="alert" hidden></p>
+        <div class="row"><button class="primary" type="submit">Create invoice</button></div>
+      </form>
+      <div id="rcvOut" hidden>
+        <p class="label">Lightning invoice</p>
+        <canvas class="qr" id="rcvQr" role="img" aria-label="QR code of the Lightning invoice" hidden></canvas>
+        <textarea id="rcvInvoice" rows="4" readonly></textarea>
+        <div class="row"><button type="button" id="rcvCopy">Copy</button><button type="button" id="rcvShare" hidden>Share</button></div>
+      </div>
+    </div>
+
+    <div class="card" id="sendPanel" hidden>
+      <h2>Send</h2>
+      <form id="sendForm" autocomplete="off">
+        <label for="sendTo">Lightning invoice or Spark address</label>
+        <textarea id="sendTo" rows="3" spellcheck="false" autocapitalize="none" required></textarea>
+        <label for="sendAmount">Amount in sats (only if the invoice has none)</label>
+        <input id="sendAmount" type="number" min="1" step="1" inputmode="numeric">
+        <p class="err" id="sendErr" role="alert" hidden></p>
+        <div class="row"><button class="primary" type="submit" id="sendPrepare">Check fee</button></div>
+      </form>
+      <div id="sendConfirm" hidden>
+        <p>Send <strong id="sendSats"></strong> sats, network fee <strong id="sendFee"></strong> sats. This cannot be undone.</p>
+        <div class="row"><button type="button" id="sendCancel">Cancel</button><button type="button" class="primary" id="sendGo">Send now</button></div>
+      </div>
+    </div>
+
+    <div class="card" id="fundPanel" hidden>
+      <h2>Get test bitcoin (test network only)</h2>
+      <p class="muted small">Send coins from the test network's faucet to this address. After the deposit confirms, the wallet adds it to the balance by itself. Test coins have no value.</p>
+      <div class="row"><button type="button" id="fundBtn">Show deposit address</button></div>
+      <div id="fundOut" hidden>
+        <canvas class="qr" id="fundQr" role="img" aria-label="QR code of the test deposit address" hidden></canvas>
+        <textarea id="fundAddr" rows="2" readonly></textarea>
+        <div class="row"><button type="button" id="fundCopy">Copy address</button></div>
+        <p class="muted small" id="fundPending" hidden></p>
+      </div>
+      <p class="err" id="fundErr" role="alert" hidden></p>
+    </div>
+
+    <div class="card">
+      <h2>Activity</h2>
+      <ul class="list" id="history"></ul>
+      <p class="muted small" id="historyEmpty">No payments yet.</p>
+    </div>
+
+    <div class="card linkcard" id="linkCard" hidden>
+      <h2>CPAY account (optional)</h2>
+      <div id="linkOff">
+        <p class="muted">Link your CPAY website account to see its balance here. Linking only signs this app in to CPAY. It never shares the wallet's recovery phrase or keys, and it does not move money.</p>
+        <form id="linkForm" autocomplete="off">
+          <label for="linkEmail">CPAY email</label>
+          <input id="linkEmail" type="email" autocomplete="username" required>
+          <label for="linkPass">CPAY password</label>
+          <input id="linkPass" type="password" autocomplete="current-password" required>
+          <label class="check"><input type="checkbox" id="linkConsent" required> I want this app to sign in to my CPAY account and show its balance.</label>
+          <p class="err" id="linkErr" role="alert" hidden></p>
+          <div class="row"><button class="primary" type="submit">Link account</button></div>
+        </form>
+      </div>
+      <div id="linkOn" hidden>
+        <p class="label">CPAY website balance · held by CPAY</p>
+        <p class="big" id="siteBal">—</p>
+        <p class="muted small">This is your CPAY account balance on the website ledger. It is not in this wallet, and this wallet's balance is not part of it. Signed in as <span id="linkWho"></span>.</p>
+        <p class="err" id="siteErr" role="alert" hidden></p>
+        <div class="row"><button type="button" id="unlinkBtn">Unlink</button><button type="button" id="unlinkAllBtn">Unlink and sign out everywhere</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Security</h2>
+      <div class="row">
+        <button type="button" id="showPhraseBtn">Show recovery phrase</button>
+        <button type="button" class="danger" id="wipeBtn">Remove wallet from this phone</button>
+      </div>
+      <form id="revealForm" hidden autocomplete="off">
+        <label for="revealPass">Passphrase</label>
+        <input id="revealPass" type="password" autocomplete="current-password" required>
+        <p class="err" id="revealErr" role="alert" hidden></p>
+        <div class="row"><button class="primary" type="submit">Show</button></div>
+      </form>
+      <ol class="words" id="revealWords" hidden></ol>
+      <div class="row"><button type="button" id="exitBackupBtn">Save exit backup</button></div>
+      <p class="muted small">An exit backup lets this wallet move its money to the Bitcoin blockchain on its own if the Spark operators ever stop working. It holds no keys, but it shows your balance: keep it private. Save a new one after receiving money.</p>
+      <p class="err" id="exitErr" role="alert" hidden></p>
+      <form id="wipeForm" hidden autocomplete="off">
+        <p>This deletes the wallet from this phone. Without your recovery phrase the money in it is gone for good. Type <strong>DELETE</strong> to confirm.</p>
+        <input id="wipeText" type="text" autocomplete="off" required>
+        <div class="row"><button class="danger" type="submit">Remove</button></div>
+      </form>
+      <p class="muted small"><a href="security.html">How your keys are kept, and how to recover</a></p>
+    </div>
+  </section>
+</main>
+<footer class="foot muted small">CPAY Wallet <span id="ver"></span> · <a href="security.html">Security and recovery</a></footer>
+</body>
+</html>

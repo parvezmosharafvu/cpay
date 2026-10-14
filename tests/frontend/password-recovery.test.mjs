@@ -53,16 +53,16 @@ test('reset.html reads the link without forwarding; other pages and plain visits
 });
 
 test('branded-template links carry a one-time hash that is only read, never used, on load', () => {
-  const r = run('https://pay.example/reset.html?token_hash=abcdef0123456789&type=recovery');
+  const r = run('https://pay.example/reset.html?token_hash=aaaabbbbccccdddd&type=recovery');
   assert.equal(r.link.kind, 'recovery');
-  assert.equal(r.link.tokenHash, 'abcdef0123456789');
+  assert.equal(r.link.tokenHash, 'aaaabbbbccccdddd');
   assert.deepEqual(r.replaced, []);
   // Forwarded intact from the home page.
-  const home = run('https://pay.example/?token_hash=abcdef0123456789&type=recovery');
-  assert.deepEqual(home.replaced, ['/reset.html?token_hash=abcdef0123456789&type=recovery']);
+  const home = run('https://pay.example/?token_hash=aaaabbbbccccdddd&type=recovery');
+  assert.deepEqual(home.replaced, ['/reset.html?token_hash=aaaabbbbccccdddd&type=recovery']);
   // Malformed or wrong-type hashes are ignored.
   assert.equal(run('https://pay.example/reset.html?token_hash=<x>&type=recovery').link.tokenHash, '');
-  assert.equal(run('https://pay.example/reset.html?token_hash=abcdef0123456789&type=signup').link.kind, '');
+  assert.equal(run('https://pay.example/reset.html?token_hash=aaaabbbbccccdddd&type=signup').link.kind, '');
   // type=recovery without tokens is not a recovery link.
   assert.equal(run('https://pay.example/reset.html?type=recovery').link.kind, '');
   assert.equal(run('https://pay.example/reset.html#type=recovery').link.kind, '');

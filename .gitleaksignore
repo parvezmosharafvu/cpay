@@ -4,3 +4,6 @@
 d14b708ee88e9d31c6fd47efb5457258cfbe3950:public/config.js:jwt:4
 d14b708ee88e9d31c6fd47efb5457258cfbe3950:src/home-analytics.js:generic-api-key:4
 d14b708ee88e9d31c6fd47efb5457258cfbe3950:worker/og-preview-worker.js:jwt:13
+# Test fixture, not a secret (reviewed 2026-10-14): a made-up reset-link hash in a
+# unit test of PR #109's first commit; later commits use a low-entropy value.
+91dc15d81e8ae62a1999c809b4d8acc1f774f9a8:tests/frontend/password-recovery.test.mjs:generic-api-key:58

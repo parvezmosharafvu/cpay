@@ -35,6 +35,7 @@
     <h1>Your own wallet</h1>
     <p>CPAY Wallet keeps its keys on this phone. CPAY cannot see, move or recover the money in it. It is separate from your CPAY website account and its balance.</p>
     <ul class="points">
+      <li>Payments run on the Spark network. Each transfer needs your phone's signature <strong>and</strong> co-signing by Spark operators (two of Lightspark, Breez and Flashnet). They cannot move your money without you, but while they are working, payments depend on them. <a href="security.html">How this works</a></li>
       <li>You get a 12-word recovery phrase. Write it on paper. It is the only way back in if this phone is lost or reset.</li>
       <li>Never type it into a website, a chat or an email. CPAY staff will never ask for it.</li>
     </ul>
@@ -196,6 +197,9 @@
         <div class="row"><button class="primary" type="submit">Show</button></div>
       </form>
       <ol class="words" id="revealWords" hidden></ol>
+      <div class="row"><button type="button" id="exitBackupBtn">Save exit backup</button></div>
+      <p class="muted small">An exit backup lets this wallet move its money to the Bitcoin blockchain on its own if the Spark operators ever stop working. It holds no keys, but it shows your balance: keep it private. Save a new one after receiving money.</p>
+      <p class="err" id="exitErr" role="alert" hidden></p>
       <form id="wipeForm" hidden autocomplete="off">
         <p>This deletes the wallet from this phone. Without your recovery phrase the money in it is gone for good. Type <strong>DELETE</strong> to confirm.</p>
         <input id="wipeText" type="text" autocomplete="off" required>

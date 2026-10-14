@@ -71,3 +71,14 @@ test('WALLET_LINK=off removes the CPAY account link and its CSP origin', () => {
   assert.match(readFileSync(join(r.out, 'config.js'), 'utf8'), /"cpaySupabaseUrl": null/);
   assert.equal(readFileSync(join(r.out, '_headers'), 'utf8').includes('supabase.co'), false);
 });
+
+test('vendor real-time sync is off by default and only on when asked', () => {
+  const off = build({ WALLET_NETWORK: 'regtest', WALLET_LINK: 'off' });
+  assert.equal(off.status, 0, off.stderr);
+  assert.match(readFileSync(join(off.out, 'config.js'), 'utf8'), /"sync": false/);
+  assert.equal(readFileSync(join(off.out, '_headers'), 'utf8').includes('datasync.breez.technology'), false, 'CSP blocks the sync host');
+  const on = build({ WALLET_NETWORK: 'regtest', WALLET_LINK: 'off', WALLET_SYNC: 'on' });
+  assert.equal(on.status, 0, on.stderr);
+  assert.match(readFileSync(join(on.out, 'config.js'), 'utf8'), /"sync": true/);
+  assert.match(readFileSync(join(on.out, '_headers'), 'utf8'), /datasync\.breez\.technology:442/);
+});

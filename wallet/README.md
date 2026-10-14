@@ -49,7 +49,10 @@ npx playwright test -c tests/wallet/playwright.config.ts
 
 ## Limitations of this version
 
-- No unilateral-exit button (supported by the library, see SECURITY.md).
+- No unilateral-exit button yet. The app saves an exit backup file;
+  the exit itself is a later milestone (see SECURITY.md).
+- Real-time sync with the library vendor is off (`WALLET_SYNC=on` to
+  turn it on after review).
 - Receive shows a QR code; there is no camera scan yet, so invoices to
   pay are pasted.
 - On-chain deposits: a deposit address is shown only on the test network

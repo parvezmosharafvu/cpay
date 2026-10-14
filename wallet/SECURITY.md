@@ -40,17 +40,25 @@ configuration, `defaultConfig()`):
   funds. This is a weaker guarantee than a single-signature on-chain
   wallet. If operators go offline or refuse service, the user can exit
   unilaterally to Bitcoin L1 using pre-signed transactions (on-chain fees
-  apply). **This version has no exit button**; the library supports it
-  (`prepareUnilateralExit`, `unilateralExit`) and a later version should
-  expose it.
+  apply). This version saves an **exit backup** (Security → Save exit
+  backup, `exportUnilateralExitState`): a JSON file of the pre-signed exit
+  chain. It holds no keys and cannot spend by itself, but it reveals the
+  wallet's leaves and balance, so it is downloaded to the device only and
+  never uploaded. It is stale after new receives; the UI tells users to
+  save a fresh one. **There is still no exit button**: building the exit
+  (`prepareUnilateralExit`, `unilateralExit`) needs on-chain CPFP funding
+  inputs and a PSBT signer, which is a separate milestone. Until then the
+  exit plan is in docs/WALLET-APP.md ("Operator outage / unilateral exit").
 - **Lightning** payments are swapped through a Spark Service Provider
   (Lightspark's SSP, `api.lightspark.com`).
-- **Data sync:** the library syncs wallet metadata to
-  `datasync.breez.technology` by default (its "real-time sync"). We left
-  the default unchanged because the server wallet runs with it. We have
-  **not** independently verified what that sync contains or how it is
-  encrypted; see the library's documentation before relying on it for
-  privacy.
+- **Data sync:** the library's real-time sync to
+  `datasync.breez.technology` is **off** in CPAY builds
+  (`realTimeSyncServerUrl` unset, and the host is left out of the CSP
+  `connect-src`, so the browser blocks it even if the library tried).
+  `WALLET_SYNC=on` turns it back on; do not do that without first
+  reviewing what the service stores. Effect of off: payment notes made
+  on one device are not copied to another; balances and transfers still
+  come back from Spark when the phrase is restored.
 - **API key:** mainnet use requires a key from the library vendor. The
   key identifies the app, ships inside it, and does not protect funds. Use
   a key issued for this wallet, never the website server's key.

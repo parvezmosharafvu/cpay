@@ -54,3 +54,39 @@ Release-check separation, as the repository works today:
   decision (see wallet/README.md). Whether the wallet needs its own terms
   or privacy notice before it is published is a business and legal
   question, not an engineering blocker.
+
+## Operator outage / unilateral exit
+
+The wallet's money is on Spark. If the Spark operators (Lightspark, Breez,
+Flashnet) stop co-signing, payments stop but the money is not lost: Spark
+keeps pre-signed Bitcoin transactions that let the owner exit to the
+Bitcoin blockchain alone.
+
+What exists today:
+
+- **Exit backup** in the app (Security → Save exit backup). Users are told
+  to save a fresh one after receiving money. It holds no keys.
+- The library (pinned 0.26.0) implements the exit itself:
+  `checkUnilateralExit`, `prepareUnilateralExit`, `unilateralExit`,
+  `importUnilateralExitState`.
+
+What does not exist yet (later milestone, not in beta):
+
+- An exit button. It needs an on-chain UTXO to pay the CPFP fees and a
+  PSBT signer, plus a mainnet test.
+
+If an outage happens before that milestone ships, CPAY's response:
+
+1. Post a notice on the website and the Download wallet page: do not
+   remove the wallet, keep the recovery phrase and latest exit backup.
+2. Ship a wallet release with the exit flow (restore phrase → import
+   exit backup → prepare exit → fund CPFP → broadcast), tested on regtest
+   first.
+3. No CPAY server ever receives a user's phrase or exit backup; users run
+   the exit on their own device.
+
+## Vendor data sync
+
+Real-time sync to `datasync.breez.technology` is off in CPAY builds and
+blocked by the CSP. Turning it on (`WALLET_SYNC=on`) needs a written
+review of what the service stores and how it is encrypted.

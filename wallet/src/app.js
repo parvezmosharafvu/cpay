@@ -247,6 +247,22 @@ $('revealForm').onsubmit = async (e) => {
     $('revealPass').value = '';
   }
 };
+$('exitBackupBtn').onclick = async () => {
+  err('exitErr');
+  $('exitBackupBtn').disabled = true;
+  try {
+    const state = await engine.exportExitState();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([state], { type: 'application/json' }));
+    a.download = `cpay-wallet-exit-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  } catch (e) {
+    err('exitErr', `Could not make the exit backup: ${e?.message || e}`);
+  } finally {
+    $('exitBackupBtn').disabled = false;
+  }
+};
 $('wipeBtn').onclick = () => { $('wipeForm').hidden = false; $('revealForm').hidden = true; };
 $('wipeForm').onsubmit = async (e) => {
   e.preventDefault();

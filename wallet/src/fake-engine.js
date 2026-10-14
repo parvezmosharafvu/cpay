@@ -47,6 +47,7 @@ export function createFakeEngine() {
       return { id: p.id, status: p.status };
     },
     async payments() { return state.payments.slice(); },
+    async exportExitState() { return JSON.stringify({ fake: true, balanceSats: state.balance }); },
     async disconnect() { state.connected = null; },
   };
 }

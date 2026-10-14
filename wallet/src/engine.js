@@ -42,6 +42,9 @@ export async function createEngine() {
       const c = cfg();
       const config = sdkMod.defaultConfig(c.network);
       if (c.apiKey) config.apiKey = c.apiKey;
+      // Real-time sync shares wallet records with the library's sync
+      // service. Off unless the build turned it on (WALLET_SYNC=on).
+      if (!c.sync) config.realTimeSyncServerUrl = undefined;
       sdk = await sdkMod.connect({ config, seed: { type: 'mnemonic', mnemonic }, storageDir: storageDir() });
       if (onEvent) listenerId = await sdk.addEventListener({ onEvent: (e) => onEvent(e?.type || 'event') });
     },
@@ -102,6 +105,13 @@ export async function createEngine() {
         id: p.id, type: p.paymentType, status: p.status,
         amountSats: Number(p.amount), feesSats: Number(p.fees), timestamp: Number(p.timestamp),
       }));
+    },
+    // Exit backup: the pre-signed Bitcoin transactions that let this wallet
+    // leave Spark on its own if the Spark operators stop working. It holds
+    // no keys and cannot move money by itself, but it does reveal the
+    // wallet's balance, so it is treated as private.
+    async exportExitState() {
+      return (await sdk.exportUnilateralExitState()).exitState;
     },
     async disconnect() {
       if (!sdk) return;

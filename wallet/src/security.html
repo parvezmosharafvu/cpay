@@ -25,8 +25,9 @@
 <p>The wallet uses the Spark network, a Bitcoin layer, through an open-source wallet library (the Breez SDK). Lightning payments go through a Spark service provider.</p>
 <ul class="points">
 <li>Every transfer needs a signature from the keys on your phone. The Spark operators (currently Lightspark, Breez and Flashnet; two of the three must co-sign) cannot move your money without that signature.</li>
-<li>Spark's safety relies on at least one operator deleting old key shares as designed. If the operators stop working, Spark lets you exit to the Bitcoin blockchain on your own, with an on-chain fee. This first version of the wallet does not have an exit button yet.</li>
-<li>The wallet library keeps its own records on your phone and syncs wallet data with the library's sync service by default. The wallet needs an internet connection to the Spark network to pay or be paid. It does not need the CPAY website.</li>
+<li>Spark's safety relies on at least one operator deleting old key shares as designed. If the operators stop working, Spark lets you exit to the Bitcoin blockchain on your own, with an on-chain fee. This version can save an <strong>exit backup</strong> (Security → Save exit backup): the pre-signed transactions needed for that exit. It does not have an exit button yet; CPAY will publish exit steps before any operator shutdown affects users.</li>
+<li>While the operators are working, sending and receiving depend on them and on the Spark service provider. Holding your own keys means nobody can move the money without your phone's signature; it does not mean the wallet works without Spark.</li>
+<li>The wallet library keeps its own records on your phone. CPAY builds it with the library's real-time sync service turned off, so wallet records are not copied to that service. The wallet needs an internet connection to the Spark network to pay or be paid. It does not need the CPAY website.</li>
 </ul>
 </div>
 

@@ -311,3 +311,21 @@ test('regtest funding: deposit address with a QR that decodes to it', async ({ p
   expect(await page.locator('#fundAddr').inputValue()).toBe('');
   assertNoLeak(phrase);
 });
+
+test('welcome explains Spark operator co-signing before a wallet is made', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#s-welcome')).toContainText('co-signing by Spark operators');
+  await expect(page.locator('#s-welcome')).toContainText('Lightspark, Breez and Flashnet');
+});
+
+test('exit backup downloads a file, needs no network, and holds no phrase', async ({ page }) => {
+  const phrase = await createWallet(page);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save exit backup' }).click()]);
+  expect(dl.suggestedFilename()).toMatch(/^cpay-wallet-exit-backup-\d{4}-\d{2}-\d{2}\.json$/);
+  const fs = await import('node:fs');
+  const text = fs.readFileSync((await dl.path())!, 'utf8');
+  expect(JSON.parse(text).fake).toBe(true);
+  for (const w of [phrase, PASS]) expect(text.includes(w)).toBe(false);
+  await expect(page.locator('#exitErr')).toBeHidden();
+  assertNoLeak(phrase);
+});

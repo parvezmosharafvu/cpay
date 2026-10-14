@@ -76,9 +76,15 @@ dashboard or the private backup repo. Record each in the drill log above.
    backup, so a bad event late in the day loses up to 24 h of ledger rows;
    then the ledger git snapshot is the only finer-grained copy of
    payments and withdrawals.
+   *Checked read-only on 2026-10-14:* the 18:15 UTC run answered
+   `backed up`, `verified: true` (payments 4, withdrawals 0, payment links 1,
+   profiles 18, daily stats 26). No repository visible to the audit's GitHub
+   access received that commit, so the target repo's visibility could not be
+   checked from here: the owner confirms it is **private** (step 2).
 2. **Open the latest snapshot.** In the private repo named by
    `GITHUB_OWNER`/`GITHUB_REPO`, open `ledger-backups/<today>.json` and
-   check that the counts match the admin dashboard. Do not copy it
+   check that the counts match the admin dashboard, and that the repo's
+   visibility is **Private** (repo → Settings → General). Do not copy it
    anywhere public.
 3. **Staging restore drill (Auth + Edge).** On a staging project only:
    restore the latest backup (or PITR to a chosen time); deploy the Edge

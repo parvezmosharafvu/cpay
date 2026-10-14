@@ -5,55 +5,196 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#f6f7f9">
 <meta name="color-scheme" content="light">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
 <title>New password · CPAY</title>
 <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
 <link rel="stylesheet" href="a11y.css">
+<script src="auth-link.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script>
+<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="mfa.js"></script>
 </head>
 <body class="auth">
   <a class="skip-link" href="#resetCard">Skip to form</a>
   <main class="auth-card">
     <a class="brand" href="/login.html"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
-    <div class="card" id="resetCard">
-      <h1>Set a new password</h1>
-      <p class="sub">Use the link from your email, then choose a new password.</p>
-      <div class="field"><label for="password">New password</label><input id="password" type="password" autocomplete="new-password" aria-describedby="passwordHint" minlength="8" required></div>
-      <p class="hint" id="passwordHint">At least 8 characters.</p>
-      <div class="field"><label for="password2">Confirm</label><input id="password2" type="password" autocomplete="new-password" required></div>
-      <button class="btn primary block lg" id="saveBtn" type="button">Save password</button>
+    <div class="card" id="resetCard" aria-live="polite">
+      <div id="checking" data-state="checking">
+        <h1>Set a new password</h1>
+        <p class="sub" aria-busy="true">Checking your reset link…</p>
+      </div>
+
+      <div id="confirmState" data-state="confirm" hidden>
+        <h1>Reset your password</h1>
+        <p class="sub">Tap Continue to open your reset link. It works once.</p>
+        <button class="btn primary block lg" id="continueBtn" type="button">Continue</button>
+      </div>
+
+      <div id="formState" data-state="form" hidden>
+        <h1>Set a new password</h1>
+        <p class="sub">Choose a new password for your CPAY account.</p>
+        <div class="field"><label for="password">New password</label><input id="password" type="password" autocomplete="new-password" aria-describedby="passwordHint" minlength="8" maxlength="72" required></div>
+        <p class="hint" id="passwordHint">8 to 72 characters. A long phrase is easiest to remember.</p>
+        <div class="field"><label for="password2">Confirm new password</label><input id="password2" type="password" autocomplete="new-password" maxlength="72" required></div>
+        <button class="btn primary block lg" id="saveBtn" type="button">Save password</button>
+      </div>
+
+      <div id="linkState" data-state="link" hidden>
+        <h1 id="linkTitle">This link no longer works</h1>
+        <p class="sub" id="linkBody">Reset links work once and expire after about an hour. Enter your email to get a new one.</p>
+        <div class="field"><label for="resendEmail">Email</label><input id="resendEmail" type="email" autocomplete="email" inputmode="email" required></div>
+        <button class="btn primary block lg" id="resendBtn" type="button">Send a new link</button>
+      </div>
+
+      <div id="doneState" data-state="done" hidden>
+        <h1>Password updated</h1>
+        <p class="sub">You are signed out everywhere. Log in with your new password.</p>
+        <a class="btn primary block lg" href="login.html?reset=done">Go to log in</a>
+      </div>
+
       <div class="alert alert-danger" id="errorMsg" role="alert" hidden></div>
+      <div class="alert alert-success" id="okMsg" role="status" hidden></div>
     </div>
     <p class="foot"><a href="login.html">Back to log in</a></p>
   </main>
 <script>
-function showErr(t){ const e=document.getElementById('errorMsg'); e.textContent=t; e.hidden=false; }
+// Password recovery (Supabase Auth). The reset link signs this browser in
+// with a short-lived recovery session; this page lets that session set a
+// new password once, then ends every session for the account. Passwords
+// and link tokens are never logged or stored by this page.
+const byId = (id) => document.getElementById(id);
+function state(name){
+  document.querySelectorAll('#resetCard [data-state]').forEach((el) => { el.hidden = el.dataset.state !== name; });
+  byId('errorMsg').hidden = true; byId('okMsg').hidden = true;
+}
+function showErr(t){ const e=byId('errorMsg'); e.textContent=t; e.hidden=false; byId('okMsg').hidden=true; }
+function showOk(t){ const o=byId('okMsg'); o.textContent=t; o.hidden=false; byId('errorMsg').hidden=true; }
+function linkProblem(title, body){
+  byId('linkTitle').textContent = title;
+  byId('linkBody').textContent = body;
+  state('link');
+}
+// Messages for Supabase Auth's error codes; anything else stays generic.
+function saveError(error){
+  const code = error?.code || error?.error_code || '';
+  if (code === 'weak_password') return 'That password is too weak. Use a longer one, ideally a phrase of several words.';
+  if (code === 'same_password') return 'Choose a password different from your old one.';
+  if (code === 'insufficient_aal') return 'Enter the code from your authenticator app first, then save again.';
+  if (code === 'session_not_found' || code === 'session_expired' || error?.status === 401 || error?.status === 403) return 'session';
+  if (error?.name === 'AuthRetryableFetchError') return 'Could not reach the server. Check your connection and try again.';
+  return 'Could not save the new password. Try again, or request a new link.';
+}
+
+// The access token's amr lists how the session was made; a reset link
+// adds "recovery" (kept after a reload, and after the authenticator step).
+function fromResetLink(session){
+  try {
+    const part = session.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return (JSON.parse(atob(part)).amr || []).some((m) => m && m.method === 'recovery');
+  } catch (e) { return false; }
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   if (window.applyDomainTheme) await applyDomainTheme();
-  const { data:{ session } } = await window.supabaseClient.auth.getSession();
-  if (!session) showErr('Open the link from the email on this phone. If it expired, request a new one from log in.');
+  const link = window.cpayAuthLink || {};
+  if (link.kind === 'expired') {
+    linkProblem('This link no longer works', 'It has expired, was already used, or was changed in transit. Reset links work once and expire after about an hour. Enter your email to get a new one.');
+    return;
+  }
+  if (link.tokenHash) { state('confirm'); return; }
+  await showFormOrProblem(link);
 });
-document.getElementById('saveBtn').onclick = async () => {
-  const a = document.getElementById('password').value;
-  const b = document.getElementById('password2').value;
-  if (!a || a.length < 8){ showErr('Use at least 8 characters.'); return; }
-  if (a !== b){ showErr('The two passwords do not match.'); return; }
-  const btn = document.getElementById('saveBtn');
+
+async function showFormOrProblem(link){
+  let session = null;
+  try { ({ data: { session } } = await window.supabaseClient.auth.getSession()); } catch (e) { session = null; }
+  // Only a session that came from a reset link may set a password here
+  // without the old one; an ordinary signed-in session may not.
+  if (!session || !(link.kind === 'recovery' || fromResetLink(session))) {
+    linkProblem('Open the link from your email', 'This page needs the reset link from your email, opened in this browser. Enter your email to get a new one.');
+    return;
+  }
+  state('form');
+  byId('password').focus();
+}
+
+byId('continueBtn').onclick = async () => {
+  const btn = byId('continueBtn');
   if (btn.disabled) return;
-  btn.disabled = true;
-  let error;
+  btn.disabled = true; btn.textContent = 'Opening…';
+  let error = null;
+  try {
+    ({ error } = await window.supabaseClient.auth.verifyOtp({ token_hash: window.cpayAuthLink.tokenHash, type: 'recovery' }));
+  } catch (e) {
+    error = { name: 'AuthRetryableFetchError' };
+  }
+  window.cpayAuthLink.tokenHash = '';
+  if (error) {
+    if (error.name === 'AuthRetryableFetchError') {
+      linkProblem('Could not reach the server', 'Check your connection, then open the link from your email again.');
+    } else {
+      linkProblem('This link no longer works', 'It has expired, was already used, or was changed in transit. Reset links work once and expire after about an hour. Enter your email to get a new one.');
+    }
+    return;
+  }
+  await showFormOrProblem({ kind: 'recovery' });
+};
+
+byId('saveBtn').onclick = async () => {
+  const a = byId('password').value;
+  const b = byId('password2').value;
+  if (a.length < 8){ showErr('Use at least 8 characters.'); return; }
+  if (a.length > 72){ showErr('Use at most 72 characters.'); return; }
+  if (a !== b){ showErr('The two passwords do not match.'); return; }
+  const btn = byId('saveBtn');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const restore = () => { btn.disabled = false; btn.textContent = 'Save password'; };
+  // An account with an authenticator must reach aal2 before Supabase Auth
+  // accepts a new password; the reset link alone is not enough.
+  try {
+    if (window.cpayMfa && !(await window.cpayMfa.ensureAal2('Enter the 6-digit code from your authenticator app to set a new password.'))) {
+      showErr('Password not changed: the authentication code was not confirmed.');
+      restore(); return;
+    }
+  } catch (e) {
+    showErr('Could not check two-step sign-in. Reload the page and try again.');
+    restore(); return;
+  }
+  let error = null;
   try {
     ({ error } = await window.supabaseClient.auth.updateUser({ password: a }));
   } catch (e) {
-    error = { message: 'Could not reach the server. Check your connection and try again.' };
+    error = { name: 'AuthRetryableFetchError' };
   }
-  if (error){ showErr(error.message); btn.disabled = false; return; }
+  if (error){
+    const msg = saveError(error);
+    if (msg === 'session') {
+      linkProblem('Your reset session ended', 'For safety the reset session is short. Enter your email to get a new link.');
+    } else {
+      showErr(msg);
+      restore();
+    }
+    return;
+  }
+  byId('password').value = ''; byId('password2').value = '';
   // End every session for the account, so a session stolen before the
   // reset does not keep working. The user signs in again with the new password.
-  try { await window.supabaseClient.auth.signOut({ scope: 'global' }); } catch (e) { /* still go to sign-in */ }
-  location.href = 'login.html';
+  try { await window.supabaseClient.auth.signOut({ scope: 'global' }); } catch (e) { /* still show the result */ }
+  state('done');
+};
+byId('password2').addEventListener('keydown', (e) => { if (e.key === 'Enter') byId('saveBtn').click(); });
+
+byId('resendBtn').onclick = async () => {
+  const btn = byId('resendBtn');
+  if (btn.disabled) return;
+  const r = await window.cpayResetRequest.requestReset(byId('resendEmail').value.trim());
+  if (r === 'invalid'){ showErr('Enter the email address you use for CPAY.'); return; }
+  if (r === 'network'){ showErr('Could not reach the server. Check your connection and try again.'); return; }
+  showOk(window.cpayResetRequest.SENT);
+  window.cpayResetRequest.cooldown(btn, 'Send a new link');
 };
 </script>
 </body>

@@ -37,6 +37,8 @@ let mfaSetting: unknown = undefined;
 const b64u = (o: unknown) => btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const ADMIN_AAL1 = `${b64u({ alg: "ES256" })}.${b64u({ sub: ADMIN.id, aal: "aal1" })}.sig`;
 const ADMIN_AAL2 = `${b64u({ alg: "ES256" })}.${b64u({ sub: ADMIN.id, aal: "aal2" })}.sig`;
+// The same admin after enrolling an authenticator (20261014080000).
+const ENROLLED_AAL1 = `${ADMIN_AAL1}e`, ENROLLED_AAL2 = `${ADMIN_AAL2}e`;
 
 const sb = Deno.serve({ hostname: "127.0.0.1", port: 0, onListen() {} }, async (req) => {
     const url = new URL(req.url);
@@ -50,10 +52,11 @@ const sb = Deno.serve({ hostname: "127.0.0.1", port: 0, onListen() {} }, async (
         return Response.json(rows);
     }
     if (url.pathname === "/auth/v1/user") {
-        const user = bearer === "admin-jwt" || bearer === ADMIN_AAL1 || bearer === ADMIN_AAL2 ? ADMIN
+        const enrolled = bearer === ENROLLED_AAL1 || bearer === ENROLLED_AAL2;
+        const user = bearer === "admin-jwt" || bearer === ADMIN_AAL1 || bearer === ADMIN_AAL2 || enrolled ? ADMIN
             : bearer === "creator-jwt" ? CREATOR : INACTIVE_ADMINS[bearer] ?? null;
         if (!user) return Response.json({ code: 401, msg: "invalid JWT" }, { status: 401 });
-        return Response.json({ ...user, aud: "authenticated", role: "authenticated" });
+        return Response.json({ ...user, aud: "authenticated", role: "authenticated", factors: enrolled ? [{ status: "verified" }] : [] });
     }
     if (url.pathname === "/rest/v1/profiles") {
         const id = (url.searchParams.get("id") ?? "").replace(/^eq\./, "");
@@ -223,6 +226,18 @@ Deno.test({
             mfaSetting = false;
             resetMgmt(false);
             eq((await call(handler, "GET", ADMIN_AAL1)).status, 200, "flag false: aal1 GET as before");
+            mfaSetting = undefined;
+        });
+
+        await t.step("flag off: an admin with a verified authenticator needs aal2", async () => {
+            mfaSetting = false;
+            resetMgmt(false);
+            auditRows.length = 0;
+            eq((await call(handler, "GET", ENROLLED_AAL1)).status, 403, "enrolled, aal1 GET");
+            eq((await call(handler, "POST", ENROLLED_AAL1, { email_confirmation_required: false })).status, 403, "enrolled, aal1 POST");
+            eq(mgmtCalls.length, 0, "management API never called");
+            eq(auditRows.length, 0, "nothing audited");
+            eq((await call(handler, "GET", ENROLLED_AAL2)).status, 200, "enrolled, aal2 GET");
             mfaSetting = undefined;
         });
 

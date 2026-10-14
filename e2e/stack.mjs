@@ -4,7 +4,7 @@
 //
 //   Postgres  : fresh database $E2E_DB (bootstrap + every migration + e2e/shim.sql)
 //   PostgREST : real RLS, JWTs signed with a local test secret
-//   Auth      : a small GoTrue stand-in (password sign-up/in, refresh, user, recover)
+//   Auth      : a small GoTrue stand-in (password sign-up/in, refresh, user, recover, verify)
 //   Functions : the real create-invoice and user-withdraw Edge Functions under Deno
 //   Payments  : the real payment-service with a fake wallet SDK; no network, no money
 //   Gateway   : one origin serving dist/ (with a local config.js), /rest, /auth,
@@ -107,6 +107,7 @@ async function startPaymentService() {
 
 // ── auth stand-in ──────────────────────────────────────────────────────
 const mailbox = [];
+const recoveryHashes = new Map(); // token hash -> user id, single use
 let pool;
 const refreshTokens = new Map();
 // Like Supabase Auth: a sign-in is aal1 with its method in amr; a verified
@@ -180,6 +181,12 @@ async function handleAuth(req, res, url, body) {
   }
   if (p === '/user' && req.method === 'PUT') {
     if (!claims?.sub) return authError(res, 401, 'invalid JWT', 'bad_jwt');
+    // Like Supabase Auth: once a factor is verified, changing the password
+    // needs an aal2 session (a reset link alone is aal1).
+    if (body.password && claims.aal !== 'aal2' && (await factorsFor(claims.sub)).some((f) => f.status === 'verified')) {
+      return authError(res, 403, 'AAL2 session is required to update email or password when MFA is enabled.', 'insufficient_aal');
+    }
+    if (body.password && String(body.password).length < 8) return authError(res, 422, 'Password should be at least 8 characters.', 'weak_password');
     if (body.password) await pool.query(`update auth.users set encrypted_password = crypt($2, gen_salt('bf', 4)) where id = $1`, [claims.sub, body.password]);
     return send(res, 200, await userJson(await userById(claims.sub)));
   }
@@ -233,9 +240,19 @@ async function handleAuth(req, res, url, body) {
     if (u) {
       const s = await session(u, 'recovery');
       const redirect = url.searchParams.get('redirect_to') || body.redirect_to || `${ORIGIN}/reset.html`;
-      mailbox.push({ to: u.email, kind: 'recovery', link: `${redirect}#access_token=${s.access_token}&refresh_token=${s.refresh_token}&expires_in=3600&expires_at=${s.expires_at}&token_type=bearer&type=recovery` });
+      // Like the branded template: a one-time hash, used only by /verify.
+      const tokenHash = randomBytes(20).toString('hex');
+      recoveryHashes.set(tokenHash, u.id);
+      mailbox.push({ to: u.email, kind: 'recovery', tokenHash,
+        link: `${redirect}#access_token=${s.access_token}&refresh_token=${s.refresh_token}&expires_in=3600&expires_at=${s.expires_at}&token_type=bearer&type=recovery` });
     }
     return send(res, 200, {});
+  }
+  if (p === '/verify' && req.method === 'POST') {
+    const id = body.type === 'recovery' && recoveryHashes.get(String(body.token_hash || ''));
+    if (!id) return authError(res, 403, 'Email link is invalid or has expired', 'otp_expired');
+    recoveryHashes.delete(String(body.token_hash));
+    return send(res, 200, await session(await userById(id), 'recovery'));
   }
   if (p === '/settings') return send(res, 200, { external: { email: true }, disable_signup: false, mailer_autoconfirm: true });
   return send(res, 404, { msg: `e2e auth: ${req.method} ${p} not implemented` });

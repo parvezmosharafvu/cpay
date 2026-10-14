@@ -1,5 +1,7 @@
 # cpay auth email setup (Resend + Supabase)
 
+> **2026-10-14 obostha:** Resend domain `pay-cashapp.buzz` verified, Supabase Auth er reset email Resend diye jacche, Site URL thik ache. Baki owner kaj (Redirect URLs e `/reset.html`, branded template, test) ar ki ki verify kora hoyeche: [CPAY_AUTH_AND_EMAIL.md](CPAY_AUTH_AND_EMAIL.md). Niche step gula prothombar setup er jonno.
+
 cpay er signup, confirm ar password reset email gula Supabase Auth pathay. Supabase er nijer email service shudhu testing er jonno: ghontay 2 ta email, ar shudhu project team member der kache jay. Tai amra Resend er SMTP diye pathai. SMTP mane email pathanor standard system.
 
 Resend free plan e mashe 3,000 ta email jay, kintu dine maximum 100 ta. Dine er beshi lagle Brevo (dine 300) bhalo free option.

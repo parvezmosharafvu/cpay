@@ -1,4 +1,4 @@
-import { adminMfaEnforced, adminMfaHealth, mfaFlagOn, sessionIsAal2 } from "./admin-mfa.ts";
+import { adminMfaEnforced, adminMfaHealth, hasVerifiedFactor, mfaFlagOn, sessionIsAal2 } from "./admin-mfa.ts";
 
 function eq(a: unknown, b: unknown, msg: string) {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg}: expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
@@ -34,4 +34,13 @@ Deno.test("health verdict: lockout risk and owner expectation are unsafe", () =>
   eq(adminMfaHealth({ enforced: false }, false).ok, true, "not required, not expected (rollout pending)");
   eq(adminMfaHealth({ enforced: false }, true).ok, false, "expected but switched off");
   eq(adminMfaHealth(null, false).ok, true, "no data, not expected");
+});
+
+Deno.test("verified factor: only a factor with status verified counts", () => {
+  eq(hasVerifiedFactor({ factors: [{ status: "verified" }] }), true, "verified");
+  eq(hasVerifiedFactor({ factors: [{ status: "unverified" }] }), false, "unverified");
+  eq(hasVerifiedFactor({ factors: [] }), false, "none");
+  eq(hasVerifiedFactor({ factors: null }), false, "null");
+  eq(hasVerifiedFactor({}), false, "missing");
+  eq(hasVerifiedFactor(null), false, "no user");
 });

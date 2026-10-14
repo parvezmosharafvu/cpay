@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="cpay.css">
 <link rel="stylesheet" href="a11y.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="mfa.js"></script><script src="reauth.js"></script>
+<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="mfa.js"></script><script src="reauth.js"></script><script src="admin-security.js"></script>
 <script src="daily-desk.js?v=3"></script>
 </head>
 <body>
@@ -25,6 +25,7 @@
     <a class="navi" href="/assets/wallet.html">Download wallet</a>
     <button type="button" class="navi" data-tab="chat">Chat</button>
     <button type="button" class="navi" data-tab="profile">Profile</button>
+    <button type="button" class="navi" data-tab="security">Security</button>
     <button type="button" class="navi" id="logoutBtn">Log out</button>
   </aside>
   <main class="main" id="deskMain">
@@ -35,6 +36,7 @@
     <section id="cash" hidden></section>
     <section id="chat" hidden></section>
     <section id="profile" hidden></section>
+    <section id="security" hidden></section>
   </main>
 </div>
 <script>const RESERVED = ['index','login','register','dashboard','admin','404','config','theme','assets','favicon','invoice-cpay-v2','api','u','static','public','well-known','robots','sitemap','moderator','reseller','store','classic'];</script>

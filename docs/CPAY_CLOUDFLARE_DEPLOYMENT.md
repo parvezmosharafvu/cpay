@@ -11,7 +11,10 @@ audit, so nothing was created, changed or deleted on Cloudflare.
 | `cpay` | The website (static files in `public/`) | Workers Builds on every merge to `main`; config in the root `wrangler.jsonc` | Serves `pay-cashapp.buzz`. Do not change its routes or DNS for the wallet |
 | `cpay-og-preview` | Link-preview cards | `worker/` | Leave as is |
 
-No other CPAY project exists. Nothing should be deleted.
+No other CPAY project is connected to this repository; there is no
+`cpay-wallet` or `cpay-wallet-pwa` Worker (re-checked 2026-10-14, see
+[CPAY_WALLET_REPOS_AND_PROJECTS.md](CPAY_WALLET_REPOS_AND_PROJECTS.md)).
+Nothing should be deleted.
 
 ## The project that does not exist yet: `cpay-wallet`
 

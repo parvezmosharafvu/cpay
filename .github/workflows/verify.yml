@@ -223,6 +223,7 @@ jobs:
           # The MFA audit trail with production's grants as well.
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/mfa_audit_test.sql
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/admin_mfa_enforcement_test.sql
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/admin_aal2_enrolled_test.sql
           # Machine-readable final state of the replayed schema, kept as an
           # artifact to diff against production (docs/DB-FINAL-STATE.md).
           psql -h localhost -U postgres -d privcheck -Atq -v ON_ERROR_STOP=1 -f ci/db_inventory.sql > db-inventory.json
@@ -367,6 +368,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/admin_mfa_enforcement_test.sql
+      - name: An admin with an authenticator needs aal2 (20261014080000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/admin_aal2_enrolled_test.sql
       - name: Money is exact (no float columns or float casts in public)
         env:
           PGPASSWORD: postgres
@@ -703,7 +708,7 @@ jobs:
           cat /proc/sys/net/ipv4/ip_local_port_range
           grep -qx "${base}-$((base + 3))" /proc/sys/net/ipv4/ip_local_reserved_ports \
             || { echo "::error::ports ${base}-$((base + 3)) were not reserved"; exit 1; }
-      - name: Run the eight E2E suites
+      - name: Run the E2E suites
         run: npx playwright test -c tests/e2e/playwright.config.ts
       - name: Stack ports released after the run
         # Pass or fail, the stack and everything it spawned must be gone.

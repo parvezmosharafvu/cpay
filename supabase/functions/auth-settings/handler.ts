@@ -26,7 +26,7 @@
 // The Supabase Edge Runtime resolves this remote Deno import at deployment time.
 // @ts-ignore The local TypeScript server cannot resolve URL imports without Deno's resolver.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
-import { adminMfaEnforced, sessionIsAal2 } from "../_shared/admin-mfa.ts";
+import { adminMfaEnforced, hasVerifiedFactor, sessionIsAal2 } from "../_shared/admin-mfa.ts";
 
 export interface AuthSettingsConfig {
     supabaseUrl: string;
@@ -137,8 +137,9 @@ export function createHandler(cfg: AuthSettingsConfig): (req: Request) => Promis
         if (profile?.role !== "admin" || profile?.account_status !== "active") {
             return { ok: false, status: 403, error: "Admins only" };
         }
-        // Two-step sign-in, when required (20261014030000): aal2 only.
-        if (await adminMfaEnforced(supabaseAdmin) && !sessionIsAal2(authHeader)) {
+        // Two-step sign-in: aal2 when required (20261014030000) or when this
+        // admin has a verified authenticator (20261014080000).
+        if (!sessionIsAal2(authHeader) && (hasVerifiedFactor(user) || await adminMfaEnforced(supabaseAdmin))) {
             return { ok: false, status: 403, error: "Two-step sign-in is required: sign in again and enter your authenticator code." };
         }
         return { ok: true, userId: user.id, email: profile?.email ?? user.email ?? null };

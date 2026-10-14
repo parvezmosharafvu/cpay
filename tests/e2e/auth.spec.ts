@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { makeUser, login, db, uniq, ORIGIN, PASSWORD, expectCleanCopy } from './helpers';
+// @ts-ignore -- plain ESM helper shared with the fake Supabase Auth
+import { totp, b32encode } from '../../e2e/totp.mjs';
+import { randomBytes } from 'node:crypto';
+
+const SENT = /^If an account uses that email, a reset link is on its way/;
+const mailFor = async (email: string) => (await fetch(`${ORIGIN}/__e2e/mailbox?to=${encodeURIComponent(email)}`)).json();
 
 test('register creates a pending Freelancer application', async ({ page }) => {
   const email = `${uniq('reg')}@test.invalid`;
@@ -48,18 +54,162 @@ test('password recovery: request a link, set a new password, log in with it', as
   await page.goto('/login.html');
   await page.fill('#email', u.email);
   await page.click('#forgotBtn');
-  await expect(page.locator('#okMsg')).toHaveText(/Check your email/);
-  const mail = await (await fetch(`${ORIGIN}/__e2e/mailbox?to=${encodeURIComponent(u.email)}`)).json();
+  await expect(page.locator('#okMsg')).toHaveText(SENT);
+  await expect(page.locator('#forgotBtn')).toBeDisabled();
+  await expect(page.locator('#forgotBtn')).toHaveText(/Send again in \d+s/);
+  const mail = await mailFor(u.email);
   expect(mail).toHaveLength(1);
+  expect(mail[0].link).toContain(`${ORIGIN}/reset.html#`);
   await page.goto(mail[0].link);
   await page.fill('#password', 'brand-new-pass-1');
   await page.fill('#password2', 'brand-new-pass-1');
   await page.click('#saveBtn');
-  await page.waitForURL(/login\.html|dashboard\.html/);
+  await expect(page.locator('#doneState')).toBeVisible();
+  await page.click('#doneState a');
+  await page.waitForURL(/login\.html\?reset=done/);
+  await expect(page.locator('#okMsg')).toHaveText(/Password updated/);
   // A fresh browser: the old password fails, the new one works.
   const fresh = await (await browser.newContext()).newPage();
   await login(fresh, u);
   await expect(fresh.locator('#errorMsg')).toHaveText(/Invalid login credentials/);
   await login(fresh, { ...u, password: 'brand-new-pass-1' });
   await fresh.waitForURL(/dashboard\.html/);
+});
+
+test('forgot password answers the same for an unknown email and sends nothing', async ({ page }) => {
+  const email = `${uniq('nobody')}@test.invalid`;
+  await page.goto('/login.html');
+  await page.fill('#email', email);
+  await page.click('#forgotBtn');
+  await expect(page.locator('#okMsg')).toHaveText(SENT);
+  await expect(page.locator('#errorMsg')).toBeHidden();
+  expect(await mailFor(email)).toHaveLength(0);
+});
+
+test('a reset link that falls back to the home page (Site URL) still opens the reset form', async ({ page, browser }) => {
+  const u = await makeUser({ name: 'Home Landing' });
+  await page.goto('/login.html');
+  await page.fill('#email', u.email);
+  await page.click('#forgotBtn');
+  await expect(page.locator('#okMsg')).toHaveText(SENT);
+  const [mail] = await mailFor(u.email);
+  // What Supabase Auth does when /reset.html is not on the Redirect URLs list.
+  const home = `${ORIGIN}/${mail.link.slice(mail.link.indexOf('#'))}`;
+  await page.goto(home);
+  await page.waitForURL(/reset\.html/);
+  await expect(page.locator('#formState')).toBeVisible();
+  await page.fill('#password', 'home-landing-pass-1');
+  await page.fill('#password2', 'home-landing-pass-1');
+  await page.click('#saveBtn');
+  await expect(page.locator('#doneState')).toBeVisible();
+  const fresh = await (await browser.newContext()).newPage();
+  await login(fresh, { ...u, password: 'home-landing-pass-1' });
+  await fresh.waitForURL(/dashboard\.html/);
+});
+
+test('an expired or reused link shows a clear state and can send a new link', async ({ page }) => {
+  const u = await makeUser({ name: 'Expired Link' });
+  await page.goto('/#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
+  await page.waitForURL(/reset\.html/);
+  await expect(page.locator('#linkState')).toBeVisible();
+  await expect(page.locator('#linkTitle')).toHaveText('This link no longer works');
+  await expect(page.locator('#formState')).toBeHidden();
+  await page.fill('#resendEmail', u.email);
+  await page.click('#resendBtn');
+  await expect(page.locator('#okMsg')).toHaveText(SENT);
+  await expect(page.locator('#resendBtn')).toBeDisabled();
+  expect(await mailFor(u.email)).toHaveLength(1);
+});
+
+test('the reset page refuses a missing or ordinary session, and a malformed link', async ({ page }) => {
+  await page.goto('/reset.html');
+  await expect(page.locator('#linkState')).toBeVisible();
+  await expect(page.locator('#linkTitle')).toHaveText('Open the link from your email');
+  await page.goto('/reset.html#access_token=not-a-token&type=recovery');
+  await expect(page.locator('#formState')).toBeHidden();
+  // Signed in with a password (not from a reset link): no password change here.
+  const u = await makeUser({ name: 'Ordinary Session' });
+  await login(page, u);
+  await page.waitForURL(/dashboard\.html/);
+  await page.goto('/reset.html');
+  await expect(page.locator('#linkState')).toBeVisible();
+  await expect(page.locator('#formState')).toBeHidden();
+});
+
+test('reset rejects short and mismatched passwords before calling the server', async ({ page }) => {
+  const u = await makeUser({ name: 'Validate Me' });
+  await page.goto('/login.html');
+  await page.fill('#email', u.email);
+  await page.click('#forgotBtn');
+  await expect(page.locator('#okMsg')).toHaveText(SENT);
+  const [mail] = await mailFor(u.email);
+  await page.goto(mail.link);
+  await page.fill('#password', 'short');
+  await page.fill('#password2', 'short');
+  await page.click('#saveBtn');
+  await expect(page.locator('#errorMsg')).toHaveText(/at least 8/);
+  await page.fill('#password', 'long-enough-1');
+  await page.fill('#password2', 'long-enough-2');
+  await page.click('#saveBtn');
+  await expect(page.locator('#errorMsg')).toHaveText(/do not match/);
+  await expect(page.locator('#formState')).toBeVisible();
+});
+
+test('an account with an authenticator must enter its code to reset the password', async ({ page, browser }) => {
+  const u = await makeUser({ name: 'Reset With MFA' });
+  const secret = b32encode(randomBytes(20)); // fresh per run
+  // Written as Supabase Auth's own role, as the stand-in does on enrolment.
+  const c = await db.connect();
+  try {
+    await c.query('begin');
+    await c.query('set local session authorization supabase_auth_admin');
+    await c.query(`insert into auth.mfa_factors(user_id, friendly_name, factor_type, status, secret) values ($1, 'Phone', 'totp', 'verified', $2)`, [u.id, secret]);
+    await c.query('commit');
+  } finally { c.release(); }
+  await page.goto('/login.html');
+  await page.fill('#email', u.email);
+  await page.click('#forgotBtn');
+  await expect(page.locator('#okMsg')).toHaveText(SENT);
+  const [mail] = await mailFor(u.email);
+  await page.goto(mail.link);
+  await page.fill('#password', 'mfa-reset-pass-1');
+  await page.fill('#password2', 'mfa-reset-pass-1');
+  await page.click('#saveBtn');
+  // Cancelling the code leaves the password unchanged.
+  await expect(page.locator('#mfaCode')).toBeVisible();
+  await page.click('[data-role="cancel"]');
+  await expect(page.locator('#errorMsg')).toHaveText(/Password not changed/);
+  await page.click('#saveBtn');
+  await expect(page.locator('#mfaCode')).toBeVisible();
+  await page.fill('#mfaCode', totp(secret));
+  await page.click('[data-role="ok"]');
+  await expect(page.locator('#doneState')).toBeVisible();
+  const fresh = await (await browser.newContext()).newPage();
+  await login(fresh, { ...u, password: 'mfa-reset-pass-1' });
+  await expect(fresh.locator('#mfaCode')).toBeVisible();
+});
+
+test('branded-template link: nothing is used until Continue; a second use is refused', async ({ page }) => {
+  const u = await makeUser({ name: 'Token Hash' });
+  await page.goto('/login.html');
+  await page.fill('#email', u.email);
+  await page.click('#forgotBtn');
+  await expect(page.locator('#okMsg')).toHaveText(SENT);
+  const [mail] = await mailFor(u.email);
+  const link = `${ORIGIN}/reset.html?token_hash=${mail.tokenHash}&type=recovery`;
+  await page.goto(link);
+  await expect(page.locator('#confirmState')).toBeVisible();
+  // The one-time hash leaves the address bar before anything else loads.
+  expect(page.url()).toBe(`${ORIGIN}/reset.html`);
+  await page.click('#continueBtn');
+  await expect(page.locator('#formState')).toBeVisible();
+  await page.fill('#password', 'token-hash-pass-1');
+  await page.fill('#password2', 'token-hash-pass-1');
+  await page.click('#saveBtn');
+  await expect(page.locator('#doneState')).toBeVisible();
+  // Reusing the same link fails safely.
+  await page.goto(link);
+  await page.click('#continueBtn');
+  await expect(page.locator('#linkState')).toBeVisible();
+  await expect(page.locator('#linkTitle')).toHaveText('This link no longer works');
 });

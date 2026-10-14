@@ -392,6 +392,10 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/withdraw_cooldown_all_paths_test.sql
 
+      - name: Telegram never names an account by email (20261014070000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/telegram_no_email_test.sql
       - name: Wallet lease health probe (20261013040000)
         env:
           PGPASSWORD: postgres

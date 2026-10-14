@@ -36,6 +36,11 @@ no new table, RPC or permission was added. Unlink signs the wallet out;
 "Unlink and sign out everywhere" revokes all of the member's sessions.
 The recovery phrase and keys are never part of linking.
 
+## Testing
+
+What is proven, by which test, and the Android and mainnet procedures:
+[WALLET-TESTING.md](WALLET-TESTING.md).
+
 ## Publishing and release checks
 
 Publishing steps are in [wallet/README.md](../wallet/README.md) (API key,

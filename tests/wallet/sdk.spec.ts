@@ -38,6 +38,7 @@ test('live regtest: phrase made on the device, wallet connects, invoice created'
   page.on('request', (r: Request) => bodies.push(`${r.url()}\n${r.postData() || ''}`));
   await page.goto('/');
   await page.getByRole('button', { name: 'Create a new wallet' }).click();
+  await expect(page.locator('#words li')).toHaveCount(12);
   const words = await page.locator('#words li').allTextContents();
   await page.getByLabel('I wrote the 12 words down on paper.').check();
   await page.locator('#backupNext').click();

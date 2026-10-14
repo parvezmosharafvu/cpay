@@ -16,7 +16,7 @@
 #threadList{min-height:180px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="reauth.js"></script>
+<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="mfa.js"></script><script src="reauth.js"></script>
 <script src="daily-desk.js?v=3"></script>
 </head>
 <body>
@@ -37,6 +37,7 @@
     <button type="button" class="navi" data-tab="receipts">Receipt review</button>
     <button type="button" class="navi" data-tab="system">System</button>
     <button type="button" class="navi" data-tab="audit">Audit</button>
+    <button type="button" class="navi" data-tab="security">Security</button>
     <button type="button" class="navi" data-tab="chat">Inbox</button>
     <button type="button" class="navi" id="logoutBtn">Log out</button>
   </aside>
@@ -58,6 +59,7 @@
     <section id="receipts" hidden></section>
     <section id="system" hidden></section>
     <section id="audit" hidden></section>
+    <section id="security" hidden></section>
     <section id="chat" hidden></section>
     <section id="apps" hidden></section>
   </main>
@@ -84,5 +86,6 @@
 <script src="admin-ops-gates.js?v=25"></script>
 <script src="admin-receipt-reviews.js?v=1"></script>
 <script src="admin-home-live.js?v=26"></script>
+<script src="admin-security.js?v=1"></script>
 </body>
 </html>

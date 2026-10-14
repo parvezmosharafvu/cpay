@@ -88,6 +88,7 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('get_my_account_state()',                                                  'self',          'caller''s own data: get my account state (auth.uid())'),
   ('get_my_analytics()',                                                      'self',          'caller''s own data: get my analytics (auth.uid())'),
   ('get_my_balance()',                                                        'self',          'caller''s own data: get my balance (auth.uid())'),
+  ('record_mfa_challenge_failure()',                                          'self',          'writes one audit row for the caller (auth.uid()) after a wrong MFA code; at most 20 an hour'),
   ('get_my_insights()',                                                       'self',          'caller''s own data: get my insights (auth.uid())'),
   ('get_my_payment_marks()',                                                  'self',          'caller''s own data: get my payment marks (auth.uid())'),
   ('get_my_payments(integer, integer, text, text)',                           'self',          'caller''s own data: get my payments (auth.uid())'),

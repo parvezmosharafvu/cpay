@@ -3,14 +3,16 @@
 CPAY is a separate system. Completing this checklist must not require a
 change to the previous production project.
 
-**Chat 5 status (2026-10-07 Asia/Dhaka):** **CONDITIONAL GO** — automated
-code/QA on stack tip is green; High **ops** items (orphans, Telegram secrets,
-prod migration `20261007040000`, staging money path, PR stack merge) remain
-**OPEN**. Do not call production-ready until those are closed or explicitly
-accepted by the owner with dated evidence.
+**Status 2026-10-14 (Asia/Dhaka):** **CONDITIONAL GO.** Code and CI are
+green on main. Of the 2026-10-07 High ops items, the orphan functions (H3),
+the production migration and the PR stack are done; Telegram alerting (H4)
+works in production but waits for owner confirmation of the channel (see
+below). Still open: admin MFA (code, then owner), legal pages, the freeze
+test and the small-value mainnet pilot. `docs/RELEASE-BLOCKERS.md` is what
+the release gate reads.
 
-Evidence branch: `release/chat5-qa` (from Chat 4 tip `4540043`). main not
-updated until stack merges.
+History: the 2026-10-07 (Chat 5) review used branch `release/chat5-qa`; that
+stack (#28–#33) is merged.
 
 ## Repository and database
 
@@ -18,7 +20,7 @@ updated until stack merges.
 - [x] `npm run build` passes. *(Chat 5)*
 - [ ] A backup or snapshot exists for the new CPAY Supabase project. **OPEN (owner)**
 - [x] Migrations apply in order on empty/CI DB (122 files; uniqueness check). *(CI + Chat 1/5 local)*
-- [ ] Migration history and the live **production** schema agree (incl. apply `20261007040000`). **OPEN (owner)**
+- [x] Migration history and the live **production** schema agree (incl. `20261007040000`). *(read-only check 2026-10-14: latest applied = latest in repo, `20261013090000`; re-check whenever a new migration merges)*
 - [x] RLS / allowlist / search-path checks pass on privcheck-style DB. *(Chat 5: anon + authenticated allowlists, sweep)*
 - [x] Rollback / restore plan documented. *(docs/BACKUP-RECOVERY.md, RELEASE-CHECKLIST.md)*
 
@@ -27,6 +29,7 @@ updated until stack merges.
 - [x] Suspended/pending/rejected gates covered in SQL + Deno admin-auth tests. *(unit/SQL; live admin UI exercise still manual)*
 - [ ] An admin has exercised approve/suspend on **staging** with a real session. **OPEN (manual)**
 - [ ] Emergency suspension verified on staging public pages. **OPEN (manual)**
+- [ ] Admin MFA protects sign-in and payouts (aal2), rolled out without lockout. **OPEN (code PRs, then owner enrolment)**
 - [x] UI: admin Status control + filters present; server RPCs authoritative. *(Chat 3 + unit tests)*
 
 ## Payment provider and events
@@ -59,18 +62,18 @@ updated until stack merges.
 - [ ] Admin → Health preflight reviewed on live/staging. **OPEN (owner)**
 - [ ] Staging sign-off ledger complete. **OPEN (owner)**
 - [ ] Cron health with rotated secret observed. **OPEN (owner)**
-- [ ] Daily reconciliation, ledger backup, alert delivery observed. **OPEN — alerts blocked until Telegram secrets (H4)**
+- [ ] Daily reconciliation, ledger backup, alert delivery observed. **OPEN (owner confirmation)** — 2026-10-14: `ledger-backup` and `daily-report` crons succeeded 7/7 days, `cpay-health` runs every 15 min since 2026-10-13, Telegram delivers; the owner still has to confirm the alert channel (H4)
 - [x] Owner has runbooks + emergency-stop docs. *(RUNBOOKS, INCIDENT, OPS_OWNER_CUTOVER)*
 - [ ] Controlled production rollout planned after ops cutover. **OPEN (owner)**
 
-## Remaining High ops (block full GO)
+## High ops from 2026-10-07 (block full GO until closed)
 
-| ID | Item | Doc |
+| ID | Item | Status |
 |---|---|---|
-| H3 | Orphan Edge Functions still ACTIVE (`reconcile`, `reseller-digest`, `telegram-report`) | OPS_OWNER_CUTOVER.md |
-| H4 | Telegram bot secrets unset / outbox 503 risk | OPS_OWNER_CUTOVER.md |
-| Mig | Apply `20261007040000` + redeploy `user-withdraw` on production | OPS_OWNER_CUTOVER.md §C |
-| Stack | Merge PR stack #28→#29→#30→#32→#33 (chat5) without force-merging red #28 Pages | RELEASE-CHECKLIST.md |
+| H3 | Orphan Edge Functions (`reconcile`, `reseller-digest`, `telegram-report`) | Closed 2026-10-07 (AUDIT) |
+| H4 | Telegram alert secrets / outbox | Secrets set and delivering (2026-10-14 evidence in OPS_OWNER_CUTOVER §B); **open until the owner confirms the intended admin group received the 2026-10-13 test alert** |
+| Mig | `20261007040000` + `user-withdraw` redeploy | Done (verified 2026-10-14) |
+| Stack | PR stack #28→#33 | Merged |
 
 Do not call CPAY production-ready until every unchecked item has a named
 owner, documented exception or completed test result.

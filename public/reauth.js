@@ -1,7 +1,9 @@
 // Step-up sign-in for payouts. When a confirm answers code "reauth_required"
-// (the last real sign-in is older than a few minutes), ask for the password
-// in a small dialog, sign in again with the same email, and let the caller
-// retry once. The password goes only to Supabase Auth.
+// (the last real sign-in is older than a few minutes, or the account has an
+// authenticator and the session is not aal2), ask for the password in a
+// small dialog, sign in again with the same email, then ask for the
+// authenticator code when one is enrolled (mfa.js), and let the caller retry
+// once. The password and the code go only to Supabase Auth.
 (function () {
   function ask(message) {
     return new Promise((resolve) => {
@@ -38,6 +40,14 @@
           const { error } = await sb.auth.signInWithPassword({ email, password: pw.value });
           pw.value = '';
           if (error) throw new Error('That password is not right.');
+          // A password sign-in is aal1. With an authenticator enrolled the
+          // payout needs aal2, so ask for the code now instead of sending the
+          // user round the password dialog again (mfa.js).
+          if (window.cpayMfa && await window.cpayMfa.needsChallenge()) {
+            dlg.close(); dlg.remove();
+            resolve(await window.cpayMfa.promptCode('Enter the code from your authenticator app to confirm this payout.'));
+            return;
+          }
           done(true);
         } catch (x) {
           err.textContent = x.message || 'Could not confirm. Try again.';

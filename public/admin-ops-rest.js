@@ -4,6 +4,7 @@ const OPS_LABEL = {
   emergency_withdrawals_stop: 'Stop withdrawals',
   manual_withdrawals_enabled: 'Manual withdrawals',
   auto_withdraw_enabled: 'Auto-queue USDT payouts',
+  admin_mfa_required: 'Require two-step sign-in for admins',
   pending_count: 'Waiting', pending_amount: 'Waiting amount', processing_count: 'Processing',
   last_webhook_at: 'Last webhook', last_daily_stat_at: 'Last daily close',
   last_settled_at: 'Last settled payment', oldest_pending_payment_at: 'Oldest unpaid invoice',
@@ -40,6 +41,7 @@ const FLAG_ROWS = [
   ['emergency_withdrawals_stop', 'Emergency: stop withdrawals'],
   ['manual_withdrawals_enabled', 'Manual withdrawals enabled'],
   ['hide_small_payments_enabled', 'Global hide-small-payments'],
+  ['admin_mfa_required', 'Require two-step sign-in for admins'],
 ];
 async function renderFlagsLive() {
   if (typeof renderFlags === 'function') return renderFlags();

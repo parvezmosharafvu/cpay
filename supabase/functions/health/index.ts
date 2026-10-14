@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
+import { stepUpWindow } from "../_shared/step-up.ts";
+import { adminMfaHealth } from "../_shared/admin-mfa.ts";
 
 /**
 * CPAY — health monitor
@@ -300,6 +302,34 @@ Deno.serve(async (req) => {
         detail: cf === 0 ? "no failed pg_cron run in the last hour" : `${cf} failed pg_cron run(s) in the last hour (cron.job_run_details)`,
       });
     }
+  }
+
+  // ---------- Security configuration (admin two-step sign-in) ----------
+  // Unsafe, so alerted: payout step-up switched off (STEP_UP_MAX_AGE_SECONDS
+  // = 0); admin two-step sign-in required while an active admin has no
+  // authenticator (they cannot get in); or ADMIN_MFA_EXPECTED=true (the
+  // owner sets it after rollout) while it is not required. Only states are
+  // reported here, never a secret value.
+  const stepUpOff = stepUpWindow(Deno.env.get("STEP_UP_MAX_AGE_SECONDS")) === 0;
+  checks.push({
+    name: "payout_step_up",
+    ok: !stepUpOff,
+    runbook: "docs/RUNBOOKS.md#payout-safety-step-up-and-address-cooldown",
+    detail: stepUpOff ? "STEP_UP_MAX_AGE_SECONDS is 0: payout confirms no longer ask for a recent sign-in" : "payout confirms require a recent sign-in",
+  });
+  const { data: mfa, error: mfaErr } = await supabase.rpc("admin_mfa_status");
+  if (mfaErr) {
+    // Before migration 20261014030000 is applied the function does not exist:
+    // report it without paging anyone.
+    const missing = mfaErr.code === "PGRST202" || mfaErr.code === "42883";
+    checks.push({
+      name: "admin_mfa", ok: false, informational: missing, runbook: "docs/RUNBOOKS.md#two-step-sign-in-admin-mfa",
+      detail: missing ? "admin_mfa_status() not found: apply migration 20261014030000" : `admin_mfa_status failed: ${mfaErr.message}`,
+    });
+  } else {
+    const expected = (Deno.env.get("ADMIN_MFA_EXPECTED") ?? "").trim().toLowerCase() === "true";
+    const v = adminMfaHealth((mfa ?? null) as Record<string, unknown> | null, expected);
+    checks.push({ name: "admin_mfa", ok: v.ok, detail: v.detail, runbook: "docs/RUNBOOKS.md#two-step-sign-in-admin-mfa" });
   }
 
   const failing = checks.filter((c) => !c.ok && !c.informational);

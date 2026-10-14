@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="cpay.css">
 <link rel="stylesheet" href="a11y.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script>
+<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="mfa.js"></script>
 </head>
 <body class="auth">
   <a class="skip-link" href="#loginCard">Skip to form</a>
@@ -34,7 +34,19 @@ const errEl = () => document.getElementById('errorMsg');
 const okEl = () => document.getElementById('okMsg');
 function showErr(t){ const e=errEl(); e.textContent=t; e.hidden=false; okEl().hidden=true; }
 function showOk(t){ const o=okEl(); o.textContent=t; o.hidden=false; errEl().hidden=true; }
+// An account with an authenticator finishes signing in with its code (aal2).
+// Cancelling, or too many wrong codes, signs out again, so a reload shows the
+// form instead of prompting in a loop.
+async function finishSecondStep(){
+  if (!window.cpayMfa) return true;
+  if (await window.cpayMfa.ensureAal2('Enter the 6-digit code from your authenticator app to finish signing in.')) return true;
+  await window.supabaseClient.auth.signOut();
+  showErr('Sign-in not finished: the authentication code was not confirmed.');
+  const btn = document.getElementById('submitBtn'); if (btn) btn.disabled = false;
+  return false;
+}
 async function go(id){
+  if (!(await finishSecondStep())) return;
   const { data } = await window.supabaseClient.from('profiles').select('role,account_status').eq('id', id).single();
   if (data?.account_status && data.account_status !== 'active'){
     await window.supabaseClient.auth.signOut();

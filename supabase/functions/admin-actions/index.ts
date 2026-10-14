@@ -109,6 +109,14 @@ const WALLET_ACTIONS: Record<string, string[]> = {
 const verifyAdminCaller = createAdminVerifier({
     supabaseUrl: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY, supabaseAdmin,
 });
+// 401 for "not an active admin"; 403 mfa_required when two-step sign-in is
+// required and this session has not entered its code (aal1).
+function refuse(auth: { reason?: string }, cors: Record<string, string>) {
+    if (auth.reason === "mfa_required") {
+        return json({ error: "Two-step sign-in is required: sign in again and enter your authenticator code.", code: "mfa_required" }, 403, cors);
+    }
+    return json({ error: "Unauthorized" }, 401, cors);
+}
 Deno.serve(async (req) => {
     const cors = await corsHeaders(req);
     if (req.method === "OPTIONS") return new Response(null, { headers: cors });
@@ -119,7 +127,7 @@ Deno.serve(async (req) => {
     // ==========================================
     if (url.pathname.endsWith("/admin-mark-settled")) {
         const auth = await verifyAdminCaller(req);
-        if (!auth.ok) return json({ error: "Unauthorized" }, 401, cors);
+        if (!auth.ok) return refuse(auth, cors);
         try {
             const { paymentId, amountSettled } = await req.json();
             if (!paymentId) return json({ error: "paymentId required" }, 400, cors);
@@ -148,7 +156,7 @@ Deno.serve(async (req) => {
     // ==========================================
     if (url.pathname.endsWith("/process-withdrawal")) {
         const auth = await verifyAdminCaller(req);
-        if (!auth.ok) return json({ error: "Unauthorized" }, 401, cors);
+        if (!auth.ok) return refuse(auth, cors);
         try {
             const { withdrawalId, action } = await req.json();
             if (!withdrawalId) return json({ error: "withdrawalId required" }, 400, cors);
@@ -192,7 +200,7 @@ Deno.serve(async (req) => {
     // ==========================================
     if (url.pathname.endsWith("/admin-wallet")) {
         const auth = await verifyAdminCaller(req);
-        if (!auth.ok) return json({ error: "Unauthorized" }, 401, cors);
+        if (!auth.ok) return refuse(auth, cors);
         let body: Record<string, unknown>;
         try { body = await req.json(); } catch { return json({ error: "Invalid JSON body" }, 400, cors); }
         const action = String(body.action ?? "");

@@ -1,4 +1,5 @@
-// Admin → Security: two-step sign-in (TOTP authenticators).
+// Security: two-step sign-in (TOTP authenticators), on the admin desk
+// (Admin → Security) and the Freelancer desk (Security).
 //
 // Enrolling the first authenticator works from a normal (aal1) session.
 // Adding another, or removing one, needs the current code first (aal2);
@@ -14,6 +15,7 @@
   const root = () => document.querySelector('main > section#security');
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   const say = (msg, ok) => { if (typeof toast === 'function') toast(msg, ok); };
+  const adminDesk = /\/admin(\.html)?$/.test(location.pathname);
 
   async function removeUnverified(all) {
     for (const f of all) if (f.status !== 'verified') await sb.auth.mfa.unenroll({ factorId: f.id }).catch(() => {});
@@ -22,6 +24,7 @@
   // app_settings.admin_mfa_required (Admin → Settings). While it is on, an
   // admin's last authenticator cannot be removed (the database refuses too).
   async function required() {
+    if (!adminDesk) return false;
     const { data } = await sb.from('app_settings').select('value').eq('key', 'admin_mfa_required').maybeSingle();
     return data?.value === true || data?.value === 'true';
   }
@@ -43,7 +46,9 @@
       ? `On: ${verified.length} authenticator${verified.length > 1 ? 's' : ''}. Sign-in and payouts ask for a code.`
       : 'Off. Signing in needs only your password.'));
     if (enforced) card.append(el('p', 'ok', 'Required for every admin (Admin → Settings).'));
-    card.append(el('p', 'hint', 'Add two authenticators (your phone and a backup device kept somewhere safe). CPAY cannot show recovery codes: if you lose every authenticator, recovery is the owner break-glass procedure in the runbooks.'));
+    card.append(el('p', 'hint', adminDesk
+      ? 'Add two authenticators (your phone and a backup device kept somewhere safe). CPAY cannot show recovery codes: if you lose every authenticator, recovery is the owner break-glass procedure in the runbooks.'
+      : 'Use an authenticator app such as Google Authenticator, Microsoft Authenticator or 1Password. Add a second one on a backup device: CPAY cannot show recovery codes, so if you lose every authenticator you need to contact support to prove it is your account.'));
 
     if (verified.length) {
       const list = el('ul', 'list');

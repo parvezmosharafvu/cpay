@@ -132,6 +132,15 @@ refuses). Both are checked server-side.
 Admin → **Security** turns on two-step sign-in (TOTP authenticator apps).
 After that, signing in and every payout confirm ask for the 6-digit code;
 the payout step-up asks for the password, then the code (aal2).
+Freelancers have the same screen on their desk (**Security** tab).
+
+**Once enrolled, aal2 is required (migration 20261014080000).** An admin
+with a verified authenticator is an admin only in an aal2 session, even
+while the flag below is off: `is_admin()` and the admin-actions and
+auth-settings gates refuse a password-only token (for example from a
+password-reset link). Admins without an authenticator are unaffected, so
+this cannot lock anyone out. A password reset for an account with an
+authenticator also asks for the code before the new password is saved.
 
 - **Enrol two authenticators**: your phone and a backup device kept
   offline. CPAY shows no recovery codes, so the second authenticator is the

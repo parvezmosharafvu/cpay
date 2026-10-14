@@ -38,6 +38,13 @@ const ADMIN_AAL1 = tok("aal1"), ADMIN_AAL2 = tok("aal2"), SUSPENDED_AAL2 = `${to
 PEOPLE[ADMIN_AAL1] = ["00000000-0000-4000-8000-0000000000a1", { role: "admin", account_status: "active" }];
 PEOPLE[ADMIN_AAL2] = ["00000000-0000-4000-8000-0000000000a1", { role: "admin", account_status: "active" }];
 PEOPLE[SUSPENDED_AAL2] = ["00000000-0000-4000-8000-0000000000a2", { role: "admin", account_status: "suspended" }];
+// An admin with a verified authenticator (auth/v1/user lists it), and one
+// whose only factor is still unverified.
+const ENROLLED_AAL1 = `${tok("aal1")}e`, ENROLLED_AAL2 = `${tok("aal2")}e`, UNVERIFIED_AAL1 = `${tok("aal1")}u`;
+for (const j of [ENROLLED_AAL1, ENROLLED_AAL2, UNVERIFIED_AAL1]) PEOPLE[j] = ["00000000-0000-4000-8000-0000000000a5", { role: "admin", account_status: "active" }];
+const FACTORS: Record<string, Array<{ status: string }>> = {
+    [ENROLLED_AAL1]: [{ status: "verified" }], [ENROLLED_AAL2]: [{ status: "verified" }], [UNVERIFIED_AAL1]: [{ status: "unverified" }],
+};
 // app_settings.admin_mfa_required as the fake database holds it:
 // undefined = no row, "error" = the read fails.
 let mfaSetting: unknown = undefined;
@@ -48,7 +55,7 @@ const sb = Deno.serve({ hostname: "127.0.0.1", port: 0, onListen() {} }, (req) =
     if (url.pathname === "/auth/v1/user") {
         const p = PEOPLE[bearer];
         if (!p) return Response.json({ code: 401, msg: "invalid JWT" }, { status: 401 });
-        return Response.json({ id: p[0], aud: "authenticated", role: "authenticated" });
+        return Response.json({ id: p[0], aud: "authenticated", role: "authenticated", factors: FACTORS[bearer] ?? [] });
     }
     if (url.pathname === "/rest/v1/profiles") {
         profileSelects.push(url.searchParams.get("select") ?? "");
@@ -130,6 +137,15 @@ Deno.test({
                 mfaSetting = v;
                 eq((await call(ADMIN_AAL1)).ok, true, `flag ${String(v)}`);
             }
+            mfaSetting = undefined;
+        });
+
+        await t.step("admin MFA off: an admin with a verified authenticator still needs aal2", async () => {
+            mfaSetting = false;
+            const r = await call(ENROLLED_AAL1);
+            eq([r.ok, r.reason, r.callerClient], [false, "mfa_required", undefined], "enrolled, aal1");
+            eq((await call(ENROLLED_AAL2)).ok, true, "enrolled, aal2");
+            eq((await call(UNVERIFIED_AAL1)).ok, true, "unverified factor only: aal1 passes (no lock-out)");
             mfaSetting = undefined;
         });
 

@@ -1,0 +1,17 @@
+<!-- CPAY password reset: paste into Supabase → Authentication → Emails →
+     Templates → "Reset password" (Message body). Subject: Reset your CPAY password
+     The link opens reset.html, which uses the one-time hash only when the
+     person taps Continue, so a mail scanner that opens links cannot use it
+     up. It does not depend on the Redirect URLs list. Needs Site URL =
+     https://pay-cashapp.buzz. No email address or account detail appears. -->
+<div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#111827">
+  <p style="font-size:18px;font-weight:700;margin:0 0 16px">CPAY</p>
+  <h2 style="font-size:20px;margin:0 0 12px">Reset your password</h2>
+  <p style="margin:0 0 16px;line-height:1.5">Someone asked to reset the password for your CPAY account. Tap the button to choose a new one. The link works once and expires after about an hour.</p>
+  <p style="margin:0 0 24px">
+    <a href="{{ .SiteURL }}/reset.html?token_hash={{ .TokenHash }}&amp;type=recovery"
+       style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">Choose a new password</a>
+  </p>
+  <p style="margin:0 0 8px;line-height:1.5;color:#4b5563;font-size:14px">If you did not ask for this, ignore this email: your password stays the same.</p>
+  <p style="margin:0;line-height:1.5;color:#4b5563;font-size:14px">CPAY never asks for your password or authentication code by email or chat.</p>
+</div>

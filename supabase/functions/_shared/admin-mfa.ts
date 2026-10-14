@@ -1,7 +1,8 @@
 // Admin two-step sign-in enforcement (20261014030000), shared by every admin
 // gate in Edge Functions (admin-actions, auth-settings). Same rule as the
-// database's is_admin(): when app_settings.admin_mfa_required is on, an
-// admin session must be aal2.
+// database's is_admin(): an admin session must be aal2 when
+// app_settings.admin_mfa_required is on, or when that admin has a verified
+// authenticator (20261014080000).
 import { decodeJwtPayload } from "./step-up.ts";
 
 // A JSON boolean true, or the string "true", turns enforcement on (fail
@@ -21,6 +22,11 @@ export async function adminMfaEnforced(supabaseAdmin: SettingsReader): Promise<b
         .from("app_settings").select("value").eq("key", "admin_mfa_required").maybeSingle();
     if (error) return true;
     return mfaFlagOn(data?.value);
+}
+
+// The user object from auth.getUser() lists the account's factors.
+export function hasVerifiedFactor(user: { factors?: Array<{ status?: string }> | null } | null | undefined): boolean {
+    return (user?.factors ?? []).some((f) => f?.status === "verified");
 }
 
 // Only after auth.getUser() accepted the same token (claims unverified here).

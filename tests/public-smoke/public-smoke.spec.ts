@@ -107,6 +107,7 @@ test('freelancer desk lists Download wallet without changing its tabs', async ({
   await page.goto('/dashboard.html', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('.side a.navi[href="/assets/wallet.html"]')).toHaveText('Download wallet');
   const tabs = await page.locator('.side .navi[data-tab]').evaluateAll((b) => b.map((x) => x.getAttribute('data-tab')));
-  expect(tabs).toEqual(['home', 'links', 'pay', 'cash', 'chat', 'profile']);
+  // 'security' (two-step sign-in) was added on purpose after Download wallet.
+  expect(tabs).toEqual(['home', 'links', 'pay', 'cash', 'chat', 'profile', 'security']);
   await context.close();
 });

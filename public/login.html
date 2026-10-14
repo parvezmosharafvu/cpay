@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
 <link rel="stylesheet" href="a11y.css">
+<script src="auth-link.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
 <script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="mfa.js"></script>
 </head>
@@ -74,26 +75,26 @@ document.getElementById('submitBtn').onclick = async () => {
     btn.disabled = false;
   }
 };
+// Never says whether an account exists for the email (auth-link.js).
 document.getElementById('forgotBtn').onclick = async () => {
+  const btn = document.getElementById('forgotBtn');
+  if (btn.disabled) return;
   const email = document.getElementById('email').value.trim();
-  if (!email){ showErr('Enter your email first, then tap Forgot password.'); return; }
-  const btn = document.getElementById('forgotBtn'); btn.disabled = true;
-  let error;
-  try {
-    ({ error } = await window.supabaseClient.auth.resetPasswordForEmail(email, {
-      redirectTo: `${location.origin}/reset.html`,
-    }));
-  } catch (e) {
-    error = { message: 'Could not reach the server. Check your connection and try again.' };
-  } finally {
-    btn.disabled = false;
+  if (!email){ showErr('Enter your email first, then tap Forgot password.'); document.getElementById('email').focus(); return; }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  const r = await window.cpayResetRequest.requestReset(email);
+  if (r !== 'sent'){
+    btn.disabled = false; btn.textContent = 'Forgot password?';
+    showErr(r === 'invalid' ? 'Enter a valid email address.' : 'Could not reach the server. Check your connection and try again.');
+    return;
   }
-  if (error){ showErr(error.message); return; }
-  showOk('Check your email for a reset link. It opens this site so you can set a new password.');
+  showOk(window.cpayResetRequest.SENT);
+  window.cpayResetRequest.cooldown(btn, 'Forgot password?');
 };
 document.getElementById('password').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('submitBtn').click(); });
 window.addEventListener('DOMContentLoaded', async () => {
   if (window.applyDomainTheme) await applyDomainTheme();
+  if (new URLSearchParams(location.search).get('reset') === 'done') showOk('Password updated. Log in with your new password.');
   const { data:{ session } } = await window.supabaseClient.auth.getSession();
   if (session) await go(session.user.id);
 });

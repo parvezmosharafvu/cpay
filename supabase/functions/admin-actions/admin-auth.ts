@@ -6,12 +6,13 @@
 // that act with the service role (/process-withdrawal) or forward to the
 // payment service (/admin-wallet), where no is_admin() check would run.
 //
-// When app_settings.admin_mfa_required is on (20261014030000), the session
-// must also be aal2, the same rule as is_admin(). A settings read failure
+// The session must also be aal2 when app_settings.admin_mfa_required is on
+// (20261014030000) or when the admin has a verified authenticator
+// (20261014080000), the same rule as is_admin(). A settings read failure
 // fails closed: admin actions are refused rather than run without the check.
 // @ts-ignore The local TypeScript server cannot resolve URL imports without Deno's resolver.
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
-import { adminMfaEnforced, mfaFlagOn, sessionIsAal2 } from "../_shared/admin-mfa.ts";
+import { adminMfaEnforced, hasVerifiedFactor, mfaFlagOn, sessionIsAal2 } from "../_shared/admin-mfa.ts";
 export { mfaFlagOn };
 
 export type AdminProfile = { role?: string | null; account_status?: string | null } | null | undefined;
@@ -34,7 +35,7 @@ export function createAdminVerifier(opts: { supabaseUrl: string; anonKey: string
         const { data: profile } = await opts.supabaseAdmin
             .from("profiles").select("role, account_status").eq("id", user.id).single();
         if (!isActiveAdmin(profile)) return { ok: false };
-        if (await adminMfaEnforced(opts.supabaseAdmin) && !sessionIsAal2(authHeader)) {
+        if (!sessionIsAal2(authHeader) && (hasVerifiedFactor(user) || await adminMfaEnforced(opts.supabaseAdmin))) {
             return { ok: false, reason: "mfa_required" };
         }
         return { ok: true, userId: user.id, callerClient };

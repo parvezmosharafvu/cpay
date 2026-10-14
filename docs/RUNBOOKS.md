@@ -127,6 +127,33 @@ Admin panel (emergency controls): **emergency payments stop** (create-invoice re
 new invoices) and **emergency withdrawals stop** (every withdrawal path
 refuses). Both are checked server-side.
 
+## Two-step sign-in (admin MFA)
+
+Admin → **Security** turns on two-step sign-in (TOTP authenticator apps).
+After that, signing in and every payout confirm ask for the 6-digit code;
+the payout step-up asks for the password, then the code (aal2).
+
+- **Enrol two authenticators**: your phone and a backup device kept
+  offline. CPAY shows no recovery codes, so the second authenticator is the
+  recovery path.
+- **Audit**: enrol, verify and remove write `security.mfa.*` rows to
+  `audit_log`; wrong codes write `security.mfa.challenge_failed` (at most
+  20 an hour per user). The factor secret is never stored there.
+- **Never** paste a code, QR image or authenticator key into a ticket or chat.
+
+**Break-glass (every authenticator lost).** Only the owner, from the
+Supabase dashboard, whose own login must have MFA. Do not disable security
+globally instead.
+
+```sql
+select id, friendly_name, status, created_at from auth.mfa_factors
+ where user_id = (select id from auth.users where email = '<admin email>');
+delete from auth.mfa_factors where id = '<factor id>';
+-- audit_log: security.mfa.factor_removed_by_operator
+```
+
+Then sign in with the password and enrol two new authenticators at once.
+
 ## Payout safety: step-up and address cooldown
 
 - **Step-up** (`_shared/step-up.ts`): confirming a payout needs a sign-in in

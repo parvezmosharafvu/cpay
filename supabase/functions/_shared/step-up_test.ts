@@ -42,3 +42,14 @@ Deno.test("malformed tokens never pass", () => {
   eq(checkStepUp("a.!!!.c", null, 600, NOW).ok, false, "bad b64");
   eq(decodeJwtPayload("x.e30.y") !== null, true, "empty object decodes");
 });
+
+Deno.test("password then TOTP (what reauth.js now produces) passes; aal2 with a stale TOTP does not", () => {
+  const factors = { factors: [{ status: "verified" }] };
+  const fresh = tok({ sub: "u", aal: "aal2", amr: [{ method: "totp", timestamp: NOW - 5 }, { method: "password", timestamp: NOW - 20 }] });
+  eq(checkStepUp(fresh, factors, 600, NOW).ok, true, "fresh password + totp, aal2");
+  const mfaOnly = tok({ sub: "u", aal: "aal2", amr: [{ method: "mfa/totp", timestamp: NOW - 5 }] });
+  eq(checkStepUp(mfaOnly, factors, 600, NOW).ok, true, "mfa/totp spelling");
+  const stale = tok({ sub: "u", aal: "aal2", amr: [{ method: "totp", timestamp: NOW - 3600 }, { method: "password", timestamp: NOW - 3700 }] });
+  const r = checkStepUp(stale, factors, 600, NOW);
+  eq(!r.ok && r.reason, "stale_sign_in", "an hour-old aal2 session still re-authenticates");
+});

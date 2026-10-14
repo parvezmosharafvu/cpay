@@ -15,6 +15,7 @@ Timezone for evidence stamps: **Asia/Dhaka (UTC+6)**.
 | Public copy hygiene | `python3 ci/check_public_copy.py` | No processor names / traditional payout ads |
 | Frontend unit | `node --test tests/frontend/*.mjs` | Desk + design system |
 | No analytics / session replay | `python3 ci/check_frontend.py` | No tracker code, CSP host or SDK dependency |
+| Two-step sign-in (MFA) | `node --test tests/frontend/mfa.test.mjs`, `ci/mfa_audit_test.sql`, `tests/e2e/admin-mfa.spec.ts` | Wiring, audit trail, enrol/challenge/payout journeys |
 | Public Playwright smoke | Serve `public/` then `npx playwright test -c tests/public-smoke/playwright.config.ts` | Static only |
 | payment-service | `DATABASE_URL=postgres://… npm test` in `payment-service/` | Needs Node ≥22 and migrated schema; concurrency 1 |
 | Financial invariants | `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ci/financial_invariants_test.sql` | Settle once, available ≥ 0, `request_withdrawal` closed |

@@ -25,6 +25,10 @@ begin
   if not exists (select 1 from pg_roles where rolname = 'authenticator') then
     create role authenticator noinherit login password 'postgres';
   end if;
+  -- Supabase Auth's own database role (it writes auth.mfa_factors).
+  if not exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then
+    create role supabase_auth_admin nologin;
+  end if;
 end $$;
 
 grant anon, authenticated, service_role to authenticator;
@@ -45,6 +49,21 @@ create table if not exists auth.users (
 );
 create or replace function auth.uid() returns uuid
   language sql stable as $fn$ select null::uuid $fn$;
+-- Supabase Auth's MFA factor table (only the columns CPAY touches; status
+-- and factor_type are enums in production, compared as text here).
+create table if not exists auth.mfa_factors (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  friendly_name text,
+  factor_type text not null default 'totp',
+  status text not null default 'unverified',
+  secret text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  last_challenged_at timestamptz
+);
+grant usage on schema auth to supabase_auth_admin;
+grant select, insert, update, delete on auth.mfa_factors to supabase_auth_admin;
 create or replace function auth.role() returns text
   language sql stable as $fn$ select 'authenticated'::text $fn$;
 create or replace function auth.jwt() returns jsonb

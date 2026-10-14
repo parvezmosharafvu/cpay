@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { stepUpWindow } from "../_shared/step-up.ts";
 import { adminMfaHealth } from "../_shared/admin-mfa.ts";
+import { secretMatches } from "../_shared/secret-compare.ts";
 
 /**
 * CPAY — health monitor
@@ -92,7 +93,7 @@ type Check = {
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
-  const authorised = cronSecret && req.headers.get("x-cron-secret") === cronSecret;
+  const authorised = secretMatches(req.headers.get("x-cron-secret"), cronSecret);
   if (!authorised) return new Response("Unauthorized", { status: 401 });
 
   // Alerts are suppressed for manual runs unless explicitly asked for, so

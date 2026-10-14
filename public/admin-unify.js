@@ -8,7 +8,7 @@ async function adminFn(path, body) {
     body: JSON.stringify(body),
   });
   const payload = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(payload.error || 'Request failed');
+  if (!res.ok) { const err = new Error(payload.error || 'Request failed'); err.code = payload.code; throw err; }
   return payload;
 }
 
@@ -71,7 +71,9 @@ async function renderPayouts() {
     btn.onclick = async () => {
       btn.disabled = true;
       try {
-        await adminFn('process-withdrawal', { withdrawalId: btn.dataset.wd, action: btn.dataset.act });
+        const run = () => adminFn('process-withdrawal', { withdrawalId: btn.dataset.wd, action: btn.dataset.act });
+        // "Mark paid" needs a recent sign-in, like a send (admin-actions step-up).
+        await (window.cpayWithStepUp ? window.cpayWithStepUp(run) : run());
         toast(btn.dataset.act === 'reject' ? 'Rejected' : 'Marked paid', true);
         renderPayouts(); renderHome();
       } catch (e) { toast(e.message); btn.disabled = false; }

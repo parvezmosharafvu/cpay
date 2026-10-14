@@ -65,6 +65,26 @@ jobs:
           fi
           echo "All migration numbers are unique."
 
+      - name: New migrations sort after every migration on main
+        # Supabase applies migrations in version order. A new file numbered
+        # below one main already has (and production may already have
+        # applied) would run out of order or be skipped, as nearly happened
+        # with 20261014010000 after 20261014030000 was applied.
+        run: |
+          git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+          base_max=$(git ls-tree --name-only origin/main supabase/migrations/ | xargs -n1 basename | grep '\.sql$' | cut -d_ -f1 | sort | tail -1)
+          added=$(git diff --name-only --diff-filter=A origin/main HEAD -- supabase/migrations/ | xargs -r -n1 basename | cut -d_ -f1)
+          bad=""
+          for v in $added; do
+            if [ "$(printf '%s\n%s\n' "$v" "$base_max" | sort | tail -1)" != "$v" ] || [ "$v" = "$base_max" ]; then bad="$bad $v"; fi
+          done
+          if [ -n "$bad" ]; then
+            echo "These new migrations sort at or before main's latest ($base_max):$bad"
+            echo "Rename them to a later timestamp (never rename one that is already applied)."
+            exit 1
+          fi
+          echo "New migrations (${added:-none}) all sort after main's latest ($base_max)."
+
       - name: Install psql
         run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
 
@@ -362,6 +382,11 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/withdraw_address_cooldown_test.sql
+
+      - name: Payout address wait holds on every payout path (20261014050000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/withdraw_cooldown_all_paths_test.sql
 
       - name: Wallet lease health probe (20261013040000)
         env:

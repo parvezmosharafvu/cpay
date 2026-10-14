@@ -19,6 +19,8 @@ export const LOCK_WAIT_MS = 20_000;
 export const WALLET_IDLE_MS = 45_000;
 export const HANDOFF_POLL_MS = 200;
 const WANT_LOCK = "select pg_advisory_lock_shared(73501, 2)";
+const ABANDON_STALE_LEASES =
+  "update breez_wallet.lease_log set released_at = now(), outcome = 'abandoned: holder ended without releasing; closed by the next lease' where released_at is null";
 const WANT_UNLOCK = "select pg_advisory_unlock_shared(73501, 2)";
 const WANTED = "select exists(select 1 from pg_locks where locktype = 'advisory' and classid = 73501 and objid = 2 and granted and pid <> pg_backend_pid()) as w";
 // Read-only responses served from breez_wallet.response_cache when fresh,
@@ -120,6 +122,11 @@ export function createHost(deps: HostDeps) {
       if (wanting) await client.query(WANT_UNLOCK).catch(() => {});
       // Re-check after the lock: the owner may have switched back meanwhile.
       if (!(await enabled())) throw new WalletUnavailable(503, "wallet is not enabled on supabase");
+      // Holding the session lock proves no live isolate holds the wallet, so
+      // any lease row still open belongs to one that died without releasing
+      // (killed mid-lease). Close those rows, or health reports a wedged
+      // lease for a whole day although the wallet is fine.
+      await client.query(ABANDON_STALE_LEASES).catch(() => {});
       const { rows } = await client.query(
         "insert into breez_wallet.lease_log (holder) values ($1) returning id", [holder]);
       leaseId = Number(rows[0].id);

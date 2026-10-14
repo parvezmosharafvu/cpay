@@ -5,7 +5,8 @@
 // builds a config; the fake engine is absent from the build.
 // With WALLET_LIVE=1 (needs internet to the Spark regtest network): create
 // a wallet in the page, connect with the on-device phrase, read the
-// balance and create a Lightning invoice. The phrase never appears in any
+// balance, create a Lightning invoice (with its QR) and a regtest deposit
+// address. The phrase never appears in any
 // request.
 import { expect, test, type Request } from '@playwright/test';
 
@@ -53,6 +54,10 @@ test('live regtest: phrase made on the device, wallet connects, invoice created'
   await page.locator('#rcvAmount').fill('1000');
   await page.getByRole('button', { name: 'Create invoice' }).click();
   await expect(page.locator('#rcvInvoice')).toHaveValue(/^lnbcrt/i, { timeout: 60_000 });
+  await expect(page.locator('#rcvQr')).toBeVisible();
+  // The documented regtest funding route: an on-chain deposit address.
+  await page.getByRole('button', { name: 'Show deposit address' }).click();
+  await expect(page.locator('#fundAddr')).toHaveValue(/^bcrt1/, { timeout: 60_000 });
   const phrase = words.join(' ');
   for (const b of bodies) expect(b.includes(words.slice(0, 4).join(' ')) || b.includes(phrase), 'phrase in a request').toBe(false);
 });

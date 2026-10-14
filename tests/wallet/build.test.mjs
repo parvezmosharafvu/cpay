@@ -32,6 +32,9 @@ test('production build: no fake engine, hashes match, strict CSP, offline precac
     assert.equal(createHash('sha256').update(readFileSync(join(r.out, f))).digest('hex'), h, f);
   }
   assert.ok(release.files['vendor/sdk/breez_sdk_spark_wasm_bg.wasm']);
+  assert.equal(release.files['vendor/qrcode.js'], createHash('sha256').update(readFileSync('wallet/node_modules/qrcode-generator/dist/qrcode.mjs')).digest('hex'), 'QR library copied byte for byte');
+  assert.ok(release.files['qr.js']);
+  assert.equal(Object.keys(release.files).some((f) => /jsqr/i.test(f)), false, 'test-only decoder not shipped');
   const headers = readFileSync(join(r.out, '_headers'), 'utf8');
   assert.match(headers, /script-src 'self' 'wasm-unsafe-eval';/);
   assert.match(headers, /default-src 'none'/);

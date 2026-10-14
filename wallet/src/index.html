@@ -21,6 +21,7 @@
   <button type="button" class="ghost" id="lockBtn" hidden>Lock</button>
 </header>
 <main id="main">
+  <p class="banner beta" id="betaBanner" role="note"><strong>Beta.</strong> CPAY Wallet is new. Only use small amounts you can afford to lose while it is being tested. <span id="testNetNote" hidden>This copy runs on the <strong>test network</strong>: its coins have no value.</span></p>
   <p class="banner" id="offline" hidden>You are offline. Your keys stay on this device; payments need a connection.</p>
 
   <section id="s-loading"><p class="muted">Loading…</p></section>
@@ -118,6 +119,7 @@
       </form>
       <div id="rcvOut" hidden>
         <p class="label">Lightning invoice</p>
+        <canvas class="qr" id="rcvQr" role="img" aria-label="QR code of the Lightning invoice" hidden></canvas>
         <textarea id="rcvInvoice" rows="4" readonly></textarea>
         <div class="row"><button type="button" id="rcvCopy">Copy</button><button type="button" id="rcvShare" hidden>Share</button></div>
       </div>
@@ -137,6 +139,19 @@
         <p>Send <strong id="sendSats"></strong> sats, network fee <strong id="sendFee"></strong> sats. This cannot be undone.</p>
         <div class="row"><button type="button" id="sendCancel">Cancel</button><button type="button" class="primary" id="sendGo">Send now</button></div>
       </div>
+    </div>
+
+    <div class="card" id="fundPanel" hidden>
+      <h2>Get test bitcoin (test network only)</h2>
+      <p class="muted small">Send coins from the test network's faucet to this address. After the deposit confirms, the wallet adds it to the balance by itself. Test coins have no value.</p>
+      <div class="row"><button type="button" id="fundBtn">Show deposit address</button></div>
+      <div id="fundOut" hidden>
+        <canvas class="qr" id="fundQr" role="img" aria-label="QR code of the test deposit address" hidden></canvas>
+        <textarea id="fundAddr" rows="2" readonly></textarea>
+        <div class="row"><button type="button" id="fundCopy">Copy address</button></div>
+        <p class="muted small" id="fundPending" hidden></p>
+      </div>
+      <p class="err" id="fundErr" role="alert" hidden></p>
     </div>
 
     <div class="card">

@@ -50,7 +50,11 @@ npx playwright test -c tests/wallet/playwright.config.ts
 ## Limitations of this version
 
 - No unilateral-exit button (supported by the library, see SECURITY.md).
-- No QR code display or camera scan; invoices are copied or shared.
+- Receive shows a QR code; there is no camera scan yet, so invoices to
+  pay are pasted.
+- On-chain deposits: a deposit address is shown only on the test network
+  (regtest), for funding from the faucet. Mainnet builds do not offer it.
+- Beta: the app tells users to use small amounts only.
 - Lightning addresses and LNURL are not supported.
 - Not tested against the live Spark network from this repository's
   sandbox; CI runs the live regtest test (`WALLET_LIVE=1`) where the

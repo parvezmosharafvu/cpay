@@ -20,6 +20,10 @@ export function configProblem() {
   return null;
 }
 
+export function assertRegtest() {
+  if (cfg().network !== 'regtest') throw new Error('Test-bitcoin deposits are only available on the test network.');
+}
+
 const storageDir = () => `cpay-wallet-${cfg().network || 'fake'}`;
 
 export async function createEngine() {
@@ -53,6 +57,19 @@ export async function createEngine() {
     },
     async sparkAddress() {
       return (await sdk.receivePayment({ paymentMethod: { type: 'sparkAddress' } })).paymentRequest;
+    },
+    // On-chain deposit address, REGTEST ONLY: the documented way to fund a
+    // test wallet from the regtest faucet. The library claims a confirmed
+    // deposit into the wallet by itself (within its default claim-fee cap).
+    // Not offered on mainnet: a deposit whose claim fee exceeds the cap
+    // would wait unclaimed, and this version has no screen to handle that.
+    async bitcoinAddress() {
+      assertRegtest();
+      return (await sdk.receivePayment({ paymentMethod: { type: 'bitcoinAddress' } })).paymentRequest;
+    },
+    async unclaimedDeposits() {
+      const { deposits } = await sdk.listUnclaimedDeposits({});
+      return (deposits || []).map((d) => ({ txid: d.txid, vout: d.vout, amountSats: Number(d.amountSats) }));
     },
     // Same two-step send the CPAY server wallet uses: parse, prepare (shows
     // the fee), then send only after the user confirms.

@@ -49,3 +49,24 @@ test('index.html has no inline script or style (strict CSP)', () => {
   assert.equal(/\son[a-z]+\s*=/i.test(html), false, 'inline event handler');
   assert.equal(/<style/i.test(html) || /\sstyle=/i.test(html), false, 'inline style');
 });
+
+test('test-bitcoin deposit addresses exist only on the test network', async () => {
+  const { assertRegtest } = await import('../../wallet/src/engine.js');
+  const { createFakeEngine } = await import('../../wallet/src/fake-engine.js');
+  globalThis.CPAY_WALLET_CONFIG = { network: 'mainnet', apiKey: 'k' };
+  assert.throws(() => assertRegtest(), /only available on the test network/);
+  await assert.rejects(() => createFakeEngine().bitcoinAddress(), /only available on the test network/);
+  globalThis.CPAY_WALLET_CONFIG = { network: 'regtest' };
+  assert.doesNotThrow(() => assertRegtest());
+  assert.match(await createFakeEngine().bitcoinAddress(), /^bcrt1/);
+  delete globalThis.CPAY_WALLET_CONFIG;
+  const engine = src('engine.js');
+  assert.match(engine, /async bitcoinAddress\(\) \{\n\s+assertRegtest\(\);/, 'the real engine checks before asking the library');
+  assert.match(src('app.js'), /\$\('fundPanel'\)\.hidden = cfg\.network !== 'regtest'/, 'the UI hides it off regtest');
+});
+
+test('QR module draws locally from the pinned library only', () => {
+  const qr = src('qr.js');
+  assert.match(qr, /from '\.\/vendor\/qrcode\.js'/);
+  for (const bad of ['fetch(', 'innerHTML', 'import(', 'http']) assert.equal(qr.includes(bad), false, bad);
+});

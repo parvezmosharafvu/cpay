@@ -16,7 +16,7 @@
 //   WALLET_TEST=1           test build: ships fake-engine.js and allows
 //                           WALLET_ENGINE=fake. Never deploy a test build.
 //
-// The wallet library and supabase-js come from node_modules, pinned with
+// The wallet library, supabase-js and qrcode-generator come from node_modules, pinned with
 // integrity hashes in package-lock.json, and are copied, not edited.
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -70,6 +70,9 @@ cpSync(sdkWeb, join(out, 'vendor', 'sdk'), {
   filter: (p) => !/\.d\.ts$|passkey-prf-provider/.test(p), // types and the passkey signer are not used
 });
 cpSync(supaUmd, join(out, 'vendor', 'supabase.js'));
+const qrLib = join(here, 'node_modules', 'qrcode-generator', 'dist', 'qrcode.mjs');
+if (!existsSync(qrLib)) fail('qrcode-generator missing: run `npm ci --ignore-scripts` in wallet/');
+cpSync(qrLib, join(out, 'vendor', 'qrcode.js'));
 const sdkVersion = JSON.parse(readFileSync(join(here, 'node_modules', '@breeztech', 'breez-sdk-spark', 'package.json'), 'utf8')).version;
 
 // Runtime config (public values only).

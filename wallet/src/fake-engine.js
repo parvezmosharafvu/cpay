@@ -25,6 +25,11 @@ export function createFakeEngine() {
     async info() { return { balanceSats: state.balance }; },
     async receive({ amountSats }) { return { request: `lnbcrt${amountSats || 0}n1fake${Date.now().toString(36)}`, feeSats: 0 }; },
     async sparkAddress() { return 'sprt1fakeaddress'; },
+    async bitcoinAddress() {
+      if ((globalThis.CPAY_WALLET_CONFIG || {}).network !== 'regtest') throw new Error('Test-bitcoin deposits are only available on the test network.');
+      return 'bcrt1qfakedepositaddress0000000000000000';
+    },
+    async unclaimedDeposits() { return []; },
     async prepareSend(input, amountSats) {
       const text = String(input || '').trim();
       if (!/^lnbc/i.test(text)) throw new Error('Paste a Lightning invoice or a Spark address.');

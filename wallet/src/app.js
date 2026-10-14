@@ -12,6 +12,7 @@ import { generateMnemonic, normalizeMnemonic, validateMnemonic } from './bip39.j
 import { MIN_PASSPHRASE, openPhrase, sealPhrase, vaultStore } from './vault.js';
 import { configProblem, createEngine, wipeEngineStorage } from './engine.js';
 import { link, linkAvailable, linkedAccount, unlink, websiteBalance } from './link.js';
+import { bitcoinUri, drawQr, lightningUri } from './qr.js';
 
 const $ = (id) => document.getElementById(id);
 const cfg = globalThis.CPAY_WALLET_CONFIG || {};
@@ -123,9 +124,10 @@ $('unlockForm').onsubmit = async (e) => {
 
 async function start(phrase) {
   engine = engine || await createEngine();
-  await engine.connect(phrase, () => refresh());
+  await engine.connect(phrase, () => { refresh(); if (!$('fundOut').hidden) renderDeposits(); });
   try { await navigator.storage?.persist?.(); } catch { /* best effort */ }
   show('home');
+  $('fundPanel').hidden = cfg.network !== 'regtest';
   armLock();
   await refresh();
   await renderLink();
@@ -159,6 +161,7 @@ $('receiveForm').onsubmit = async (e) => {
     const amount = Number($('rcvAmount').value) || undefined;
     const r = await engine.receive({ amountSats: amount, description: $('rcvNote').value.trim() });
     $('rcvInvoice').value = r.request;
+    drawQr($('rcvQr'), lightningUri(r.request));
     $('rcvOut').hidden = false;
     $('rcvShare').hidden = !navigator.share;
   } catch (x) {
@@ -203,6 +206,31 @@ $('sendGo').onclick = async () => {
   }
 };
 
+// ---- test-network funding (regtest builds only) ------------------------
+async function renderDeposits() {
+  try {
+    const pending = await engine.unclaimedDeposits();
+    const total = pending.reduce((t, d) => t + d.amountSats, 0);
+    $('fundPending').textContent = pending.length
+      ? `${pending.length} deposit(s), ${sats(total)} sats, received but not yet added. The wallet keeps trying.`
+      : '';
+    $('fundPending').hidden = !pending.length;
+  } catch { /* informational only */ }
+}
+$('fundBtn').onclick = async () => {
+  err('fundErr');
+  try {
+    const address = await engine.bitcoinAddress();
+    $('fundAddr').value = address;
+    drawQr($('fundQr'), bitcoinUri(address));
+    $('fundOut').hidden = false;
+    await renderDeposits();
+  } catch (x) {
+    err('fundErr', x.message || 'Could not get a deposit address.');
+  }
+};
+$('fundCopy').onclick = () => navigator.clipboard?.writeText($('fundAddr').value);
+
 // ---- security --------------------------------------------------------
 $('showPhraseBtn').onclick = () => { $('revealForm').hidden = false; $('wipeForm').hidden = true; err('revealErr'); };
 $('revealForm').onsubmit = async (e) => {
@@ -238,6 +266,9 @@ async function lock() {
   $('revealWords').replaceChildren();
   $('rcvInvoice').value = '';
   $('rcvOut').hidden = true;
+  $('rcvQr').hidden = true;
+  $('fundAddr').value = '';
+  $('fundOut').hidden = true;
   $('receivePanel').hidden = true;
   $('sendPanel').hidden = true;
   prepared = null;
@@ -288,6 +319,7 @@ window.addEventListener('offline', () => { $('offline').hidden = false; });
 $('offline').hidden = navigator.onLine !== false;
 $('ver').textContent = cfg.version ? `v${cfg.version}` : '';
 $('netTag').textContent = cfg.network && cfg.network !== 'mainnet' ? cfg.network : '';
+$('testNetNote').hidden = cfg.network !== 'regtest';
 
 if ('serviceWorker' in navigator && cfg.serviceWorker !== false) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

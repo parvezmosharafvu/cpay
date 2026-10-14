@@ -89,5 +89,9 @@ passphrase is device-local and not a backup. Clearing site data or
 - No second ledger: the wallet's balance comes from its own keys and the
   Spark network, and the website ledger stays the record for website
   balances.
+- On-chain deposits are offered only on the test network (regtest), to
+  fund a test wallet from the faucet; the engine refuses them on mainnet.
+  A mainnet deposit whose claim fee exceeds the library's cap would wait
+  unclaimed, and this version has no screen to resolve that.
 - Lightning addresses and LNURL are not supported in this version (they
   fetch arbitrary hosts, which the CSP does not allow).

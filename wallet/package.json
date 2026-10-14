@@ -10,6 +10,10 @@
   },
   "dependencies": {
     "@breeztech/breez-sdk-spark": "0.26.0",
-    "@supabase/supabase-js": "2.117.3"
+    "@supabase/supabase-js": "2.117.3",
+    "qrcode-generator": "2.0.4"
+  },
+  "devDependencies": {
+    "jsqr": "1.4.0"
   }
 }

@@ -7,6 +7,18 @@
 // work, the optional CPAY link is consented, read-only, labelled as a
 // separate CPAY-held balance and revocable, and the wallet opens offline.
 import { expect, test, type Page, type Request } from '@playwright/test';
+// Test-only QR decoder (wallet devDependency), to read back what the page drew.
+import jsQRModule from '../../wallet/node_modules/jsqr/dist/jsQR.js';
+const jsQR = ((jsQRModule as any).default || jsQRModule) as (d: Uint8ClampedArray, w: number, h: number) => { data: string } | null;
+async function decodeCanvas(page: Page, id: string): Promise<string | null> {
+  const img = await page.evaluate((cid) => {
+    const c = document.getElementById(cid) as HTMLCanvasElement;
+    const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
+    return { w: c.width, h: c.height, data: Array.from(d.data) };
+  }, id);
+  const out = jsQR(Uint8ClampedArray.from(img.data), img.w, img.h);
+  return out ? out.data : null;
+}
 
 const CPAY = 'http://127.0.0.1:8791';
 const PASS = 'my wallet passphrase';
@@ -109,6 +121,8 @@ test('receive, then send with a fee confirm; balances move only in this wallet',
   await page.locator('#rcvAmount').fill('2100');
   await page.getByRole('button', { name: 'Create invoice' }).click();
   await expect(page.locator('#rcvInvoice')).toHaveValue(/^lnbcrt2100n1fake/);
+  await expect(page.locator('#rcvQr')).toBeVisible();
+  expect(await decodeCanvas(page, 'rcvQr')).toBe(`lightning:${await page.locator('#rcvInvoice').inputValue()}`);
   await page.evaluate(() => (window as any).__fakeWallet.credit(5000));
   await expect(page.locator('#balSats')).toHaveText('5,000');
 
@@ -270,4 +284,30 @@ test('the page runs under the strict CSP with no violations', async ({ page }) =
   expect(csp).toContain("frame-ancestors 'none'");
   await createWallet(page);
   expect(violations).toEqual([]);
+});
+
+test('beta warning on every screen; test-network note on a regtest build', async ({ page }) => {
+  await page.goto('/');
+  const banner = page.locator('#betaBanner');
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText('Only use small amounts you can afford to lose');
+  await expect(banner).toContainText('test network');
+  const phrase = await createWallet(page);
+  await expect(banner).toBeVisible();
+  await page.goto('/security.html');
+  await expect(page.getByText('Only use small amounts you can afford to lose')).toBeVisible();
+  assertNoLeak(phrase);
+});
+
+test('regtest funding: deposit address with a QR that decodes to it', async ({ page }) => {
+  const phrase = await createWallet(page);
+  await expect(page.locator('#fundPanel')).toBeVisible();
+  await page.getByRole('button', { name: 'Show deposit address' }).click();
+  const addr = await page.locator('#fundAddr').inputValue();
+  expect(addr).toMatch(/^bcrt1/);
+  await expect(page.locator('#fundQr')).toBeVisible();
+  expect(await decodeCanvas(page, 'fundQr')).toBe(`bitcoin:${addr}`);
+  await page.getByRole('button', { name: 'Lock' }).click();
+  expect(await page.locator('#fundAddr').inputValue()).toBe('');
+  assertNoLeak(phrase);
 });

@@ -50,6 +50,48 @@ reset link (`/verify`) need no token.
 Until 3 is deployed, keep CAPTCHA protection off in Supabase, or nobody can
 sign in.
 
+## Email confirmation for new accounts
+
+With "Confirm email" on in Supabase, a new Freelancer must open the link
+sent to their address before they can log in:
+
+- Register shows **Check your inbox** (the same screen for an address that
+  already has an account, so nothing reveals who is registered).
+- Log in before confirming shows **Confirm your email first** with **Send the
+  confirmation email again** (Supabase `/resend`, CAPTCHA token included).
+- The link opens `login.html?confirmed=1`: "Email confirmed", then the usual
+  admin approval (accounts start pending unless auto-approval is on).
+- A used or expired link lands on a page that explains it and offers a new
+  one. Accounts created before confirmation was switched on are unaffected
+  (all 18 were confirmed on 2026-10-15).
+- Branded template: [email-templates/confirm-signup.html](email-templates/confirm-signup.html).
+
+## Continue with Google
+
+`public/oauth.js` shows **Continue with Google** on log in and register only
+when the Google provider is on in Supabase (read from Auth's public
+`/settings`), so nothing changes on the site until the owner enables it.
+Google returns to `login.html`, which finishes like a password sign-in: the
+two-step code if the account has one, then the account status. A new Google
+account is a pending Freelancer application named from the Google profile
+(migration 20261015010000); Google has already verified the email. An
+existing account with the same verified email is linked by Supabase.
+
+Owner setup (no code change needed afterwards):
+
+1. Google Cloud Console → APIs & Services → OAuth consent screen: app name
+   CPAY, support email, logo, home page `https://pay-cashapp.buzz`, privacy
+   policy link (needs the final privacy page, see #97). Scopes: email,
+   profile, openid only.
+2. Credentials → Create credentials → OAuth client ID → Web application.
+   Authorized JavaScript origin: `https://pay-cashapp.buzz`. Authorized
+   redirect URI: `https://riumaeihemgznvgattoc.supabase.co/auth/v1/callback`.
+3. Supabase → Authentication → Sign In / Providers → Google: enable, paste
+   the Client ID and Client secret there (the secret never goes into the
+   site, chat or the repository).
+4. Supabase → Authentication → URL Configuration → Redirect URLs: add
+   `https://pay-cashapp.buzz/login.html` (and `/reset.html`).
+
 ## Two-step sign-in (TOTP)
 
 - **Who**: admins (Admin → Security) and Freelancers (desk → Security). Enrol
@@ -90,7 +132,8 @@ message. It does not prove it reached the inbox rather than spam.
 ## Owner steps (Supabase dashboard)
 
 1. **Authentication → URL Configuration**: Site URL `https://pay-cashapp.buzz`.
-   Add to Redirect URLs: `https://pay-cashapp.buzz/reset.html`. Do not add
+   Add to Redirect URLs: `https://pay-cashapp.buzz/reset.html` and
+   `https://pay-cashapp.buzz/login.html` (confirmation and Google). Do not add
    preview hosts (`*.workers.dev`): a reset requested from a preview then
    lands on production, which is the safe default.
 2. **Authentication → Emails → Templates → Reset password** (optional): paste

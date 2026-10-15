@@ -45,7 +45,7 @@ test('wrong password and pending account are refused with a clear message', asyn
   await expect(page.locator('#errorMsg')).toHaveText(/Invalid login credentials/);
   const pending = await makeUser({ status: 'pending' });
   await login(page, pending);
-  await expect(page.locator('#errorMsg')).toHaveText(/Waiting for admin approval/);
+  await expect(page.locator('#errorMsg')).toHaveText(/waiting for admin approval/i);
   expect(page.url()).toContain('login.html');
 });
 
@@ -112,7 +112,7 @@ test('an expired or reused link shows a clear state and can send a new link', as
   await page.goto('/#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
   await page.waitForURL(/reset\.html/);
   await expect(page.locator('#linkState')).toBeVisible();
-  await expect(page.locator('#linkTitle')).toHaveText('This link no longer works');
+  await expect(page.locator('#linkTitle')).toHaveText('This email link no longer works');
   await expect(page.locator('#formState')).toBeHidden();
   await page.fill('#resendEmail', u.email);
   await page.click('#resendBtn');

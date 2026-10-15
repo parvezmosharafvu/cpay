@@ -372,6 +372,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/admin_aal2_enrolled_test.sql
+      - name: Payout-address ready time and Google sign-in names (20261015010000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/payout_ready_oauth_names_test.sql
       - name: Money is exact (no float columns or float casts in public)
         env:
           PGPASSWORD: postgres

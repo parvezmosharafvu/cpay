@@ -41,6 +41,15 @@ test('an expired, used or malformed link is forwarded and reported as expired', 
   assert.equal(run('https://pay.example/?error=server_error').link.kind, 'expired');
 });
 
+test('a sign-up confirmation or Google sign-in that fell back to the home page finishes on log in', () => {
+  const conf = run('https://pay.example/#access_token=a.b.c&refresh_token=r&type=signup');
+  assert.deepEqual(conf.replaced, ['/login.html?confirmed=1#access_token=a.b.c&refresh_token=r&type=signup']);
+  const g = run('https://pay.example/#access_token=a.b.c&refresh_token=r&provider_token=p');
+  assert.deepEqual(g.replaced, ['/login.html?via=google#access_token=a.b.c&refresh_token=r&provider_token=p']);
+  // On the log-in page itself nothing is forwarded.
+  assert.deepEqual(run('https://pay.example/login.html#access_token=a.b.c&type=signup').replaced, []);
+});
+
 test('reset.html reads the link without forwarding; other pages and plain visits do nothing', () => {
   const r = run('https://pay.example/reset.html#type=recovery&access_token=x');
   assert.equal(r.link.kind, 'recovery');

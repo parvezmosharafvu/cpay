@@ -13,7 +13,9 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   reporter: process.env.CI ? [['github'], ['list']] : 'list',
-  use: { baseURL: `http://127.0.0.1:${PORT}`, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+  // Pages load from localhost; the API (SUPABASE_URL) is 127.0.0.1, a
+  // different origin, as pay-cashapp.buzz and supabase.co are in production.
+  use: { baseURL: `http://localhost:${PORT}`, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   projects: [{ name: 'desktop', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: 'node e2e/stack.mjs',

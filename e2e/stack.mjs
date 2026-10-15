@@ -35,7 +35,12 @@ const DENO = process.env.DENO_BIN || 'deno';
 const REST_PORT = PORT + 1, INVOICE_FN_PORT = PORT + 2, WITHDRAW_FN_PORT = PORT + 3;
 const JWT_SECRET = 'e2e-only-jwt-secret-'.padEnd(48, 'x');
 const SERVICE_SECRET = 'e2e-only-service-secret-'.padEnd(48, 'y');
+// Like production, the website and the API live on different origins
+// (pay-cashapp.buzz and *.supabase.co): pages load from SITE and call ORIGIN,
+// so the browser enforces CORS, including the Edge Functions' own headers.
+// localhost also lets WebAuthn (passkeys) run; it refuses IP addresses.
 const ORIGIN = `http://127.0.0.1:${PORT}`;
+const SITE = `http://localhost:${PORT}`;
 // Tagged on every Edge Function response (e2e/fn-wrapper.ts), so readiness
 // can tell this run's functions from a stale process holding the port.
 const RUN_ID = randomUUID();
@@ -189,7 +194,7 @@ async function handleAuth(req, res, url, body) {
       `insert into auth.users(email, encrypted_password, raw_user_meta_data, email_confirmed_at) values ($1, crypt($2, gen_salt('bf', 4)), $3, ${confirmRequired ? 'null' : 'now()'}) returning *`,
       [email, body.password, body.data || {}]);
     if (confirmRequired) {
-      mailConfirm(u, url.searchParams.get('redirect_to') || `${ORIGIN}/`);
+      mailConfirm(u, url.searchParams.get('redirect_to') || `${SITE}/`);
       return send(res, 200, await userJson(u));
     }
     return send(res, 200, await session(u, 'email/signup'));
@@ -276,7 +281,7 @@ async function handleAuth(req, res, url, body) {
     const { rows: [u] } = await pool.query('select * from auth.users where email = lower($1)', [body.email]);
     if (u) {
       const s = await session(u, 'recovery');
-      const redirect = url.searchParams.get('redirect_to') || body.redirect_to || `${ORIGIN}/reset.html`;
+      const redirect = url.searchParams.get('redirect_to') || body.redirect_to || `${SITE}/reset.html`;
       // Like the branded template: a one-time hash, used only by /verify.
       const tokenHash = randomBytes(20).toString('hex');
       recoveryHashes.set(tokenHash, u.id);
@@ -287,7 +292,7 @@ async function handleAuth(req, res, url, body) {
   }
   if (p === '/resend' && req.method === 'POST') {
     const { rows: [u] } = await pool.query('select * from auth.users where email = lower($1)', [body.email]);
-    if (u && !u.email_confirmed_at && body.type === 'signup') mailConfirm(u, url.searchParams.get('redirect_to') || `${ORIGIN}/`);
+    if (u && !u.email_confirmed_at && body.type === 'signup') mailConfirm(u, url.searchParams.get('redirect_to') || `${SITE}/`);
     return send(res, 200, {});
   }
   if (p === '/authorize' && req.method === 'GET') {
@@ -299,7 +304,7 @@ async function handleAuth(req, res, url, body) {
         [google.email, { full_name: google.name, name: google.name.split(' ')[0], provider_id: 'g-e2e' }]));
     }
     const sess = await session(u, 'oauth');
-    const back = url.searchParams.get('redirect_to') || `${ORIGIN}/`;
+    const back = url.searchParams.get('redirect_to') || `${SITE}/`;
     res.writeHead(302, { location: `${back}#access_token=${sess.access_token}&refresh_token=${sess.refresh_token}&expires_in=3600&expires_at=${sess.expires_at}&provider_token=e2e-google&token_type=bearer` });
     return res.end();
   }
@@ -324,12 +329,14 @@ function send(res, status, body, headers = {}) {
   res.writeHead(status, { ...CORS, ...(body === null ? {} : { 'content-type': 'application/json' }), ...headers });
   res.end(body === null ? undefined : JSON.stringify(body));
 }
-async function proxy(req, res, target, raw) {
+// ownCors: the target answers CORS itself (Edge Functions do, in
+// production), so its access-control headers reach the browser unchanged.
+async function proxy(req, res, target, raw, { ownCors = false } = {}) {
   const headers = { ...req.headers };
   delete headers.host; delete headers['content-length'];
-  const r = await fetch(target, { method: req.method, headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : raw, redirect: 'manual' });
-  const out = { ...CORS };
-  r.headers.forEach((v, k) => { if (!['content-encoding', 'transfer-encoding', 'content-length', 'connection'].includes(k) && !k.startsWith('access-control-')) out[k] = v; });
+  const r = await fetch(target, { method: req.method, headers, body: ['GET', 'HEAD', 'OPTIONS'].includes(req.method) ? undefined : raw, redirect: 'manual' });
+  const out = ownCors ? {} : { ...CORS };
+  r.headers.forEach((v, k) => { if (!['content-encoding', 'transfer-encoding', 'content-length', 'connection'].includes(k) && (ownCors || !k.startsWith('access-control-'))) out[k] = v; });
   res.writeHead(r.status, out);
   res.end(Buffer.from(await r.arrayBuffer()));
 }
@@ -363,7 +370,7 @@ async function main() {
   const fnEnv = {
     SUPABASE_URL: ORIGIN, SUPABASE_ANON_KEY: ANON_KEY, SUPABASE_SERVICE_ROLE_KEY: SERVICE_KEY,
     PAYMENT_SERVICE_URL: pay.url, PAYMENT_SERVICE_SECRET: SERVICE_SECRET, PAYMENT_SERVICE_AUTH_MODE: 'bearer',
-    PUBLIC_SITE_URL: ORIGIN, SITE_URL: ORIGIN, E2E_RUN_ID: RUN_ID,
+    PUBLIC_SITE_URL: SITE, SITE_URL: SITE, ALLOWED_ORIGINS: SITE, E2E_RUN_ID: RUN_ID,
   };
   const fn = (name, port) => run(DENO, ['run', '--quiet', '--no-lock', '--allow-net', '--allow-env', '--allow-read', 'e2e/fn-wrapper.ts'],
     { ...fnEnv, FN_PORT: String(port), FN_ENTRY: `../supabase/functions/${name}/index.ts` }, name);
@@ -376,12 +383,13 @@ async function main() {
     let body = {}; try { body = raw.length ? JSON.parse(raw) : {}; } catch { /* form or empty */ }
     const url = new URL(req.url, ORIGIN);
     try {
-      if (req.method === 'OPTIONS') return send(res, 204, null);
+      // Edge Functions answer their own preflight, as on Supabase.
+      if (req.method === 'OPTIONS' && !url.pathname.startsWith('/functions/v1/')) return send(res, 204, null);
       if (url.pathname.startsWith('/rest/v1/')) return await proxy(req, res, `http://127.0.0.1:${REST_PORT}${url.pathname.slice(8)}${url.search}`, raw);
       if (url.pathname.startsWith('/auth/v1/')) return await handleAuth(req, res, url, body);
       if (url.pathname.startsWith('/realtime/')) return send(res, 404, { msg: 'realtime is not part of the e2e stack; pages poll' });
-      if (url.pathname === '/functions/v1/create-invoice') return await proxy(req, res, `http://127.0.0.1:${INVOICE_FN_PORT}/`, raw);
-      if (url.pathname.startsWith('/functions/v1/user-withdraw')) return await proxy(req, res, `http://127.0.0.1:${WITHDRAW_FN_PORT}${url.pathname.slice('/functions/v1/user-withdraw'.length) || '/'}${url.search}`, raw);
+      if (url.pathname === '/functions/v1/create-invoice') return await proxy(req, res, `http://127.0.0.1:${INVOICE_FN_PORT}/`, raw, { ownCors: true });
+      if (url.pathname.startsWith('/functions/v1/user-withdraw')) return await proxy(req, res, `http://127.0.0.1:${WITHDRAW_FN_PORT}${url.pathname.slice('/functions/v1/user-withdraw'.length) || '/'}${url.search}`, raw, { ownCors: true });
       if (url.pathname.startsWith('/functions/v1/')) return send(res, 503, { error: 'not available in e2e' });
       if (url.pathname === '/__e2e/health') return send(res, 200, { ok: true });
       if (url.pathname === '/__e2e/confirm' && req.method === 'POST') { confirmRequired = url.searchParams.get('on') === '1'; return send(res, 200, { confirmRequired }); }
@@ -393,7 +401,7 @@ async function main() {
         // Like GoTrue's GET /verify for a sign-up link: confirm, then redirect
         // with a session in the fragment (or an error when used or unknown).
         const t = confirmTokens.get(url.searchParams.get('token') || '');
-        if (!t) { res.writeHead(302, { location: `${ORIGIN}/#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired` }); return res.end(); }
+        if (!t) { res.writeHead(302, { location: `${SITE}/#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired` }); return res.end(); }
         confirmTokens.delete(url.searchParams.get('token'));
         await pool.query('update auth.users set email_confirmed_at = now() where id = $1', [t.id]);
         const sess = await session(await userById(t.id), 'otp');

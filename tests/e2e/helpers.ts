@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { expect, type Page } from '@playwright/test';
 
 const PORT = Number(process.env.E2E_PORT || 54321);
+// ORIGIN is the API (Auth, REST, functions, test hooks); SITE serves the
+// pages. Different origins, like supabase.co and pay-cashapp.buzz.
 export const ORIGIN = `http://127.0.0.1:${PORT}`;
+export const SITE = `http://localhost:${PORT}`;
 export const db = new pg.Pool({
   host: process.env.PGHOST || 'localhost', user: process.env.PGUSER || 'postgres',
   password: process.env.PGPASSWORD || 'postgres', database: process.env.E2E_DB || 'cpay_e2e', max: 3,

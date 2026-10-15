@@ -6,5 +6,5 @@ window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
 // Supabase Auth CAPTCHA protection is on, or sign-in, sign-up and reset
 // email are refused. Never put the Turnstile SECRET key here: it belongs
 // only in Supabase (Authentication -> Attack Protection). See turnstile.js.
-window.CPAY_TURNSTILE_SITE_KEY = window.CPAY_TURNSTILE_SITE_KEY || '';
+window.CPAY_TURNSTILE_SITE_KEY = window.CPAY_TURNSTILE_SITE_KEY || '0x4AAAAAAFX1K3sdZQ66Mss0';
 window.supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);

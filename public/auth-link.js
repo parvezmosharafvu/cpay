@@ -55,16 +55,26 @@
   // address is reported. The button then waits COOLDOWN seconds.
   const COOLDOWN = 60;
   const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  async function requestReset(email) {
+  // With Supabase Auth CAPTCHA on, the request carries a fresh Turnstile
+  // token (turnstile.js). A failed or refused check is reported as
+  // 'captcha': it says nothing about whether the account exists.
+  async function requestReset(email, captchaOpts) {
     if (!EMAIL.test(String(email || ''))) return 'invalid';
+    let captcha = {};
+    try {
+      if (window.cpayCaptchaOptions) captcha = await window.cpayCaptchaOptions('reset', captchaOpts);
+    } catch (e) {
+      return 'captcha';
+    }
     let error = null;
     try {
-      ({ error } = await window.supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}/reset.html` }));
+      ({ error } = await window.supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}/reset.html`, ...captcha }));
     } catch (e) {
       return 'network';
     }
     // supabase-js reports an unreachable server as a retryable fetch error.
     if (error && (error.name === 'AuthRetryableFetchError' || error.status === 0)) return 'network';
+    if (error && window.cpayIsCaptchaError && window.cpayIsCaptchaError(error)) return 'captcha';
     return 'sent';
   }
   function cooldown(btn, label) {

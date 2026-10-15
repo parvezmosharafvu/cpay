@@ -16,6 +16,7 @@
         <div class="field"><label for="reauthPw">Password</label>
           <input id="reauthPw" type="password" autocomplete="current-password" required></div>
         <p class="hint" id="reauthErr" role="alert" hidden></p>
+        <div id="reauthCaptcha" class="captcha-box"></div>
         <div class="row">
           <button class="btn ghost" value="cancel" type="button" id="reauthCancel">Cancel</button>
           <button class="btn primary" value="ok" type="submit" id="reauthOk">Continue</button>
@@ -37,8 +38,12 @@
           const { data } = await sb.auth.getUser();
           const email = data?.user?.email;
           if (!email) throw new Error('Sign in again to continue.');
-          const { error } = await sb.auth.signInWithPassword({ email, password: pw.value });
+          // Supabase Auth CAPTCHA applies to this sign-in too (turnstile.js).
+          let captcha = {};
+          if (window.cpayCaptchaOptions) captcha = await window.cpayCaptchaOptions('reauth', { container: dlg.querySelector('#reauthCaptcha') });
+          const { error } = await sb.auth.signInWithPassword({ email, password: pw.value, options: captcha });
           pw.value = '';
+          if (error && window.cpayIsCaptchaError && window.cpayIsCaptchaError(error)) throw new Error(window.CPAY_CAPTCHA_MESSAGE);
           if (error) throw new Error('That password is not right.');
           // A password sign-in is aal1. With an authenticator enrolled the
           // payout needs aal2, so ask for the code now instead of sending the

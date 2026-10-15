@@ -1,0 +1,147 @@
+import { test, expect, type Page } from '@playwright/test';
+import { makeUser, makeLink, login, db, uniq, ORIGIN, PASSWORD, paymentsFor } from './helpers';
+// @ts-ignore -- plain ESM helper shared with the fake Supabase Auth
+import { totp, b32encode } from '../../e2e/totp.mjs';
+import { randomBytes } from 'node:crypto';
+
+// Supabase Auth CAPTCHA protection (production since 2026-10-15): sign-in,
+// sign-up and reset-email requests without a Turnstile token are refused
+// with "captcha protection: request disallowed (no captcha_token found)".
+// The stand-in Auth enforces the same rule while /__e2e/captcha is on, and
+// a fake Turnstile (no network) hands out single-use "e2e-pass-" tokens.
+
+const captcha = (on: boolean) => fetch(`${ORIGIN}/__e2e/captcha?on=${on ? 1 : 0}`, { method: 'POST' });
+const mailFor = async (email: string) => (await fetch(`${ORIGIN}/__e2e/mailbox?to=${encodeURIComponent(email)}`)).json();
+const CAPTCHA_MSG = /The security check did not pass/;
+
+// mode: 'pass' issues a fresh token; 'fail' calls the error callback once,
+// then passes (a retry works).
+async function fakeTurnstile(page: Page, { siteKey = true, mode = 'pass' } = {}) {
+  const loads: string[] = [];
+  await page.route('https://challenges.cloudflare.com/**', (route) => {
+    loads.push(route.request().url());
+    return route.fulfill({
+      contentType: 'application/javascript',
+      body: `window.turnstile = { _n: 0, _fail: ${mode === 'fail' ? 1 : 0},
+        render(el, o) { const id = 'w' + (++this._n); const fail = this._fail > 0; if (fail) this._fail--;
+          setTimeout(() => fail ? o['error-callback']() : o.callback('e2e-pass-' + Math.random().toString(36).slice(2)), 20); return id; },
+        remove() {} };`,
+    });
+  });
+  if (siteKey) await page.addInitScript(() => { (window as any).CPAY_TURNSTILE_SITE_KEY = '1x00000000000000000000AA'; });
+  return loads;
+}
+
+test.afterEach(async () => { await captcha(false); });
+
+test('without a site key the login fails with a clear message, not the raw Auth error', async ({ page }) => {
+  const u = await makeUser({ name: 'No Key' });
+  await captcha(true);
+  await login(page, u);
+  await expect(page.locator('#errorMsg')).toHaveText(CAPTCHA_MSG);
+  await expect(page.locator('#submitBtn')).toBeEnabled();
+  expect(page.url()).toContain('login.html');
+});
+
+test('login sends a fresh token and works; a second login needs a new token', async ({ page, browser }) => {
+  const u = await makeUser({ name: 'Captcha Login' });
+  await captcha(true);
+  const loads = await fakeTurnstile(page);
+  await login(page, u);
+  await page.waitForURL(/dashboard\.html/);
+  expect(loads.length).toBeGreaterThan(0);
+  // A new browser: a new token, accepted once.
+  const ctx = await browser.newContext();
+  const other = await ctx.newPage();
+  await fakeTurnstile(other);
+  await login(other, u);
+  await other.waitForURL(/dashboard\.html/);
+  await ctx.close();
+});
+
+test('a widget error re-enables the button and a retry logs in', async ({ page }) => {
+  const u = await makeUser({ name: 'Captcha Retry' });
+  await captcha(true);
+  await fakeTurnstile(page, { mode: 'fail' });
+  await login(page, u);
+  await expect(page.locator('#errorMsg')).toHaveText(/Verification failed/);
+  await expect(page.locator('#submitBtn')).toBeEnabled();
+  await expect(page.locator('#submitBtn')).toHaveText('Log in');
+  await page.click('#submitBtn');
+  await page.waitForURL(/dashboard\.html/);
+});
+
+test('an account with an authenticator: captcha, then the code, then the desk', async ({ page }) => {
+  const u = await makeUser({ name: 'Captcha MFA' });
+  const secret = b32encode(randomBytes(20)); // fresh per run
+  const c = await db.connect();
+  try {
+    await c.query('begin');
+    await c.query('set local session authorization supabase_auth_admin');
+    await c.query(`insert into auth.mfa_factors(user_id, friendly_name, factor_type, status, secret) values ($1, 'Phone', 'totp', 'verified', $2)`, [u.id, secret]);
+    await c.query('commit');
+  } finally { c.release(); }
+  await captcha(true);
+  await fakeTurnstile(page);
+  await login(page, u);
+  await expect(page.locator('#mfaCode')).toBeVisible();
+  await page.fill('#mfaCode', totp(secret));
+  await page.locator('dialog [data-role="ok"]').click();
+  await page.waitForURL(/dashboard\.html/);
+});
+
+test('forgot password and resend carry a token; a refused check says nothing about the account', async ({ page }) => {
+  const u = await makeUser({ name: 'Captcha Reset' });
+  await captcha(true);
+  // No site key: refused as a security check, not "no account".
+  await page.goto('/login.html');
+  await page.fill('#email', u.email);
+  await page.click('#forgotBtn');
+  await expect(page.locator('#errorMsg')).toHaveText(CAPTCHA_MSG);
+  expect(await mailFor(u.email)).toHaveLength(0);
+  // With the widget: the email goes out.
+  const fresh = await page.context().newPage();
+  await fakeTurnstile(fresh);
+  await fresh.goto('/login.html');
+  await fresh.fill('#email', u.email);
+  await fresh.click('#forgotBtn');
+  await expect(fresh.locator('#okMsg')).toHaveText(/^If an account uses that email/);
+  expect(await mailFor(u.email)).toHaveLength(1);
+  // The link itself (/verify) needs no token; setting the password works.
+  const [mail] = await mailFor(u.email);
+  await fresh.goto(mail.link);
+  await fresh.fill('#password', 'captcha-reset-pass-1');
+  await fresh.fill('#password2', 'captcha-reset-pass-1');
+  await fresh.click('#saveBtn');
+  await expect(fresh.locator('#doneState')).toBeVisible();
+  // Resend from the reset page also carries a token.
+  await fresh.goto('/reset.html');
+  await fresh.fill('#resendEmail', u.email);
+  await fresh.click('#resendBtn');
+  await expect(fresh.locator('#okMsg')).toHaveText(/^If an account uses that email/);
+  expect(await mailFor(u.email)).toHaveLength(2);
+});
+
+test('registration carries a token', async ({ page }) => {
+  const email = `${uniq('cap')}@test.invalid`;
+  await captcha(true);
+  await fakeTurnstile(page);
+  await page.goto('/register.html');
+  await page.fill('#displayName', 'Captcha Signup');
+  await page.fill('#email', email);
+  await page.fill('#password', PASSWORD);
+  await page.click('#submitBtn');
+  await expect.poll(async () => (await db.query('select account_status from profiles where email = $1', [email])).rows[0]?.account_status ?? null,
+    { timeout: 15_000 }).toBe('pending');
+});
+
+test('payments stay challenge-free when only Auth CAPTCHA is on', async ({ page }) => {
+  const u = await makeUser();
+  const slug = await makeLink(u.id, { name: 'No Challenge' });
+  const loads = await fakeTurnstile(page);
+  await page.goto(`/${slug}?amount=5`);
+  await page.click('#payBtn');
+  await page.waitForURL(/invoice-cpay-v2\.html\?id=/);
+  expect(loads).toHaveLength(0);
+  expect(await paymentsFor(u.id)).toHaveLength(1);
+});

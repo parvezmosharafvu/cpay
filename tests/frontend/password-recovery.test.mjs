@@ -110,7 +110,7 @@ test('reset.html: states, authenticator step before saving, global sign-out, rec
 
 test('login.html: forgot password uses the safe request and never shows the server answer', () => {
   const s = pub('login.html');
-  assert.match(s, /forgotBtn'\)\.onclick[\s\S]*cpayResetRequest\.requestReset\(email\)[\s\S]*cpayResetRequest\.cooldown/);
+  assert.match(s, /forgotBtn'\)\.onclick[\s\S]*cpayResetRequest\.requestReset\(email[,)][\s\S]*cpayResetRequest\.cooldown/);
   assert.doesNotMatch(s, /resetPasswordForEmail/, 'only auth-link.js calls the reset endpoint');
   assert.ok(s.includes("get('reset') === 'done'"));
 });

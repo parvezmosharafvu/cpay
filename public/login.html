@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="a11y.css">
 <script src="auth-link.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="mfa.js"></script>
+<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="turnstile.js"></script><script src="mfa.js"></script>
 </head>
 <body class="auth">
   <a class="skip-link" href="#loginCard">Skip to form</a>
@@ -23,6 +23,7 @@
       <p class="sub">Welcome back. Enter your email and password.</p>
       <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" inputmode="email" required></div>
       <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required></div>
+      <div id="captchaBox" class="captcha-box"></div>
       <button class="btn primary block lg" id="submitBtn" type="button">Log in</button>
       <p class="foot" style="margin-top:12px"><button class="btn ghost block" id="forgotBtn" type="button">Forgot password?</button></p>
       <div class="alert alert-danger" id="errorMsg" role="alert" hidden></div>
@@ -66,13 +67,20 @@ document.getElementById('submitBtn').onclick = async () => {
   const btn = document.getElementById('submitBtn');
   if (btn.disabled) return;
   btn.disabled = true;
+  const done = () => { btn.disabled = false; btn.textContent = 'Log in'; };
+  // Supabase Auth CAPTCHA: a fresh Turnstile token for every attempt.
+  let captcha;
+  btn.textContent = 'Checking…';
+  try { captcha = await window.cpayCaptchaOptions('login', { container: document.getElementById('captchaBox') }); }
+  catch (te) { showErr(te.message || 'Verification failed. Try again.'); done(); return; }
+  btn.textContent = 'Logging in…';
   try {
-    const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
-    if (error){ showErr(error.message); btn.disabled=false; return; }
+    const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password, options: captcha });
+    if (error){ showErr(window.cpayIsCaptchaError(error) ? window.CPAY_CAPTCHA_MESSAGE : error.message); done(); return; }
     await go(data.user.id);
   } catch (e) {
     showErr('Could not reach the server. Check your connection and try again.');
-    btn.disabled = false;
+    done();
   }
 };
 // Never says whether an account exists for the email (auth-link.js).
@@ -82,10 +90,12 @@ document.getElementById('forgotBtn').onclick = async () => {
   const email = document.getElementById('email').value.trim();
   if (!email){ showErr('Enter your email first, then tap Forgot password.'); document.getElementById('email').focus(); return; }
   btn.disabled = true; btn.textContent = 'Sending…';
-  const r = await window.cpayResetRequest.requestReset(email);
+  const r = await window.cpayResetRequest.requestReset(email, { container: document.getElementById('captchaBox') });
   if (r !== 'sent'){
     btn.disabled = false; btn.textContent = 'Forgot password?';
-    showErr(r === 'invalid' ? 'Enter a valid email address.' : 'Could not reach the server. Check your connection and try again.');
+    showErr(r === 'invalid' ? 'Enter a valid email address.'
+      : r === 'captcha' ? window.CPAY_CAPTCHA_MESSAGE
+      : 'Could not reach the server. Check your connection and try again.');
     return;
   }
   showOk(window.cpayResetRequest.SENT);

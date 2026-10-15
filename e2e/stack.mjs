@@ -147,8 +147,27 @@ async function asAuth(sql, params) {
 const userById = async (id) => (await pool.query('select * from auth.users where id = $1', [id])).rows[0];
 const authError = (res, status, msg, code) => send(res, status, { error: code || 'invalid_grant', error_description: msg, msg, code: status, error_code: code });
 
+// Supabase Auth CAPTCHA protection, off unless a test turns it on via
+// /__e2e/captcha. Like GoTrue, sign-up, password sign-in and reset-email
+// requests then need gotrue_meta_security.captcha_token; refresh, MFA and
+// /verify do not. A token passes once, and only if it starts "e2e-pass-".
+let captchaRequired = false;
+const usedCaptcha = new Set();
+function captchaRefused(res, body) {
+  if (!captchaRequired) return false;
+  const t = String(body?.gotrue_meta_security?.captcha_token || '');
+  if (!t) { authError(res, 400, 'captcha protection: request disallowed (no captcha_token found)', 'captcha_failed'); return true; }
+  if (!t.startsWith('e2e-pass-') || usedCaptcha.has(t)) { authError(res, 400, 'captcha protection: request disallowed (captcha verification process failed)', 'captcha_failed'); return true; }
+  usedCaptcha.add(t);
+  return false;
+}
+
 async function handleAuth(req, res, url, body) {
   const p = url.pathname.replace(/^\/auth\/v1/, '');
+  const grantType = url.searchParams.get('grant_type');
+  if (((p === '/signup' || p === '/recover') && req.method === 'POST') || (p === '/token' && grantType === 'password')) {
+    if (captchaRefused(res, body)) return;
+  }
   if (p === '/signup' && req.method === 'POST') {
     const email = String(body.email || '').toLowerCase();
     if (!email || String(body.password || '').length < 8) return authError(res, 422, 'Password should be at least 8 characters.', 'weak_password');
@@ -329,6 +348,7 @@ async function main() {
       if (url.pathname.startsWith('/functions/v1/user-withdraw')) return await proxy(req, res, `http://127.0.0.1:${WITHDRAW_FN_PORT}${url.pathname.slice('/functions/v1/user-withdraw'.length) || '/'}${url.search}`, raw);
       if (url.pathname.startsWith('/functions/v1/')) return send(res, 503, { error: 'not available in e2e' });
       if (url.pathname === '/__e2e/health') return send(res, 200, { ok: true });
+      if (url.pathname === '/__e2e/captcha' && req.method === 'POST') { captchaRequired = url.searchParams.get('on') === '1'; return send(res, 200, { captchaRequired }); }
       if (url.pathname === '/__e2e/anon-key') return send(res, 200, { anonKey: ANON_KEY });
       if (url.pathname === '/__e2e/mailbox') return send(res, 200, mailbox.filter((m) => !url.searchParams.get('to') || m.to === url.searchParams.get('to')));
       if (url.pathname === '/__e2e/pay' && req.method === 'POST') {

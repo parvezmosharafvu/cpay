@@ -24,6 +24,7 @@
       <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" inputmode="email" required></div>
       <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="new-password" aria-describedby="passwordHint" placeholder="At least 8 characters" minlength="8" required></div>
       <p class="hint" id="passwordHint">At least 8 characters.</p>
+      <div id="captchaBox" class="captcha-box"></div>
       <button class="btn primary block lg" id="submitBtn" type="button">Create account</button>
       <div class="alert alert-danger" id="errorMsg" role="alert" hidden></div>
       <div class="alert alert-success" id="successMsg" role="status" hidden></div>
@@ -47,7 +48,7 @@ document.getElementById('submitBtn').onclick = async () => {
     // Optional Turnstile (off unless CPAY_TURNSTILE_SITE_KEY is set); the
     // token goes to Supabase Auth, which verifies it when captcha is enabled.
     let captchaToken = null;
-    try { captchaToken = window.cpayTurnstileToken ? await window.cpayTurnstileToken('register') : null; }
+    try { captchaToken = window.cpayTurnstileToken ? await window.cpayTurnstileToken('register', { container: document.getElementById('captchaBox') }) : null; }
     catch (te) { err.textContent = te.message || 'Verification failed. Try again.'; err.hidden = false; btn.disabled = false; return; }
     ({ data, error } = await window.supabaseClient.auth.signUp({
       email, password,
@@ -59,7 +60,7 @@ document.getElementById('submitBtn').onclick = async () => {
   } catch (e) {
     error = { message: 'Could not reach the server. Check your connection and try again.' };
   }
-  if (error){ err.textContent=error.message; err.hidden=false; btn.disabled=false; return; }
+  if (error){ err.textContent = window.cpayIsCaptchaError && window.cpayIsCaptchaError(error) ? window.CPAY_CAPTCHA_MESSAGE : error.message; err.hidden=false; btn.disabled=false; return; }
   if (data.session){ location.href = 'dashboard.html'; return; }
   ok.textContent = 'Application received. Confirm your email. An admin then approves the account, unless auto-approval is on.';
   ok.hidden=false;

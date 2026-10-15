@@ -9,6 +9,9 @@
 <meta name="referrer" content="no-referrer">
 <title>New password · CPAY</title>
 <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
 <link rel="stylesheet" href="a11y.css">
@@ -101,7 +104,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (window.applyDomainTheme) await applyDomainTheme();
   const link = window.cpayAuthLink || {};
   if (link.kind === 'expired') {
-    linkProblem('This link no longer works', 'It has expired, was already used, or was changed in transit. Reset links work once and expire after about an hour. Enter your email to get a new one.');
+    linkProblem('This email link no longer works', 'It has expired, was already used, or was changed in transit. Email links work once and expire after about an hour. To reset your password, enter your email for a new link. To confirm a new account, log in and ask for the confirmation email again.');
     return;
   }
   if (link.tokenHash) { state('confirm'); return; }

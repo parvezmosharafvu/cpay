@@ -28,7 +28,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Serving from the origin removes that dependency entirely and follows
 // whichever domain the link was actually shared on.
 const OG_PATH = "/assets/og";
-const OG_ASSET_VERSION = "3";
+const OG_ASSET_VERSION = "4";
 // Real pages and static files that must never be treated as a payment slug.
 // Keep this in sync with the RESERVED list in 404.html and dashboard.html.
 const RESERVED = new Set([

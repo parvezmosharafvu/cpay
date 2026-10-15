@@ -1,0 +1,16 @@
+<!-- CPAY sign-up confirmation: paste into Supabase → Authentication → Emails →
+     Templates → "Confirm signup" (Message body). Subject: Confirm your CPAY account
+     {{ .ConfirmationURL }} confirms the address and opens log in
+     (login.html?confirmed=1, set by the sign-up form; it must be on the
+     Redirect URLs list, otherwise it opens the home page, which forwards
+     to log in). No account detail appears in the email. -->
+<div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#111827">
+  <p style="font-size:18px;font-weight:700;margin:0 0 16px">CPAY</p>
+  <h2 style="font-size:20px;margin:0 0 12px">Confirm your email</h2>
+  <p style="margin:0 0 16px;line-height:1.5">Thanks for opening a CPAY Freelancer account. Tap the button to confirm this email address. An admin then reviews your account.</p>
+  <p style="margin:0 0 24px">
+    <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#047857;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">Confirm email</a>
+  </p>
+  <p style="margin:0 0 8px;line-height:1.5;color:#4b5563;font-size:14px">The link works once and expires after about a day. If you did not sign up, ignore this email.</p>
+  <p style="margin:0;line-height:1.5;color:#4b5563;font-size:14px">CPAY never asks for your password or authentication code by email or chat.</p>
+</div>

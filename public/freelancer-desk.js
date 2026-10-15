@@ -4,6 +4,16 @@ let me = null;
 let payFilter = { status: '', search: '' };
 let wdFilter = { status: '' };
 
+// Saved payout addresses can be used 24 hours after they are saved or
+// changed (20261009010000); my_payout_book returns usable_after.
+function netLabel(id) {
+  return (USDT_NETWORKS.find(([n]) => n === id) || [id, id])[1];
+}
+function readyText(w) {
+  const t = w.usable_after ? new Date(w.usable_after) : null;
+  if (!t || isNaN(t) || t <= new Date()) return '<span class="net-ready">Ready</span>';
+  return `<span class="net-wait">Usable from ${escapeHtml(t.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }))}</span>`;
+}
 const USDT_NETWORKS = [
   ['tron', 'Tron (TRC-20)'],
   ['bsc', 'BNB Smart Chain (BEP-20)'],
@@ -268,7 +278,7 @@ async function renderCash() {
   const fee = Number(ws?.fee_percent ?? 0);
   const wallets = book?.wallets || [];
   const savedNote = wallets.length
-    ? `<p class="hint">Saved USDT wallets: ${wallets.map((w) => escapeHtml(w.network)).join(', ')}. Open Profile to add more networks.</p>`
+    ? `<p class="hint">Saved USDT wallets: ${wallets.map((w) => `${escapeHtml(netLabel(w.network))} (${readyText(w)})`).join(', ')}. Open Profile to add more networks.</p>`
     : `<p class="hint">Save a USDT address in Profile first. Withdrawals only go to a saved address, starting 24 hours after you save or change it.</p>`;
   el.innerHTML = withdrawForm(`<p class="muted">Available balance <strong id="wAvail">${money(b.available)}</strong></p>`
     + savedNote)
@@ -318,8 +328,7 @@ async function renderProfile() {
   const prefOpts = `<option value="">None yet</option>` + USDT_NETWORKS.map(([id, label]) =>
     `<option value="${id}" ${book?.preferred_usdt_network === id ? 'selected' : ''}>${label}</option>`).join('');
   const rows = wallets.map((w) => {
-    const label = (USDT_NETWORKS.find(([id]) => id === w.network) || [w.network, w.network])[1];
-    return `<tr><td>${escapeHtml(label)}</td><td><code>${escapeHtml(w.address)}</code></td>
+    return `<tr><td>${escapeHtml(netLabel(w.network))}</td><td><code>${escapeHtml(w.address)}</code></td><td>${readyText(w)}</td>
       <td><button type="button" class="btn ghost" data-del-net="${escapeHtml(w.network)}">Remove</button></td></tr>`;
   }).join('');
   el.innerHTML = `<div class="grid split">
@@ -338,8 +347,8 @@ async function renderProfile() {
       <div class="field"><label for="usdtAddr">Wallet address</label><input id="usdtAddr" placeholder="Address for that network" autocomplete="off" spellcheck="false"></div>
       <button class="btn primary" id="saveUsdt" type="button">Save address</button>
       <div class="card flush" style="margin-top:16px">
-        <table class="table"><thead><tr><th>Network</th><th>Address</th><th></th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="3">${deskEmpty('No USDT address saved', 'Add a network address before withdrawing.')}</td></tr>`}</tbody></table>
+        <table class="table"><thead><tr><th>Network</th><th>Address</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="4">${deskEmpty('No USDT address saved', 'Add a network address before withdrawing.')}</td></tr>`}</tbody></table>
       </div>
       <div class="field"><label for="prefNet">Preferred network</label><select id="prefNet">${prefOpts}</select></div>
       <div class="field"><label for="thresh">Auto-withdraw threshold (USD)</label>

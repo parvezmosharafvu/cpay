@@ -70,7 +70,7 @@
     }
 
     const name = el('input');
-    name.type = 'text'; name.maxLength = 40; name.placeholder = verified.length ? 'Backup device' : 'Phone';
+    name.type = 'text'; name.maxLength = 40; name.placeholder = verified.length ? 'Backup authenticator' : 'Google Authenticator';
     name.setAttribute('aria-label', 'Authenticator name');
     name.dataset.role = 'factor-name';
     const add = el('button', 'btn primary', verified.length ? 'Add another authenticator' : 'Turn on two-step sign-in');

@@ -14,7 +14,7 @@
 <link rel="stylesheet" href="a11y.css">
 <script src="auth-link.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="mfa.js"></script>
+<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="turnstile.js"></script><script src="mfa.js"></script>
 </head>
 <body class="auth">
   <a class="skip-link" href="#resetCard">Skip to form</a>
@@ -45,6 +45,7 @@
         <h1 id="linkTitle">This link no longer works</h1>
         <p class="sub" id="linkBody">Reset links work once and expire after about an hour. Enter your email to get a new one.</p>
         <div class="field"><label for="resendEmail">Email</label><input id="resendEmail" type="email" autocomplete="email" inputmode="email" required></div>
+        <div id="captchaBox" class="captcha-box"></div>
         <button class="btn primary block lg" id="resendBtn" type="button">Send a new link</button>
       </div>
 
@@ -190,8 +191,11 @@ byId('password2').addEventListener('keydown', (e) => { if (e.key === 'Enter') by
 byId('resendBtn').onclick = async () => {
   const btn = byId('resendBtn');
   if (btn.disabled) return;
-  const r = await window.cpayResetRequest.requestReset(byId('resendEmail').value.trim());
+  btn.disabled = true;
+  const r = await window.cpayResetRequest.requestReset(byId('resendEmail').value.trim(), { container: byId('captchaBox') });
+  btn.disabled = false;
   if (r === 'invalid'){ showErr('Enter the email address you use for CPAY.'); return; }
+  if (r === 'captcha'){ showErr(window.CPAY_CAPTCHA_MESSAGE); return; }
   if (r === 'network'){ showErr('Could not reach the server. Check your connection and try again.'); return; }
   showOk(window.cpayResetRequest.SENT);
   window.cpayResetRequest.cooldown(btn, 'Send a new link');

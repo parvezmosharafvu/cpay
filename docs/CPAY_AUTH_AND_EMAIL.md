@@ -20,6 +20,36 @@ Nothing on these pages logs, stores or sends the link, password or code
 (checked by `tests/frontend/password-recovery.test.mjs`). The reset page
 sets `noindex` and `no-referrer`.
 
+## CAPTCHA (Supabase Auth Attack Protection)
+
+When CAPTCHA protection is on in Supabase (Authentication → Attack
+Protection), Supabase Auth refuses password sign-in, sign-up and
+reset-email requests without a token: `captcha protection: request
+disallowed (no captcha_token found)` (seen in production on 2026-10-15,
+which blocked every login). Refresh, MFA challenge/verify and opening the
+reset link (`/verify`) need no token.
+
+- `public/turnstile.js` gets a fresh Cloudflare Turnstile token per attempt
+  (tokens are single-use), with error, expiry and timeout handling.
+- It is passed as `captchaToken` by: log in, payout re-confirm (`reauth.js`),
+  register, forgot password and "Send a new link".
+- A refused check shows "The security check did not pass…", and never says
+  whether an account exists.
+- Payment pages stay challenge-free unless `CPAY_TURNSTILE_PAYMENTS = true`
+  (a separate decision, with `TURNSTILE_MODE` on create-invoice).
+- CSP already allows `https://challenges.cloudflare.com` (script and frame).
+
+**Required configuration** (all three must match one Turnstile widget):
+
+1. Cloudflare → Turnstile → the widget: hostname `pay-cashapp.buzz` listed.
+2. Supabase → Authentication → Attack Protection: provider **Turnstile**,
+   the widget's **secret** key.
+3. `public/config.js`: `CPAY_TURNSTILE_SITE_KEY` = the widget's **site** key
+   (public). Tests refuse anything shaped like a secret there.
+
+Until 3 is deployed, keep CAPTCHA protection off in Supabase, or nobody can
+sign in.
+
 ## Two-step sign-in (TOTP)
 
 - **Who**: admins (Admin → Security) and Freelancers (desk → Security). Enrol

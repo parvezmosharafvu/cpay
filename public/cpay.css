@@ -897,3 +897,7 @@ body.ops{padding-bottom:48px}
   .desk-skel .row-skel{grid-template-columns:1fr 1fr}
   .table-actions{justify-content:flex-start}
 }
+
+/* Turnstile widget slot (turnstile.js); empty while CAPTCHA is off. */
+.captcha-box{margin:12px 0;min-height:0}
+.captcha-box:empty{display:none}

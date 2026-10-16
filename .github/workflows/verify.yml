@@ -679,6 +679,24 @@ jobs:
       PGPASSWORD: postgres
       POSTGREST_BIN: /tmp/postgrest
     steps:
+      - name: Keep the stack's fixed ports out of the ephemeral range
+        # e2e/stack.mjs listens on 54321-54324, inside Linux's ephemeral range
+        # (32768-60999). If an outbound socket (Postgres/PostgREST pools) or a
+        # port-0 listener (payment service) happens to get one of them first,
+        # an Edge Function dies with AddrInUse and the stack times out
+        # (main 58dc1ec, Verify run 38437889611). Reserved ports are never
+        # handed out automatically but can still be bound explicitly.
+        # This is the first step: the reservation only covers ports handed out
+        # after it, and the downloads below open hundreds of connections.
+        # GitHub-hosted runners run one job per fresh VM, so no other job
+        # shares these ports; e2e/stack.mjs still refuses to start if any of
+        # them is taken (it never kills a process it did not start).
+        run: |
+          base="${E2E_PORT:-54321}"
+          sudo sysctl -w "net.ipv4.ip_local_reserved_ports=${base}-$((base + 3))"
+          cat /proc/sys/net/ipv4/ip_local_port_range
+          grep -qx "${base}-$((base + 3))" /proc/sys/net/ipv4/ip_local_reserved_ports \
+            || { echo "::error::ports ${base}-$((base + 3)) were not reserved"; exit 1; }
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -700,22 +718,22 @@ jobs:
           (cd payment-service && npm ci --no-audit --no-fund)
           npm run build && npm run prepare:upload
           npx playwright install --with-deps chromium
-      - name: Keep the stack's fixed ports out of the ephemeral range
-        # e2e/stack.mjs listens on 54321-54324, inside Linux's ephemeral range
-        # (32768-60999). If an outbound socket (Postgres/PostgREST pools) or a
-        # port-0 listener (payment service) happens to get one of them first,
-        # an Edge Function dies with AddrInUse and the stack times out
-        # (main 58dc1ec, Verify run 38437889611). Reserved ports are never
-        # handed out automatically but can still be bound explicitly.
-        # GitHub-hosted runners run one job per fresh VM, so no other job
-        # shares these ports; e2e/stack.mjs still refuses to start if any of
-        # them is taken (it never kills a process it did not start).
+      - name: Stack ports not held by a socket from before the reservation
+        # The job's own setup (runner, service container) connects out before
+        # the first step, and a closed client socket keeps its port in
+        # TIME_WAIT for 60s. That alone makes e2e/ports.mjs refuse the port
+        # (54322 on Verify run 38977310130, 2s after a cached install). No new
+        # socket can take these ports now, so wait for the old ones to go; one
+        # still there after 75s is a real conflict and fails here.
         run: |
           base="${E2E_PORT:-54321}"
-          sudo sysctl -w "net.ipv4.ip_local_reserved_ports=${base}-$((base + 3))"
-          cat /proc/sys/net/ipv4/ip_local_port_range
-          grep -qx "${base}-$((base + 3))" /proc/sys/net/ipv4/ip_local_reserved_ports \
-            || { echo "::error::ports ${base}-$((base + 3)) were not reserved"; exit 1; }
+          for i in $(seq 0 75); do
+            held="$(ss -Htan | awk '{print $1, $4}' | grep -E ":(${base}|$((base + 1))|$((base + 2))|$((base + 3)))$" || true)"
+            [ -z "$held" ] && { echo "ports ${base}-$((base + 3)) free (waited ${i}s)"; exit 0; }
+            [ "$i" = 0 ] && echo "waiting for: ${held}"
+            sleep 1
+          done
+          echo "::error::ports still held 75s after setup: ${held}"; sudo ss -Htanp || true; exit 1
       - name: Run the E2E suites
         run: npx playwright test -c tests/e2e/playwright.config.ts
       - name: Stack ports released after the run

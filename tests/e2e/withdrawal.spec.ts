@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { makeUser, login, readyAddress, db, TRON } from './helpers';
+import { makeUser, login, readyAddress, db, TRON, ORIGIN, SITE } from './helpers';
 
 async function openWithdraw(page: Page, earned = 50, fee = 0, ready = true) {
   const u = await makeUser({ name: 'Payout', earned, fee });
@@ -130,4 +130,34 @@ test('networks: a failing routes call is retried with backoff; after the retries
   await page.click('#wNetRetry');
   await expect(page.locator('#wNet option', { hasText: 'Tron' })).toHaveCount(1, { timeout: 15_000 });
   await expect(page.locator('#wNetRetry')).toBeHidden();
+});
+
+test('a password-reset link session cannot confirm a payout; signing in with the password again can', async ({ page }) => {
+  // Someone who can read the member's email but does not know the password:
+  // they request a reset, open the link, and go to the desk with that
+  // session. The payout must ask for the password, not go out.
+  const u = await makeUser({ name: 'Reset Session', earned: 50 });
+  await readyAddress(u.id);
+  await fetch(`${ORIGIN}/auth/v1/recover?redirect_to=${encodeURIComponent(`${SITE}/reset.html`)}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: u.email }),
+  });
+  const mail = (await (await fetch(`${ORIGIN}/__e2e/mailbox?to=${encodeURIComponent(u.email)}`)).json()).filter((m: { kind: string }) => m.kind === 'recovery');
+  expect(mail).toHaveLength(1);
+  await page.goto(mail[0].link);
+  await expect(page.locator('#formState')).toBeVisible();
+  await page.goto('/dashboard.html');
+  await page.click('.navi[data-tab="cash"]');
+  const tron = await page.locator('#wNet option', { hasText: 'Tron' }).getAttribute('value');
+  await page.selectOption('#wNet', tron!);
+  await page.fill('#wDest', TRON);
+  await page.fill('#wAmt', '10');
+  await page.click('#wBtn');
+  await expect(page.locator('#wBtn')).toHaveText(/Confirm and send/);
+  await page.click('#wBtn');
+  await expect(page.locator('#reauthPw')).toBeVisible();
+  expect((await db.query('select count(*)::int n from withdrawals where user_id = $1', [u.id])).rows[0].n).toBe(0);
+  await page.fill('#reauthPw', u.password);
+  await page.click('#reauthOk');
+  await expect(page.locator('#toast')).toHaveText(/Sent/);
+  expect((await db.query('select count(*)::int n from withdrawals where user_id = $1', [u.id])).rows[0].n).toBe(1);
 });

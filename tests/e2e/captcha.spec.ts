@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { makeUser, makeLink, login, db, uniq, ORIGIN, PASSWORD, paymentsFor } from './helpers';
+import { makeUser, makeLink, login, db, uniq, ORIGIN, SITE, PASSWORD, TRON, paymentsFor, readyAddress } from './helpers';
 // @ts-ignore -- plain ESM helper shared with the fake Supabase Auth
 import { totp, b32encode } from '../../e2e/totp.mjs';
 import { randomBytes } from 'node:crypto';
@@ -14,17 +14,25 @@ const captcha = (on: boolean) => fetch(`${ORIGIN}/__e2e/captcha?on=${on ? 1 : 0}
 const mailFor = async (email: string) => (await fetch(`${ORIGIN}/__e2e/mailbox?to=${encodeURIComponent(email)}`)).json();
 const CAPTCHA_MSG = /The security check did not pass/;
 
-// mode: 'pass' issues a fresh token; 'fail' calls the error callback once,
-// then passes (a retry works).
+// mode: 'pass' issues a fresh token. The others misbehave once, then pass
+// (so a retry works): 'fail' calls the error callback, 'expire' the expiry
+// callback, 'bad' hands out a token Supabase Auth refuses (as a stale or
+// forged one would be).
 async function fakeTurnstile(page: Page, { siteKey = true, mode = 'pass' } = {}) {
   const loads: string[] = [];
   await page.route('https://challenges.cloudflare.com/**', (route) => {
     loads.push(route.request().url());
     return route.fulfill({
       contentType: 'application/javascript',
-      body: `window.turnstile = { _n: 0, _fail: ${mode === 'fail' ? 1 : 0},
-        render(el, o) { const id = 'w' + (++this._n); const fail = this._fail > 0; if (fail) this._fail--;
-          setTimeout(() => fail ? o['error-callback']() : o.callback('e2e-pass-' + Math.random().toString(36).slice(2)), 20); return id; },
+      body: `window.turnstile = { _n: 0, _odd: ${mode === 'pass' ? 0 : 1}, _mode: ${JSON.stringify(mode)},
+        render(el, o) { const id = 'w' + (++this._n); const odd = this._odd > 0; if (odd) this._odd--;
+          const tok = (p) => p + Math.random().toString(36).slice(2);
+          setTimeout(() => {
+            if (!odd) return o.callback(tok('e2e-pass-'));
+            if (this._mode === 'fail') return o['error-callback']();
+            if (this._mode === 'expire') return o['expired-callback']();
+            return o.callback(tok('e2e-bad-'));
+          }, 20); return id; },
         remove() {} };`,
     });
   });
@@ -144,4 +152,80 @@ test('payments stay challenge-free when only Auth CAPTCHA is on', async ({ page 
   await page.waitForURL(/invoice-cpay-v2\.html\?id=/);
   expect(loads).toHaveLength(0);
   expect(await paymentsFor(u.id)).toHaveLength(1);
+});
+
+test('an expired check says so and a retry logs in with a new token', async ({ page }) => {
+  const u = await makeUser({ name: 'Captcha Expired' });
+  await captcha(true);
+  await fakeTurnstile(page, { mode: 'expire' });
+  await login(page, u);
+  await expect(page.locator('#errorMsg')).toHaveText(/Verification expired/);
+  await expect(page.locator('#submitBtn')).toBeEnabled();
+  await page.click('#submitBtn');
+  await page.waitForURL(/dashboard\.html/);
+});
+
+test('a token Supabase Auth refuses gives the plain CAPTCHA message, and a retry with a fresh token works', async ({ page }) => {
+  const u = await makeUser({ name: 'Captcha Refused' });
+  await captcha(true);
+  await fakeTurnstile(page, { mode: 'bad' });
+  await login(page, u);
+  await expect(page.locator('#errorMsg')).toHaveText(CAPTCHA_MSG);
+  await expect(page.locator('#errorMsg')).not.toContainText(/invalid|credentials|not found/i);
+  await expect(page.locator('#submitBtn')).toBeEnabled();
+  await page.click('#submitBtn');
+  await page.waitForURL(/dashboard\.html/);
+});
+
+test('the sign-up confirmation email can be sent again with a token', async ({ page }) => {
+  const email = `${uniq('capconf')}@test.invalid`;
+  await fetch(`${ORIGIN}/__e2e/confirm?on=1`, { method: 'POST' });
+  try {
+    await captcha(true);
+    await fakeTurnstile(page);
+    await page.goto('/register.html');
+    await page.fill('#email', email);
+    await page.fill('#password', PASSWORD);
+    await page.click('#submitBtn');
+    await expect(page.locator('#checkState')).toBeVisible();
+    await login(page, { id: '', email, password: PASSWORD });
+    await expect(page.locator('#confirmBox')).toBeVisible();
+    await page.click('#resendConfirmBtn');
+    await expect(page.locator('#okMsg')).toContainText('a new link is on its way');
+    expect(await mailFor(email)).toHaveLength(2);
+  } finally {
+    await fetch(`${ORIGIN}/__e2e/confirm?on=0`, { method: 'POST' });
+  }
+});
+
+test('the payout password re-confirm carries a token too', async ({ page }) => {
+  const u = await makeUser({ name: 'Captcha Payout', earned: 50 });
+  await readyAddress(u.id);
+  // A reset-link session (requested before CAPTCHA is on) must re-confirm.
+  await fetch(`${ORIGIN}/auth/v1/recover?redirect_to=${encodeURIComponent(`${SITE}/reset.html`)}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: u.email }),
+  });
+  const [mail] = (await mailFor(u.email)).filter((m: { kind: string }) => m.kind === 'recovery');
+  await captcha(true);
+  await fakeTurnstile(page, { mode: 'bad' });
+  await page.goto(mail.link);
+  await expect(page.locator('#formState')).toBeVisible();
+  await page.goto('/dashboard.html');
+  await page.click('.navi[data-tab="cash"]');
+  const tron = await page.locator('#wNet option', { hasText: 'Tron' }).getAttribute('value');
+  await page.selectOption('#wNet', tron!);
+  await page.fill('#wDest', TRON);
+  await page.fill('#wAmt', '10');
+  await page.click('#wBtn');
+  await expect(page.locator('#wBtn')).toHaveText(/Confirm and send/);
+  await page.click('#wBtn');
+  await page.fill('#reauthPw', u.password);
+  await page.click('#reauthOk');
+  // The first token is refused: a plain message, nothing sent.
+  await expect(page.locator('#reauthErr')).toHaveText(CAPTCHA_MSG);
+  expect((await db.query('select count(*)::int n from withdrawals where user_id = $1', [u.id])).rows[0].n).toBe(0);
+  await page.fill('#reauthPw', u.password);
+  await page.click('#reauthOk');
+  await expect(page.locator('#toast')).toHaveText(/Sent/);
+  expect((await db.query('select count(*)::int n from withdrawals where user_id = $1', [u.id])).rows[0].n).toBe(1);
 });

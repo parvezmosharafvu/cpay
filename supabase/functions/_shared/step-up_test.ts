@@ -53,3 +53,14 @@ Deno.test("password then TOTP (what reauth.js now produces) passes; aal2 with a 
   const r = checkStepUp(stale, factors, 600, NOW);
   eq(!r.ok && r.reason, "stale_sign_in", "an hour-old aal2 session still re-authenticates");
 });
+
+Deno.test("a fresh passkey sign-in passes; with an authenticator it still needs the code (aal2)", () => {
+  const pk = tok({ sub: "u", aal: "aal1", amr: [{ method: "passkey", timestamp: NOW - 30 }] });
+  eq(checkStepUp(pk, { factors: [] }, 600, NOW).ok, true, "passkey, no authenticator");
+  const r = checkStepUp(pk, { factors: [{ status: "verified" }] }, 600, NOW);
+  eq(!r.ok && r.reason, "mfa_required", "passkey alone is aal1");
+  const both = tok({ sub: "u", aal: "aal2", amr: [{ method: "totp", timestamp: NOW - 5 }, { method: "passkey", timestamp: NOW - 30 }] });
+  eq(checkStepUp(both, { factors: [{ status: "verified" }] }, 600, NOW).ok, true, "passkey + code");
+  const old = tok({ sub: "u", aal: "aal1", amr: [{ method: "passkey", timestamp: NOW - 3600 }] });
+  eq(checkStepUp(old, null, 600, NOW).ok, false, "an hour-old passkey sign-in re-authenticates");
+});

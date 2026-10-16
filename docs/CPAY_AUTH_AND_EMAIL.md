@@ -92,6 +92,43 @@ Owner setup (no code change needed afterwards):
 4. Supabase → Authentication → URL Configuration → Redirect URLs: add
    `https://pay-cashapp.buzz/login.html` (and `/reset.html`).
 
+## Passkeys
+
+`public/passkey.js` (Supabase Auth passkeys, WebAuthn) lets a Freelancer or
+admin sign in with the device's fingerprint, face or screen lock instead of
+the password. It needs supabase-js 2.105 or later (the site uses 2.117.3)
+and the client opt-in in `config.js` (`auth.experimental.passkey`).
+
+- **Shown only when on**: **Sign in with a passkey** on log in, and the
+  **Passkeys** card in Security, appear only when Supabase Auth reports
+  `passkeys_enabled` (public `/settings`, read by `auth-features.js`) and the
+  browser supports WebAuthn.
+- **Adding one**: Security → **Add a passkey** (signed in, confirmed email).
+  An account with an authenticator enters its code first; the rule is
+  checked when the button is pressed. Removing one asks the same.
+- **Signing in**: no email or password; the browser offers the passkeys it
+  holds for `pay-cashapp.buzz`. The challenge request carries a Turnstile
+  token (CAPTCHA). A passkey sign-in is aal1 with amr `passkey`, so **an
+  account with an authenticator still enters its code**; the account status
+  check follows, as for a password sign-in.
+- **Payouts**: the re-confirm dialog offers **Use a passkey** when the
+  account has one (it must be the same account, otherwise the browser is
+  signed out), and **Sign in with Google again** for Google accounts. The
+  payout step-up (`_shared/step-up.ts`) counts a fresh `passkey` sign-in.
+- **Privacy**: the private key never leaves the device or password manager;
+  the pages log and store nothing (`tests/frontend/passkey-wiring.test.mjs`).
+
+Owner setup, once:
+
+1. Supabase → **Authentication → Passkeys** → **Enable Passkey
+   authentication**.
+2. Relying Party Display Name: `CPAY`.
+3. Relying Party ID: `pay-cashapp.buzz` (no `https://`, no path).
+   **Do not change it later**: every passkey is bound to it, and changing it
+   makes all of them stop working.
+4. Relying Party Origins: `https://pay-cashapp.buzz`.
+5. Save. The buttons appear on the site at the next page load; no deploy.
+
 ## Two-step sign-in (TOTP)
 
 - **Who**: admins (Admin → Security) and Freelancers (desk → Security). Enrol
@@ -150,8 +187,8 @@ message. It does not prove it reached the inbox rather than spam.
    two-step sign-in for admins"; then set the Edge secret
    `ADMIN_MFA_EXPECTED=true`. Details: [RUNBOOKS.md](RUNBOOKS.md#two-step-sign-in-admin-mfa).
 
-Sign-up email confirmation is off in production, so no confirmation email
-is sent; turning it on is described in [auth-email-setup.md](auth-email-setup.md).
+Sign-up email confirmation ("Confirm email") was switched on in production
+on 2026-10-15 (owner screenshot); see [auth-email-setup.md](auth-email-setup.md).
 Telegram alerts never contain email addresses (20261014070000).
 
 ## Tests
@@ -163,5 +200,9 @@ Telegram alerts never contain email addresses (20261014070000).
   ordinary session refused, validation, reset with an authenticator.
 - `tests/e2e/member-mfa.spec.ts`, `tests/e2e/admin-mfa.spec.ts`: enrol,
   sign-in challenge, removal, enrolled admin refused at aal1.
+- `tests/e2e/passkey.spec.ts`: Chromium's virtual authenticator runs the
+  real WebAuthn ceremony against the stand-in Auth (which checks the
+  signature): add, sign in, code still asked, code before adding, unknown
+  passkey, pending account, payout re-confirm with a passkey.
 - `ci/admin_aal2_enrolled_test.sql`, `ci/admin_mfa_enforcement_test.sql`,
   Deno tests for the admin gates.

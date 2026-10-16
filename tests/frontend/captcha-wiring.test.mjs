@@ -11,7 +11,7 @@ const pub = (f) => readFileSync(`public/${f}`, 'utf8');
 // Objects from the vm realm: compare by value.
 const same = (a, b, msg) => assert.equal(JSON.stringify(a), JSON.stringify(b), msg);
 const files = readdirSync('public').filter((f) => /\.(html|js)$/.test(f));
-const PROTECTED = /\.auth\.(signInWithPassword|signUp|resetPasswordForEmail|signInWithOtp|resend)\(/g;
+const PROTECTED = /\.auth\.(signInWithPassword|signUp|resetPasswordForEmail|signInWithOtp|resend|signInWithPasskey)\(/g;
 
 test('every protected Auth call passes a captcha token', () => {
   const seen = [];
@@ -23,7 +23,7 @@ test('every protected Auth call passes a captcha token', () => {
       assert.match(call, /captcha/i, `${f}: ${m[1]}() without a captcha token`);
     }
   }
-  for (const want of ['login.html:signInWithPassword', 'login.html:resend', 'reauth.js:signInWithPassword', 'register.html:signUp', 'auth-link.js:resetPasswordForEmail']) {
+  for (const want of ['login.html:signInWithPassword', 'login.html:resend', 'reauth.js:signInWithPassword', 'register.html:signUp', 'auth-link.js:resetPasswordForEmail', 'passkey.js:signInWithPasskey']) {
     assert.ok(seen.includes(want), `expected ${want}`);
   }
 });

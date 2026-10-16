@@ -1,5 +1,5 @@
 // Step-up for money-moving confirms: the caller must have actually signed in
-// (password, one-time code, MFA, magic link or SSO) within the last few
+// (password, passkey, one-time code, MFA, magic link or SSO) within the last few
 // minutes, not merely hold a session that keeps refreshing. Supabase puts
 // each sign-in method and its time in the access token's "amr" claim, which
 // survives refreshes unchanged, so a stolen refresh token or a laptop left
@@ -13,7 +13,9 @@
 // (rollback switch).
 
 export const DEFAULT_STEP_UP_SECONDS = 600;
-const SIGN_IN_METHODS = new Set(["password", "otp", "totp", "mfa/totp", "mfa/phone", "magiclink", "email/signup", "oauth", "sso/saml", "web3", "recovery", "invite"]);
+// "passkey" is a passkey sign-in (Supabase Auth, aal1: an account with an
+// authenticator still needs its code, checked below).
+const SIGN_IN_METHODS = new Set(["password", "otp", "totp", "mfa/totp", "mfa/phone", "magiclink", "email/signup", "oauth", "sso/saml", "web3", "recovery", "invite", "passkey"]);
 
 export function stepUpWindow(raw: string | undefined | null): number {
   const s = String(raw ?? "").trim();

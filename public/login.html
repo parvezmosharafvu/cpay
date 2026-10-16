@@ -29,7 +29,7 @@
 <link rel="stylesheet" href="a11y.css">
 <script src="auth-link.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="turnstile.js"></script><script src="oauth.js"></script><script src="mfa.js"></script>
+<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="turnstile.js"></script><script src="auth-features.js"></script><script src="oauth.js"></script><script src="passkey.js"></script><script src="mfa.js"></script>
 </head>
 <body class="auth">
   <a class="skip-link" href="#loginCard">Skip to form</a>
@@ -38,8 +38,9 @@
     <div class="card" id="loginCard">
       <h1>Log in</h1>
       <p class="sub">Welcome back to your CPAY dashboard.</p>
-      <div data-oauth hidden>
-        <button class="btn oauth-btn block lg" id="googleBtn" type="button"><svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Continue with Google</button>
+      <div class="alt-signin" data-alt hidden>
+        <div data-oauth hidden><button class="btn oauth-btn block lg" id="googleBtn" type="button"><svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Continue with Google</button></div>
+        <div data-passkey hidden><button class="btn oauth-btn block lg" id="passkeyBtn" type="button"><svg class="pk-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>Sign in with a passkey</button></div>
         <div class="or-divider" role="separator"><span>or</span></div>
       </div>
       <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" inputmode="email" required></div>
@@ -154,13 +155,40 @@ document.getElementById('resendConfirmBtn').onclick = async () => {
   window.cpayResetRequest.cooldown(btn, 'Send the confirmation email again');
 };
 document.getElementById('password').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('submitBtn').click(); });
+// Passkey sign-in (passkey.js): no email or password; the device asks for
+// its fingerprint, face or screen lock. Then the same steps as a password
+// sign-in: the authenticator code when the account has one, then the
+// account status.
+async function wirePasskey(){
+  const wrap = document.querySelector('[data-passkey]');
+  wrap.hidden = !(window.cpayPasskey && await window.cpayPasskey.available());
+  if (wrap.hidden) return;
+  const btn = document.getElementById('passkeyBtn');
+  btn.onclick = async () => {
+    if (btn.disabled) return;
+    errEl().hidden = true; okEl().hidden = true; document.getElementById('confirmBox').hidden = true;
+    btn.disabled = true;
+    try {
+      const r = await window.cpayPasskey.signIn({ container: document.getElementById('captchaBox') });
+      if (r.cancelled) return;
+      if (r.code === 'email_not_confirmed') { document.getElementById('confirmBox').hidden = false; return; }
+      if (r.error) { showErr(r.error); return; }
+      await go(r.user.id);
+    } finally { btn.disabled = false; }
+  };
+}
 window.addEventListener('DOMContentLoaded', async () => {
   if (window.applyDomainTheme) await applyDomainTheme();
   if (params.get('reset') === 'done') showOk('Password updated. Log in with your new password.');
   if (arrivedConfirmed) showOk('Email confirmed. Log in to continue.');
   const link = window.cpayAuthLink || {};
   if (link.error) showErr(arrivedGoogle ? 'Google sign-in did not finish. Try again, or use your email and password.' : 'That link no longer works. Log in, or ask for a new email below.');
-  if (window.cpayOAuth) window.cpayOAuth.wire(document.getElementById('googleBtn'), showErr);
+  // Google and passkey buttons appear only when Supabase Auth has them on.
+  await Promise.all([
+    window.cpayOAuth ? window.cpayOAuth.wire(document.getElementById('googleBtn'), showErr) : null,
+    wirePasskey(),
+  ]);
+  document.querySelector('[data-alt]').hidden = document.querySelector('[data-oauth]').hidden && document.querySelector('[data-passkey]').hidden;
   const { data:{ session } } = await window.supabaseClient.auth.getSession();
   if (session) await go(session.user.id);
 });

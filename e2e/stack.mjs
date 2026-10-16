@@ -4,7 +4,8 @@
 //
 //   Postgres  : fresh database $E2E_DB (bootstrap + every migration + e2e/shim.sql)
 //   PostgREST : real RLS, JWTs signed with a local test secret
-//   Auth      : a small GoTrue stand-in (password sign-up/in, refresh, user, recover, verify)
+//   Auth      : a small GoTrue stand-in (password sign-up/in, refresh, user, recover, verify,
+//               TOTP, Google, passkeys)
 //   Functions : the real create-invoice and user-withdraw Edge Functions under Deno
 //   Payments  : the real payment-service with a fake wallet SDK; no network, no money
 //   Gateway   : one origin serving dist/ (with a local config.js), /rest, /auth,
@@ -13,7 +14,7 @@
 // Usage: node e2e/stack.mjs   (then http://127.0.0.1:$E2E_PORT)
 import http from 'node:http';
 import { spawn, execFileSync } from 'node:child_process';
-import { createHmac, randomUUID, randomBytes } from 'node:crypto';
+import { createHmac, randomUUID, randomBytes, createHash, createPublicKey, verify as verifySig } from 'node:crypto';
 import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -180,6 +181,120 @@ function captchaRefused(res, body) {
   return false;
 }
 
+// Passkeys (Supabase Auth /passkeys/*), off unless a test turns them on via
+// /__e2e/passkey. Like GoTrue: discoverable credentials, the relying party is
+// the site's host, a sign-in is aal1 with amr "passkey", and the browser's
+// real WebAuthn answer is checked (challenge, origin, RP id hash, user
+// presence, and the signature against the key stored at registration).
+let passkeysOn = false;
+const RP_ID = 'localhost';
+const passkeys = new Map(); // credential id (base64url) -> { id, userId, jwk, friendly_name, created_at, last_used_at }
+const webauthnChallenges = new Map(); // challenge id -> { challenge, kind, userId, expires }
+const sha256 = (b) => createHash('sha256').update(b).digest();
+// Minimal CBOR (RFC 8949) reader: enough for attestationObject and COSE keys.
+function cbor(buf, at = 0) {
+  const ib = buf[at]; const major = ib >> 5; let info = ib & 31; let p = at + 1; let n = info;
+  if (info === 24) { n = buf[p]; p += 1; } else if (info === 25) { n = buf.readUInt16BE(p); p += 2; } else if (info === 26) { n = buf.readUInt32BE(p); p += 4; } else if (info > 26) throw new Error('cbor: unsupported length');
+  if (major === 0) return [n, p];
+  if (major === 1) return [-1 - n, p];
+  if (major === 2) return [buf.subarray(p, p + n), p + n];
+  if (major === 3) return [buf.subarray(p, p + n).toString('utf8'), p + n];
+  if (major === 4) { const a = []; for (let i = 0; i < n; i++) { const [v, q] = cbor(buf, p); a.push(v); p = q; } return [a, p]; }
+  if (major === 5) { const m = new Map(); for (let i = 0; i < n; i++) { const [k, q] = cbor(buf, p); const [v, r] = cbor(buf, q); m.set(k, v); p = r; } return [m, p]; }
+  if (major === 7) return [info === 20 ? false : info === 21 ? true : null, p];
+  throw new Error('cbor: unsupported type');
+}
+function clientDataOk(c, cred, type) {
+  try {
+    const d = JSON.parse(Buffer.from(cred?.response?.clientDataJSON || '', 'base64url').toString());
+    return d.type === type && d.challenge === c.challenge && d.origin === SITE;
+  } catch { return false; }
+}
+function newWebauthnChallenge(kind, userId) {
+  const id = randomUUID(); const challenge = b64u(randomBytes(32));
+  webauthnChallenges.set(id, { challenge, kind, userId, expires: Date.now() + 300_000 });
+  return { id, challenge };
+}
+function takeWebauthnChallenge(id, kind) {
+  const c = webauthnChallenges.get(String(id || ''));
+  webauthnChallenges.delete(String(id || ''));
+  return c && c.kind === kind && c.expires > Date.now() ? c : null;
+}
+const passkeyJson = (k) => ({ id: k.id, friendly_name: k.friendly_name, created_at: k.created_at, last_used_at: k.last_used_at });
+async function handlePasskeys(req, res, p, body, claims) {
+  if (!passkeysOn) return authError(res, 422, 'Passkey sign-in is disabled', 'passkey_disabled');
+  if (p === '/passkeys/registration/options' && req.method === 'POST') {
+    if (!claims?.sub) return authError(res, 401, 'invalid JWT', 'bad_jwt');
+    const u = await userById(claims.sub);
+    if (!u?.email_confirmed_at) return authError(res, 422, 'Email not confirmed', 'email_not_confirmed');
+    const c = newWebauthnChallenge('register', u.id);
+    const mine = [...passkeys.entries()].filter(([, k]) => k.userId === u.id);
+    return send(res, 200, { challenge_id: c.id, options: {
+      rp: { id: RP_ID, name: 'CPAY' }, user: { id: b64u(Buffer.from(u.id.replace(/-/g, ''), 'hex')), name: u.email, displayName: u.email },
+      challenge: c.challenge, pubKeyCredParams: [{ type: 'public-key', alg: -7 }], timeout: 60000, attestation: 'none',
+      authenticatorSelection: { residentKey: 'required', requireResidentKey: true, userVerification: 'preferred' },
+      excludeCredentials: mine.map(([credId]) => ({ type: 'public-key', id: credId })),
+    } });
+  }
+  if (p === '/passkeys/registration/verify' && req.method === 'POST') {
+    if (!claims?.sub) return authError(res, 401, 'invalid JWT', 'bad_jwt');
+    const c = takeWebauthnChallenge(body.challenge_id, 'register');
+    if (!c || c.userId !== claims.sub) return authError(res, 422, 'Challenge not found', 'webauthn_challenge_not_found');
+    const cred = body.credential;
+    if (!clientDataOk(c, cred, 'webauthn.create')) return authError(res, 422, 'Verification failed', 'webauthn_verification_failed');
+    const [att] = cbor(Buffer.from(cred.response.attestationObject, 'base64url'));
+    const auth = att.get('authData');
+    if (!sha256(RP_ID).equals(auth.subarray(0, 32)) || !(auth[32] & 0x01) || !(auth[32] & 0x40)) return authError(res, 422, 'Verification failed', 'webauthn_verification_failed');
+    const idLen = auth.readUInt16BE(53);
+    const credId = b64u(auth.subarray(55, 55 + idLen));
+    if (credId !== cred.id) return authError(res, 422, 'Verification failed', 'webauthn_verification_failed');
+    if (passkeys.has(credId)) return authError(res, 422, 'Credential already registered', 'webauthn_credential_exists');
+    const [cose] = cbor(auth, 55 + idLen);
+    if (cose.get(1) !== 2 || cose.get(3) !== -7) return authError(res, 422, 'Unsupported key', 'webauthn_verification_failed');
+    const jwk = { kty: 'EC', crv: 'P-256', x: b64u(cose.get(-2)), y: b64u(cose.get(-3)) };
+    const k = { id: randomUUID(), userId: claims.sub, jwk, friendly_name: null, created_at: new Date().toISOString(), last_used_at: null };
+    passkeys.set(credId, k);
+    return send(res, 200, passkeyJson(k));
+  }
+  if (p === '/passkeys/authentication/options' && req.method === 'POST') {
+    if (captchaRefused(res, body)) return;
+    const c = newWebauthnChallenge('signin', null);
+    return send(res, 200, { challenge_id: c.id, options: { challenge: c.challenge, rpId: RP_ID, timeout: 60000, userVerification: 'preferred', allowCredentials: [] } });
+  }
+  if (p === '/passkeys/authentication/verify' && req.method === 'POST') {
+    const c = takeWebauthnChallenge(body.challenge_id, 'signin');
+    if (!c) return authError(res, 422, 'Challenge not found', 'webauthn_challenge_not_found');
+    const cred = body.credential;
+    const k = passkeys.get(String(cred?.id || ''));
+    if (!k) return authError(res, 404, 'Passkey not found', 'webauthn_credential_not_found');
+    if (!clientDataOk(c, cred, 'webauthn.get')) return authError(res, 422, 'Verification failed', 'webauthn_verification_failed');
+    const auth = Buffer.from(cred.response.authenticatorData, 'base64url');
+    const signed = Buffer.concat([auth, sha256(Buffer.from(cred.response.clientDataJSON, 'base64url'))]);
+    const ok = sha256(RP_ID).equals(auth.subarray(0, 32)) && (auth[32] & 0x01)
+      && verifySig('sha256', signed, createPublicKey({ key: k.jwk, format: 'jwk' }), Buffer.from(cred.response.signature, 'base64url'));
+    if (!ok) return authError(res, 422, 'Verification failed', 'webauthn_verification_failed');
+    const u = await userById(k.userId);
+    if (!u?.email_confirmed_at) return authError(res, 400, 'Email not confirmed', 'email_not_confirmed');
+    k.last_used_at = new Date().toISOString();
+    await pool.query('update auth.users set last_sign_in_at = now() where id = $1', [u.id]);
+    return send(res, 200, await session(u, 'passkey'));
+  }
+  if (p === '/passkeys' && req.method === 'GET') {
+    if (!claims?.sub) return authError(res, 401, 'invalid JWT', 'bad_jwt');
+    return send(res, 200, [...passkeys.values()].filter((k) => k.userId === claims.sub).map(passkeyJson));
+  }
+  const one = p.match(/^\/passkeys\/([0-9a-f-]{36})$/);
+  if (one && (req.method === 'DELETE' || req.method === 'PATCH')) {
+    if (!claims?.sub) return authError(res, 401, 'invalid JWT', 'bad_jwt');
+    const entry = [...passkeys.entries()].find(([, k]) => k.id === one[1] && k.userId === claims.sub);
+    if (!entry) return authError(res, 404, 'Passkey not found', 'webauthn_credential_not_found');
+    if (req.method === 'DELETE') { passkeys.delete(entry[0]); return send(res, 204, null); }
+    entry[1].friendly_name = String(body.friendly_name || '').slice(0, 120) || null;
+    return send(res, 200, passkeyJson(entry[1]));
+  }
+  return send(res, 404, { msg: `e2e auth: ${req.method} ${p} not implemented` });
+}
+
 async function handleAuth(req, res, url, body) {
   const p = url.pathname.replace(/^\/auth\/v1/, '');
   const grantType = url.searchParams.get('grant_type');
@@ -216,6 +331,7 @@ async function handleAuth(req, res, url, body) {
     }
   }
   const claims = verifyJwt((req.headers.authorization || '').replace(/^Bearer /i, ''));
+  if (p.startsWith('/passkeys')) return handlePasskeys(req, res, p, body, claims);
   if (p === '/user' && req.method === 'GET') {
     if (!claims?.sub) return authError(res, 401, 'invalid JWT', 'bad_jwt');
     const u = await userById(claims.sub);
@@ -314,7 +430,7 @@ async function handleAuth(req, res, url, body) {
     recoveryHashes.delete(String(body.token_hash));
     return send(res, 200, await session(await userById(id), 'recovery'));
   }
-  if (p === '/settings') return send(res, 200, { external: { email: true, google: google.on }, disable_signup: false, mailer_autoconfirm: !confirmRequired });
+  if (p === '/settings') return send(res, 200, { external: { email: true, google: google.on }, disable_signup: false, mailer_autoconfirm: !confirmRequired, passkeys_enabled: passkeysOn });
   return send(res, 404, { msg: `e2e auth: ${req.method} ${p} not implemented` });
 }
 
@@ -341,7 +457,8 @@ async function proxy(req, res, target, raw, { ownCors = false } = {}) {
   res.end(Buffer.from(await r.arrayBuffer()));
 }
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2' };
-const configJs = `window.SUPABASE_URL = '${ORIGIN}';\nconst SUPABASE_ANON_KEY = '${ANON_KEY}';\nwindow.supabaseClient = window.supabase.createClient(window.SUPABASE_URL, SUPABASE_ANON_KEY);\n`;
+// Same client options as public/config.js (passkeys opted in).
+const configJs = `window.SUPABASE_URL = '${ORIGIN}';\nwindow.SUPABASE_ANON_KEY = '${ANON_KEY}';\nwindow.supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, { auth: { experimental: { passkey: true } } });\n`;
 function serveStatic(req, res, url) {
   const dist = path.join(root, 'dist');
   if (url.pathname === '/config.js') { res.writeHead(200, { 'content-type': 'text/javascript' }); return res.end(configJs); }
@@ -408,6 +525,7 @@ async function main() {
         res.writeHead(302, { location: `${t.redirect}#access_token=${sess.access_token}&refresh_token=${sess.refresh_token}&expires_in=3600&expires_at=${sess.expires_at}&token_type=bearer&type=signup` });
         return res.end();
       }
+      if (url.pathname === '/__e2e/passkey' && req.method === 'POST') { passkeysOn = url.searchParams.get('on') === '1'; return send(res, 200, { passkeysOn }); }
       if (url.pathname === '/__e2e/captcha' && req.method === 'POST') { captchaRequired = url.searchParams.get('on') === '1'; return send(res, 200, { captchaRequired }); }
       if (url.pathname === '/__e2e/anon-key') return send(res, 200, { anonKey: ANON_KEY });
       if (url.pathname === '/__e2e/mailbox') return send(res, 200, mailbox.filter((m) => !url.searchParams.get('to') || m.to === url.searchParams.get('to')));

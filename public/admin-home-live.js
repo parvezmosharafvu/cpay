@@ -34,7 +34,7 @@ async function renderHomeLive() {
     const acts = open
       ? `<button class="btn primary sm" data-ap="${a.id}" data-dec="approved">Approve</button> <button class="btn danger sm" data-ap="${a.id}" data-dec="rejected">Reject</button>`
       : '';
-    return `<tr><td>${escapeHtml(a.display_name || a.email || '')}</td><td>${escapeHtml(a.requested_role || '')}</td><td>${badge(a.status)}</td><td class="num">${acts}</td></tr>`;
+    return `<tr><td>${escapeHtml(a.display_name || a.email || '')}</td><td>${escapeHtml(a.requested_role || '')}</td><td>${escapeHtml(accountTypeText(a))}</td><td>${badge(a.status)}</td><td class="num">${acts}</td></tr>`;
   }).join('');
   const payRows = (pays.data || []).map((p) => `<tr>
       <td>${escapeHtml(when(p.settled_at || p.created_at))}</td>
@@ -62,8 +62,8 @@ async function renderHomeLive() {
     <div class="card"><div class="kicker">Waiting applications</div><div class="kpi">${pendingApps.length}</div></div>
   </div>
   <div class="card flush"><h3 style="padding:16px 20px 0">Applications</h3>
-    <table class="table"><thead><tr><th>Applicant</th><th>Role</th><th>Status</th><th></th></tr></thead>
-    <tbody>${appRows || '<tr><td colspan="4" class="empty">No applications</td></tr>'}</tbody></table></div>
+    <table class="table"><thead><tr><th>Applicant</th><th>Role</th><th>Account type</th><th>Status</th><th></th></tr></thead>
+    <tbody>${appRows || '<tr><td colspan="5" class="empty">No applications</td></tr>'}</tbody></table></div>
   <div class="card flush"><h3 style="padding:16px 20px 0">Recent payouts</h3>
     <table class="table"><thead><tr><th class="num">Amount</th><th>Status</th><th>Address</th><th></th></tr></thead>
     <tbody>${wdRows || '<tr><td colspan="4" class="empty">No withdrawals</td></tr>'}</tbody></table></div>

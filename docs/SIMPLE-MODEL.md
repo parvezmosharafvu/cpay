@@ -7,6 +7,25 @@ Payout is USDT only, to a saved address on a supported network.
 USDC is only used if a live route offers it. Stable Balance is off: sats stay
 in the platform wallet until a USDT quote is confirmed.
 
+## Accounts
+
+Two account types, chosen at sign-up (migration 20261017010000):
+
+- **Individual** (default): one person, under their own name.
+- **Business / Organization**: a company, shop or organization, with its
+  name (`profiles.business_name`, 2 to 120 characters).
+
+The type is shown on the desk and to the admin reviewing the application.
+It grants nothing: both types have the same role (`creator`, shown as
+Freelancer), approval, fees, limits and payouts. Users cannot change it
+after sign-up; an admin can. Continue with Google opens an Individual
+account. There are no team members or organization settings, and no other
+roles (`creator` and `admin` only).
+
+The website balance is **held by CPAY** for either type (custodial).
+CPAY Wallet is a separate, optional app that keeps its own keys on the
+phone; nothing moves between the two.
+
 ## One payout book
 
 Each account saves one USDT address per network in `usdt_wallets`.

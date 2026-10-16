@@ -47,6 +47,7 @@ async function boot() {
     toast('This account role is not supported. Contact support.');
   }
   document.getElementById('hello').textContent = me.display_name || 'Freelancer';
+  document.getElementById('deskKind').textContent = me.account_type === 'business' ? 'Business / Organization account' : 'Individual account';
   document.getElementById('home').innerHTML = deskSkeleton(3);
   document.getElementById('links').innerHTML = deskSkeleton(3);
   document.getElementById('pay').innerHTML = deskSkeleton(4);

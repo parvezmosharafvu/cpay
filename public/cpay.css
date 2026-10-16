@@ -898,6 +898,16 @@ body.ops{padding-bottom:48px}
   .table-actions{justify-content:flex-start}
 }
 
+/* Account type on register: two radio cards. */
+.choice{border:0;margin:0 0 14px;padding:0;display:grid;gap:8px}
+.choice legend{font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px;padding:0}
+.choice-opt{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--surface);cursor:pointer}
+.choice-opt input[type="radio"]{margin:3px 0 0;accent-color:var(--accent);width:18px;height:18px;min-height:0;flex:0 0 auto}
+.choice-opt strong{display:block;font-size:14px}
+.choice-opt .faint{display:block;font-size:13px}
+.choice-opt:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.choice-opt:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+
 /* Turnstile widget slot (turnstile.js); empty while CAPTCHA is off. */
 .captcha-box{margin:12px 0;min-height:0}
 .captcha-box:empty{display:none}

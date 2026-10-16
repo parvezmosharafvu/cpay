@@ -12,8 +12,9 @@ Rows last checked against production on 2026-10-16 (Supabase SQL, Auth logs, sec
 | Backups: the organisation is on the Pro plan (2026-10-16), which adds daily backups. Still open: a decision on point-in-time recovery (PITR add-on) for a money ledger, and one tested restore | Medium | open | Owner: see docs/BACKUP-RECOVERY.md |
 | Public invoice endpoint can be flooded per link/owner (Turnstile off unless `TURNSTILE_MODE=enforce`; `x-cpay-client-ip` from a Cloudflare Worker is not signed) | Medium | open | Owner: set `TURNSTILE_MODE=enforce` after a test payment; see docs/AUDIT-2026-10-14.md |
 | One `CRON_SECRET` shared by six functions and suggested for an external monitor | Medium | open | Owner: do not give it to a monitor; separate secrets per docs/AUDIT-2026-10-14.md |
-| Cloudflare API token shared during setup (2026-10-14) not yet confirmed revoked | Medium | open | Owner: Cloudflare → My Profile → API Tokens → revoke it and create a new one if needed |
+| Cloudflare API token shared during setup (2026-10-14) | Medium | closed | Owner, 2026-10-16: revoked (Cloudflare → My Profile → API Tokens) |
 | Supabase Auth leaked-password protection off (advisor) | Medium | closed | Owner, 2026-10-16: no longer reported by the advisor; Auth refused a known-weak password at sign-up the same day |
+| Payout re-confirm accepted a password-reset link (also a magic link, sign-up confirmation or one-time email code) as a fresh sign-in, so inbox access alone could confirm a payout on an account without an authenticator | High | closed | #115 (merged 2026-10-16; live as user-withdraw v53 and admin-actions v46, deployed source checked) |
 | Freelancer withdraw calls blocked by the browser: `user-withdraw` did not allow the `x-client-info` header, so the desk showed "Networks did not load" | High | closed | #112 (deployed 2026-10-16; desk calls now reach the function and return 200) |
 | Workflows unpinned / no permissions | High | closed | #86 |
 | main not branch-protected | High | closed | repo setting 2026-10-13 |

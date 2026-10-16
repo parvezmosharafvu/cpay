@@ -574,7 +574,7 @@ jobs:
       - name: Wallet dependency audit (high and above fails)
         run: cd wallet && npm audit --omit=dev --audit-level=high
       - name: Build rules (no fake engine in production, hashes, strict CSP)
-        run: node --test tests/wallet/build.test.mjs
+        run: node --test tests/wallet/build.test.mjs tests/wallet/verify-release.test.mjs
       - name: Browser tests (phrase never leaves the page, link is optional and revocable, offline unlock, real library under CSP)
         run: |
           npx playwright install --with-deps chromium

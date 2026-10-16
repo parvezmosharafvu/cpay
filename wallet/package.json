@@ -6,6 +6,7 @@
   "description": "CPAY Wallet: optional standalone non-custodial Lightning wallet (installable web app). Separate from the CPAY website and its ledger.",
   "scripts": {
     "build": "node build.mjs",
+    "build:staging": "WALLET_STAGE=staging WALLET_NETWORK=regtest WALLET_LINK=off node build.mjs",
     "serve": "node serve.mjs"
   },
   "dependencies": {

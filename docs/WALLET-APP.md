@@ -43,8 +43,10 @@ What is proven, by which test, and the Android and mainnet procedures:
 
 ## Publishing and release checks
 
-Publishing steps are in [wallet/README.md](../wallet/README.md) (API key,
-hostname, Workers project, phone tests, then `public/wallet-release.js`).
+Publishing steps are in [wallet/README.md](../wallet/README.md) (staging,
+API key, hostname, Workers project, phone tests, release check, then
+`public/wallet-release.js`). The gates CI enforces before the website links
+to the wallet: [WALLET-RELEASE-GATES.md](WALLET-RELEASE-GATES.md).
 Custody and key management: [wallet/SECURITY.md](../wallet/SECURITY.md).
 
 Release-check separation, as the repository works today:

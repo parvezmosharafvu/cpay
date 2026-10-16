@@ -1,0 +1,54 @@
+name: Wallet release check
+
+# Release gates G4 and G5 (docs/WALLET-RELEASE-GATES.md): run from
+# Actions → "Wallet release check" → Run workflow. Downloads the published
+# CPAY Wallet and checks every file against its version.json manifest and
+# the strict headers. Read-only: no secrets, no deploy, no write access.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Wallet address, https and its own host (for example https://wallet.your-domain)"
+        required: true
+        type: string
+      network:
+        description: "Network the build must be for"
+        required: true
+        default: mainnet
+        type: choice
+        options:
+          - mainnet
+          - regtest
+      sha256:
+        description: "version.json sha256 from the Cloudflare build log (required for production)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Every file matches the manifest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Check the published wallet
+        env:
+          WALLET_URL: ${{ inputs.url }}
+          WALLET_NETWORK: ${{ inputs.network }}
+          WALLET_SHA256: ${{ inputs.sha256 }}
+        run: |
+          if [ "$WALLET_NETWORK" = "mainnet" ] && [ -z "$WALLET_SHA256" ]; then
+            echo "A production (mainnet) check needs the version.json sha256 from the build log." >&2
+            exit 2
+          fi
+          set -- "$WALLET_URL" --network "$WALLET_NETWORK"
+          if [ -n "$WALLET_SHA256" ]; then set -- "$@" --sha256 "$WALLET_SHA256"; fi
+          node scripts/wallet-verify-release.mjs "$@"

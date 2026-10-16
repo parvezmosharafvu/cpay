@@ -19,6 +19,9 @@
 //   WALLET_OUT=<dir>        output directory (default wallet/dist)
 //   WALLET_TEST=1           test build: ships fake-engine.js and allows
 //                           WALLET_ENGINE=fake. Never deploy a test build.
+//   WALLET_STAGE=staging    the staging project (cpay-wallet-staging, test
+//                           coins only): must be regtest, with no API key and
+//                           the CPAY link off. `npm run build:staging` sets it.
 //
 // The wallet library, supabase-js and qrcode-generator come from node_modules, pinned with
 // integrity hashes in package-lock.json, and are copied, not edited.
@@ -42,6 +45,15 @@ if (!['sdk', 'fake'].includes(engine)) fail('WALLET_ENGINE must be sdk or fake')
 if (engine === 'fake' && !test) fail('WALLET_ENGINE=fake is for test builds only (set WALLET_TEST=1)');
 if (!['mainnet', 'regtest'].includes(network)) fail('WALLET_NETWORK must be mainnet or regtest');
 if (/service_role/.test(env('CPAY_SUPABASE_ANON_KEY'))) fail('that is a service-role key; only the public anon key belongs in the wallet');
+// Staging never touches real money or real accounts, and never carries the
+// dedicated wallet key, which belongs only on the production project.
+const stage = env('WALLET_STAGE');
+if (stage && stage !== 'staging') fail('WALLET_STAGE must be staging or unset');
+if (stage === 'staging') {
+  if (network !== 'regtest') fail('a staging build must be WALLET_NETWORK=regtest (test coins only)');
+  if (apiKey) fail('a staging build takes no WALLET_API_KEY; the dedicated key belongs only on the production project');
+  if (env('WALLET_LINK') !== 'off') fail('a staging build must set WALLET_LINK=off (no link to real CPAY accounts)');
+}
 
 // Optional CPAY link: the website's own public config by default.
 let supabaseUrl = env('CPAY_SUPABASE_URL');

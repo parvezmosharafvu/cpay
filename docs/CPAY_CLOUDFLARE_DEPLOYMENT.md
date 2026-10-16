@@ -43,6 +43,17 @@ Owner steps in the Cloudflare dashboard (no terminal needed):
    `publishedAt`, `versionJsonSha256`) so the website's Download page
    shows the link. Until then it stays "Not available yet".
 
+### Staging: `cpay-wallet-staging` (does not exist yet)
+
+A second, separate project for testing on test coins before production:
+name `cpay-wallet-staging`, the same repository and root `wallet`, build
+command `npm ci --ignore-scripts && npm run build:staging`, deploy command
+`npx wrangler deploy --env staging` (env `staging` in
+`wallet/wrangler.jsonc`), no build variables, its `workers.dev` address (no
+DNS change). The build refuses mainnet, an API key or the CPAY account
+link on staging. Release gates:
+[WALLET-RELEASE-GATES.md](WALLET-RELEASE-GATES.md).
+
 ### Guards already in the build
 
 - Default network is mainnet. A regtest build shows a permanent

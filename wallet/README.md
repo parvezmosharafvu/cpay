@@ -30,6 +30,16 @@ npx playwright test -c tests/wallet/playwright.config.ts
 
 ## Publish (owner steps; nothing here deploys on merge)
 
+Every step is a release gate in
+[docs/WALLET-RELEASE-GATES.md](../docs/WALLET-RELEASE-GATES.md); CI keeps
+the website's download link off until all of them pass.
+
+0. **Staging first (test coins only).** A separate Workers Builds project
+   `cpay-wallet-staging`: root directory `wallet`, build command
+   `npm ci --ignore-scripts && npm run build:staging`, deploy command
+   `npx wrangler deploy --env staging`, no build variables. It runs on
+   regtest with no API key and no CPAY link, on its `workers.dev`
+   address. The build refuses anything else.
 1. **API key.** Request a key for this wallet from the wallet library's
    vendor. Do not reuse the website's server key.
 2. **Hostname.** Choose a separate hostname, for example
@@ -42,9 +52,13 @@ npx playwright test -c tests/wallet/playwright.config.ts
 4. **Test on real phones.** Android (Chrome) and iPhone (Safari): create,
    back up, receive a small amount, send it back, lock, restore on a
    second phone.
-5. **Turn on the download link.** In `public/wallet-release.js` set
+5. **Check the release.** GitHub → Actions → "Wallet release check": the
+   production address, network `mainnet`, and the sha256 the build printed.
+   Every file must match its manifest
+   (`scripts/wallet-verify-release.mjs`).
+6. **Turn on the download link.** In `public/wallet-release.js` set
    `url` to the hostname and `publishedAt`, and `versionJsonSha256` to the
-   value the build printed. Until then the website's Download wallet page
+   value the build printed, and record them in the gates page. Until then the website's Download wallet page
    says the wallet is not yet available and shows no link.
 
 ## Limitations of this version

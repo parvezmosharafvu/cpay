@@ -7,6 +7,15 @@
 // root directory "wallet", build command
 //   npm ci --ignore-scripts && npm run build
 // and the WALLET_API_KEY build variable. See wallet/README.md.
+//
+// Staging is a second, separate Workers Builds project named
+// "cpay-wallet-staging" (env "staging" below): build command
+//   npm ci --ignore-scripts && npm run build:staging
+// deploy command
+//   npx wrangler deploy --env staging
+// It runs on the test network only, with no API key and no CPAY link, on
+// its workers.dev address, so it needs no DNS change and holds no real money.
+// See docs/WALLET-RELEASE-GATES.md.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cpay-wallet",
@@ -14,5 +23,15 @@
   "assets": {
     "directory": "dist",
     "not_found_handling": "single-page-application"
+  },
+  "env": {
+    "staging": {
+      "name": "cpay-wallet-staging",
+      "workers_dev": true,
+      "assets": {
+        "directory": "dist",
+        "not_found_handling": "single-page-application"
+      }
+    }
   }
 }

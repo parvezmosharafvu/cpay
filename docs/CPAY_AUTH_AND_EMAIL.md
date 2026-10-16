@@ -140,6 +140,7 @@ Owner setup, once:
   loads the profile repeats this check (`requireSecondStep` in `app.js`).
 - **Payouts**: the payout step-up asks for the password, then the code; the
   Edge Function refuses an aal1 token when the account has a verified factor.
+  See [Payout re-confirm](#payout-re-confirm-step-up) for what counts.
 - **Admin work**: an admin with a verified authenticator is an admin only at
   aal2 (`is_admin()`, admin-actions, auth-settings), from migration
   20261014080000, regardless of the flag. With `admin_mfa_required` on
@@ -148,6 +149,30 @@ Owner setup, once:
 - **Removal**: needs a current code (aal2). While admin MFA is required, an
   admin's last authenticator cannot be removed; break-glass is in
   [RUNBOOKS.md](RUNBOOKS.md#two-step-sign-in-admin-mfa).
+
+## Payout re-confirm (step-up)
+
+`_shared/step-up.ts` guards `user-withdraw` confirm and the admin money
+actions (`admin-actions`). It passes only when the access token shows:
+
+- a **first-factor sign-in within `STEP_UP_MAX_AGE_SECONDS`** (default 600
+  seconds): `password`, `passkey` or `oauth` (Google). `sso/saml` is
+  accepted for a future enterprise SSO, which CPAY does not offer today;
+- and **aal2** when the account has a verified authenticator.
+
+**Email-link sessions never count**: a password-reset link (`recovery`), a
+sign-up confirmation (`email/signup`), a magic link, a one-time email code
+(`otp`), an invite or an email change. They prove access to the inbox only.
+Until 2026-10-17 they counted, so someone who could read a member's email,
+without the password, could open a reset link and confirm a payout from
+that session. An authenticator code (`totp`) proves the second factor only;
+the first factor must be fresh too. The dialog then asks for the password
+(with a CAPTCHA token) and the payout goes through once
+(`tests/e2e/withdrawal.spec.ts`, `step-up_test.ts`).
+
+Rollback: revert the PR (restores the old method list). The Edge secret
+`STEP_UP_MAX_AGE_SECONDS=0` switches the whole step-up off, aal2 included;
+it is an emergency switch only, and `health` alerts while it is set.
 
 ## Verified on 2026-10-14 (read-only)
 

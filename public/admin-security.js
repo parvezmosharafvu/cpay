@@ -69,7 +69,7 @@
       card.append(list);
     }
 
-    const name = el('input');
+    const name = el('input', 'input factor-name');
     name.type = 'text'; name.maxLength = 40; name.placeholder = verified.length ? 'Backup authenticator' : 'Google Authenticator';
     name.setAttribute('aria-label', 'Authenticator name');
     name.dataset.role = 'factor-name';

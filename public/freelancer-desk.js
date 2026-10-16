@@ -70,7 +70,7 @@ async function renderHome() {
   const b = Array.isArray(bal) ? bal[0] : bal || {};
   const s = Array.isArray(split) ? split[0] : split || {};
   const kpis = `<div class="grid kpis">
-    <div class="card"><div class="kicker">Available</div><div class="kpi">${money(s.net ?? b.available)}</div><div class="faint">Ready to withdraw</div></div>
+    <div class="card"><div class="kicker">Available</div><div class="kpi">${money(s.net ?? b.available)}</div><div class="faint">Held by CPAY, ready to withdraw</div></div>
     <div class="card"><div class="kicker">Settled on your links</div><div class="kpi">${money(s.settled)}</div><div class="faint">All time, paid by customers</div></div>
     <div class="card"><div class="kicker">Platform fee</div><div class="kpi">${money(s.platform_fee)}</div><div class="faint">All time, CPAY's fee on settled payments</div></div>
     <div class="card"><div class="kicker">Link cost</div><div class="kpi">${Daily.pct(s.cost_percent || 0)}</div><div class="faint">Added to what the payer pays</div></div>
@@ -280,7 +280,7 @@ async function renderCash() {
   const savedNote = wallets.length
     ? `<p class="hint">Saved USDT wallets: ${wallets.map((w) => `${escapeHtml(netLabel(w.network))} (${readyText(w)})`).join(', ')}. Open Profile to add more networks.</p>`
     : `<p class="hint">Save a USDT address in Profile first. Withdrawals only go to a saved address, starting 24 hours after you save or change it.</p>`;
-  el.innerHTML = withdrawForm(`<p class="muted">Available balance <strong id="wAvail">${money(b.available)}</strong></p>`
+  el.innerHTML = withdrawForm(`<p class="muted">Available balance <strong id="wAvail">${money(b.available)}</strong>, held by CPAY</p>`
     + savedNote)
     + '<div id="wHist"></div>';
   bindWithdraw(() => fee, {

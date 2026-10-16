@@ -2,14 +2,18 @@
 
 Read by `scripts/release-gate.mjs`: any row with severity Critical or High and status `open` refuses a release (and fails CI). Owner-only items are Medium, so the gate does not stop on them: **every open row below must be closed or explicitly accepted by the owner before a release.** Keep one row per finding; close it with the PR that fixed it.
 
+Rows last checked against production on 2026-10-16 (Supabase SQL, Auth logs, security advisors, organisation plan).
+
 | Finding | Severity | Status | Owner / PR |
 |---|---|---|---|
-| Draft legal pages (terms, privacy, refund, contact) | Medium | open | Owner legal sign-off; gate also checks text |
-| Admin MFA: implemented (#101 enrolment + challenge, #102 aal2 enforcement behind `admin_mfa_required`, off); still needs the owner to enrol two authenticators, test sign-in and a payout at aal2, then turn the flag on and set `ADMIN_MFA_EXPECTED=true`. While the flag is off the server accepts an admin session that skipped its code (the desk pages now ask for it) | Medium | open | Owner (RUNBOOKS "Two-step sign-in") |
-| Real low-value receive → withdraw reconciliation (no real-money end-to-end evidence yet) | Medium | open | Owner |
-| No database backup beyond the nightly git snapshot: the Supabase organisation is on the Free plan (no PITR, no downloadable backups; `auth.users`, audit log and wallet schema not backed up) | Medium | open | Owner: upgrade to Pro (+ PITR for a money ledger) or record a tested manual-dump routine; see docs/BACKUP-RECOVERY.md |
+| Draft legal pages (terms, privacy, refund, contact). Since 2026-10-16 the Google sign-in consent screen links privacy.html and terms.html | Medium | open | Owner legal sign-off (#97, Draft); gate also checks text |
+| Admin MFA: `admin_mfa_required` is on (2026-10-16), so every admin session needs its code. Remaining: enrol a second authenticator (a passkey does not replace it: it is a first factor and the code is still asked), then set the Edge secret `ADMIN_MFA_EXPECTED=true` so the health check alerts if the flag is ever turned off | Medium | open | Owner (RUNBOOKS "Two-step sign-in") |
+| Real low-value receive → withdraw reconciliation: receive is proven (settled payments in production), no withdrawal yet (2026-10-16). The Freelancer desk could not reach withdraw at all until #112 | Medium | open | Owner: one small USDT withdrawal per docs/CPAY_LIVE_TEST_RUNBOOK.md |
+| Backups: the organisation is on the Pro plan (2026-10-16), which adds daily backups. Still open: a decision on point-in-time recovery (PITR add-on) for a money ledger, and one tested restore | Medium | open | Owner: see docs/BACKUP-RECOVERY.md |
 | Public invoice endpoint can be flooded per link/owner (Turnstile off unless `TURNSTILE_MODE=enforce`; `x-cpay-client-ip` from a Cloudflare Worker is not signed) | Medium | open | Owner: set `TURNSTILE_MODE=enforce` after a test payment; see docs/AUDIT-2026-10-14.md |
 | One `CRON_SECRET` shared by six functions and suggested for an external monitor | Medium | open | Owner: do not give it to a monitor; separate secrets per docs/AUDIT-2026-10-14.md |
-| Supabase Auth leaked-password protection off (advisor) | Medium | open | Owner: Auth → Passwords → enable |
+| Cloudflare API token shared during setup (2026-10-14) not yet confirmed revoked | Medium | open | Owner: Cloudflare → My Profile → API Tokens → revoke it and create a new one if needed |
+| Supabase Auth leaked-password protection off (advisor) | Medium | closed | Owner, 2026-10-16: no longer reported by the advisor; Auth refused a known-weak password at sign-up the same day |
+| Freelancer withdraw calls blocked by the browser: `user-withdraw` did not allow the `x-client-info` header, so the desk showed "Networks did not load" | High | closed | #112 (deployed 2026-10-16; desk calls now reach the function and return 200) |
 | Workflows unpinned / no permissions | High | closed | #86 |
 | main not branch-protected | High | closed | repo setting 2026-10-13 |

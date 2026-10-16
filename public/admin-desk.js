@@ -236,13 +236,14 @@ async function renderApps() {
   const rows = (data || []).map((a) => `<tr>
     <td>${escapeHtml(a.display_name || a.email)}</td>
     <td>${escapeHtml(a.requested_role)}</td>
+    <td>${escapeHtml(accountTypeText(a))}</td>
     <td>${badge(a.status)}</td>
     <td class="num">
       <button class="btn primary sm" data-approve="${a.id}">Approve</button>
       <button class="btn danger sm" data-reject="${a.id}">Reject</button>
     </td>
   </tr>`).join('');
-  document.getElementById('apps').innerHTML = `<div class="card flush"><table class="table"><thead><tr><th>Applicant</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="4">${typeof deskEmpty === 'function' ? deskEmpty('No applications waiting', 'New signups appear here for review.') : '<span class="empty">No applications waiting</span>'}</td></tr>`}</tbody></table></div>`;
+  document.getElementById('apps').innerHTML = `<div class="card flush"><table class="table"><thead><tr><th>Applicant</th><th>Role</th><th>Account type</th><th>Status</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="5">${typeof deskEmpty === 'function' ? deskEmpty('No applications waiting', 'New signups appear here for review.') : '<span class="empty">No applications waiting</span>'}</td></tr>`}</tbody></table></div>`;
   document.querySelectorAll('[data-approve]').forEach((b) => b.onclick = () => review(b.dataset.approve, 'approved'));
   document.querySelectorAll('[data-reject]').forEach((b) => b.onclick = () => review(b.dataset.reject, 'rejected'));
 }

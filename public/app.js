@@ -3,6 +3,12 @@ function escapeHtml(s){
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function money(n){ return '$' + Number(n ?? 0).toFixed(2); }
+// Individual or Business / Organization (profiles.account_type, chosen at
+// sign-up). Display only: the type grants nothing. Returns plain text.
+function accountTypeText(row){
+  if (!row || row.account_type !== 'business') return 'Individual';
+  return row.business_name ? `Business / Organization: ${row.business_name}` : 'Business / Organization';
+}
 function when(ts){ return ts ? new Date(ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : ''; }
 function layoutLabel(theme){
   const meta = window.CPAY_LAYOUTS[resolveDesign(theme)];

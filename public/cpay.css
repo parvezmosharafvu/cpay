@@ -907,6 +907,14 @@ body.ops{padding-bottom:48px}
 .oauth-btn:hover{background:var(--surface-2);border-color:color-mix(in srgb,var(--line) 70%,var(--text))}
 .oauth-btn:disabled{opacity:.6;cursor:progress}
 .g-logo{width:18px;height:18px;flex:0 0 auto}
+.pk-icon{width:18px;height:18px;flex:0 0 auto;color:var(--accent)}
+.alt-signin [data-oauth]:not([hidden]) + [data-passkey]{margin-top:10px}
+/* Passkeys list in Security */
+.passkey-list{list-style:none;margin:12px 0;padding:0;display:grid;gap:8px}
+.passkey-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+.passkey-list .pk-name{font-weight:600}
+.passkey-list .pk-meta{display:block;color:var(--faint);font-size:var(--text-sm);font-weight:400}
+.reauth-dialog .alt-confirm{display:grid;gap:8px;margin:4px 0 12px}
 .or-divider{display:flex;align-items:center;gap:12px;margin:16px 0 14px;color:var(--faint);font-size:var(--text-sm)}
 .or-divider::before,.or-divider::after{content:"";flex:1;height:1px;background:var(--line)}
 .label-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}

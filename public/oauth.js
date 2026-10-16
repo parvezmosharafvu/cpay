@@ -1,29 +1,17 @@
 // "Continue with Google" on log in and register (Supabase Auth OAuth).
 //
 // The button appears only when the Google provider is switched on in
-// Supabase (Authentication → Sign In / Providers → Google). The page asks
-// Supabase Auth's public /settings endpoint, so nothing here has to change
-// when the owner turns it on or off. Google returns to login.html, which
+// Supabase (Authentication → Sign In / Providers → Google), read from
+// Supabase Auth's public /settings (auth-features.js), so nothing here has
+// to change when the owner turns it on or off. Google returns to login.html, which
 // finishes the sign-in (two-step code, account status) like a password
 // sign-in. A new Google account starts as a pending Freelancer application,
 // the same as the sign-up form; Google has already verified the email.
 (function () {
-  let cached = null;
-  async function providers() {
-    if (cached) return cached;
-    cached = (async () => {
-      try {
-        const r = await fetch(`${window.SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: window.SUPABASE_ANON_KEY } });
-        if (!r.ok) return {};
-        const s = await r.json();
-        return (s && s.external) || {};
-      } catch (e) { return {}; }
-    })();
-    return cached;
-  }
-
+  // Reads Supabase Auth's public settings once (auth-features.js).
   async function googleEnabled() {
-    return (await providers()).google === true;
+    if (!window.cpayAuthFeatures) return false;
+    return (await window.cpayAuthFeatures()).google === true;
   }
 
   async function startGoogle() {

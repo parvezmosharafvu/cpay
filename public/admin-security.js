@@ -1,5 +1,5 @@
-// Security: two-step sign-in (TOTP authenticators), on the admin desk
-// (Admin → Security) and the Freelancer desk (Security).
+// Security: two-step sign-in (TOTP authenticators) and passkeys, on the
+// admin desk (Admin → Security) and the Freelancer desk (Security).
 //
 // Enrolling the first authenticator works from a normal (aal1) session.
 // Adding another, or removing one, needs the current code first (aal2);
@@ -79,6 +79,76 @@
     const row = el('div', 'row'); row.append(name, add);
     card.append(row);
     sec.replaceChildren(card);
+    const pk = await passkeyCard(verified.length > 0);
+    if (pk && root() === sec && sec.firstChild === card) sec.append(pk);
+  }
+
+  // Passkeys (passkey.js): sign in, and confirm payouts, with the device's
+  // fingerprint, face or screen lock instead of the password. Shown only when
+  // the owner has switched passkeys on in Supabase. Adding or removing one
+  // asks for the authenticator code first when two-step sign-in is on, so a
+  // stolen password alone cannot plant a passkey.
+  async function passkeyCard(hasAuthenticator) {
+    if (!window.cpayPasskey || !window.cpayAuthFeatures) return null;
+    if (!(await window.cpayAuthFeatures()).passkeys) return null;
+    const card = el('div', 'card');
+    card.dataset.role = 'passkeys';
+    card.append(el('h3', null, 'Passkeys'));
+    card.append(el('p', 'hint', hasAuthenticator
+      ? 'Sign in with your fingerprint, face or screen lock instead of your password. Two-step sign-in stays on: you still enter your authenticator code.'
+      : 'Sign in with your fingerprint, face or screen lock instead of your password. The passkey is kept by this device or your password manager (Google Password Manager, iCloud Keychain, 1Password).'));
+    if (!window.cpayPasskey.supported()) {
+      card.append(el('p', 'muted', 'This browser cannot use passkeys. Try an up-to-date Chrome, Safari, Edge or Firefox.'));
+      return card;
+    }
+    let keys = [];
+    try { keys = await window.cpayPasskey.list(); } catch (e) {
+      card.append(el('p', 'muted', 'Your passkeys did not load. Reload the page to try again.'));
+      return card;
+    }
+    if (keys.length) {
+      const list = el('ul', 'passkey-list');
+      for (const k of keys) {
+        const li = el('li');
+        const label = el('span', 'pk-name', k.friendly_name || 'Passkey');
+        const when = [k.created_at ? `added ${new Date(k.created_at).toLocaleDateString()}` : '', k.last_used_at ? `last used ${new Date(k.last_used_at).toLocaleDateString()}` : ''].filter(Boolean).join(' · ');
+        if (when) label.append(el('span', 'pk-meta', when));
+        const rm = el('button', 'btn ghost sm', 'Remove');
+        rm.dataset.passkey = k.id;
+        rm.onclick = () => removePasskey(k);
+        li.append(label, rm);
+        list.append(li);
+      }
+      card.append(list);
+    } else {
+      card.append(el('p', 'muted', 'No passkey yet.'));
+    }
+    const add = el('button', 'btn primary', keys.length ? 'Add another passkey' : 'Add a passkey');
+    add.dataset.role = 'add-passkey';
+    add.onclick = async () => {
+      if (add.disabled) return;
+      add.disabled = true;
+      try {
+        // Checked at click time (not from this card's render): an account
+        // with an authenticator must be at aal2 first.
+        if (!(await window.cpayMfa.ensureAal2('Enter your authenticator code to add a passkey.'))) return;
+        const r = await window.cpayPasskey.register();
+        if (r.cancelled) return;
+        if (r.error) { say(r.error); return; }
+        say('Passkey added. You can now sign in with it.', true);
+        render();
+      } finally { add.disabled = false; }
+    };
+    card.append(add);
+    return card;
+  }
+
+  async function removePasskey(k) {
+    if (!(await window.cpayMfa.ensureAal2('Enter your authenticator code to remove a passkey.'))) return;
+    if (!window.confirm(`Remove the passkey "${k.friendly_name || 'Passkey'}"? You can still sign in with your password.`)) return;
+    try { await window.cpayPasskey.remove(k.id); } catch (e) { say('Could not remove the passkey. Sign in again and retry.'); return; }
+    say('Passkey removed', true);
+    render();
   }
 
   async function startEnrol(friendlyName, hasVerified, all) {

@@ -25,8 +25,10 @@ test('login finishes a sign-in with the code and signs out on cancel', () => {
   assert.match(s, /ensureAal2\([\s\S]*?signOut\(\)/);
 });
 
-test('reauth.js asks for the code after the password when a factor is enrolled', () => {
-  assert.match(pub('reauth.js'), /signInWithPassword[\s\S]*cpayMfa\.needsChallenge\(\)[\s\S]*cpayMfa\.promptCode\(/);
+test('reauth.js asks for the code after the password (or passkey) when a factor is enrolled', () => {
+  const s = pub('reauth.js');
+  assert.match(s, /const finish = async \(\) => \{\s*if \(window\.cpayMfa && await window\.cpayMfa\.needsChallenge\(\)\) \{[\s\S]*?cpayMfa\.promptCode\(/);
+  assert.match(s, /signInWithPassword\([^)]*\);[\s\S]*?if \(error\) throw new Error\('That password is not right\.'\);\s*await finish\(\);/);
 });
 
 test('the MFA scripts never log, store or send codes and secrets elsewhere', () => {

@@ -98,7 +98,10 @@ export function createHandler(cfg: AuthSettingsConfig): (req: Request) => Promis
     }
     async function corsHeaders(req: Request): Promise<Record<string, string>> {
         const h: Record<string, string> = {
-            "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey",
+            // Every header supabase-js may send (its canonical list in
+            // @supabase/supabase-js/cors). Missing x-client-info made the browser
+            // block every desk call after the preflight.
+            "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-retry-count, traceparent, tracestate, baggage",
             "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
             "Vary": "Origin",
         };

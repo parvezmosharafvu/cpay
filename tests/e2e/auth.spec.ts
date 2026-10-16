@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { makeUser, login, db, uniq, ORIGIN, PASSWORD, expectCleanCopy } from './helpers';
+import { makeUser, login, db, uniq, ORIGIN, SITE, PASSWORD, expectCleanCopy } from './helpers';
 // @ts-ignore -- plain ESM helper shared with the fake Supabase Auth
 import { totp, b32encode } from '../../e2e/totp.mjs';
 import { randomBytes } from 'node:crypto';
@@ -59,7 +59,7 @@ test('password recovery: request a link, set a new password, log in with it', as
   await expect(page.locator('#forgotBtn')).toHaveText(/Send again in \d+s/);
   const mail = await mailFor(u.email);
   expect(mail).toHaveLength(1);
-  expect(mail[0].link).toContain(`${ORIGIN}/reset.html#`);
+  expect(mail[0].link).toContain(`${SITE}/reset.html#`);
   await page.goto(mail[0].link);
   await page.fill('#password', 'brand-new-pass-1');
   await page.fill('#password2', 'brand-new-pass-1');
@@ -94,7 +94,7 @@ test('a reset link that falls back to the home page (Site URL) still opens the r
   await expect(page.locator('#okMsg')).toHaveText(SENT);
   const [mail] = await mailFor(u.email);
   // What Supabase Auth does when /reset.html is not on the Redirect URLs list.
-  const home = `${ORIGIN}/${mail.link.slice(mail.link.indexOf('#'))}`;
+  const home = `${SITE}/${mail.link.slice(mail.link.indexOf('#'))}`;
   await page.goto(home);
   await page.waitForURL(/reset\.html/);
   await expect(page.locator('#formState')).toBeVisible();
@@ -196,11 +196,11 @@ test('branded-template link: nothing is used until Continue; a second use is ref
   await page.click('#forgotBtn');
   await expect(page.locator('#okMsg')).toHaveText(SENT);
   const [mail] = await mailFor(u.email);
-  const link = `${ORIGIN}/reset.html?token_hash=${mail.tokenHash}&type=recovery`;
+  const link = `${SITE}/reset.html?token_hash=${mail.tokenHash}&type=recovery`;
   await page.goto(link);
   await expect(page.locator('#confirmState')).toBeVisible();
   // The one-time hash leaves the address bar before anything else loads.
-  expect(page.url()).toBe(`${ORIGIN}/reset.html`);
+  expect(page.url()).toBe(`${SITE}/reset.html`);
   await page.click('#continueBtn');
   await expect(page.locator('#formState')).toBeVisible();
   await page.fill('#password', 'token-hash-pass-1');

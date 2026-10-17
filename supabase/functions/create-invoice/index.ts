@@ -86,6 +86,16 @@ const { data: linkRows, error: linkErr } = await supabaseAdmin
 const link = Array.isArray(linkRows) ? linkRows[0] : linkRows;
 if (linkErr || !link) return json({ error: "Payment link not found" }, 404);
 if (!link.is_active) return json({ error: "This payment link is no longer active" }, 410);
+// A direct link pays the owner's own wallet (direct-invoice); it never gets
+// a platform-wallet invoice. This read only gives the payer a clear answer:
+// the guarantee is the payments insert trigger (20261018010000), so a read
+// error (or this function running before that migration) carries on.
+const { data: modeRow, error: modeErr } = await supabaseAdmin
+  .from("payment_links").select("settlement_mode").eq("id", link.link_id).maybeSingle();
+if (modeErr) console.error("link mode read failed (the insert trigger still guards):", modeErr.message);
+if (modeRow?.settlement_mode === "direct") {
+  return json({ error: "This link takes direct payments. Refresh the page and try again.", code: "direct_link" }, 409);
+}
 
 // The owner's own markup, applied by us. It is the only thing separating
 // what the payer is charged from the link's face value. Clamped

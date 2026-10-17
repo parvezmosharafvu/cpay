@@ -44,6 +44,16 @@ insert into support_messages(id, user_id, sender, message)
 values ('5b000000-0000-0000-0000-0000000003f1', '5b000000-0000-0000-0000-0000000000f1', 'creator', 'sweep victim message');
 insert into usdt_wallets(id, user_id, network, address)
 values ('5b000000-0000-0000-0000-0000000004f1', '5b000000-0000-0000-0000-0000000000f1', 'tron', 'TSweepVictimWa11etAddressXXXXXXXXX');
+-- Direct settlement (20261018010000): the victim's Lightning address and a
+-- direct payment, so a function that leaks or changes them shows up too.
+insert into settlement_destinations(id, user_id, address, callback_host, min_sendable_msat, max_sendable_msat, checked_at, ready_at)
+values ('5b000000-0000-0000-0000-0000000005f1', '5b000000-0000-0000-0000-0000000000f1', 'sweep-victim@pay.example.com',
+        'pay.example.com', 1000, 1000000000, now(), now());
+insert into direct_payments(id, payment_link_id, user_id, destination_id, destination_address, buyer_amount, amount_usd, amount_msat,
+                            btc_usd_rate, rate_sources, bolt11, payment_hash, verify_url, expires_at)
+values ('5b000000-0000-0000-0000-0000000006f1', '5b000000-0000-0000-0000-0000000001f1', '5b000000-0000-0000-0000-0000000000f1',
+        '5b000000-0000-0000-0000-0000000005f1', 'sweep-victim@pay.example.com', 5, 5, 5000000, 100000, array['a', 'b'],
+        'lnbc50u1sweepvictimdirectinvoice', repeat('5b', 32), 'https://pay.example.com/verify/sweep', now() + interval '1 hour');
 
 -- Strings that must never come back to an attacker.
 create temp table sweep_markers(m text primary key);
@@ -53,7 +63,8 @@ insert into sweep_markers values
   ('5b000000-0000-0000-0000-0000000003f1'), ('5b000000-0000-0000-0000-0000000004f1'),
   ('sweep-victim-other@test.invalid'), ('sweep-victim-freelancer@test.invalid'),
   ('sweep-victim-invoice-ref'), ('SweepVictimCity'), ('TSweepVictimWa11etAddressXXXXXXXXX'),
-  ('sweep victim message');
+  ('sweep victim message'), ('5b000000-0000-0000-0000-0000000005f1'), ('5b000000-0000-0000-0000-0000000006f1'),
+  ('sweep-victim@pay.example.com'), ('lnbc50u1sweepvictimdirectinvoice');
 
 -- uuid values tried in each uuid argument.
 create temp table sweep_ids(id uuid primary key);
@@ -67,7 +78,9 @@ create function pg_temp.victim_state() returns text language sql as $$
     (select string_agg(to_jsonb(t)::text, ',' order by t.id) from payments t where t.user_id::text like '5b000000-0000-0000-0000-0000000000_1'),
     (select string_agg(to_jsonb(t)::text, ',' order by t.id) from support_messages t where t.user_id::text like '5b000000-0000-0000-0000-0000000000_1'),
     (select string_agg(to_jsonb(t)::text, ',' order by t.id) from usdt_wallets t where t.user_id::text like '5b000000-0000-0000-0000-0000000000_1'),
-    (select string_agg(to_jsonb(t)::text, ',' order by t.id) from withdrawals t where t.user_id::text like '5b000000-0000-0000-0000-0000000000_1')
+    (select string_agg(to_jsonb(t)::text, ',' order by t.id) from withdrawals t where t.user_id::text like '5b000000-0000-0000-0000-0000000000_1'),
+    (select string_agg(to_jsonb(t)::text, ',' order by t.id) from settlement_destinations t where t.user_id::text like '5b000000-0000-0000-0000-0000000000_1'),
+    (select string_agg(to_jsonb(t)::text, ',' order by t.id) from direct_payments t where t.user_id::text like '5b000000-0000-0000-0000-0000000000_1')
   ))
 $$;
 

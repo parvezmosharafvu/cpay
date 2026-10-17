@@ -1,11 +1,11 @@
-// Port ownership for the E2E stack (e2e/stack.mjs). The stack binds four
-// fixed ports (E2E_PORT, default 54321, .. +3). A port held by anything else
+// Port ownership for the E2E stack (e2e/stack.mjs). The stack binds five
+// fixed ports (E2E_PORT, default 54321, .. +4). A port held by anything else
 // must be a clear startup error, never a timeout or, worse, a stale process
 // answering readiness probes for a service that never started. Nothing here
 // kills a process: the stack only ever stops the children it spawned.
 import net from 'node:net';
 
-export const stackPorts = (base) => ({ gateway: base, rest: base + 1, invoiceFn: base + 2, withdrawFn: base + 3 });
+export const stackPorts = (base) => ({ gateway: base, rest: base + 1, invoiceFn: base + 2, withdrawFn: base + 3, directFns: base + 4 });
 
 // Listening on the unspecified address (dual-stack where available) conflicts
 // with any listener on that port, IPv4 or IPv6, loopback or wildcard.

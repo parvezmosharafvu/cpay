@@ -26,6 +26,7 @@
 <script src="theme.js"></script>
 <script src="wallets-config.js"></script>
 <script src="turnstile.js"></script>
+<script src="direct-pay.js"></script>
 <script>
 /* Apply checkout design before first paint so the page colour does not flash. */
 (function(){
@@ -72,6 +73,7 @@
     <div class="kicker">Amount due</div>
     <div class="amount-value"><span id="amountDue">-</span> <span class="amount-ccy" id="amountCcy">USD</span></div>
     <button class="ref-chip" id="refChip" type="button" aria-label="Copy payment reference">Ref <span class="mono" id="refShort">-</span></button>
+    <div class="direct-note" id="directNote" hidden></div>
     <div class="row status-row">
       <span class="status-chip" id="statusChip" data-state="waiting" role="status" aria-live="polite">Waiting for payment</span>
       <span class="timer-pill" id="timerPill" role="timer" aria-live="off">--:--</span>
@@ -132,7 +134,9 @@
     <div class="receipt-row"><span>Amount</span><b id="rcpAmount">-</b></div>
     <div class="receipt-row"><span>Date</span><b id="rcpDate">-</b></div>
     <div class="receipt-row"><span>Reference</span><b class="mono" id="rcpRef">-</b></div>
+    <div class="receipt-row" id="rcpProofRow" hidden><span>Proof of payment</span><b class="mono" id="rcpProof">-</b></div>
   </div>
+  <p class="direct-note" id="rcpDirectNote" hidden></p>
 
   <div class="receipt-actions">
     <button class="pill-btn btn-copy" id="rcpCopyBtn" type="button">Copy reference</button>
@@ -204,6 +208,11 @@ let amountRequested = 0;
 let linkSlug = '';
 let session = null;       // sessionStorage cache from the payment link page
 let finished = false;     // settled, expired or failed: stop all status work
+// Direct payments (20261018010000): the invoice is the merchant's own
+// wallet's, and the status comes from direct-invoice, which confirms it with
+// the provider's proof of payment.
+const DIRECT = new URLSearchParams(window.location.search).get('settlement') === 'direct';
+let directInfo = null;    // { destination, proof, paymentHash } from the last direct read
 let lastFocus = null;
 
 // Ways out of this page on a phone:
@@ -386,6 +395,14 @@ function withTimeout(promise, ms){
 }
 
 async function fetchInvoiceRow(){
+  if (DIRECT){
+    const r = await window.cpayDirectPay.status(currentPaymentId, LOAD_TIMEOUT_MS);
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error(r.data && r.data.error || 'status unavailable');
+    const row = window.cpayDirectPay.toRow(r.data);
+    directInfo = { destination: row.destination || '', proof: row.proof || '', paymentHash: row.payment_hash || '' };
+    return row;
+  }
   const { data: rows, error } = await withTimeout(
     supabaseClient.rpc('get_invoice_public', { p_payment_id: currentPaymentId }), LOAD_TIMEOUT_MS);
   if (error) throw error;
@@ -454,6 +471,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.title = (merchantName ? 'Pay ' + merchantName : 'Pay') + ' · CPAY';
 
   if (linkSlug) returnPage = '/' + linkSlug;
+  if (DIRECT && directInfo){
+    const note = el('directNote');
+    note.textContent = 'Goes straight to ' + (merchantName || 'the merchant') + "'s own wallet"
+      + (directInfo.destination ? ' (' + directInfo.destination + ')' : '') + '. CPAY does not hold this payment.';
+    note.hidden = false;
+  }
   applyWalletMode();
 
   if (row.status === 'settled'){ finishAsSettled(row.amount_settled || row.amount_requested); return; }
@@ -742,6 +765,13 @@ function finishAsSettled(amount){
   el('rcpAmount').textContent = '$' + paid + ' USD';
   el('rcpDate').textContent = when.toLocaleString();
   el('rcpRef').textContent = shortRef(currentPaymentId);
+  if (DIRECT && directInfo && directInfo.proof){
+    el('rcpProof').textContent = shortRef(directInfo.proof);
+    el('rcpProofRow').hidden = false;
+    el('rcpDirectNote').textContent = 'Paid straight to ' + (directInfo.destination || "the merchant's wallet")
+      + '. CPAY did not hold this payment, so a refund is between you and the merchant. The saved receipt has the full proof of payment.';
+    el('rcpDirectNote').hidden = false;
+  }
   el('successTitle').focus();
 
   // Stash the full values for the copy and save actions, so neither has
@@ -752,6 +782,7 @@ function finishAsSettled(amount){
     date: when.toLocaleString(),
     iso: when.toISOString(),
     reference: currentPaymentId,
+    direct: DIRECT && directInfo ? { ...directInfo } : null,
   };
 }
 
@@ -766,6 +797,15 @@ function receiptText(){
     `Amount     $${receipt.amount} USD`,
     `Date       ${receipt.date}`,
     `Reference  ${receipt.reference}`,
+    ...(receipt.direct && receipt.direct.proof ? [
+      `Paid to    ${receipt.direct.destination} (the merchant's own wallet)`,
+      `Payment hash      ${receipt.direct.paymentHash}`,
+      `Proof of payment  ${receipt.direct.proof}`,
+      '',
+      'This payment went straight to the merchant\'s wallet; CPAY never held',
+      'it. The SHA-256 of the proof of payment is the payment hash of the',
+      'invoice you paid, which anyone can check.',
+    ] : []),
     '',
     'Keep this reference. It is what identifies this payment if you',
     'ever need to ask about it.',
@@ -819,17 +859,24 @@ async function regenerate(){
   try {
     const requestId = window.cpayRequestId ? window.cpayRequestId(reqScope) : undefined;
     const turnstileToken = window.cpayTurnstileToken ? await window.cpayTurnstileToken('pay') : null;
-    const body = JSON.stringify({ slug, amount: base, requestId, turnstileToken: turnstileToken || undefined });
-    const post = (url) => withTimeout(fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }), CREATE_TIMEOUT_MS);
-    let res;
-    try {
-      res = await post('/api/create-invoice');
-      if (res.status === 404 || res.status === 405) throw new Error('proxy unavailable');
-    } catch (e) {
-      if (e && e.message === 'timeout') throw e;
-      res = await post(`${window.SUPABASE_URL}/functions/v1/create-invoice`);
+    let res, result;
+    if (DIRECT){
+      const r = await window.cpayDirectPay.create({ slug, amount: base, requestId, turnstileToken: turnstileToken || undefined }, CREATE_TIMEOUT_MS);
+      res = { ok: r.ok, status: r.status };
+      result = r.data;
+    } else {
+      const body = JSON.stringify({ slug, amount: base, requestId, turnstileToken: turnstileToken || undefined });
+      const post = (url) => withTimeout(fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }), CREATE_TIMEOUT_MS);
+      try {
+        res = await post('/api/create-invoice');
+        if (res.status === 404 || res.status === 405) throw new Error('proxy unavailable');
+      } catch (e) {
+        if (e && e.message === 'timeout') throw e;
+        res = await post(`${window.SUPABASE_URL}/functions/v1/create-invoice`);
+      }
+      result = await res.json().catch(() => ({}));
+      if (res.status === 409 && result.code === 'direct_link'){ window.location.href = '/' + encodeURIComponent(slug); return; }
     }
-    const result = await res.json().catch(() => ({}));
     if (!res.ok || !result.paymentId){
       if (res.status === 409 && window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
       throw new Error(typeof result.error === 'string' ? result.error : 'Could not create a new payment.');
@@ -838,6 +885,7 @@ async function regenerate(){
     sessionStorage.setItem('invoiceSession', JSON.stringify({
       paymentId: result.paymentId, payCode: result.payCode, payUrl: result.payUrl,
       cashAppUrl: result.cashAppUrl || '', returnUrl: '/' + slug, baseAmount: base,
+      settlement: DIRECT ? 'direct' : 'custodial',
     }));
     const q = new URLSearchParams(location.search);
     q.set('id', result.paymentId);

@@ -14,6 +14,7 @@
     <script src="/config.js"></script>
     <script src="/theme.js"></script>
     <script src="/turnstile.js"></script>
+    <script src="/direct-pay.js"></script>
   </head>
   <body class="checkout">
     <a class="skip-link" href="#paymentCard">Skip to payment</a>
@@ -42,6 +43,13 @@
       <div class="state-title">Payment link not found</div>
       <div class="state-sub">This payment link doesn't exist, or its owner has turned it off.</div>
       <div class="state-sub">Check the address with the person who sent it. Nothing has been charged.</div>
+    </div>
+
+    <div class="checkout-card state-panel" id="notTakingCard" hidden aria-hidden="true">
+      <div class="state-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></div>
+      <div class="state-title">This link isn't taking payments right now</div>
+      <div class="state-sub">Payments on this link go straight to the merchant's own wallet, and it isn't set up to receive them at the moment.</div>
+      <div class="state-sub">Nothing has been charged. Try again later, or contact the person who sent the link.</div>
     </div>
 
     <main class="checkout-card" id="paymentCard" hidden aria-hidden="true" style="flex-direction:column;">
@@ -110,6 +118,7 @@
         </div>
         <div class="status-msg" id="statusMsg" role="status" aria-live="polite"></div>
         <div id="walletHint">Pay with Lightning, Cash App or another Lightning wallet</div>
+        <div class="direct-note" id="directNote" hidden>Paid straight to the merchant's own wallet. CPAY does not hold this payment.</div>
         <button class="pay-btn" id="payBtn" type="button">
           <div class="btn-spinner" aria-hidden="true"></div>
           <span id="payBtnText">Continue to payment</span>
@@ -146,19 +155,31 @@ function showLoadError(){
   setPanel('loadingState', false);
   setPanel('paymentCard', false);
   setPanel('notFoundCard', false);
+  setPanel('notTakingCard', false);
   setPanel('loadErrorCard', true);
 }
 function showNotFound(){
   setPanel('loadingState', false);
   setPanel('loadErrorCard', false);
   setPanel('paymentCard', false);
+  setPanel('notTakingCard', false);
   setPanel('notFoundCard', true);
   document.title = 'Payment link not found — CPAY';
+}
+// A direct link whose owner has no usable wallet address (or direct
+// payments are paused): say so before anyone types an amount.
+function showNotTaking(){
+  setPanel('loadingState', false);
+  setPanel('loadErrorCard', false);
+  setPanel('paymentCard', false);
+  setPanel('notFoundCard', false);
+  setPanel('notTakingCard', true);
 }
 function showPaymentCard(){
   setPanel('loadingState', false);
   setPanel('notFoundCard', false);
   setPanel('loadErrorCard', false);
+  setPanel('notTakingCard', false);
   setPanel('paymentCard', true);
   const field = document.documentElement.getAttribute('data-entry') === 'field';
   el('keypad').setAttribute('aria-hidden', field ? 'true' : 'false');
@@ -251,6 +272,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (error && /fetch|network|timeout/i.test(String(error.message || ''))){ showLoadError(); return; }
     if (error || !row || row.is_active === false){ showNotFound(); return; }
     const name = row.display_name || slug;
+    // Direct links (20261018010000) pay the owner's own wallet through
+    // direct-invoice. Pages served before that migration see no field.
+    window.CPAY_SETTLEMENT = row.settlement_mode === 'direct' ? 'direct' : 'custodial';
+    if (window.CPAY_SETTLEMENT === 'direct' && !row.direct_ready){ showNotTaking(); return; }
+    el('directNote').hidden = window.CPAY_SETTLEMENT !== 'direct';
     linkCostPercent = Number(row.cost_percent || 0);
     applyLinkTheme(row.theme);
     window.CPAY_INVOICE_DESIGN = invoiceDesignFor(row.invoice_theme, window.CPAY_LAYOUT);
@@ -337,16 +363,24 @@ function pickChip(e){
 // second tap after returning) is offered again instead of silently making a
 // second one. The server is asked whether it is still payable.
 let openInvoice = null;
-function invoiceUrl(id){
-  return '/invoice-cpay-v2.html?id=' + encodeURIComponent(id) + '&wallet=' + encodeURIComponent(window.CPAY_WALLET_MODE || 'all_wallets') + '&theme=' + encodeURIComponent(window.CPAY_INVOICE_DESIGN || window.CPAY_LAYOUT);
+function invoiceUrl(id, settlement){
+  return '/invoice-cpay-v2.html?id=' + encodeURIComponent(id) + '&wallet=' + encodeURIComponent(window.CPAY_WALLET_MODE || 'all_wallets') + '&theme=' + encodeURIComponent(window.CPAY_INVOICE_DESIGN || window.CPAY_LAYOUT)
+    + ((settlement || window.CPAY_SETTLEMENT) === 'direct' ? '&settlement=direct' : '');
 }
 async function findOpenInvoice(){
   let saved = null;
   try { saved = JSON.parse(sessionStorage.getItem('invoiceSession') || 'null'); } catch {}
   if (!saved || !saved.paymentId || String(saved.returnUrl || '').replace(/^\/|\/$/g, '') !== slug) return;
   try {
-    const { data } = await withTimeout(window.supabaseClient.rpc('get_invoice_public', { p_payment_id: saved.paymentId }), LOOKUP_TIMEOUT_MS);
-    const row = Array.isArray(data) ? data[0] : data;
+    let row;
+    if (saved.settlement === 'direct'){
+      if (window.CPAY_SETTLEMENT !== 'direct') return;
+      const r = await window.cpayDirectPay.status(saved.paymentId, LOOKUP_TIMEOUT_MS);
+      row = r.ok ? window.cpayDirectPay.toRow(r.data) : null;
+    } else {
+      const { data } = await withTimeout(window.supabaseClient.rpc('get_invoice_public', { p_payment_id: saved.paymentId }), LOOKUP_TIMEOUT_MS);
+      row = Array.isArray(data) ? data[0] : data;
+    }
     if (!row || !['new', 'pending'].includes(row.status) || Date.parse(row.expires_at) - Date.now() < 60000) return;
     // Soft-delete rewrites the old link's slug (…--deleted-…) and frees the
     // original for a new link. Match the live link_slug so a reused slug
@@ -356,9 +390,9 @@ async function findOpenInvoice(){
       try { sessionStorage.removeItem('invoiceSession'); } catch {}
       return;
     }
-    openInvoice = { id: saved.paymentId, baseAmount: Number(saved.baseAmount), amount: Number(row.amount_requested) };
+    openInvoice = { id: saved.paymentId, baseAmount: Number(saved.baseAmount), amount: Number(row.amount_requested), settlement: saved.settlement };
     el('resumeText').textContent = 'You have an open payment of $' + openInvoice.amount.toFixed(2) + ' on this link.';
-    el('resumeBtn').onclick = () => { window.location.href = invoiceUrl(openInvoice.id); };
+    el('resumeBtn').onclick = () => { window.location.href = invoiceUrl(openInvoice.id, saved.settlement); };
     el('resumeBox').hidden = false;
   } catch {}
 }
@@ -367,7 +401,7 @@ async function startPayment(){
   const amount = currentAmount();
   if (openInvoice && openInvoice.baseAmount === amount){
     setPaying(true, 'Opening your payment…');
-    window.location.href = invoiceUrl(openInvoice.id);
+    window.location.href = invoiceUrl(openInvoice.id, openInvoice.settlement);
     return;
   }
   clearStatus();
@@ -385,19 +419,29 @@ async function startPayment(){
     let turnstileToken;
     try { turnstileToken = window.cpayTurnstileToken ? await window.cpayTurnstileToken('pay') : null; }
     catch (te) { setStatus(te.message || 'Verification failed. Try again.', 'err'); setPaying(false, 'Continue to payment'); return; }
-    const body = JSON.stringify({ slug, amount, requestId, turnstileToken: turnstileToken || undefined });
-    const post = (url) => withTimeout(fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }), CREATE_TIMEOUT_MS);
-    let res;
-    try {
-      res = await post('/api/create-invoice');
-      if (res.status === 404 || res.status === 405) throw new Error('proxy unavailable');
-    } catch (e) {
-      // A timeout may mean the first request is still being processed;
-      // don't fire a second one (a later retry reuses the request id).
-      if (e && e.message === 'timeout') throw e;
-      res = await post(`${window.SUPABASE_URL}/functions/v1/create-invoice`);
+    const direct = window.CPAY_SETTLEMENT === 'direct';
+    let res, result;
+    if (direct){
+      // The merchant's own wallet provider makes this invoice.
+      const r = await window.cpayDirectPay.create({ slug, amount, requestId, turnstileToken: turnstileToken || undefined }, CREATE_TIMEOUT_MS);
+      res = { ok: r.ok, status: r.status };
+      result = r.data;
+    } else {
+      const body = JSON.stringify({ slug, amount, requestId, turnstileToken: turnstileToken || undefined });
+      const post = (url) => withTimeout(fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }), CREATE_TIMEOUT_MS);
+      try {
+        res = await post('/api/create-invoice');
+        if (res.status === 404 || res.status === 405) throw new Error('proxy unavailable');
+      } catch (e) {
+        // A timeout may mean the first request is still being processed;
+        // don't fire a second one (a later retry reuses the request id).
+        if (e && e.message === 'timeout') throw e;
+        res = await post(`${window.SUPABASE_URL}/functions/v1/create-invoice`);
+      }
+      result = await res.json().catch(() => ({}));
+      // The link was switched to direct payments after this page loaded.
+      if (res.status === 409 && result.code === 'direct_link'){ window.location.reload(); return; }
     }
-    const result = await res.json().catch(() => ({}));
     if (!res.ok || !result.paymentId){
       if (res.status === 409 && window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
       setStatus((typeof result.error === 'string' && result.error) || 'Something went wrong. Please try again.', 'err');
@@ -414,8 +458,10 @@ async function startPayment(){
       // What the payer typed (before any link fee), so an expired request
       // can be re-created with the same server-side pricing.
       baseAmount: amount,
+      settlement: direct ? 'direct' : 'custodial',
+      destination: direct ? String(result.destination || '') : '',
     }));
-    window.location.href = invoiceUrl(result.paymentId);
+    window.location.href = invoiceUrl(result.paymentId, direct ? 'direct' : 'custodial');
   } catch (e){
     console.error('create-invoice failed:', e);
     setStatus(e && e.message === 'timeout'

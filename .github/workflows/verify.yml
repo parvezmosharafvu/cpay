@@ -380,6 +380,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/account_type_test.sql
+      - name: Direct settlement, off by default, paid only with proof, never a balance (20261018010000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/direct_settlement_test.sql
       - name: Money is exact (no float columns or float casts in public)
         env:
           PGPASSWORD: postgres
@@ -478,8 +482,13 @@ jobs:
             deno check "${d}index.ts" || fail=1
           done
           exit $fail
-      - name: exact money helpers and invoice markup (no float cents)
+      - name: exact money helpers, invoice markup, invoice decoder, Lightning-address client, price agreement (no network)
         run: deno test supabase/functions/_shared/ supabase/functions/create-invoice/
+      - name: direct settlement functions against fakes (no network, no database)
+        # direct-invoice: switch, limits, idempotency, paid only with proof,
+        # expiry grace, reconcile secret. settlement-destination: sign-in,
+        # fresh sign-in for save/remove, server-side re-check.
+        run: deno test supabase/functions/direct-invoice/ supabase/functions/settlement-destination/
       - name: auth-settings against a mock Management API
         # Local mock servers only: no call to api.supabase.com, no real token.
         # Covers the admin check (a non-admin is refused before any
@@ -512,7 +521,7 @@ jobs:
         # and pass once they are allowed. This also lists the repo set.
         run: |
           set +e
-          out=$(python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet)
+          out=$(python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination)
           code=$?
           set -e
           echo "$out"
@@ -520,14 +529,16 @@ jobs:
           [ "$(echo "$out" | grep -c '^  ORPHAN')" -eq 3 ] || { echo "expected exactly 3 orphans"; exit 1; }
           for f in reconcile reseller-digest telegram-report; do echo "$out" | grep -q "ORPHAN    $f " || { echo "missing orphan $f"; exit 1; }; done
           ! echo "$out" | grep -q '^  MISSING' || { echo "a repo function is missing from the fixture"; exit 1; }
-          python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet \
+          python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination \
             --allow reconcile --allow reseller-digest --allow telegram-report
       - name: deployed-vs-repo drift check (2026-10-07 list, after orphan deletes)
         # Production list saved after reconcile, reseller-digest and
         # telegram-report were deleted (2026-10-07). Must report no drift.
         # breez-wallet stays undeployed until the wallet cutover
-        # (supabase/functions/breez-wallet/README.md).
-        run: python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-07.json --undeployed breez-wallet
+        # (supabase/functions/breez-wallet/README.md). direct-invoice and
+        # settlement-destination are new (20261018010000) and not in either
+        # saved production list.
+        run: python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-07.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination
 
   frontend:
     name: Pages parse and reference real things
@@ -680,7 +691,7 @@ jobs:
       POSTGREST_BIN: /tmp/postgrest
     steps:
       - name: Keep the stack's fixed ports out of the ephemeral range
-        # e2e/stack.mjs listens on 54321-54324, inside Linux's ephemeral range
+        # e2e/stack.mjs listens on 54321-54325, inside Linux's ephemeral range
         # (32768-60999). If an outbound socket (Postgres/PostgREST pools) or a
         # port-0 listener (payment service) happens to get one of them first,
         # an Edge Function dies with AddrInUse and the stack times out
@@ -693,10 +704,10 @@ jobs:
         # them is taken (it never kills a process it did not start).
         run: |
           base="${E2E_PORT:-54321}"
-          sudo sysctl -w "net.ipv4.ip_local_reserved_ports=${base}-$((base + 3))"
+          sudo sysctl -w "net.ipv4.ip_local_reserved_ports=${base}-$((base + 4))"
           cat /proc/sys/net/ipv4/ip_local_port_range
-          grep -qx "${base}-$((base + 3))" /proc/sys/net/ipv4/ip_local_reserved_ports \
-            || { echo "::error::ports ${base}-$((base + 3)) were not reserved"; exit 1; }
+          grep -qx "${base}-$((base + 4))" /proc/sys/net/ipv4/ip_local_reserved_ports \
+            || { echo "::error::ports ${base}-$((base + 4)) were not reserved"; exit 1; }
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -728,8 +739,8 @@ jobs:
         run: |
           base="${E2E_PORT:-54321}"
           for i in $(seq 0 75); do
-            held="$(ss -Htan | awk '{print $1, $4}' | grep -E ":(${base}|$((base + 1))|$((base + 2))|$((base + 3)))$" || true)"
-            [ -z "$held" ] && { echo "ports ${base}-$((base + 3)) free (waited ${i}s)"; exit 0; }
+            held="$(ss -Htan | awk '{print $1, $4}' | grep -E ":(${base}|$((base + 1))|$((base + 2))|$((base + 3))|$((base + 4)))$" || true)"
+            [ -z "$held" ] && { echo "ports ${base}-$((base + 4)) free (waited ${i}s)"; exit 0; }
             [ "$i" = 0 ] && echo "waiting for: ${held}"
             sleep 1
           done
@@ -742,8 +753,8 @@ jobs:
         run: |
           base="${E2E_PORT:-54321}"
           for i in $(seq 1 20); do
-            busy="$(ss -Htln | awk '{print $4}' | grep -E ":(${base}|$((base + 1))|$((base + 2))|$((base + 3)))$" || true)"
-            [ -z "$busy" ] && { echo "ports ${base}-$((base + 3)) released"; exit 0; }
+            busy="$(ss -Htln | awk '{print $4}' | grep -E ":(${base}|$((base + 1))|$((base + 2))|$((base + 3))|$((base + 4)))$" || true)"
+            [ -z "$busy" ] && { echo "ports ${base}-$((base + 4)) released"; exit 0; }
             sleep 0.5
           done
           echo "::error::still listening after the E2E run: ${busy}"; ss -Htlnp || true; exit 1

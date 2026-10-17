@@ -15,7 +15,7 @@ const freePort = async () => { const s = net.createServer(); const p = await lis
 const sleeper = () => spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)']);
 
 test('stack ports are E2E_PORT .. +3 in the order stack.mjs binds them', () => {
-  assert.deepEqual(stackPorts(54321), { gateway: 54321, rest: 54322, invoiceFn: 54323, withdrawFn: 54324 });
+  assert.deepEqual(stackPorts(54321), { gateway: 54321, rest: 54322, invoiceFn: 54323, withdrawFn: 54324, directFns: 54325 });
 });
 
 test('free ports pass the preflight', async () => {

@@ -6,7 +6,10 @@
 //   PostgREST : real RLS, JWTs signed with a local test secret
 //   Auth      : a small GoTrue stand-in (password sign-up/in, refresh, user, recover, verify,
 //               TOTP, Google, passkeys)
-//   Functions : the real create-invoice and user-withdraw Edge Functions under Deno
+//   Functions : the real create-invoice and user-withdraw Edge Functions under Deno,
+//               and direct-invoice + settlement-destination (one process, e2e/fn-multi.ts)
+//   Provider  : a fake merchant wallet provider (Lightning address, LUD-21) for
+//               direct settlement, answered here for any request with x-e2e-host
 //   Payments  : the real payment-service with a fake wallet SDK; no network, no money
 //   Gateway   : one origin serving dist/ (with a local config.js), /rest, /auth,
 //               /functions, and /__e2e test hooks (mailbox, simulated payment)
@@ -21,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { stackPorts, assertPortsFree, waitReady } from './ports.mjs';
 import { totp, b32encode } from './totp.mjs';
+import { createFakeLnurl } from './fake-lnurl.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(path.join(root, 'payment-service', 'package.json'));
@@ -33,7 +37,8 @@ const PGPASSWORD = process.env.PGPASSWORD || 'postgres';
 const DB = process.env.E2E_DB || 'cpay_e2e';
 const POSTGREST = process.env.POSTGREST_BIN || 'postgrest';
 const DENO = process.env.DENO_BIN || 'deno';
-const REST_PORT = PORT + 1, INVOICE_FN_PORT = PORT + 2, WITHDRAW_FN_PORT = PORT + 3;
+const REST_PORT = PORT + 1, INVOICE_FN_PORT = PORT + 2, WITHDRAW_FN_PORT = PORT + 3, DIRECT_FN_PORT = PORT + 4;
+const lnurl = createFakeLnurl();
 const JWT_SECRET = 'e2e-only-jwt-secret-'.padEnd(48, 'x');
 const SERVICE_SECRET = 'e2e-only-service-secret-'.padEnd(48, 'y');
 // Like production, the website and the API live on different origins
@@ -488,11 +493,17 @@ async function main() {
     SUPABASE_URL: ORIGIN, SUPABASE_ANON_KEY: ANON_KEY, SUPABASE_SERVICE_ROLE_KEY: SERVICE_KEY,
     PAYMENT_SERVICE_URL: pay.url, PAYMENT_SERVICE_SECRET: SERVICE_SECRET, PAYMENT_SERVICE_AUTH_MODE: 'bearer',
     PUBLIC_SITE_URL: SITE, SITE_URL: SITE, ALLOWED_ORIGINS: SITE, E2E_RUN_ID: RUN_ID,
+    // Direct settlement: merchant providers are the fake one below, prices
+    // are fixed, invoices are regtest. Honoured only with a loopback SUPABASE_URL.
+    E2E_LNURL_GATEWAY: ORIGIN, E2E_FIXED_BTC_USD: '100000', DIRECT_SETTLEMENT_NETWORK: 'regtest',
+    DIRECT_RECONCILE_SECRET: 'e2e-only-reconcile-secret',
   };
   const fn = (name, port) => run(DENO, ['run', '--quiet', '--no-lock', '--allow-net', '--allow-env', '--allow-read', 'e2e/fn-wrapper.ts'],
     { ...fnEnv, FN_PORT: String(port), FN_ENTRY: `../supabase/functions/${name}/index.ts` }, name);
   const invoiceFn = fn('create-invoice', INVOICE_FN_PORT);
   const withdrawFn = fn('user-withdraw', WITHDRAW_FN_PORT);
+  const directFns = run(DENO, ['run', '--quiet', '--no-lock', '--allow-net', '--allow-env', '--allow-read', 'e2e/fn-multi.ts'],
+    { ...fnEnv, FN_PORT: String(DIRECT_FN_PORT), FN_NAMES: 'direct-invoice,settlement-destination' }, 'direct-fns');
 
   const server = http.createServer(async (req, res) => {
     const chunks = []; for await (const c of req) chunks.push(c);
@@ -500,6 +511,12 @@ async function main() {
     let body = {}; try { body = raw.length ? JSON.parse(raw) : {}; } catch { /* form or empty */ }
     const url = new URL(req.url, ORIGIN);
     try {
+      // The fake merchant wallet provider (direct settlement), for any host.
+      const providerHost = req.headers['x-e2e-host'];
+      if (providerHost) {
+        const answer = lnurl.handle(String(providerHost), url);
+        return answer ? send(res, 200, answer) : send(res, 404, { status: 'ERROR', reason: 'Not found' });
+      }
       // Edge Functions answer their own preflight, as on Supabase.
       if (req.method === 'OPTIONS' && !url.pathname.startsWith('/functions/v1/')) return send(res, 204, null);
       if (url.pathname.startsWith('/rest/v1/')) return await proxy(req, res, `http://127.0.0.1:${REST_PORT}${url.pathname.slice(8)}${url.search}`, raw);
@@ -507,6 +524,9 @@ async function main() {
       if (url.pathname.startsWith('/realtime/')) return send(res, 404, { msg: 'realtime is not part of the e2e stack; pages poll' });
       if (url.pathname === '/functions/v1/create-invoice') return await proxy(req, res, `http://127.0.0.1:${INVOICE_FN_PORT}/`, raw, { ownCors: true });
       if (url.pathname.startsWith('/functions/v1/user-withdraw')) return await proxy(req, res, `http://127.0.0.1:${WITHDRAW_FN_PORT}${url.pathname.slice('/functions/v1/user-withdraw'.length) || '/'}${url.search}`, raw, { ownCors: true });
+      for (const name of ['direct-invoice', 'settlement-destination']) {
+        if (url.pathname === `/functions/v1/${name}`) return await proxy(req, res, `http://127.0.0.1:${DIRECT_FN_PORT}/${name}`, raw, { ownCors: true });
+      }
       if (url.pathname.startsWith('/functions/v1/')) return send(res, 503, { error: 'not available in e2e' });
       if (url.pathname === '/__e2e/health') return send(res, 200, { ok: true });
       if (url.pathname === '/__e2e/confirm' && req.method === 'POST') { confirmRequired = url.searchParams.get('on') === '1'; return send(res, 200, { confirmRequired }); }
@@ -545,6 +565,29 @@ async function main() {
         }
         return send(res, 200, { status: 'pending' });
       }
+      if (url.pathname === '/__e2e/direct-switch' && req.method === 'POST') {
+        const on = url.searchParams.get('on') === '1';
+        await pool.query("insert into app_settings(key, value) values ('direct_settlement_enabled', $1::jsonb) on conflict (key) do update set value = excluded.value", [JSON.stringify(on)]);
+        return send(res, 200, { on });
+      }
+      if (url.pathname === '/__e2e/direct-ready' && req.method === 'POST') {
+        // Skip the 24-hour wait of a saved Lightning address (test only).
+        const c = await pool.connect();
+        try {
+          await c.query('begin');
+          await c.query('alter table settlement_destinations disable trigger trg_guard_settlement_destination_changes');
+          const r = await c.query("update settlement_destinations set ready_at = now() - interval '1 minute' where user_id = $1 and status = 'active'", [body.userId]);
+          await c.query('alter table settlement_destinations enable trigger trg_guard_settlement_destination_changes');
+          await c.query('commit');
+          return send(res, 200, { updated: r.rowCount });
+        } catch (e) { await c.query('rollback'); throw e; } finally { c.release(); }
+      }
+      if (url.pathname === '/__e2e/direct-pay' && req.method === 'POST') {
+        // The payer pays the merchant's wallet; the fake provider learns it.
+        const { rows: [p] } = await pool.query('select payment_hash from direct_payments where id = $1', [body.paymentId]);
+        if (!p) return send(res, 404, { error: 'no direct payment' });
+        return send(res, 200, { paid: lnurl.pay(p.payment_hash, { forge: body.forge === true }) });
+      }
       if (url.pathname.startsWith('/__e2e/')) return send(res, 404, {});
       if (url.pathname.startsWith('/api/')) return send(res, 404, { error: 'no proxy' }); // as in production assets-only routing
       return serveStatic(req, res, url);
@@ -557,6 +600,7 @@ async function main() {
   await waitReady(rest, 'postgrest', `http://127.0.0.1:${REST_PORT}/`);
   await waitReady(invoiceFn, 'create-invoice', `http://127.0.0.1:${INVOICE_FN_PORT}/`, { ok: ours, ms: 120_000 });
   await waitReady(withdrawFn, 'user-withdraw', `http://127.0.0.1:${WITHDRAW_FN_PORT}/`, { ok: ours, ms: 120_000 });
+  await waitReady(directFns, 'direct-invoice + settlement-destination', `http://127.0.0.1:${DIRECT_FN_PORT}/direct-invoice`, { ok: ours, ms: 120_000 });
   server.listen(PORT, '127.0.0.1', () => console.log(`e2e stack ready on ${ORIGIN}`));
   const stop = async () => { for (const c of children) c.kill('SIGTERM'); await pay.service.stop('e2e-end').catch(() => {}); process.exit(0); };
   process.on('SIGTERM', stop); process.on('SIGINT', stop);

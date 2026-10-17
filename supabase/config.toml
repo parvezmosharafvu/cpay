@@ -63,6 +63,18 @@ verify_jwt = false
 [functions.telegram-notify]
 verify_jwt = false
 
+# Direct settlement (20261018010000, off until the owner turns it on).
+# direct-invoice is called by payers, who have no account, exactly like
+# create-invoice: the gateway JWT check is off and the function defends
+# itself (operator stop, switch, Turnstile, per-address/link/owner limits).
+[functions.direct-invoice]
+verify_jwt = false
+
+# Signed-in Freelancers only: check, save or remove their own Lightning
+# address (save and remove also need a fresh sign-in, checked in code).
+[functions.settlement-destination]
+verify_jwt = true
+
 # Breez Spark wallet (supabase/functions/breez-wallet/README.md). Callers are
 # Edge Functions with an HMAC-signed request and pg_cron with x-cron-secret;
 # it refuses everything else, so the gateway JWT check is off.

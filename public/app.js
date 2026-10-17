@@ -18,12 +18,18 @@ function badge(status){
   const s = String(status || '').toLowerCase();
   return `<span class="badge ${escapeHtml(s)}">${escapeHtml(s || 'unknown')}</span>`;
 }
+// The desk status line floats over the page, so it hides itself after a
+// while (or on a tap) instead of covering content for good.
+let toastTimer = null;
 function toast(msg, ok){
   const el = $('toast');
   if (!el) return alert(msg);
   el.textContent = msg;
   el.classList.toggle('ok', !!ok);
   el.style.display = 'block';
+  el.onclick = () => { el.style.display = 'none'; };
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.display = 'none'; }, 8000);
 }
 async function requireSession(){
   const { data: { session } } = await window.supabaseClient.auth.getSession();
@@ -73,11 +79,18 @@ function deskSkeleton(rows = 4){
   ).join('');
   return `<div class="desk-skel" aria-busy="true" aria-live="polite"><span class="skeleton line lg"></span>${lines}</div>`;
 }
+const STATE_ICONS = {
+  err: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>',
+  empty: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>',
+};
+function stateIcon(kind){
+  return `<span class="state-ico" aria-hidden="true"><svg class="ico" viewBox="0 0 24 24">${STATE_ICONS[kind]}</svg></span>`;
+}
 function deskError(message){
-  return `<div class="state-panel err" role="alert"><p class="state-title">Could not load</p><p class="state-body">${escapeHtml(message || 'Something went wrong. Try again.')}</p></div>`;
+  return `<div class="state-panel err" role="alert">${stateIcon('err')}<p class="state-title">Could not load</p><p class="state-body">${escapeHtml(message || 'Something went wrong. Try again.')}</p></div>`;
 }
 function deskEmpty(title, body){
-  return `<div class="state-panel"><p class="state-title">${escapeHtml(title || 'Nothing here yet')}</p><p class="state-body">${escapeHtml(body || '')}</p></div>`;
+  return `<div class="state-panel">${stateIcon('empty')}<p class="state-title">${escapeHtml(title || 'Nothing here yet')}</p><p class="state-body">${escapeHtml(body || '')}</p></div>`;
 }
 function deskFilterBar(fieldsHtml, actionsHtml = ''){
   return `<div class="desk-toolbar" role="search">${fieldsHtml}${actionsHtml || ''}</div>`;
@@ -174,7 +187,7 @@ async function callFunction(name, body){
 function withdrawForm(whoHtml){
   return `<div class="withdraw">
     <div class="card">
-      <h3>Withdraw USDT</h3>
+      <div class="card-title"><div><h3>Withdraw USDT</h3><p class="faint">Quote first, then confirm. The fee and the amount you receive are shown before you send.</p></div></div>
       <div class="who">${whoHtml}</div>
       <input type="hidden" id="wMethod" value="stablecoin">
       <div class="field" id="wNetField"><label for="wNet">USDT network</label><select id="wNet"></select></div>

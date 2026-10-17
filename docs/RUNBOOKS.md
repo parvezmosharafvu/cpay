@@ -127,6 +127,24 @@ Admin panel (emergency controls): **emergency payments stop** (create-invoice re
 new invoices) and **emergency withdrawals stop** (every withdrawal path
 refuses). Both are checked server-side.
 
+Change emergency-stop settings only through the CPAY admin panel. During every
+freeze test, verify that jsonb_typeof(value) returns boolean for the relevant
+app_settings rows. Do not set emergency-stop values manually as JSON strings.
+
+Why: a JSON string `"true"` shows On and stops new payments, but the SQL
+withdrawal checks don't match it, so withdrawals keep running. The panel calls
+`admin_set_feature_toggle()`, which always writes a JSON boolean; if the panel
+is down, call that RPC rather than writing `app_settings` by hand. Check both
+rows (each must say `boolean`):
+
+```sql
+select key, value, jsonb_typeof(value) from app_settings
+where key in ('emergency_payments_stop', 'emergency_withdrawals_stop');
+```
+
+During a freeze test also try one withdrawal and one new invoice, and check
+that both are refused.
+
 ## Two-step sign-in (admin MFA)
 
 Admin → **Security** turns on two-step sign-in (TOTP authenticator apps).

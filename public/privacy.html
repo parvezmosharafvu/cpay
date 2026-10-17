@@ -20,14 +20,35 @@
 </head>
 <body>
 <main>
-<div class="draft" role="note"><strong>DRAFT, not final legal text.</strong> This page is a placeholder for the owner and legal review. It is not indexed and is not linked from the site. Text in [brackets] must be filled in or replaced before launch.</div>
+<div class="draft" role="note"><strong>DRAFT, not final legal text.</strong> Written from how CPAY actually works today, for the owner and a qualified legal reviewer. It is not indexed and is not linked from the site. Text in [brackets] needs a fact or decision from the owner, or the reviewer's wording, before launch.</div>
 <h1>Privacy Policy</h1>
-<p><em>Last updated: [date]</em></p>
-<h2>What we collect</h2><ul><li>Account data: name, email address, password (stored hashed by our authentication provider).</li><li>Payment data: invoice amounts, status, timestamps and Lightning payment identifiers.</li><li>Payout data: the withdrawal addresses you save.</li><li>Technical data: IP address and browser details in security and server logs; product analytics [confirm whether analytics is enabled].</li></ul>
-<h2>Why</h2><p>To run payment links, credit balances, process withdrawals, prevent fraud and abuse, and meet legal obligations. [Legal bases if GDPR applies.]</p>
-<h2>Who processes it</h2><p>Hosting and database (Supabase), website delivery and bot protection (Cloudflare), notifications (Telegram, for operators only) and our Lightning wallet infrastructure provider. [Complete the list; data transfer safeguards.]</p>
-<h2>Retention</h2><p>[How long account, payment and log data are kept.]</p>
-<h2>Your rights</h2><p>[Access, correction, deletion and how to request them.] Contact us via <a href="/contact.html">contact and support</a>.</p>
+<p><em>Last updated: [Effective date]. Operated by [Company legal name], [Registered address].</em></p>
+<h2>Who we are</h2>
+<p>[Company legal name] runs CPAY and decides how your personal data is used. Contact: [Privacy contact email].</p>
+<h2>What we collect and why</h2>
+<ul>
+<li><strong>Account data:</strong> email address, password (stored only as a hash by our authentication provider), display name, and the store details you choose to publish (name, bio, public link name). To run your account and sign you in.</li>
+<li><strong>Two-step sign-in data:</strong> the fact that you set up an authenticator and the times of sign-in attempts. The authenticator secret is held by our authentication provider. To protect your account.</li>
+<li><strong>Payment data:</strong> invoice amounts, exchange rate, status, timestamps and Lightning payment identifiers for payments made to you. We do not receive your customers' names, card details or wallet balances. To credit your balance and keep accounting records.</li>
+<li><strong>Payout data:</strong> the USDT addresses and networks you save, and your withdrawal history. To send withdrawals and protect them (for example the 24-hour wait on new addresses).</li>
+<li><strong>Security data:</strong> IP address and browser information, used to limit abuse of payment links (rate limiting and bot checks), and an audit log of sensitive account and admin actions. To prevent fraud and investigate incidents.</li>
+</ul>
+<p>We do not use advertising or product-analytics trackers. Your sign-in session is kept in your browser's local storage so you stay signed in. [Reviewer: legal bases for each purpose if GDPR or a similar law applies.]</p>
+<h2>Who processes it for us</h2>
+<ul>
+<li>Database, authentication and server functions: Supabase (servers in Singapore).</li>
+<li>Website delivery and bot protection: Cloudflare.</li>
+<li>Lightning payments: our Lightning payment infrastructure provider and the Lightning Network. [Reviewer: decide whether the provider must be named here.]</li>
+<li>Staff notifications: Telegram, used only for CPAY's operator group. Messages include payment amounts and the receiving account's display name.</li>
+<li>Backups: a nightly ledger backup is kept in a private code repository on GitHub. It contains payment records, withdrawal records (only the last four characters of each address), payment links and account names and roles. It does not contain email addresses.</li>
+</ul>
+<p>[Reviewer: international transfer safeguards.] We do not sell personal data.</p>
+<h2>How long we keep it</h2>
+<p>[Owner and reviewer: retention periods for account, payment, withdrawal, audit and log data, taking accounting and anti-money-laundering record-keeping into account.]</p>
+<h2>Your rights</h2>
+<p>You can ask to see, correct or delete your data, or object to some uses, by writing to [Privacy contact email]. Some payment and withdrawal records must be kept even after an account is closed. [Reviewer: rights that apply under the governing law, and the supervisory authority.]</p>
+<h2>The optional CPAY Wallet</h2>
+<p>The CPAY Wallet app keeps its recovery phrase on your phone, encrypted with your passphrase. It is never sent to CPAY. If you choose to link the app to your CPAY account, it signs in to read your website balance and nothing else.</p>
 <p><a href="/">Back to CPAY</a></p>
 </main>
 </body>

@@ -365,6 +365,8 @@ function renderQr(qrText){
     colorDark: '#000000', colorLight: '#ffffff',
     correctLevel: QRCode.CorrectLevel.H,
   });
+  // The QR button's aria-label names the code, so the drawn image is decorative.
+  box.querySelectorAll('img').forEach((img) => { img.alt = ''; });
   box.dataset.rendered = '1';
 }
 

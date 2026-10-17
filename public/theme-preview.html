@@ -149,6 +149,7 @@ document.querySelectorAll('.preview-tabs [data-view]').forEach(tab => {
   });
 });
 if (window.QRCode) new QRCode(document.getElementById('qrcode'), { text: 'lightning:lnbc615u1pj9x7zrpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpusp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygs9qrsgq', width: 440, height: 440, correctLevel: QRCode.CorrectLevel.M });
+document.querySelectorAll('#qrcode img').forEach((img) => { img.alt = ''; });
 render();
 </script>
 </body>

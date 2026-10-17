@@ -84,7 +84,36 @@ A native, signed app would reduce this risk; it needs an Android build
 toolchain and a signing key held by the owner, which this repository does
 not have.
 
+## Sends whose outcome is not known
+
+A payment can go out and the answer still be lost (a timeout, a closed
+tab). The app never treats an error as "nothing was sent":
+
+- The idempotency key is chosen once, when the payment is prepared. The
+  library returns the existing payment for a key it has seen, and uses the
+  key as the Spark transfer id, which the operators do not run twice (per
+  the library's source at 0.26.0). Sending the same prepared payment again
+  cannot pay twice ("Try again safely"). A new prepared payment gets a new
+  key, so the app warns before one to a request it already tried.
+- After an error the app asks the library for that payment: pending is
+  shown as in progress ("do not pay again"), failed as nothing sent, and
+  "no record" as most likely not sent, with a reminder to check Activity.
+- Sends whose outcome is not settled are listed on the phone (no keys:
+  the idempotency key, the pasted request, the amount, the time) and
+  reconciled from the library's own record on every refresh. Preparing the
+  same request again warns that it may pay twice.
+
+Tested in `tests/wallet/wallet.spec.ts` with the test engine's
+fail-after-send and fail-before-send modes.
+
 ## Recovery
+
+Restoring a **different** recovery phrase on a phone that already holds a
+wallet deletes that wallet from the phone, so it needs a tick box and typing
+REPLACE. The same phrase (a forgotten passphrase) needs neither: the app keeps
+a one-way fingerprint of the phrase (64 bits of SHA-256, which cannot give the
+phrase back) to tell them apart. The Security card shows whether the words were
+checked against the paper at creation or used to restore.
 
 The 12 words restore the wallet in CPAY Wallet on any device. The
 passphrase is device-local and not a backup. Clearing site data or

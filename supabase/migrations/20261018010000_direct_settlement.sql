@@ -10,7 +10,8 @@
 --     saved, like a payout address, so a hijacked session cannot redirect
 --     the next payment;
 --   * a link can be switched to settlement_mode 'direct' by its owner only
---     (set_link_settlement_mode), never by an admin or the service role;
+--     (set_link_settlement_mode), never by an admin or the service role,
+--     and only once the address is in use;
 --   * the direct-invoice Edge Function asks the merchant's wallet provider
 --     for the invoice, and records it in direct_payments;
 --   * a direct payment is 'paid' only with a preimage whose SHA-256 is the
@@ -23,10 +24,12 @@
 -- OFF by default: app_settings.direct_settlement_enabled = false. While it
 -- is off nothing changes for anyone: no link can be made direct, the
 -- function refuses, the desk hides the controls. Turning it on is an owner
--- decision (admin_set_feature_toggle, needs aal2).
+-- decision (admin_set_feature_toggle, needs aal2; a direct write of the row
+-- by a signed-in caller is refused by trg_guard_direct_settlement_switch).
 --
 -- Also: get_public_store()'s fallback name was 'CPAY creator'; it is
--- 'CPAY member' (public copy uses Freelancer / member, never the role name).
+-- 'CPAY member' (public copy uses Freelancer / member, never the role name),
+-- and its role filter no longer names the role removed in 20261005020000.
 --
 -- Additive only: two tables, two columns with constant defaults (no table
 -- rewrite), functions and triggers. No existing row changes meaning.
@@ -34,6 +37,7 @@
 -- Rollback (documented, not automatic), with the flag off:
 --   drop trigger if exists trg_guard_payment_settlement_mode on public.payments;
 --   drop trigger if exists trg_guard_link_settlement_mode on public.payment_links;
+--   drop trigger if exists trg_guard_direct_settlement_switch on public.app_settings;
 --   drop the functions created below; re-create get_link_preview() and
 --   get_public_store() from 0093 / 20261004020000 and admin_set_feature_toggle()
 --   from 20261014030000;
@@ -52,6 +56,28 @@ on conflict (key) do nothing;
 alter table public.app_settings drop constraint if exists app_settings_direct_settlement_boolean;
 alter table public.app_settings add constraint app_settings_direct_settlement_boolean
   check (key <> 'direct_settlement_enabled' or jsonb_typeof(value) = 'boolean');
+
+-- A signed-in caller (an admin through the "settings admin write" policy, for
+-- example) can change this key only through admin_set_feature_toggle(),
+-- which needs aal2 to turn it on and audits the change. No-session callers
+-- (migrations, the SQL editor, the service role) are not affected.
+create or replace function public.guard_direct_settlement_switch()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if new.key = 'direct_settlement_enabled'
+     and auth.uid() is not null
+     and coalesce(current_setting('cpay.feature_toggle_rpc', true), '') <> 'on' then
+    raise exception 'Change direct payments in Admin → Settings (two-step sign-in needed to turn them on)';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists trg_guard_direct_settlement_switch on public.app_settings;
+create trigger trg_guard_direct_settlement_switch
+  before insert or update on public.app_settings
+  for each row execute function public.guard_direct_settlement_switch();
 
 create or replace function public.direct_settlement_enabled()
 returns boolean
@@ -89,7 +115,9 @@ create table if not exists public.settlement_destinations (
   checked_at timestamptz not null,
   ready_at timestamptz not null,
   status text not null default 'active' check (status in ('active', 'removed')),
-  created_at timestamptz not null default now(),
+  -- clock_timestamp(): "the newest address" must be well defined even for
+  -- two saves in one transaction.
+  created_at timestamptz not null default clock_timestamp(),
   removed_at timestamptz,
   constraint settlement_destinations_limits check (max_sendable_msat >= min_sendable_msat),
   constraint settlement_destinations_removed check ((status = 'removed') = (removed_at is not null))
@@ -306,6 +334,11 @@ begin
     if not exists (select 1 from settlement_destinations where user_id = v_uid and status = 'active') then
       raise exception 'Add your Lightning address first';
     end if;
+    -- Only an address already in use: a link switched while its address
+    -- still waits would take no payment at all until the wait ends.
+    if not exists (select 1 from system_direct_destination_for(v_uid)) then
+      raise exception 'Your Lightning address is not in use yet. Links can pay it once it is (24 hours after you saved it).';
+    end if;
   end if;
   if v_link.settlement_mode = p_mode then return p_mode; end if;
   perform set_config('cpay.settlement_mode_rpc', 'on', true);
@@ -349,7 +382,9 @@ language plpgsql security definer set search_path = public
 as $$
 declare
   v_existing settlement_destinations;
+  v_ready settlement_destinations;
   v_new settlement_destinations;
+  v_cancelled integer;
 begin
   if p_user_id is null then raise exception 'No account'; end if;
   if not direct_settlement_enabled() then raise exception 'Direct payments are not available yet'; end if;
@@ -363,8 +398,26 @@ begin
   select * into v_existing from settlement_destinations d
    where d.user_id = p_user_id and d.status = 'active'
    order by d.created_at desc limit 1;
+  -- The newest address again (in use or waiting): nothing new, no new wait.
   if found and v_existing.address = lower(p_address) then
     return query select v_existing.id, v_existing.address, v_existing.ready_at, true;
+    return;
+  end if;
+  -- The address already in use, while another one waits: keep the one in
+  -- use and cancel the waiting one (for example one a hijacked session
+  -- saved). No new wait for an address that is already live.
+  select * into v_ready from settlement_destinations d
+   where d.user_id = p_user_id and d.status = 'active' and d.ready_at <= now()
+   order by d.created_at desc limit 1;
+  if found and v_ready.address = lower(p_address) then
+    update settlement_destinations d set status = 'removed', removed_at = now()
+     where d.user_id = p_user_id and d.status = 'active' and d.ready_at > now();
+    get diagnostics v_cancelled = row_count;
+    insert into audit_log(actor_id, actor_email, action, subject_type, subject_id, old_value, new_value, note)
+    values (p_user_id, (select email from profiles where profiles.id = p_user_id), 'settlement.destination_kept', 'profile', p_user_id::text,
+            jsonb_build_object('waiting_cancelled', v_cancelled), jsonb_build_object('address', v_ready.address),
+            'settlement-destination function, after a fresh sign-in');
+    return query select v_ready.id, v_ready.address, v_ready.ready_at, true;
     return;
   end if;
   -- One waiting address at a time: a newer one replaces one still waiting.
@@ -425,7 +478,9 @@ as $$
      select id from direct_payments
       where status <> 'paid'
         and created_at > now() - interval '7 days'
-        and (last_checked_at is null or last_checked_at < now() - make_interval(secs => greatest(p_min_interval_seconds, 1)))
+        -- An expired invoice can still be paid late, but rarely: every 10 min.
+        and (last_checked_at is null or last_checked_at < now() - make_interval(secs =>
+              case when status = 'expired' then greatest(p_min_interval_seconds, 600) else greatest(p_min_interval_seconds, 1) end))
       order by last_checked_at nulls first
       limit least(greatest(p_limit, 1), 100)
       for update skip locked)
@@ -569,8 +624,10 @@ begin
      and coalesce(auth.jwt() ->> 'aal', '') <> 'aal2' then
     raise exception 'Enter your authenticator code first (sign in again with two-step sign-in), then turn direct payments on';
   end if;
+  perform set_config('cpay.feature_toggle_rpc', 'on', true);
   insert into app_settings(key, value) values (p_key, to_jsonb(p_enabled))
   on conflict (key) do update set value = to_jsonb(p_enabled);
+  perform set_config('cpay.feature_toggle_rpc', 'off', true);
   perform record_audit('settings.feature_toggle', 'setting', p_key,
     null, jsonb_build_object('enabled', p_enabled));
   return p_enabled;
@@ -643,7 +700,7 @@ as $$
          from payment_links l where l.user_id=p_user_id and l.is_active=true and l.deleted_at is null),'[]'::jsonb)
   from profiles pr
   where pr.id=p_user_id
-    and pr.role in ('creator','moderator')
+    and pr.role = 'creator'
     and pr.account_status = 'active';
 $$;
 revoke all on function public.get_public_store(uuid) from public;

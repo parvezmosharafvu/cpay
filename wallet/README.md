@@ -72,7 +72,10 @@ the website's download link off until all of them pass.
 - On-chain deposits: a deposit address is shown only on the test network
   (regtest), for funding from the faucet. Mainnet builds do not offer it.
 - Beta: the app tells users to use small amounts only.
-- Lightning addresses and LNURL are not supported.
+- Lightning addresses and LNURL are not supported, so CPAY Wallet cannot yet
+  be the wallet a CPAY direct-payment link pays into (that needs the
+  library's Lightning-address registration and its server in the CSP; see
+  docs/NON-CUSTODIAL-ARCHITECTURE.md, option B).
 - Not tested against the live Spark network from this repository's
   sandbox; CI runs the live regtest test (`WALLET_LIVE=1`) where the
   network is reachable.

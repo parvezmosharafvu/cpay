@@ -151,8 +151,10 @@ export function statusAnswer(r: PublicRow) {
     linkSlug: r.link_slug,
     destination: r.destination_address,
     paidAt: r.paid_at,
-    // Proof of payment: sha256(proof) is paymentHash, the hash in the
-    // invoice the payer paid. Anyone can check it.
+    // The preimage the merchant's wallet provider reported, which hashes to
+    // paymentHash, the hash in the invoice. It binds the provider's "paid" to
+    // this invoice; it is the provider's statement, not CPAY's own sighting
+    // of the payment (the payee side knows the preimage from the start).
     proof: r.status === "paid" ? r.preimage : null,
     paymentHash: r.payment_hash,
   };
@@ -210,7 +212,9 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
     if (link === undefined) return json({ error: BUSY }, 503);
     if (!link) return json({ error: "Payment link not found" }, 404);
     if (!link.is_active) return json({ error: "This payment link is no longer active" }, 410);
-    if (link.settlement_mode !== "direct") return json({ error: "This link does not take direct payments." }, 409);
+    // The page loaded while the link was direct; it has since been switched
+    // back. The page reloads on this code and uses the CPAY-balance flow.
+    if (link.settlement_mode !== "direct") return json({ error: "This link does not take direct payments.", code: "custodial_link" }, 409);
 
     const rawCost = Number(link.cost_percent ?? 0);
     const costPercent = Number.isFinite(rawCost) ? Math.min(Math.max(rawCost, 0), 1000) : 0;
@@ -321,14 +325,19 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
   async function reconcile(req: Request): Promise<Response> {
     if (!deps.reconcileSecret) return json({ error: "Not configured" }, 503);
     if (!secretMatches(req.headers.get("x-direct-reconcile-secret"), deps.reconcileSecret)) return json({ error: "Forbidden" }, 403);
-    const rows = await db.claimChecks(25, 60);
+    // 20 a run, 5 providers at a time: with the 8 s provider timeout a run
+    // stays well inside the function's time limit even when providers hang.
+    const rows = await db.claimChecks(20, 60);
     if (rows === undefined) return json({ error: BUSY }, 503);
     const out: Record<string, number> = { checked: rows.length, paid: 0, expired: 0 };
-    for (const r of rows) {
-      const s = await checkOne(r);
-      if (s === "paid" && r.status !== "paid") out.paid++;
-      if (s === "expired" && r.status !== "expired") out.expired++;
-    }
+    const queue = [...rows];
+    await Promise.all(Array.from({ length: Math.min(5, queue.length) }, async () => {
+      for (let r = queue.shift(); r; r = queue.shift()) {
+        const s = await checkOne(r);
+        if (s === "paid" && r.status !== "paid") out.paid++;
+        if (s === "expired" && r.status !== "expired") out.expired++;
+      }
+    }));
     return json(out);
   }
 

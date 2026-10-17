@@ -426,6 +426,8 @@ async function startPayment(){
       const r = await window.cpayDirectPay.create({ slug, amount, requestId, turnstileToken: turnstileToken || undefined }, CREATE_TIMEOUT_MS);
       res = { ok: r.ok, status: r.status };
       result = r.data;
+      // The link was switched back to the CPAY balance after this page loaded.
+      if (res.status === 409 && result.code === 'custodial_link'){ window.location.reload(); return; }
     } else {
       const body = JSON.stringify({ slug, amount, requestId, turnstileToken: turnstileToken || undefined });
       const post = (url) => withTimeout(fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }), CREATE_TIMEOUT_MS);

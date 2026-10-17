@@ -78,6 +78,14 @@ exception when raise_exception then
 end $$;
 select admin_set_feature_toggle('direct_settlement_enabled', false); -- OFF never needs it
 select set_config('request.jwt.claims', '{"aal":"aal2"}', true);
+-- Not around the function: a signed-in admin writing the row directly
+-- (the "settings admin write" policy) is refused, aal2 or not.
+do $$ begin
+  update app_settings set value = 'true'::jsonb where key = 'direct_settlement_enabled';
+  raise exception 'a signed-in admin wrote the switch directly';
+exception when raise_exception then
+  if sqlerrm not like 'Change direct payments in Admin%' then raise; end if;
+end $$;
 select admin_set_feature_toggle('direct_settlement_enabled', true);
 select set_config('request.jwt.claim.sub', 'd5000000-0000-0000-0000-0000000000f1', true);
 do $$ begin
@@ -114,10 +122,34 @@ do $$ begin
   raise exception 'a malformed address was stored';
 exception when check_violation then null;
 end $$;
+-- While the address waits, a link cannot pay it yet.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'd5000000-0000-0000-0000-0000000000f1', true);
+do $$ begin
+  perform set_link_settlement_mode('d5000000-0000-0000-0000-0000000001f1', 'direct');
+  raise exception 'a link was made direct while its address still waits';
+exception when raise_exception then
+  if sqlerrm not like 'Your Lightning address is not in use yet%' then raise; end if;
+end $$;
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
 -- Pass the wait (test only: rewrite the row with the guard off).
 alter table settlement_destinations disable trigger trg_guard_settlement_destination_changes;
 update settlement_destinations set ready_at = now() - interval '1 minute' where user_id = 'd5000000-0000-0000-0000-0000000000f1';
 alter table settlement_destinations enable trigger trg_guard_settlement_destination_changes;
+-- Another address saved (waiting), then the one in use saved again: the
+-- waiting one is cancelled and the one in use keeps going, with no new wait.
+do $$
+declare r record; v_ready timestamptz;
+begin
+  select ready_at into v_ready from settlement_destinations where user_id = 'd5000000-0000-0000-0000-0000000000f1' and status = 'active';
+  perform system_set_settlement_destination('d5000000-0000-0000-0000-0000000000f1', 'mallory@evil.example.com', 'evil.example.com', 1000, 1000000000);
+  select * into r from system_set_settlement_destination('d5000000-0000-0000-0000-0000000000f1', 'alice@pay.example.com', 'pay.example.com', 1000, 1000000000);
+  if not r.unchanged or r.ready_at <> v_ready then raise exception 're-saving the address in use started a new wait: %', r; end if;
+  if exists (select 1 from settlement_destinations where address = 'mallory@evil.example.com' and status = 'active') then
+    raise exception 'the waiting address was not cancelled';
+  end if;
+end $$;
 do $$ begin
   if (select address from system_direct_destination_for('d5000000-0000-0000-0000-0000000000f1')) <> 'alice@pay.example.com' then
     raise exception 'ready destination not used';
@@ -250,6 +282,15 @@ select 'd5000000-0000-0000-0000-0000000003f2', 'd5000000-0000-0000-0000-00000000
   from settlement_destinations d where d.user_id = 'd5000000-0000-0000-0000-0000000000f1' and d.status = 'active';
 do $$ begin
   if system_expire_direct_payment('d5000000-0000-0000-0000-0000000003f2', 600) <> 'expired' then raise exception 'not expired after the grace period'; end if;
+  -- The sweep checks an expired invoice at most every 10 minutes.
+  update direct_payments set last_checked_at = now() - interval '2 minutes' where id = 'd5000000-0000-0000-0000-0000000003f2';
+  if exists (select 1 from system_claim_direct_checks(10, 60) where id = 'd5000000-0000-0000-0000-0000000003f2') then
+    raise exception 'an expired invoice was re-checked within 10 minutes';
+  end if;
+  update direct_payments set last_checked_at = now() - interval '11 minutes' where id = 'd5000000-0000-0000-0000-0000000003f2';
+  if not exists (select 1 from system_claim_direct_checks(10, 60) where id = 'd5000000-0000-0000-0000-0000000003f2') then
+    raise exception 'an expired invoice was not re-checked after 10 minutes';
+  end if;
   if system_record_direct_payment_proof('d5000000-0000-0000-0000-0000000003f2', repeat('33', 32)) <> 'paid' then raise exception 'late proof refused'; end if;
 end $$;
 -- The CPAY balance is exactly what it was: direct payments are not in it.
@@ -271,7 +312,7 @@ exception when insufficient_privilege then null;
 end $$;
 select set_config('request.jwt.claim.sub', 'd5000000-0000-0000-0000-0000000000f1', true);
 do $$ begin
-  if (select count(*) from direct_payments) <> 2 or (select count(*) from settlement_destinations) <> 1 then raise exception 'A cannot read own direct rows'; end if;
+  if (select count(*) from direct_payments) <> 2 or (select count(*) from settlement_destinations) <> 2 then raise exception 'A cannot read own direct rows'; end if;
   insert into settlement_destinations(user_id, address, callback_host, min_sendable_msat, max_sendable_msat, checked_at, ready_at)
   values ('d5000000-0000-0000-0000-0000000000f1', 'self@pay.example.com', 'pay.example.com', 1, 2, now(), now());
   raise exception 'a Freelancer inserted a destination without the wait';

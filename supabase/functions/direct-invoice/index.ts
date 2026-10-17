@@ -12,25 +12,18 @@ import { toCents } from "../_shared/money.ts";
 import { checkTurnstile, turnstileMode } from "../create-invoice/guards.ts";
 import { currentRate, type Rate } from "../_shared/btc-rate.ts";
 import { lightningAddressProvider } from "../_shared/direct-settlement.ts";
-import { denoResolver, e2eGatewayFetch, guardedFetch } from "../_shared/lnurl.ts";
-import type { Bolt11Network } from "../_shared/bolt11.ts";
+import { directNetwork, isLocalStack, merchantFetch } from "../_shared/direct-env.ts";
 import { createHandler, type Db, type DirectRow, type PublicRow } from "./handler.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const sb = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const TURNSTILE_SECRET = Deno.env.get("TURNSTILE_SECRET_KEY") ?? "";
 const TURNSTILE_MODE = turnstileMode(TURNSTILE_SECRET, Deno.env.get("TURNSTILE_MODE"));
-const NETWORKS: Bolt11Network[] = ["bitcoin", "testnet", "signet", "regtest"];
-const rawNetwork = (Deno.env.get("DIRECT_SETTLEMENT_NETWORK") ?? "bitcoin").trim() as Bolt11Network;
-const NETWORK: Bolt11Network = NETWORKS.includes(rawNetwork) ? rawNetwork : "bitcoin";
-
+const NETWORK = directNetwork(Deno.env.get("DIRECT_SETTLEMENT_NETWORK"));
 // The local E2E stack only: a fake merchant provider and a fixed price.
 // Never active on the hosted project, whose SUPABASE_URL is not loopback.
-const LOCAL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(SUPABASE_URL);
-const E2E_GATEWAY = LOCAL ? Deno.env.get("E2E_LNURL_GATEWAY") ?? "" : "";
-const E2E_PRICE = LOCAL ? Number(Deno.env.get("E2E_FIXED_BTC_USD") ?? "") : NaN;
-
-const net = E2E_GATEWAY ? e2eGatewayFetch(E2E_GATEWAY) : guardedFetch(fetch, denoResolver());
+const E2E_PRICE = isLocalStack(SUPABASE_URL) ? Number(Deno.env.get("E2E_FIXED_BTC_USD") ?? "") : NaN;
+const net = merchantFetch(SUPABASE_URL, Deno.env.get("E2E_LNURL_GATEWAY"));
 const rate = (): Promise<Rate> => Number.isFinite(E2E_PRICE) && E2E_PRICE > 0
   ? Promise.resolve({ usdPerBtc: E2E_PRICE, usdPerBtcCents: BigInt(Math.round(E2E_PRICE * 100)), sources: ["e2e-fixed"] })
   : currentRate(fetch);

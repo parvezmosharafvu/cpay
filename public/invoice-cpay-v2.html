@@ -769,7 +769,7 @@ function finishAsSettled(amount){
     el('rcpProof').textContent = shortRef(directInfo.proof);
     el('rcpProofRow').hidden = false;
     el('rcpDirectNote').textContent = 'Paid straight to ' + (directInfo.destination || "the merchant's wallet")
-      + '. CPAY did not hold this payment, so a refund is between you and the merchant. The saved receipt has the full proof of payment.';
+      + ", confirmed by the merchant's wallet provider. CPAY did not hold this payment, so a refund is between you and the merchant. The saved receipt has the full proof of payment.";
     el('rcpDirectNote').hidden = false;
   }
   el('successTitle').focus();
@@ -803,8 +803,9 @@ function receiptText(){
       `Proof of payment  ${receipt.direct.proof}`,
       '',
       'This payment went straight to the merchant\'s wallet; CPAY never held',
-      'it. The SHA-256 of the proof of payment is the payment hash of the',
-      'invoice you paid, which anyone can check.',
+      'it. The merchant\'s wallet provider confirmed it with this proof of',
+      'payment, whose SHA-256 is the payment hash of the invoice you paid.',
+      'Your own wallet shows the same payment hash and proof.',
     ] : []),
     '',
     'Keep this reference. It is what identifies this payment if you',
@@ -864,6 +865,8 @@ async function regenerate(){
       const r = await window.cpayDirectPay.create({ slug, amount: base, requestId, turnstileToken: turnstileToken || undefined }, CREATE_TIMEOUT_MS);
       res = { ok: r.ok, status: r.status };
       result = r.data;
+      // The link pays the CPAY balance again: start over on the link page.
+      if (res.status === 409 && result.code === 'custodial_link'){ window.location.href = '/' + encodeURIComponent(slug); return; }
     } else {
       const body = JSON.stringify({ slug, amount: base, requestId, turnstileToken: turnstileToken || undefined });
       const post = (url) => withTimeout(fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }), CREATE_TIMEOUT_MS);

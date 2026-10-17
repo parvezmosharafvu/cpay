@@ -127,7 +127,7 @@ Deno.test("create validates input, Turnstile and the link", async () => {
   assertEquals((await world({ link: null }).post({ slug: "alice-pay", amount: 10 })).status, 404);
   assertEquals((await world({ link: { ...LINK, is_active: false } }).post({ slug: "alice-pay", amount: 10 })).status, 410);
   const custodial = await world({ link: { ...LINK, settlement_mode: "custodial" } }).post({ slug: "alice-pay", amount: 10 });
-  assertEquals(custodial.status, 409);
+  assertEquals([custodial.status, custodial.body.code], [409, "custodial_link"]);
   assertEquals((await world({ maxCents: 1000 }).post({ slug: "alice-pay", amount: 10 })).status, 400); // 10 + 10 % = 11 > 10
   assertEquals(w.calls.provider, 0);
 });

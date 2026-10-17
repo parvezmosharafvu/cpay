@@ -43,6 +43,7 @@
       <div class="field"><label for="directAddr">Lightning address</label>
         <input id="directAddr" placeholder="name@your-wallet-provider.com" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="email" aria-describedby="directHint"></div>
       <p class="hint" id="directHint">Use the Lightning address of a wallet you control. CPAY checks that the wallet provider can confirm payments before you can save it. Payers see this address on the payment page. For your safety, a new address is used 24 hours after you save it.</p>
+      <p class="hint">Fees: CPAY takes no fee from direct payments. A link cost you set is added for the payer and goes to your wallet with the rest. Your wallet provider may charge its own fees.</p>
       <p class="hint" id="directResult" role="status" hidden></p>
       <div class="row">
         <button class="btn ghost" id="directCheck" type="button"${s.enabled && !s.blocked ? '' : ' disabled'}>Check address</button>
@@ -102,7 +103,9 @@
   function linkButton(link, s) {
     const direct = link.settlement_mode === 'direct';
     if (direct) return `<button type="button" class="btn ghost sm" data-settle-link="${escapeHtml(link.id)}" data-mode="custodial">Pay to CPAY balance</button>`;
-    if (!s.enabled || s.blocked || !(s.current || s.pending)) return '';
+    // Only once the address is in use: before that the link would take no
+    // payment at all (set_link_settlement_mode refuses it too).
+    if (!readyNow(s)) return '';
     return `<button type="button" class="btn ghost sm" data-settle-link="${escapeHtml(link.id)}" data-mode="direct">Pay to my wallet</button>`;
   }
   function bindLinkButtons(root, onChange) {

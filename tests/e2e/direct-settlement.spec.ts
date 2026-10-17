@@ -64,9 +64,11 @@ test.describe.serial('direct payments to the Freelancer\'s own wallet', () => {
     await expect(page.locator('#directStatus')).toContainText('waiting');
     const { rows: [d] } = await db.query(`select address, ready_at > now() + interval '23 hours' as waits from settlement_destinations where user_id = $1`, [u.id]);
     expect(d).toEqual({ address: 'alice@pay.example.com', waits: true });
-    // Still waiting: the link cannot be made direct yet from the new-link form.
+    // Still waiting: no link can be made direct yet (it would take no payment).
     await page.click('.navi[data-tab="links"]');
+    await expect(page.locator('#links table')).toContainText('Payments go to');
     await expect(page.locator('#newLinkMode')).toHaveCount(0);
+    await expect(page.locator('[data-settle-link][data-mode="direct"]')).toHaveCount(0);
   });
 
   test('a direct link: the payer pays the merchant\'s wallet, proof marks it paid, the CPAY balance does not move', async ({ page }) => {

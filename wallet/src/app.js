@@ -217,14 +217,15 @@ async function refresh() {
 
 // Sends this phone started whose outcome is not settled yet, checked
 // against the library's own record (never re-sent). One the library has no
-// record of is kept 10 minutes for the "you already tried this" warning;
-// only the library's own "pending" counts as in progress.
+// record of is kept a day for the "you already tried this" warning: a new
+// send gets a new idempotency key, which nothing would de-duplicate. Only
+// the library's own "pending" counts as in progress.
 async function reconcileSends() {
   let open = 0;
   for (const s of sends()) {
     const p = await engine.payment(s.k);
     if (p && (p.status === 'completed' || p.status === 'failed')) forgetSend(s.k);
-    else if (!p && Date.now() - s.t > 10 * 60_000) forgetSend(s.k);
+    else if (!p && Date.now() - s.t > 86_400_000) forgetSend(s.k);
     else if (p) open++;
   }
   $('pendingSends').textContent = open

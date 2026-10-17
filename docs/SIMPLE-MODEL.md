@@ -26,6 +26,12 @@ The website balance is **held by CPAY** for either type (custodial).
 CPAY Wallet is a separate, optional app that keeps its own keys on the
 phone; nothing moves between the two.
 
+Direct payments (migration 20261018010000) are built but **off**: when the
+owner turns them on, a Freelancer can switch a link to pay their own
+Lightning address. Those payments go straight to the Freelancer's wallet,
+are never part of the CPAY balance, carry no CPAY fee and are not paid out
+by CPAY. See [NON-CUSTODIAL-ARCHITECTURE.md](NON-CUSTODIAL-ARCHITECTURE.md).
+
 ## One payout book
 
 Each account saves one USDT address per network in `usdt_wallets`.

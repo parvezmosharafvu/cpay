@@ -9,22 +9,17 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { cachedHosts, corsFor } from "../_shared/cors.ts";
 import { checkStepUp, stepUpWindow } from "../_shared/step-up.ts";
 import { lightningAddressProvider } from "../_shared/direct-settlement.ts";
-import { denoResolver, e2eGatewayFetch, guardedFetch } from "../_shared/lnurl.ts";
+import { directNetwork, merchantFetch } from "../_shared/direct-env.ts";
 import { sha256Hex } from "../create-invoice/guards.ts";
-import type { Bolt11Network } from "../_shared/bolt11.ts";
 import { createHandler } from "./handler.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const sb = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const STEP_UP_SECONDS = stepUpWindow(Deno.env.get("STEP_UP_MAX_AGE_SECONDS"));
-const NETWORKS: Bolt11Network[] = ["bitcoin", "testnet", "signet", "regtest"];
-const rawNetwork = (Deno.env.get("DIRECT_SETTLEMENT_NETWORK") ?? "bitcoin").trim() as Bolt11Network;
-const NETWORK: Bolt11Network = NETWORKS.includes(rawNetwork) ? rawNetwork : "bitcoin";
-// The local E2E stack only (see direct-invoice/index.ts).
-const LOCAL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(SUPABASE_URL);
-const E2E_GATEWAY = LOCAL ? Deno.env.get("E2E_LNURL_GATEWAY") ?? "" : "";
-const net = E2E_GATEWAY ? e2eGatewayFetch(E2E_GATEWAY) : guardedFetch(fetch, denoResolver());
+const NETWORK = directNetwork(Deno.env.get("DIRECT_SETTLEMENT_NETWORK"));
+// The local E2E stack only (see _shared/direct-env.ts).
+const net = merchantFetch(SUPABASE_URL, Deno.env.get("E2E_LNURL_GATEWAY"));
 
 const hosts = cachedHosts(
   (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean),

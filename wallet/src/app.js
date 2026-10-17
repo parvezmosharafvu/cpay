@@ -29,7 +29,35 @@ const sats = (n) => Number(n || 0).toLocaleString('en-US');
 
 let engine = null;
 let pending = null; // phrase being set up (create/restore), dropped once sealed
+let pendingHow = null; // 'created' (words checked against the paper) or 'restored'
 let lockTimer = null;
+
+// ---- small records on this phone (no keys, no phrase) --------------------
+// walletId: a one-way fingerprint of the phrase, so a restore can tell the
+// same wallet (forgot the passphrase) from a different one (would replace
+// it). 64 bits of SHA-256 over 128 bits of entropy: it cannot recover the
+// phrase. backup: when the words were last checked. sends: payments that
+// were sent but not yet seen as completed or failed. Field names are single
+// letters and the id is prefixed, so nothing stored can look like a word of
+// the phrase.
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* best effort */ } },
+  del(k) { try { localStorage.removeItem(k); } catch { /* best effort */ } },
+};
+const ID_SLOT = 'cpay-wallet.id.v1';
+const BACKUP_SLOT = 'cpay-wallet.backup.v1';
+const SENDS_SLOT = 'cpay-wallet.sends.v1';
+async function walletId(phrase) {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`cpay-wallet-id:${phrase}`)));
+  return `id-${Array.from(d.slice(0, 8), (b) => b.toString(16).padStart(2, '0')).join('')}`;
+}
+const sends = () => store.get(SENDS_SLOT) || [];
+// { k: idempotency key, d: destination as pasted, s: sats, t: when }
+function rememberSend(p) {
+  store.set(SENDS_SLOT, [...sends().filter((x) => x.k !== p.idempotencyKey), { k: p.idempotencyKey, d: p.to, s: p.amountSats, t: Date.now() }]);
+}
+const forgetSend = (key) => store.set(SENDS_SLOT, sends().filter((x) => x.k !== key));
 
 function renderWords(listId, phrase) {
   const ol = $(listId);
@@ -69,11 +97,16 @@ $('confirmForm').onsubmit = (e) => {
   const words = pending.split(' ');
   const ok = confirmAt.every((i) => normalizeMnemonic($(`cw${i}`).value) === words[i]);
   if (!ok) { err('confirmErr', 'That does not match. Check your paper, or show the words again.'); return; }
+  pendingHow = 'created';
   show('setpass');
 };
 
 // ---- restore ---------------------------------------------------------
-function startRestore() { $('restoreWords').value = ''; err('restoreErr'); show('restore'); }
+function startRestore() {
+  $('restoreWords').value = ''; err('restoreErr');
+  $('restoreReplace').hidden = true; $('replaceOk').checked = false; $('replaceText').value = '';
+  show('restore');
+}
 $('restoreStartBtn').onclick = startRestore;
 $('restoreCancel').onclick = () => show(vaultStore.load() ? 'unlock' : 'welcome');
 $('forgotLink').onclick = (e) => { e.preventDefault(); startRestore(); };
@@ -81,8 +114,19 @@ $('restoreForm').onsubmit = async (e) => {
   e.preventDefault();
   const phrase = normalizeMnemonic($('restoreWords').value);
   if (!(await validateMnemonic(phrase))) { err('restoreErr', 'That is not a valid 12- or 24-word recovery phrase. Check each word and the order.'); return; }
+  // Restoring over a different wallet deletes it from this phone: never
+  // without an explicit confirmation. The same wallet (a forgotten
+  // passphrase) needs none.
+  if (vaultStore.load() && store.get(ID_SLOT) !== (await walletId(phrase))) {
+    if ($('restoreReplace').hidden) { $('restoreReplace').hidden = false; $('replaceOk').focus(); return; }
+    if (!$('replaceOk').checked || $('replaceText').value.trim() !== 'REPLACE') {
+      err('restoreErr', 'Tick the box and type REPLACE to replace the wallet on this phone, or go back.');
+      return;
+    }
+  }
   $('restoreWords').value = '';
   pending = phrase;
+  pendingHow = 'restored';
   show('setpass');
 };
 
@@ -95,13 +139,20 @@ $('passForm').onsubmit = async (e) => {
   $('passBtn').disabled = true;
   err('passErr');
   try {
-    if (vaultStore.load()) await wipeEngineStorage(); // restoring over an old wallet
+    const id = await walletId(pending);
+    // A different wallet's local state is removed only after the restore
+    // screen's explicit confirmation (above); the same wallet keeps its own.
+    if (vaultStore.load() && store.get(ID_SLOT) !== id) { await wipeEngineStorage(); store.del(SENDS_SLOT); }
     vaultStore.save(await sealPhrase(pending, p1));
+    store.set(ID_SLOT, id);
+    // h: 1 = words checked against the paper at creation, 2 = restored from them.
+    store.set(BACKUP_SLOT, { h: pendingHow === 'created' ? 1 : 2, t: Date.now() });
     await start(pending);
   } catch (x) {
     err('passErr', x.message || 'Could not create the wallet.');
   } finally {
     pending = null;
+    pendingHow = null;
     $('pass1').value = ''; $('pass2').value = '';
     $('passBtn').disabled = false;
   }
@@ -129,8 +180,19 @@ async function start(phrase) {
   show('home');
   $('fundPanel').hidden = cfg.network !== 'regtest';
   armLock();
+  renderBackupStatus();
   await refresh();
   await renderLink();
+}
+
+function renderBackupStatus() {
+  const b = store.get(BACKUP_SLOT);
+  const when = b?.t ? new Date(b.t).toLocaleDateString() : '';
+  $('backupStatus').textContent = !b
+    ? 'Recovery phrase: not recorded on this phone. Show it and check it against your paper copy.'
+    : b.h === 1
+      ? `Recovery phrase: you checked your paper copy when you created this wallet (${when}).`
+      : `Recovery phrase: this wallet was restored from it on this phone (${when}).`;
 }
 
 // ---- home ------------------------------------------------------------
@@ -144,11 +206,31 @@ async function refresh() {
       const li = document.createElement('li');
       const sign = p.type === 'send' ? '−' : '+';
       const when = p.timestamp ? new Date(p.timestamp * 1000).toLocaleString() : '';
-      li.textContent = `${sign}${sats(p.amountSats)} sats · ${p.status}${p.type === 'send' && p.feesSats ? ` · fee ${sats(p.feesSats)}` : ''} · ${when}`;
+      const status = p.status === 'pending' && p.type === 'send' ? 'in progress, do not pay again' : p.status;
+      li.textContent = `${sign}${sats(p.amountSats)} sats · ${status}${p.type === 'send' && p.feesSats ? ` · fee ${sats(p.feesSats)}` : ''} · ${when}`;
       return li;
     }));
     $('historyEmpty').hidden = list.length > 0;
+    await reconcileSends();
   } catch { /* keep the last numbers on a failed refresh */ }
+}
+
+// Sends this phone started whose outcome is not settled yet, checked
+// against the library's own record (never re-sent). One the library has no
+// record of is kept 10 minutes for the "you already tried this" warning;
+// only the library's own "pending" counts as in progress.
+async function reconcileSends() {
+  let open = 0;
+  for (const s of sends()) {
+    const p = await engine.payment(s.k);
+    if (p && (p.status === 'completed' || p.status === 'failed')) forgetSend(s.k);
+    else if (!p && Date.now() - s.t > 10 * 60_000) forgetSend(s.k);
+    else if (p) open++;
+  }
+  $('pendingSends').textContent = open
+    ? `${open} payment${open === 1 ? ' is' : 's are'} not confirmed yet. ${open === 1 ? 'It' : 'They'} may still complete: check Activity before paying again.`
+    : '';
+  $('pendingSends').hidden = !open;
 }
 
 $('receiveBtn').onclick = () => { $('receivePanel').hidden = !$('receivePanel').hidden; $('sendPanel').hidden = true; };
@@ -180,6 +262,11 @@ $('sendForm').onsubmit = async (e) => {
     prepared = await engine.prepareSend($('sendTo').value, Number($('sendAmount').value) || undefined);
     $('sendSats').textContent = sats(prepared.amountSats);
     $('sendFee').textContent = sats(prepared.feeSats);
+    const earlier = sends().find((x) => x.d === prepared.to);
+    err('sendDupWarn', earlier
+      ? `You already started a payment to this request (${new Date(earlier.t).toLocaleString()}) and it is not confirmed yet. Check Activity first: sending again may pay twice.`
+      : '');
+    $('sendUnsure').hidden = true;
     $('sendConfirm').hidden = false;
   } catch (x) {
     err('sendErr', x.message || 'Could not prepare that payment.');
@@ -188,22 +275,63 @@ $('sendForm').onsubmit = async (e) => {
   }
 };
 $('sendCancel').onclick = () => { prepared = null; $('sendConfirm').hidden = true; };
+let unsure = null; // a sent payment whose outcome is not known
+function sendDone() {
+  $('sendTo').value = ''; $('sendAmount').value = '';
+  $('sendConfirm').hidden = true; $('sendUnsure').hidden = true;
+  $('sendPanel').hidden = true;
+  unsure = null;
+}
+// After a send errors, ask the library what happened instead of guessing:
+// an error does not mean nothing was sent (a timeout can follow a payment).
+async function settleOutcome(p, error) {
+  const known = await engine.payment(p.idempotencyKey);
+  if (known?.status === 'completed') { forgetSend(p.idempotencyKey); sendDone(); return; }
+  if (known?.status === 'failed') {
+    forgetSend(p.idempotencyKey);
+    err('sendErr', `The payment failed${error?.message ? ` (${error.message})` : ''}. Nothing was sent.`);
+    $('sendConfirm').hidden = true; $('sendUnsure').hidden = true; unsure = null;
+    return;
+  }
+  unsure = p;
+  $('sendConfirm').hidden = true;
+  $('sendUnsureMsg').textContent = known?.status === 'pending'
+    ? 'This payment is in progress and may still complete. Do not pay again; it will show in Activity.'
+    : `${error?.message ? `${error.message} ` : ''}The wallet has no record of this payment, so it was most likely not sent. If you are not sure, check Activity in a minute before trying again.`;
+  $('sendRetry').hidden = known?.status === 'pending';
+  $('sendUnsure').hidden = false;
+}
 $('sendGo').onclick = async () => {
   if (!prepared) return;
   $('sendGo').disabled = true;
+  const p = prepared;
+  rememberSend(p);
   try {
-    await engine.send(prepared);
-    $('sendTo').value = ''; $('sendAmount').value = '';
-    $('sendConfirm').hidden = true;
-    $('sendPanel').hidden = true;
+    const out = await engine.send(p);
+    if (out.status === 'completed' || out.status === 'failed') forgetSend(p.idempotencyKey);
+    if (out.status === 'failed') { await settleOutcome(p, null); return; }
+    sendDone();
     await refresh();
   } catch (x) {
-    err('sendErr', x.message || 'The payment failed. Nothing was sent.');
-    $('sendConfirm').hidden = true;
+    await settleOutcome(p, x);
+    await refresh();
   } finally {
     prepared = null;
     $('sendGo').disabled = false;
   }
+};
+$('sendCheck').onclick = async () => { if (unsure) { await settleOutcome(unsure, null); await refresh(); } };
+// The same prepared payment, the same idempotency key: the library returns
+// the first attempt's payment if there was one, so this cannot pay twice.
+$('sendRetry').onclick = async () => {
+  if (!unsure) return;
+  const p = unsure;
+  $('sendRetry').disabled = true;
+  let error = null;
+  try { await engine.send(p); } catch (x) { error = x; }
+  await settleOutcome(p, error);
+  $('sendRetry').disabled = false;
+  await refresh();
 };
 
 // ---- test-network funding (regtest builds only) ------------------------
@@ -271,6 +399,7 @@ $('wipeForm').onsubmit = async (e) => {
   await unlink().catch(() => {});
   await wipeEngineStorage();
   vaultStore.clear();
+  store.del(ID_SLOT); store.del(BACKUP_SLOT); store.del(SENDS_SLOT);
   $('wipeText').value = '';
   $('wipeForm').hidden = true;
   show('welcome');
@@ -287,7 +416,9 @@ async function lock() {
   $('fundOut').hidden = true;
   $('receivePanel').hidden = true;
   $('sendPanel').hidden = true;
+  $('sendUnsure').hidden = true;
   prepared = null;
+  unsure = null;
 }
 $('lockBtn').onclick = async () => { await lock(); show('unlock'); };
 function armLock() {

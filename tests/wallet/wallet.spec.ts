@@ -330,3 +330,87 @@ test('exit backup downloads a file, needs no network, and holds no phrase', asyn
   await expect(page.locator('#exitErr')).toBeHidden();
   assertNoLeak(phrase);
 });
+
+// ---- send outcomes that are not a plain success (audit 2026-10-18) ----------
+test('a send that times out after paying is shown as in progress, never as "nothing sent", and is not paid twice', async ({ page }) => {
+  const phrase = await createWallet(page);
+  await page.evaluate(() => (window as any).__fakeWallet.credit(5000));
+  await page.getByRole('button', { name: 'Send' }).click();
+  await page.locator('#sendTo').fill('lnbcrt1000n1fakeuncertain');
+  await page.getByRole('button', { name: 'Check fee' }).click();
+  await page.evaluate(() => { (window as any).__fakeWallet.failNextSend = 'after'; });
+  await page.getByRole('button', { name: 'Send now' }).click();
+  await expect(page.locator('#sendUnsureMsg')).toHaveText(/in progress and may still complete\. Do not pay again/);
+  await expect(page.getByText('Nothing was sent')).toHaveCount(0);
+  await expect(page.locator('#sendRetry')).toBeHidden();
+  await expect(page.locator('#pendingSends')).toContainText('may still complete');
+  await expect(page.locator('#history')).toContainText('in progress, do not pay again');
+  // Preparing the same request again warns before a second payment.
+  await page.locator('#sendTo').fill('lnbcrt1000n1fakeuncertain');
+  await page.getByRole('button', { name: 'Check fee' }).click();
+  await expect(page.locator('#sendDupWarn')).toContainText('sending again may pay twice');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  // The payment lands: the notice goes, one send in all.
+  await page.evaluate(() => {
+    const w = (window as any).__fakeWallet;
+    const keys = JSON.parse(localStorage.getItem('cpay-wallet.sends.v1') || '[]').map((x: { k: string }) => x.k);
+    for (const k of keys) w.settle(k);
+  });
+  await expect(page.locator('#pendingSends')).toBeHidden();
+  expect(await page.evaluate(() => (window as any).__fakeWallet.sendCount)).toBe(1);
+  await expect(page.locator('#balSats')).toHaveText('3,999');
+  assertNoLeak(phrase);
+});
+
+test('"Try again safely" after an unconfirmed send reuses the same payment and pays once', async ({ page }) => {
+  await createWallet(page);
+  await page.evaluate(() => (window as any).__fakeWallet.credit(5000));
+  await page.getByRole('button', { name: 'Send' }).click();
+  await page.locator('#sendTo').fill('lnbcrt1000n1fakeretry');
+  await page.getByRole('button', { name: 'Check fee' }).click();
+  await page.evaluate(() => { (window as any).__fakeWallet.failNextSend = 'before'; });
+  await page.getByRole('button', { name: 'Send now' }).click();
+  await expect(page.locator('#sendUnsureMsg')).toContainText('Could not reach the network.');
+  await expect(page.locator('#sendUnsureMsg')).toContainText('most likely not sent');
+  await page.getByRole('button', { name: 'Try again safely' }).click();
+  await expect(page.locator('#sendPanel')).toBeHidden();
+  await expect(page.locator('#balSats')).toHaveText('3,999');
+  expect(await page.evaluate(() => (window as any).__fakeWallet.sendCount)).toBe(1);
+});
+
+test('restoring a different phrase over this phone\'s wallet needs REPLACE; the same phrase does not', async ({ page }) => {
+  const phrase = await createWallet(page);
+  await expect(page.locator('#backupStatus')).toContainText('you checked your paper copy when you created this wallet');
+  await page.getByRole('button', { name: 'Lock' }).click();
+  await page.locator('#forgotLink').click();
+  // The same wallet (forgotten passphrase): no warning.
+  await page.locator('#restoreWords').fill(phrase);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.locator('#s-setpass')).toBeVisible();
+  await expect(page.locator('#restoreReplace')).toBeHidden();
+  await page.locator('#pass1').fill(PASS);
+  await page.locator('#pass2').fill(PASS);
+  await page.getByRole('button', { name: 'Create wallet' }).click();
+  await expect(page.getByText('This wallet · your keys')).toBeVisible();
+  await expect(page.locator('#backupStatus')).toContainText('restored from it');
+  // A different wallet: warned, and refused until confirmed.
+  await page.getByRole('button', { name: 'Lock' }).click();
+  await page.locator('#forgotLink').click();
+  await page.locator('#restoreWords').fill(VECTOR);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.locator('#restoreReplace')).toBeVisible();
+  await expect(page.locator('#s-setpass')).toBeHidden();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.locator('#restoreErr')).toContainText('type REPLACE');
+  await expect(page.locator('#s-setpass')).toBeHidden();
+  await page.getByLabel('I have the old wallet\'s recovery phrase, or it has no money.').check();
+  await page.locator('#replaceText').fill('REPLACE');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.locator('#s-setpass')).toBeVisible();
+  await page.locator('#pass1').fill(PASS);
+  await page.locator('#pass2').fill(PASS);
+  await page.getByRole('button', { name: 'Create wallet' }).click();
+  await expect(page.getByText('This wallet · your keys')).toBeVisible();
+  expect(await page.evaluate(() => (window as any).__fakeWallet.fingerprint)).toBe(await fingerprintOf(page, VECTOR));
+  assertNoLeak(VECTOR);
+});

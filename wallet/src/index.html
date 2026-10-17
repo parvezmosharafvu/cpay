@@ -69,6 +69,12 @@
       <label for="restoreWords">Recovery phrase (12 or 24 words)</label>
       <textarea id="restoreWords" rows="4" spellcheck="false" autocapitalize="none" autocomplete="off" required></textarea>
       <p class="err" id="restoreErr" role="alert" hidden></p>
+      <div id="restoreReplace" hidden>
+        <p class="err" role="alert">This phone already has a wallet, and these words are a different one (or a wallet from before this check). Continuing deletes that wallet from this phone. Without its own recovery phrase, the money in it is gone for good.</p>
+        <label class="check"><input type="checkbox" id="replaceOk"> I have the old wallet's recovery phrase, or it has no money.</label>
+        <label for="replaceText">Type <strong>REPLACE</strong> to continue</label>
+        <input id="replaceText" type="text" autocomplete="off" autocapitalize="characters">
+      </div>
       <div class="row"><button type="button" id="restoreCancel">Back</button><button class="primary" type="submit">Continue</button></div>
     </form>
   </section>
@@ -138,7 +144,13 @@
       </form>
       <div id="sendConfirm" hidden>
         <p>Send <strong id="sendSats"></strong> sats, network fee <strong id="sendFee"></strong> sats. This cannot be undone.</p>
+        <p class="err" id="sendDupWarn" role="alert" hidden></p>
         <div class="row"><button type="button" id="sendCancel">Cancel</button><button type="button" class="primary" id="sendGo">Send now</button></div>
+      </div>
+      <div id="sendUnsure" hidden>
+        <p class="err" id="sendUnsureMsg" role="alert"></p>
+        <div class="row"><button type="button" id="sendCheck">Check this payment</button><button type="button" id="sendRetry">Try again safely</button></div>
+        <p class="muted small">"Try again safely" sends the same payment request. If the first attempt went through, it shows that payment instead of paying again.</p>
       </div>
     </div>
 
@@ -155,6 +167,7 @@
       <p class="err" id="fundErr" role="alert" hidden></p>
     </div>
 
+    <p class="notice" id="pendingSends" role="status" hidden></p>
     <div class="card">
       <h2>Activity</h2>
       <ul class="list" id="history"></ul>
@@ -197,8 +210,9 @@
         <div class="row"><button class="primary" type="submit">Show</button></div>
       </form>
       <ol class="words" id="revealWords" hidden></ol>
+      <p class="muted small" id="backupStatus"></p>
       <div class="row"><button type="button" id="exitBackupBtn">Save exit backup</button></div>
-      <p class="muted small">An exit backup lets this wallet move its money to the Bitcoin blockchain on its own if the Spark operators ever stop working. It holds no keys, but it shows your balance: keep it private. Save a new one after receiving money.</p>
+      <p class="muted small">An exit backup holds the pre-signed transactions this wallet would need to move its money to the Bitcoin blockchain without the Spark operators, if they ever stop working. It is not an exit by itself: this version has no exit button yet, and an exit needs some bitcoin on the blockchain to pay its fees and takes time. It holds no keys, but it shows your balance: keep it private. Save a new one after receiving money. <a href="security.html#exit">What an exit needs</a></p>
       <p class="err" id="exitErr" role="alert" hidden></p>
       <form id="wipeForm" hidden autocomplete="off">
         <p>This deletes the wallet from this phone. Without your recovery phrase the money in it is gone for good. Type <strong>DELETE</strong> to confirm.</p>

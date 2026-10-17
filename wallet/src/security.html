@@ -25,7 +25,7 @@
 <p>The wallet uses the Spark network, a Bitcoin layer, through an open-source wallet library (the Breez SDK). Lightning payments go through a Spark service provider.</p>
 <ul class="points">
 <li>Every transfer needs a signature from the keys on your phone. The Spark operators (currently Lightspark, Breez and Flashnet; two of the three must co-sign) cannot move your money without that signature.</li>
-<li>Spark's safety relies on at least one operator deleting old key shares as designed. If the operators stop working, Spark lets you exit to the Bitcoin blockchain on your own, with an on-chain fee. This version can save an <strong>exit backup</strong> (Security → Save exit backup): the pre-signed transactions needed for that exit. It does not have an exit button yet; CPAY will publish exit steps before any operator shutdown affects users.</li>
+<li>Spark's safety relies on at least one operator deleting old key shares as designed. If the operators stop working, Spark is designed to let you exit to the Bitcoin blockchain without them, using pre-signed transactions. This version can save an <strong>exit backup</strong> (Security → Save exit backup): those pre-signed transactions. It does not have an exit button yet; CPAY will publish exit steps before any operator shutdown affects users.</li>
 <li>While the operators are working, sending and receiving depend on them and on the Spark service provider. Holding your own keys means nobody can move the money without your phone's signature; it does not mean the wallet works without Spark.</li>
 <li>The wallet library keeps its own records on your phone. CPAY builds it with the library's real-time sync service turned off, so wallet records are not copied to that service. The wallet needs an internet connection to the Spark network to pay or be paid. It does not need the CPAY website.</li>
 </ul>
@@ -48,6 +48,18 @@
 <li>Choose a new passphrase. Your balance and history appear once the wallet has synced.</li>
 </ol>
 <p class="muted small">Restoring in other apps built on the same library may work, but CPAY has not tested that and does not promise it.</p>
+</div>
+
+<div class="card" id="exit">
+<h2>If the Spark operators stop working (exit)</h2>
+<p>Restoring with the 12 words needs the Spark operators to be working. If they stop, the way out is an <strong>exit</strong>: broadcasting pre-signed Bitcoin transactions that move the money to an address on the Bitcoin blockchain without them. What that takes:</p>
+<ul class="points">
+<li>Your recovery phrase (the keys) and an up-to-date exit backup. A backup made before your last receive does not cover that money.</li>
+<li>Some bitcoin in another wallet on the Bitcoin blockchain, to pay the exit's network fees. Fees can be higher than a small balance, so a small amount may not be worth taking out.</li>
+<li>Time: parts of an exit wait a set number of Bitcoin blocks before the next step.</li>
+<li>A version of CPAY Wallet (or another tool) with an exit button. <strong>This version does not have one yet.</strong></li>
+</ul>
+<p class="muted small">An exit backup is therefore one part of an exit, not an exit by itself. CPAY will publish exit steps before any operator shutdown affects users.</p>
 </div>
 
 <div class="card">

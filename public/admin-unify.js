@@ -342,7 +342,8 @@ async function loadCreatorList() {
   const inboxBtn = document.querySelector('.navi[data-tab="chat"]');
   if (inboxBtn) {
     const total = list.reduce((s, c) => s + Number(c.unread_count || 0), 0);
-    inboxBtn.textContent = total ? `Inbox (${total})` : 'Inbox';
+    const label = inboxBtn.querySelector('.navi-label') || inboxBtn;
+    label.textContent = total ? `Inbox (${total})` : 'Inbox';
   }
 }
 

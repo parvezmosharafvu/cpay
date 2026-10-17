@@ -102,18 +102,18 @@ const Daily = (() => {
   function summaryTable(rows, opts = {}) {
     const today = rows[0] && rows[0].business_day;
     const body = rows.map((r) => `<tr data-day="${r.business_day}" class="pick${r.business_day === opts.selected ? ' sel' : ''}" tabindex="0">
-      <td><div class="day">${escapeHtml(dayRange(r))}${r.business_day === today ? ' <span class="tag">Today</span>' : ''}</div><div class="faint">5:00 PM to 5:00 PM</div></td>
-      <td class="num">${num(r.link_count)}<div class="faint">${num(r.paid_link_count)} paid</div></td>
-      <td>${rates(r.cost_rates)}</td>
-      <td class="num">${num(r.payment_count)}</td>
-      <td class="num">${money(r.settled)}</td>
-      <td class="num">${money(r.platform_fee)}</td>
-      <td class="num strong">${money(r.earnings)}</td>
+      <td class="lead"><div class="day">${escapeHtml(dayRange(r))}${r.business_day === today ? ' <span class="tag">Today</span>' : ''}</div><div class="faint">5:00 PM to 5:00 PM</div></td>
+      <td class="num" data-label="Links">${num(r.link_count)}<div class="faint">${num(r.paid_link_count)} paid</div></td>
+      <td data-label="Cost rates">${rates(r.cost_rates)}</td>
+      <td class="num" data-label="Payments">${num(r.payment_count)}</td>
+      <td class="num" data-label="Settled">${money(r.settled)}</td>
+      <td class="num" data-label="Platform fee">${money(r.platform_fee)}</td>
+      <td class="num strong" data-label="Earnings">${money(r.earnings)}</td>
     </tr>`).join('');
-    const foot = rows.length ? `<tr class="total"><td>${rows.length} days</td><td></td><td></td>
-      <td class="num">${sum(rows, 'payment_count')}</td><td class="num">${money(sum(rows, 'settled'))}</td><td class="num">${money(sum(rows, 'platform_fee'))}</td>
-      <td class="num strong">${money(sum(rows, 'earnings'))}</td></tr>` : '';
-    return `<table class="table daily"><thead><tr><th>Business day</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Earnings</th></tr></thead>
+    const foot = rows.length ? `<tr class="total"><td class="lead">${rows.length} days</td><td></td><td></td>
+      <td class="num" data-label="Payments">${sum(rows, 'payment_count')}</td><td class="num" data-label="Settled">${money(sum(rows, 'settled'))}</td><td class="num" data-label="Platform fee">${money(sum(rows, 'platform_fee'))}</td>
+      <td class="num strong" data-label="Earnings">${money(sum(rows, 'earnings'))}</td></tr>` : '';
+    return `<table class="table daily rtable cols-3"><thead><tr><th>Business day</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Earnings</th></tr></thead>
       <tbody>${body || '<tr><td colspan="7" class="empty">No days yet</td></tr>'}</tbody><tfoot>${foot}</tfoot></table>`;
   }
 
@@ -121,17 +121,17 @@ const Daily = (() => {
   function linkTable(rows) {
     const shown = rows.filter((r) => r.link_id || num(r.payment_count));
     const body = shown.map((r) => `<tr>
-      <td>${r.link_id ? `<strong>${escapeHtml(r.link_name || r.slug)}</strong><div class="faint mono">/${escapeHtml(r.slug || '')}</div>` : '<span class="faint">No link (store or direct)</span>'}</td>
-      <td>${r.link_id ? (r.deleted_at ? badge('deleted') : badge(r.is_active ? 'live' : 'off')) : ''}</td>
-      <td>${costCell(r)}</td>
-      <td class="num">${num(r.payment_count)}</td>
-      <td class="num">${money(r.settled)}</td>
-      <td class="num">${money(r.platform_fee)}</td>
-      <td class="num strong">${money(r.earnings)}</td>
+      <td class="lead">${r.link_id ? `<strong>${escapeHtml(r.link_name || r.slug)}</strong><div class="faint mono">/${escapeHtml(r.slug || '')}</div>` : '<span class="faint">No link (store or direct)</span>'}</td>
+      <td data-label="Status">${r.link_id ? (r.deleted_at ? badge('deleted') : badge(r.is_active ? 'live' : 'off')) : ''}</td>
+      <td data-label="Cost rate">${costCell(r)}</td>
+      <td class="num" data-label="Payments">${num(r.payment_count)}</td>
+      <td class="num" data-label="Settled">${money(r.settled)}</td>
+      <td class="num" data-label="Platform fee">${money(r.platform_fee)}</td>
+      <td class="num strong" data-label="Earnings">${money(r.earnings)}</td>
     </tr>`).join('');
-    const foot = shown.length > 1 ? `<tr class="total"><td>${shown.length} links</td><td></td><td></td><td class="num">${sum(shown, 'payment_count')}</td>
-      <td class="num">${money(sum(shown, 'settled'))}</td><td class="num">${money(sum(shown, 'platform_fee'))}</td><td class="num strong">${money(sum(shown, 'earnings'))}</td></tr>` : '';
-    return `<table class="table"><thead><tr><th>Link</th><th>Status</th><th>Cost rate</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Earnings</th></tr></thead>
+    const foot = shown.length > 1 ? `<tr class="total"><td class="lead">${shown.length} links</td><td></td><td></td><td class="num" data-label="Payments">${sum(shown, 'payment_count')}</td>
+      <td class="num" data-label="Settled">${money(sum(shown, 'settled'))}</td><td class="num" data-label="Platform fee">${money(sum(shown, 'platform_fee'))}</td><td class="num strong" data-label="Earnings">${money(sum(shown, 'earnings'))}</td></tr>` : '';
+    return `<table class="table rtable cols-3"><thead><tr><th>Link</th><th>Status</th><th>Cost rate</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Earnings</th></tr></thead>
       <tbody>${body || '<tr><td colspan="7" class="empty">No links that day</td></tr>'}</tbody><tfoot>${foot}</tfoot></table>`;
   }
   function linkCard(title, sub, rows) {
@@ -158,10 +158,10 @@ const Daily = (() => {
       sb().rpc('my_daily_summary', { p_days: days }),
       sb().rpc('daily_link_breakdown', { p_days: days }),
     ]);
-    if (sumRes.error) { el.innerHTML = card + (opts.between || '') + errorCard('Daily summary', sumRes.error); return; }
+    if (sumRes.error) { el.innerHTML = (opts.lead || '') + card + (opts.between || '') + errorCard('Daily summary', sumRes.error); return; }
     const rows = sumRes.data || [];
     const links = linkRes.error ? [] : linkRes.data || [];
-    el.innerHTML = `<div class="grid split">${card}${bizDayCard(rows[0])}</div>${opts.between || ''}
+    el.innerHTML = `${opts.lead || ''}<div class="grid split">${card}${bizDayCard(rows[0])}</div>${opts.between || ''}
       <div class="card flush"><div class="card-head"><div><h3>Last ${days} business days</h3><div class="faint">Select a day to see each link.</div></div></div>
         <div class="scroll" id="dailySelfTable">${summaryTable(rows, { selected: rows[0] && rows[0].business_day })}</div></div>
       <div id="dailySelfLinks"></div>`;

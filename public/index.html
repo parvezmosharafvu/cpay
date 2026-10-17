@@ -34,54 +34,198 @@
   <script src="config.js"></script>
   <script src="theme.js"></script>
 </head>
-<body>
+<body class="site">
   <a class="skip-link" href="#main">Skip to content</a>
-  <div class="wrap">
-    <nav class="nav" aria-label="Primary">
-      <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
-      <div class="nav-links">
-        <a class="btn ghost" href="login.html">Log in</a>
-        <a class="btn primary" href="register.html">Open account</a>
+  <svg class="sr-only" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+  <symbol id="i-in" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9.5V15h5.5"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 15l6-6M9.5 9H15v5.5"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+  <symbol id="i-user-check" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h5"/><path d="m16 19 2 2 4-4"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M21 11h-5a2 2 0 0 0 0 4h5z"/><path d="M3 7h16"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-file-check" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></symbol>
+  <symbol id="i-dollar" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M4 9v11h16V9"/><path d="M9 20v-6h6v6"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14 9l2 2"/></symbol>
+  <symbol id="i-building" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></symbol>
+</svg>
+  <header class="site-head">
+    <div class="wrap">
+      <nav class="nav" aria-label="Primary">
+        <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
+        <ul class="nav-menu">
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#accounts">Accounts</a></li>
+          <li><a href="#custody">Where money is held</a></li>
+        </ul>
+        <div class="nav-links">
+          <a class="btn ghost" href="login.html">Log in</a>
+          <a class="btn primary" href="register.html">Open account</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+    <div class="wrap">
+      <section class="hero-grid" aria-labelledby="heroTitle">
+        <div class="hero">
+          <span class="eyebrow"><b><svg class="ico sm" aria-hidden="true"><use href="#i-bolt"/></svg></b>Lightning payment links · USDT payouts</span>
+          <h1 id="heroTitle">Get paid in Lightning, from Cash App and other wallets.</h1>
+          <p>Share a payment link. Your customer pays a Lightning invoice from Cash App or another wallet that supports it. Your balance is kept in US dollars, and you withdraw USDT to an address you save.</p>
+          <div class="row">
+            <a class="btn primary lg" href="register.html">Open an account<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+            <a class="btn ghost lg" href="login.html">I already have an account</a>
+          </div>
+          <ul class="trust">
+            <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Balance kept in US dollars</li>
+            <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>USDT to an address you save</li>
+            <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Fees shown before you confirm</li>
+          </ul>
+        </div>
+        <div class="mock" role="img" aria-label="Example of the CPAY desk: an available balance held by CPAY, two settled payments and a USDT withdrawal.">
+          <div class="mock-card mock-balance" aria-hidden="true">
+            <div class="mock-row"><span class="kicker">Available</span><span class="badge">Example</span></div>
+            <div class="amount">$1,248.50</div>
+            <div class="mock-row"><span>Held by CPAY, ready to withdraw</span></div>
+            <div class="mock-bars"><span style="height:34%"></span><span style="height:52%"></span><span style="height:41%"></span><span style="height:66%"></span><span style="height:48%"></span><span style="height:72%"></span><span style="height:58%"></span><span style="height:80%"></span><span style="height:63%"></span><span style="height:92%"></span><span style="height:70%"></span><span style="height:86%"></span></div>
+            <div class="mock-row"><span>Last 14 business days</span><span>$2,486.20 settled</span></div>
+          </div>
+          <div class="mock-card mock-activity" aria-hidden="true">
+            <div class="mock-row"><b>Recent activity</b><span>Today</span></div>
+            <ul>
+              <li><span class="mock-dot"><svg class="ico" aria-hidden="true"><use href="#i-in"/></svg></span><span><b>Payment on /logo-design</b><small>Settled · 2 min ago</small></span><span class="mock-plus">+$120.00</span></li>
+              <li><span class="mock-dot"><svg class="ico" aria-hidden="true"><use href="#i-in"/></svg></span><span><b>Payment on /monthly-retainer</b><small>Settled · 1 h ago</small></span><span class="mock-plus">+$45.50</span></li>
+              <li><span class="mock-dot out"><svg class="ico" aria-hidden="true"><use href="#i-out"/></svg></span><span><b>USDT withdrawal · Tron</b><small>Paid · yesterday</small></span><span>$300.00</span></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="section" id="how" aria-labelledby="howTitle">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker">How it works</span>
+          <h2 id="howTitle">From a link to USDT in three steps</h2>
+          <p>No storefront to build and no invoices to write by hand.</p>
+        </div>
+        <ol class="steps">
+          <li><h3>Create a payment link</h3><p>Name it, pick a checkout design and choose who can pay: Cash App only, or Cash App and other Lightning wallets.</p></li>
+          <li><h3>Your customer pays</h3><p>They choose an amount and pay a standard Lightning invoice. The payment is credited to your balance once, when it settles.</p></li>
+          <li><h3>Withdraw USDT</h3><p>Save a USDT address on a supported network. Each quote shows the fee and the amount you receive before you send.</p></li>
+        </ol>
       </div>
-    </nav>
-    <main id="main">
-      <section class="hero">
-        <div class="kicker">Lightning payments</div>
-        <h1>Get paid in Lightning, from Cash App and other wallets.</h1>
-        <p>Share a payment link. Your customer pays a Lightning invoice from Cash App or another wallet that supports it. Your balance is kept in US dollars, and you withdraw USDT to an address you save.</p>
-        <div class="row">
-          <a class="btn primary lg" href="register.html">Open an account</a>
-          <a class="btn ghost lg" href="login.html">I already have an account</a>
+    </section>
+
+    <section class="section" id="features" aria-labelledby="featuresTitle">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker">Features</span>
+          <h2 id="featuresTitle">Everything you need to get paid</h2>
         </div>
-      </section>
-      <section class="features" aria-label="How CPAY works">
-        <div class="card">
-          <div class="icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></div>
-          <h3>Payment links</h3>
-          <p>Each link opens a checkout with a Lightning invoice. The payer scans it and the payment lands on your balance.</p>
+        <div class="features" aria-label="How CPAY works">
+          <div class="card"><div class="icon-tile" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-link"/></svg></div><h3>Payment links</h3><p>Each link opens a checkout with a Lightning invoice. The payer scans it and the payment lands on your balance.</p></div>
+          <div class="card"><div class="icon-tile" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-grid"/></svg></div><h3>Your own dashboard</h3><p>See every payment, your balance and your withdrawals in one place, in US dollars.</p></div>
+          <div class="card"><div class="icon-tile" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-dollar"/></svg></div><h3>Fees you can see</h3><p>Every USDT withdrawal shows the fee and the amount you receive before you confirm it.</p></div>
+          <div class="card"><div class="icon-tile" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-store"/></svg></div><h3>Ten checkout designs</h3><p>Pick how payers see your payment page and invoice. Every design shows who is paid, the amount and the time left.</p></div>
         </div>
-        <div class="card">
-          <div class="icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/></svg></div>
-          <h3>Your own dashboard</h3>
-          <p>See every payment, your balance and your withdrawals in one place, in US dollars.</p>
+      </div>
+    </section>
+
+    <section class="section" id="accounts" aria-labelledby="accountsTitle">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker">Accounts</span>
+          <h2 id="accountsTitle">For individuals and for businesses</h2>
+          <p>Choose the account type when you sign up. An admin reviews every new account before it can be used.</p>
         </div>
-        <div class="card">
-          <div class="icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div>
-          <h3>Fees you can see</h3>
-          <p>Every USDT withdrawal shows the fee and the amount you receive before you confirm it.</p>
+        <div class="split-cards">
+          <div class="card"><div class="icon-tile" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg></div><h3>Individual</h3><p>You, under your own name: freelancers and independent professionals.</p>
+            <ul class="ticks"><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Payment links and a public store page</li><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>A US dollar balance held by CPAY</li><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>USDT withdrawals to your saved addresses</li></ul></div>
+          <div class="card"><div class="icon-tile" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-building"/></svg></div><h3>Business / Organization</h3><p>A company, shop or organization, under its business name.</p>
+            <ul class="ticks"><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>The business name is shown to the reviewing admin</li><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>The same links, balance and USDT withdrawals</li><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Opened with an email and a password</li></ul></div>
         </div>
-      </section>
-      <section class="card custody" id="custody" aria-labelledby="custodyTitle">
-        <h2 id="custodyTitle">Where your money is held</h2>
-        <p>Your CPAY balance is <strong>held by CPAY</strong>. CPAY records every payment to your links and every withdrawal, and you withdraw the balance as USDT to an address you save.</p>
-        <p class="muted">CPAY Wallet, when it is released, is a separate app: its keys stay on your phone and CPAY cannot move or recover money in it. Your CPAY balance is not kept in that app, and nothing moves between the two.</p>
-      </section>
-    </main>
-    <footer class="site">
-      <span>CPAY</span>
-      <span class="faint" style="margin-left:12px">Lightning collect · USD ledger · USDT withdraw</span>
-    </footer>
-  </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="securityTitle">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker">Security</span>
+          <h2 id="securityTitle">Protection around every payout</h2>
+        </div>
+        <div class="features">
+          <div class="card"><div class="icon-tile" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-shield"/></svg></div><h3>Two-step sign-in</h3><p>Add an authenticator app or a passkey from the Security page of your desk.</p></div>
+          <div class="card"><div class="icon-tile" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-key"/></svg></div><h3>Confirm before a payout</h3><p>A withdrawal asks you to confirm it is you again when your sign-in is not recent.</p></div>
+          <div class="card"><div class="icon-tile" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg></div><h3>A wait on new addresses</h3><p>A new or changed payout address can receive withdrawals 24 hours after you save it.</p></div>
+          <div class="card"><div class="icon-tile" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-lock"/></svg></div><h3>One credit, one send</h3><p>A payment is credited once and a withdrawal is sent once, even if a button is pressed twice.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="custodyTitle">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker">Custody</span>
+          <h2 id="custodyTitle">Where your money is held</h2>
+        </div>
+        <div class="card custody custody-box" id="custody">
+          <div><div class="icon-tile" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-building"/></svg></div><h3>Your CPAY account</h3>
+            <p>Your CPAY balance is <strong>held by CPAY</strong>. CPAY records every payment to your links and every withdrawal, and you withdraw the balance as USDT to an address you save.</p></div>
+          <div><div class="icon-tile" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-phone"/></svg></div><h3>CPAY Wallet, a separate app</h3>
+            <p class="muted">CPAY Wallet, when it is released, is a separate app: its keys stay on your phone and CPAY cannot move or recover money in it. Your CPAY balance is not kept in that app, and nothing moves between the two.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <div class="cta-band">
+          <div><h2>Ready to get paid in Lightning?</h2><p>Open an account in a few minutes. An admin reviews it, then you can create your first link.</p></div>
+          <div class="row"><a class="btn primary lg" href="register.html">Open an account</a><a class="btn ghost lg" href="login.html">Log in</a></div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="site-foot">
+        <div>
+          <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
+          <p>Lightning payment links, a US dollar balance held by CPAY and USDT withdrawals.</p>
+        </div>
+        <ul class="foot-links" aria-label="Site">
+          <li><a href="login.html">Log in</a></li>
+          <li><a href="register.html">Open account</a></li>
+          <li><a href="/assets/wallet.html">CPAY Wallet</a></li>
+        </ul>
+      </div>
+      <p class="foot-note">Lightning collect · USD ledger · USDT withdraw. Payments are sent over the Bitcoin Lightning Network.</p>
+    </div>
+  </footer>
   <script>
     window.addEventListener('DOMContentLoaded', async () => {
       // A password-reset link that landed here is on its way to reset.html.

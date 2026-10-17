@@ -30,15 +30,18 @@
     </div>
 
     <div class="checkout-card state-panel" id="loadErrorCard" hidden aria-hidden="true">
+      <div class="state-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div>
       <div class="state-title">We couldn't load this payment page</div>
       <div class="state-sub">Check your connection and try again.</div>
       <button class="pay-btn" id="loadRetryBtn" type="button" style="max-width:280px;margin-top:8px">Retry</button>
     </div>
 
     <div class="checkout-card state-panel" id="notFoundCard" hidden aria-hidden="true">
+      <div class="state-icon nf" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/><path d="M3 3l18 18"/></svg></div>
       <div class="state-mark" aria-hidden="true">404</div>
       <div class="state-title">Payment link not found</div>
       <div class="state-sub">This payment link doesn't exist, or its owner has turned it off.</div>
+      <div class="state-sub">Check the address with the person who sent it. Nothing has been charged.</div>
     </div>
 
     <main class="checkout-card" id="paymentCard" hidden aria-hidden="true" style="flex-direction:column;">

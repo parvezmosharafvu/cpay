@@ -60,9 +60,10 @@ async function boot() {
 async function renderHome() {
   const home = document.getElementById('home');
   home.innerHTML = deskSkeleton(3);
-  const [{ data: bal, error: balErr }, { data: split, error: splitErr }] = await Promise.all([
+  const [{ data: bal, error: balErr }, { data: split, error: splitErr }, recent] = await Promise.all([
     sb.rpc('get_my_balance'),
     sb.rpc('my_earnings_split'),
+    sb.rpc('get_my_payments', { p_limit: 5, p_offset: 0, p_search: null, p_status: null }),
   ]);
   if (balErr || splitErr) {
     home.innerHTML = deskError((balErr || splitErr).message);
@@ -70,14 +71,52 @@ async function renderHome() {
   }
   const b = Array.isArray(bal) ? bal[0] : bal || {};
   const s = Array.isArray(split) ? split[0] : split || {};
-  const kpis = `<div class="grid kpis">
-    <div class="card"><div class="kicker">Available</div><div class="kpi">${money(s.net ?? b.available)}</div><div class="faint">Held by CPAY, ready to withdraw</div></div>
-    <div class="card"><div class="kicker">Settled on your links</div><div class="kpi">${money(s.settled)}</div><div class="faint">All time, paid by customers</div></div>
-    <div class="card"><div class="kicker">Platform fee</div><div class="kpi">${money(s.platform_fee)}</div><div class="faint">All time, CPAY's fee on settled payments</div></div>
-    <div class="card"><div class="kicker">Link cost</div><div class="kpi">${Daily.pct(s.cost_percent || 0)}</div><div class="faint">Added to what the payer pays</div></div>
+  const icon = (id) => `<svg class="ico" aria-hidden="true"><use href="#${id}"/></svg>`;
+  const recentRows = (recent.data || []).map((p) => {
+    const st = String(p.status || '').toLowerCase();
+    return `<li><span class="act-ico ${escapeHtml(st)}" aria-hidden="true">${icon('i-in')}</span>
+      <span class="act-main"><b>Payment on /${escapeHtml(p.link_slug || '')}</b><small>${escapeHtml(when(p.settled_at || p.created_at))}</small></span>
+      <span class="act-amt${st === 'settled' ? ' plus' : ''}">${money(p.amount_settled || p.amount_requested)}<small>${escapeHtml(st || 'unknown')}</small></span></li>`;
+  }).join('');
+  const recentHtml = recent.error ? deskError(recent.error.message)
+    : (recentRows ? `<ul class="activity">${recentRows}</ul>` : deskEmpty('No payments yet', 'Share a payment link; payments show up here as they arrive.'));
+  const lead = `<div class="grid two">
+    <div class="overview-left">
+      <div class="card balance-card">
+        <div class="kicker">Available</div>
+        <div class="kpi" data-kpi>${money(s.net ?? b.available)}</div>
+        <div class="faint">Held by CPAY, ready to withdraw</div>
+        <div class="quick">
+          <button type="button" class="btn primary" data-jump="cash">${icon('i-out')}Withdraw USDT</button>
+          <button type="button" class="btn ghost" data-jump="links" data-focus="linkName">${icon('i-plus')}New payment link</button>
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="card stat"><span class="stat-ico" aria-hidden="true">${icon('i-in')}</span><div class="kicker">Settled on your links</div><div class="kpi">${money(s.settled)}</div><div class="faint">All time, paid by customers</div></div>
+        <div class="card stat"><span class="stat-ico" aria-hidden="true">${icon('i-file-check')}</span><div class="kicker">Platform fee</div><div class="kpi">${money(s.platform_fee)}</div><div class="faint">All time, CPAY's fee on settled payments</div></div>
+        <div class="card stat"><span class="stat-ico" aria-hidden="true">${icon('i-link')}</span><div class="kicker">Link cost</div><div class="kpi">${Daily.pct(s.cost_percent || 0)}</div><div class="faint">Added to what the payer pays</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><h3>Recent payments</h3><button type="button" class="link-btn" data-jump="pay">View all</button></div>
+      ${recentHtml}
+    </div>
   </div>`;
   home.innerHTML = '<div class="stack" id="dailySelf"><p class="muted">Loading…</p></div>';
-  await Daily.mountSelf(document.getElementById('dailySelf'), { between: kpis });
+  await Daily.mountSelf(document.getElementById('dailySelf'), { lead });
+  bindJumps(home);
+}
+
+// Overview shortcuts open another section through its sidebar button.
+function bindJumps(root) {
+  root.querySelectorAll('[data-jump]').forEach((btn) => {
+    btn.onclick = () => {
+      const nav = document.querySelector(`.side .navi[data-tab="${btn.dataset.jump}"]`);
+      if (nav) nav.click();
+      const target = btn.dataset.focus && document.getElementById(btn.dataset.focus);
+      if (target) setTimeout(() => target.focus(), 60);
+    };
+  });
 }
 
 async function renderLinks() {
@@ -86,16 +125,22 @@ async function renderLinks() {
   const { data: links, error } = await sb.from('payment_links').select('*').eq('user_id', me.id).is('deleted_at', null).order('created_at', { ascending: false });
   if (error) { el.innerHTML = deskError(error.message); return; }
   const list = (links || []).map((l) => `<tr>
-    <td><a href="/${escapeHtml(l.slug)}" target="_blank" rel="noopener">/${escapeHtml(l.slug)}</a></td>
-    <td>${escapeHtml(l.display_name || '')}</td>
-    <td>${escapeHtml(layoutLabel(l.theme))}</td>
-    <td>${l.wallet_mode === 'cashapp' ? 'Cash App only' : 'All wallets'}</td>
-    <td>${badge(l.is_active ? 'live' : 'off')}</td>
+    <td data-label="Link"><a href="/${escapeHtml(l.slug)}" target="_blank" rel="noopener">/${escapeHtml(l.slug)}</a></td>
+    <td data-label="Name">${escapeHtml(l.display_name || '')}</td>
+    <td data-label="Design">${escapeHtml(layoutLabel(l.theme))}</td>
+    <td data-label="Wallets">${l.wallet_mode === 'cashapp' ? 'Cash App only' : 'All wallets'}</td>
+    <td data-label="Status">${badge(l.is_active ? 'live' : 'off')}</td>
     <td class="table-actions">
+      <button type="button" class="btn ghost sm" data-copy-link="${escapeHtml(l.slug)}" aria-label="Copy the link /${escapeHtml(l.slug)}">Copy link</button>
       <button type="button" class="btn ghost sm" data-toggle-link="${escapeHtml(l.id)}" data-active="${l.is_active ? '1' : '0'}">${l.is_active ? 'Turn off' : 'Turn on'}</button>
     </td>
   </tr>`).join('');
   el.innerHTML = `
+    <div class="card flush">
+      <div class="card-head"><div><h3>Your links</h3><div class="faint">Share a link; payers choose an amount and pay a Lightning invoice.</div></div><span class="meta-count">${(links || []).length} total</span></div>
+      <div class="scroll"><table class="table rtable"><thead><tr><th>Link</th><th>Name</th><th>Design</th><th>Wallets</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>${list || `<tr><td colspan="6">${deskEmpty('No links yet', 'Create a payment link to start collecting.')}</td></tr>`}</tbody></table></div>
+    </div>
     <div class="card">
       <h3>New payment link</h3>
       <p class="role-note">Payers open your link and pay over Lightning. Settled amounts land in your USD book.</p>
@@ -104,14 +149,15 @@ async function renderLinks() {
       <p class="hint">Added on top of what the payer pays. This is separate from the platform fee.</p>
       ${layoutPicker(exp.theme, exp.wallet, exp.invoice)}
       <button class="btn primary" id="makeLink" type="button">Create link</button>
-    </div>
-    <div class="card flush">
-      <div class="card-head"><h3>Your links</h3><span class="meta-count">${(links || []).length} total</span></div>
-      <div class="scroll"><table class="table"><thead><tr><th>Link</th><th>Name</th><th>Design</th><th>Wallets</th><th>Status</th><th></th></tr></thead>
-      <tbody>${list || `<tr><td colspan="6">${deskEmpty('No links yet', 'Create a payment link to start collecting.')}</td></tr>`}</tbody></table></div>
     </div>`;
   bindExperience(exp);
   document.getElementById('makeLink').onclick = makeLink;
+  el.querySelectorAll('[data-copy-link]').forEach((btn) => {
+    btn.onclick = async () => {
+      const url = `${location.origin}/${btn.dataset.copyLink}`;
+      try { await navigator.clipboard.writeText(url); toast('Link copied', true); } catch (e) { toast(url, true); }
+    };
+  });
   el.querySelectorAll('[data-toggle-link]').forEach((btn) => {
     btn.onclick = async () => {
       const next = btn.dataset.active !== '1';
@@ -168,11 +214,11 @@ async function renderPays() {
   if (error) { el.innerHTML = deskError(error.message); return; }
   const total = data?.[0]?.total_count != null ? Number(data[0].total_count) : (data || []).length;
   const rows = (data || []).map((p) => `<tr>
-    <td class="num">${money(p.amount_settled || p.amount_requested)}</td>
-    <td>${badge(p.status)}</td>
-    <td>/${escapeHtml(p.link_slug || '')}</td>
-    <td class="mono">${escapeHtml(p.invoice_ref || String(p.id || '').slice(0, 8))}</td>
-    <td>${escapeHtml(when(p.settled_at || p.created_at))}</td>
+    <td class="num" data-label="Amount"><span class="cell-main">${money(p.amount_settled || p.amount_requested)}</span></td>
+    <td data-label="Status">${badge(p.status)}</td>
+    <td data-label="Link">/${escapeHtml(p.link_slug || '')}</td>
+    <td class="mono" data-label="Invoice">${escapeHtml(p.invoice_ref || String(p.id || '').slice(0, 8))}</td>
+    <td data-label="When">${escapeHtml(when(p.settled_at || p.created_at))}</td>
   </tr>`).join('');
   const toolbar = deskFilterBar(`
     <div class="field short"><label for="payStatus">Status</label>
@@ -191,7 +237,7 @@ async function renderPays() {
   el.innerHTML = `<div class="card flush">
     ${toolbar}
     <div class="card-head"><h3>Payment history</h3><span class="meta-count">${total} match${total === 1 ? '' : 'es'}</span></div>
-    <div class="scroll"><table class="table"><thead><tr><th class="num">Amount</th><th>Status</th><th>Link</th><th>Invoice</th><th>When</th></tr></thead>
+    <div class="scroll"><table class="table rtable"><thead><tr><th class="num">Amount</th><th>Status</th><th>Link</th><th>Invoice</th><th>When</th></tr></thead>
     <tbody>${rows || `<tr><td colspan="5">${deskEmpty('No payments match', 'Try another status or clear filters.')}</td></tr>`}</tbody></table></div>
   </div>`;
   const statusEl = document.getElementById('payStatus');
@@ -224,12 +270,12 @@ async function renderWithdrawHistory() {
   const { data, error } = await q;
   if (error) { host.innerHTML = deskError(error.message); return; }
   const rows = (data || []).map((w) => `<tr>
-    <td>${escapeHtml(when(w.requested_at))}</td>
-    <td>${badge(w.status)}</td>
-    <td>${escapeHtml(w.chain || w.coin || 'USDT')}</td>
-    <td class="num">${money(w.amount_requested)}</td>
-    <td class="num">${money(w.amount_after_fee)}</td>
-    <td class="mono" title="${escapeHtml(w.destination || '')}">${escapeHtml(String(w.destination || '').slice(0, 18))}</td>
+    <td data-label="When">${escapeHtml(when(w.requested_at))}</td>
+    <td data-label="Status">${badge(w.status)}</td>
+    <td data-label="Network">${escapeHtml(w.chain || w.coin || 'USDT')}</td>
+    <td class="num" data-label="Requested">${money(w.amount_requested)}</td>
+    <td class="num" data-label="After fee"><span class="cell-main">${money(w.amount_after_fee)}</span></td>
+    <td class="mono" data-label="Address" title="${escapeHtml(w.destination || '')}">${escapeHtml(String(w.destination || '').slice(0, 18))}</td>
   </tr>`).join('');
   const toolbar = deskFilterBar(`
     <div class="field short"><label for="wdStatus">Status</label>
@@ -248,7 +294,7 @@ async function renderWithdrawHistory() {
   host.innerHTML = `<div class="card flush">
     ${toolbar}
     <div class="card-head"><h3>Withdrawal history</h3><span class="meta-count">${(data || []).length} shown</span></div>
-    <div class="scroll"><table class="table"><thead><tr><th>When</th><th>Status</th><th>Network</th><th class="num">Requested</th><th class="num">After fee</th><th>Address</th></tr></thead>
+    <div class="scroll"><table class="table rtable"><thead><tr><th>When</th><th>Status</th><th>Network</th><th class="num">Requested</th><th class="num">After fee</th><th>Address</th></tr></thead>
     <tbody>${rows || `<tr><td colspan="6">${deskEmpty('No withdrawals yet', 'Confirm a USDT quote above to see history here.')}</td></tr>`}</tbody></table></div>
   </div>`;
   const st = document.getElementById('wdStatus');
@@ -304,9 +350,9 @@ async function renderChat() {
   el.innerHTML = deskSkeleton(2);
   const { data: adminMsgs, error } = await sb.from('support_messages').select('*').eq('user_id', me.id).order('created_at', { ascending: true }).limit(80);
   if (error) { el.innerHTML = deskError(error.message); return; }
-  const adminThread = (adminMsgs || []).map((m) => `<div class="msg"><span class="faint">${m.sender === 'admin' ? 'Admin' : 'You'}</span>${escapeHtml(m.message)}</div>`).join('');
+  const adminThread = (adminMsgs || []).map((m) => `<div class="msg${m.sender === 'admin' ? '' : ' mine'}"><span class="faint">${m.sender === 'admin' ? 'Admin' : 'You'}</span>${escapeHtml(m.message)}</div>`).join('');
   el.innerHTML = `<div class="stack">
-    <div class="card"><h3>Admin</h3>
+    <div class="card"><div class="card-title"><div><h3>Messages with the admin</h3><p class="faint">Questions about your account, payments or withdrawals.</p></div></div>
       <div class="thread">${adminThread || deskEmpty('No messages yet', 'Write the admin if you need help with your account.')}</div>
       <div class="compose"><input class="input" id="adminMsg" placeholder="Write a message" aria-label="Message to the admin"><button class="btn primary" id="sendAdmin" type="button">Send</button></div></div>
   </div>`;
@@ -329,8 +375,8 @@ async function renderProfile() {
   const prefOpts = `<option value="">None yet</option>` + USDT_NETWORKS.map(([id, label]) =>
     `<option value="${id}" ${book?.preferred_usdt_network === id ? 'selected' : ''}>${label}</option>`).join('');
   const rows = wallets.map((w) => {
-    return `<tr><td>${escapeHtml(netLabel(w.network))}</td><td><code>${escapeHtml(w.address)}</code></td><td>${readyText(w)}</td>
-      <td><button type="button" class="btn ghost" data-del-net="${escapeHtml(w.network)}">Remove</button></td></tr>`;
+    return `<tr><td data-label="Network">${escapeHtml(netLabel(w.network))}</td><td data-label="Address" class="mono"><code>${escapeHtml(w.address)}</code></td><td data-label="Status">${readyText(w)}</td>
+      <td class="table-actions"><button type="button" class="btn ghost sm" data-del-net="${escapeHtml(w.network)}">Remove</button></td></tr>`;
   }).join('');
   el.innerHTML = `<div class="grid split">
     <div class="card">
@@ -348,14 +394,14 @@ async function renderProfile() {
       <div class="field"><label for="usdtAddr">Wallet address</label><input id="usdtAddr" placeholder="Address for that network" autocomplete="off" spellcheck="false"></div>
       <button class="btn primary" id="saveUsdt" type="button">Save address</button>
       <div class="card flush" style="margin-top:16px">
-        <table class="table"><thead><tr><th>Network</th><th>Address</th><th>Status</th><th></th></tr></thead>
+        <table class="table rtable"><thead><tr><th>Network</th><th>Address</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
         <tbody>${rows || `<tr><td colspan="4">${deskEmpty('No USDT address saved', 'Add a network address before withdrawing.')}</td></tr>`}</tbody></table>
       </div>
       <div class="field"><label for="prefNet">Preferred network</label><select id="prefNet">${prefOpts}</select></div>
       <div class="field"><label for="thresh">Auto-withdraw threshold (USD)</label>
         <input id="thresh" type="number" min="5" step="1" placeholder="Leave empty to only withdraw by hand" value="${book?.withdraw_threshold ?? ''}"></div>
-      <label class="row"><input type="checkbox" id="autoOn" ${book?.auto_withdraw_enabled ? 'checked' : ''}> Queue a payout when the balance reaches the threshold</label>
-      <button class="btn" id="savePrefs" type="button">Save payout settings</button>
+      <label class="check"><input type="checkbox" id="autoOn" ${book?.auto_withdraw_enabled ? 'checked' : ''}> Queue a payout when the balance reaches the threshold</label>
+      <button class="btn ghost" id="savePrefs" type="button">Save payout settings</button>
     </div>
   </div>`;
   document.getElementById('saveProf').onclick = async () => {

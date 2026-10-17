@@ -38,3 +38,10 @@ The site is static HTML. Payment links are unmatched paths, served as
 - Admin (`admin.html` + `admin-*.js`): Manage users Status control, payment/payout/audit filters, same design-system loading states.
 - Roles in UI: Freelancer (`creator`) and Admin only. Reserved slugs still list `moderator`/`reseller` so those paths are not payment links. Do not reintroduce reseller desks.
 - Authz: `loadProfile` signs out non-active accounts; admin RPCs / `admin-actions` require `role=admin` on the server. Hidden UI is not a privilege boundary.
+
+## Chat 4 (design system v2, 2026-10-17)
+
+- Tokens, breakpoints, components and the route inventory: [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md). Test evidence: [REDESIGN-TEST-REPORT.md](REDESIGN-TEST-REPORT.md).
+- Desks use one app shell: grouped icon sidebar, sticky top bar with the section title, and under 900 px a drawer plus a bottom tab bar (`shell.js`, display only).
+- Tables marked `.rtable` become labelled cards when their card is narrower than 640 px (container query), on phones and in half-width cards.
+- Payment pages keep the light base and the merchant's checkout design; only their shared states (loading, error, not found) changed.

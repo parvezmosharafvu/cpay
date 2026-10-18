@@ -206,8 +206,13 @@ function renderAmount(){
   if (summary) {
     if (amt > 0) {
       const charged = Math.round(amt * (1 + linkCostPercent / 100) * 100) / 100;
+      // On a direct link the link cost is the merchant's own charge, paid to
+      // their wallet with the rest; CPAY takes no fee there.
+      const costLabel = window.CPAY_SETTLEMENT === 'direct'
+        ? `includes ${linkCostPercent}% added by the merchant (not a CPAY fee)`
+        : `includes ${linkCostPercent}% service fee`;
       summary.textContent = linkCostPercent > 0
-        ? `You pay $${charged.toFixed(2)} · includes ${linkCostPercent}% service fee`
+        ? `You pay $${charged.toFixed(2)} · ${costLabel}`
         : `You pay $${charged.toFixed(2)}`;
       summary.classList.add('visible');
     } else {

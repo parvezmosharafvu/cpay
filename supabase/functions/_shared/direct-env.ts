@@ -1,7 +1,7 @@
 // Settings both direct-settlement functions read the same way, so they can
 // never disagree on the network or on the local test hooks.
 import type { Bolt11Network } from "./bolt11.ts";
-import { denoResolver, e2eGatewayFetch, type Fetch, guardedFetch } from "./lnurl.ts";
+import { denoResolver, e2eGatewayFetch, type Fetch, guardedFetch, providerHosts } from "./lnurl.ts";
 
 const NETWORKS: Bolt11Network[] = ["bitcoin", "testnet", "signet", "regtest"];
 
@@ -17,10 +17,21 @@ export function isLocalStack(supabaseUrl: string): boolean {
 }
 
 /**
- * How to reach merchant wallet providers: the guarded fetch, or on the local
- * stack only, the fake provider named by E2E_LNURL_GATEWAY.
+ * How to reach merchant wallet providers: the guarded fetch (limited to
+ * DIRECT_PROVIDER_HOSTS when that is set), or on the local stack only, the
+ * fake provider named by E2E_LNURL_GATEWAY.
  */
-export function merchantFetch(supabaseUrl: string, e2eGateway: string | undefined): Fetch {
+export function merchantFetch(supabaseUrl: string, e2eGateway: string | undefined, allowHostsRaw?: string): Fetch {
   const gateway = isLocalStack(supabaseUrl) ? e2eGateway ?? "" : "";
-  return gateway ? e2eGatewayFetch(gateway) : guardedFetch(fetch, denoResolver());
+  return gateway ? e2eGatewayFetch(gateway) : guardedFetch(fetch, denoResolver(), providerHosts(allowHostsRaw));
+}
+
+/**
+ * Direct invoices are public, so they are made only while Turnstile is
+ * enforced (TURNSTILE_MODE=enforce with its secret): the per-address limit
+ * keys on a client-IP header that is not signed. The local test stack is
+ * exempt, as it has no Turnstile.
+ */
+export function directInvoicesAllowed(turnstileMode: string, supabaseUrl: string): boolean {
+  return turnstileMode === "enforce" || isLocalStack(supabaseUrl);
 }

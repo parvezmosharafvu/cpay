@@ -112,8 +112,10 @@ export function providerMessage(e: unknown): string {
     switch (e.code) {
       case "bad_address": case "no_verify": case "verify_broken": case "out_of_range":
         return e.message;
-      case "unreachable": case "http_error":
+      case "unreachable": case "http_error": case "dns_unavailable":
         return "The merchant's wallet provider is not answering. Try again in a moment.";
+      case "provider_not_allowed":
+        return "This merchant is not taking payments right now.";
       default:
         return "The merchant's wallet provider sent something CPAY could not accept, so no payment request was made.";
     }

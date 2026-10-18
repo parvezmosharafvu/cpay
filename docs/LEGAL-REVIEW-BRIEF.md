@@ -11,7 +11,7 @@ pages (terms, privacy, refund, contact) are in pull request #97 and stay unmerge
 | Who receives the payer's bitcoin | CPAY's own wallet (one wallet for all merchants) | The merchant's own wallet provider, then the merchant's wallet |
 | Who holds the keys | CPAY | The merchant (or the merchant's chosen provider) |
 | What the merchant has | A balance in CPAY's ledger: a claim on CPAY | The bitcoin itself, in their wallet |
-| Fees | CPAY deducts its fee when the payment settles | CPAY receives nothing from the payment; no fee is taken today |
+| Fees | CPAY deducts its fee when the payment settles | CPAY receives nothing from the payment; no CPAY fee is taken. A link cost the merchant sets is the merchant's own markup, paid to the merchant |
 | How the merchant is paid out | CPAY converts and sends USDT to the merchant's saved address on request (or at a threshold the merchant sets) | Not applicable: the money is already with the merchant |
 | Refunds | CPAY could technically send money back from its wallet; no refund flow exists | CPAY cannot refund: it never held the money |
 | What CPAY controls | The funds, the ledger, payouts | Which invoice the payer sees; records; stopping a link |

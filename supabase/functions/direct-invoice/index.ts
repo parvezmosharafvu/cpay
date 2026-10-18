@@ -7,12 +7,14 @@
 //   TURNSTILE_SECRET_KEY, TURNSTILE_MODE      (optional, as create-invoice)
 //   DIRECT_RECONCILE_SECRET                   (optional; the reconcile sweep refuses without it)
 //   DIRECT_SETTLEMENT_NETWORK                 (optional; bitcoin by default)
+//   DIRECT_PROVIDER_HOSTS                     (optional; only these provider hosts)
+// New direct invoices need TURNSTILE_MODE=enforce (see directInvoicesAllowed).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { toCents } from "../_shared/money.ts";
 import { checkTurnstile, turnstileMode } from "../create-invoice/guards.ts";
 import { currentRate, type Rate } from "../_shared/btc-rate.ts";
 import { lightningAddressProvider } from "../_shared/direct-settlement.ts";
-import { directNetwork, isLocalStack, merchantFetch } from "../_shared/direct-env.ts";
+import { directInvoicesAllowed, directNetwork, isLocalStack, merchantFetch } from "../_shared/direct-env.ts";
 import { createHandler, type Db, type DirectRow, type PublicRow } from "./handler.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -23,7 +25,7 @@ const NETWORK = directNetwork(Deno.env.get("DIRECT_SETTLEMENT_NETWORK"));
 // The local E2E stack only: a fake merchant provider and a fixed price.
 // Never active on the hosted project, whose SUPABASE_URL is not loopback.
 const E2E_PRICE = isLocalStack(SUPABASE_URL) ? Number(Deno.env.get("E2E_FIXED_BTC_USD") ?? "") : NaN;
-const net = merchantFetch(SUPABASE_URL, Deno.env.get("E2E_LNURL_GATEWAY"));
+const net = merchantFetch(SUPABASE_URL, Deno.env.get("E2E_LNURL_GATEWAY"), Deno.env.get("DIRECT_PROVIDER_HOSTS"));
 const rate = (): Promise<Rate> => Number.isFinite(E2E_PRICE) && E2E_PRICE > 0
   ? Promise.resolve({ usdPerBtc: E2E_PRICE, usdPerBtcCents: BigInt(Math.round(E2E_PRICE * 100)), sources: ["e2e-fixed"] })
   : currentRate(fetch);
@@ -122,5 +124,6 @@ Deno.serve(createHandler({
   provider: lightningAddressProvider(net, NETWORK),
   rate,
   turnstile: (token, ip) => checkTurnstile(TURNSTILE_MODE, TURNSTILE_SECRET, token, ip),
+  createAllowed: directInvoicesAllowed(TURNSTILE_MODE, SUPABASE_URL),
   reconcileSecret: Deno.env.get("DIRECT_RECONCILE_SECRET") ?? "",
 }));

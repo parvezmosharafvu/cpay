@@ -5,8 +5,10 @@
 // preimage, and sha256(preimage) must equal the invoice's payment hash.
 //
 // Every request goes to a host the merchant chose, so each one is treated
-// as untrusted: https only, no IP literals or internal names, no redirects,
-// a short timeout, a small body cap, JSON only, and a strict shape check.
+// as untrusted: https only, no IP literals or internal names, public DNS
+// answers only (guardedFetch, fail closed), an optional owner list of
+// provider hosts, no redirects, a short timeout, a small body cap, JSON
+// only, and a strict shape check.
 // Provider error text is never echoed to a payer.
 //
 // Specs: https://github.com/lnurl/luds (06, 16, 21).
@@ -287,28 +289,41 @@ export function ipNotPublic(ip: string): boolean {
 export type Resolver = (host: string) => Promise<string[]>;
 
 /**
- * Wrap fetch so a merchant-chosen host that resolves to a private or
- * reserved address is refused before any request is sent. A resolver that
- * is not available (some runtimes) is skipped; the URL checks above still
- * apply. Re-resolution between this check and the request (DNS rebinding)
- * remains possible; the requests are GET-only, carry no credentials, and
- * nothing from a refused or odd answer is shown to anyone.
+ * Wrap fetch so a request to a merchant-chosen host is sent only when:
+ *   - the host is on `allowHosts`, when the owner set that list
+ *     (DIRECT_PROVIDER_HOSTS; exact names, no wildcards);
+ *   - DNS answers, and every A/AAAA address is public. Fails closed: no
+ *     resolver, a resolver error or no address means no request.
+ * Re-resolution between this check and the request (DNS rebinding) can
+ * still point the connection elsewhere, but only to port 443 with TLS
+ * verified against the merchant's host name, so no request is sent unless
+ * that server holds a valid certificate for the name. What remains is a
+ * connection attempt to that port; nothing from it is shown to anyone.
  */
-export function guardedFetch(base: Fetch, resolve: Resolver | null): Fetch {
+export function guardedFetch(base: Fetch, resolve: Resolver | null, allowHosts: readonly string[] = []): Fetch {
   return async (input: RequestInfo | URL, init?: RequestInit) => {
     const u = new URL(typeof input === "string" || input instanceof URL ? input.toString() : input.url);
-    if (!hostAllowed(u.hostname)) throw new LnurlError("blocked_host", "That host is not allowed.");
-    if (resolve) {
-      let ips: string[] | null = null;
-      try {
-        ips = await resolve(u.hostname);
-      } catch {
-        ips = null; // resolver unavailable; fetch fails by itself on NXDOMAIN
-      }
-      if (ips && ips.some(ipNotPublic)) throw new LnurlError("blocked_host", "That host is not allowed.");
+    const host = u.hostname.toLowerCase();
+    if (!hostAllowed(host)) throw new LnurlError("blocked_host", "That host is not allowed.");
+    if (allowHosts.length && !allowHosts.includes(host)) {
+      throw new LnurlError("provider_not_allowed", "CPAY does not accept this wallet provider for direct payments.");
     }
+    if (!resolve) throw new LnurlError("dns_unavailable", "The wallet provider's address could not be checked. Try again later.");
+    let ips: string[];
+    try {
+      ips = await resolve(host);
+    } catch {
+      throw new LnurlError("dns_unavailable", "The wallet provider's address could not be checked. Try again later.");
+    }
+    if (!ips.length) throw new LnurlError("unreachable", "The wallet provider did not answer.");
+    if (ips.some(ipNotPublic)) throw new LnurlError("blocked_host", "That host is not allowed.");
     return base(input, init);
   };
+}
+
+/** DIRECT_PROVIDER_HOSTS: comma-separated host names; invalid entries dropped. */
+export function providerHosts(raw: string | undefined): string[] {
+  return String(raw ?? "").split(",").map((s) => s.trim().toLowerCase().replace(/\.$/, "")).filter((h) => h && hostAllowed(h));
 }
 
 /** Deno's resolver (A and AAAA), or null when the runtime has none. */

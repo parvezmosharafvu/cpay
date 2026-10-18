@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { directNetwork, isLocalStack } from "./direct-env.ts";
+import { directInvoicesAllowed, directNetwork, isLocalStack } from "./direct-env.ts";
 
 Deno.test("network: bitcoin unless a known network is named", () => {
   assertEquals(directNetwork(undefined), "bitcoin");
@@ -14,4 +14,11 @@ Deno.test("test hooks only on a loopback SUPABASE_URL", () => {
   for (const u of ["https://riumaeihemgznvgattoc.supabase.co", "http://127.0.0.1.evil.example.com", "https://127.0.0.1:54321", "http://localhost.example.com"]) {
     assertEquals(isLocalStack(u), false, u);
   }
+});
+
+Deno.test("direct invoices only while Turnstile is enforced (local stack exempt)", () => {
+  const hosted = "https://riumaeihemgznvgattoc.supabase.co";
+  assertEquals(directInvoicesAllowed("enforce", hosted), true);
+  for (const m of ["off", "monitor", ""]) assertEquals(directInvoicesAllowed(m, hosted), false, m);
+  assertEquals(directInvoicesAllowed("off", "http://127.0.0.1:54321"), true);
 });

@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import {
-  e2eGatewayFetch, type Fetch, fetchPayRequest, guardedFetch, hostAllowed, ipNotPublic, LnurlError, parseLightningAddress,
+  e2eGatewayFetch, type Fetch, fetchPayRequest, guardedFetch, hostAllowed, ipNotPublic, LnurlError, parseLightningAddress, providerHosts,
   requestInvoice, safeUrl, verifyPayment,
 } from "./lnurl.ts";
 import { sha256HexBytes } from "./bolt11.ts";
@@ -60,9 +60,38 @@ Deno.test("guardedFetch refuses a host that resolves to a private address", asyn
   assertEquals(base.calls.length, 0);
   const pub = guardedFetch(base, () => Promise.resolve(["93.184.216.34"]));
   assertEquals((await pub("https://pay.example.com/x")).status, 200);
-  const noResolver = guardedFetch(base, null);
-  assertEquals((await noResolver("https://pay.example.com/x")).status, 200);
-  await assertRejects(() => noResolver("https://localhost/x"), LnurlError);
+  await assertRejects(() => pub("https://localhost/x"), LnurlError);
+});
+
+Deno.test("guardedFetch fails closed when DNS cannot be checked", async () => {
+  const base = mock({ "https://pay.example.com/x": () => json({ ok: true }) });
+  const code = async (f: Fetch) => {
+    try {
+      await f("https://pay.example.com/x");
+      return "sent";
+    } catch (e) {
+      return (e as LnurlError).code;
+    }
+  };
+  assertEquals(await code(guardedFetch(base, null)), "dns_unavailable");
+  assertEquals(await code(guardedFetch(base, () => Promise.reject(new Error("PermissionDenied")))), "dns_unavailable");
+  assertEquals(await code(guardedFetch(base, () => Promise.resolve([]))), "unreachable");
+  // One private answer among public ones is enough to refuse.
+  assertEquals(await code(guardedFetch(base, () => Promise.resolve(["93.184.216.34", "::ffff:10.0.0.1"]))), "blocked_host");
+  assertEquals(base.calls.length, 0);
+});
+
+Deno.test("guardedFetch: an owner list of provider hosts, exact names only", async () => {
+  const base = mock({ "https://pay.example.com/x": () => json({ ok: true }), "https://evil.pay.example.com/x": () => json({ ok: true }) });
+  const pub = () => Promise.resolve(["93.184.216.34"]);
+  const listed = guardedFetch(base, pub, providerHosts(" Pay.Example.com., not a host, 10.0.0.1,localhost "));
+  assertEquals((await listed("https://pay.example.com/x")).status, 200);
+  const e = await assertRejects(() => listed("https://evil.pay.example.com/x"), LnurlError);
+  assertEquals(e.code, "provider_not_allowed");
+  assertEquals(providerHosts(" Pay.Example.com., not a host, 10.0.0.1,localhost "), ["pay.example.com"]);
+  assertEquals(providerHosts(undefined), []);
+  // No list: any public host.
+  assertEquals((await guardedFetch(base, pub)("https://evil.pay.example.com/x")).status, 200);
 });
 
 Deno.test("payRequest: valid shape accepted, every malformed field refused", async () => {

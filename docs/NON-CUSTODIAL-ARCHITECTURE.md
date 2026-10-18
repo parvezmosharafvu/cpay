@@ -155,8 +155,8 @@ Built (migration `20261018010000`, Edge Functions `direct-invoice` and `settleme
 | `payment_links.settlement_mode` | `custodial` (default) or `direct`. Changed **only by the link's owner** (`set_link_settlement_mode`), and to `direct` only once the address is in use; admins and the service role are refused by a trigger |
 | `direct_payments` | The record of each direct invoice: amount, sats, rate and its sources, invoice, payment hash, verify URL, status. A CHECK constraint makes `paid` impossible without a preimage that hashes to the payment hash. `paid` is final; `pending → expired` only after the invoice expires; late proof still counts. Never read by `get_balance_for()`, withdrawals or fees |
 | Payments guard | A `payments` row can never be created for a direct link, whatever the caller |
-| `direct-invoice` | Public (payers have no account), like `create-invoice`: operator stop, switch, Turnstile when enforced, per-address, per-link and per-owner limits, request-id idempotency. Prices from public exchange tickers: at least two that agree within 2 %, else no invoice. Status reads ask the provider at most once every 3 s per payment however many pages poll. `reconcile` sweeps open payments with its own secret |
-| Provider client | https only; no IP literals or internal names; DNS answers that are private, loopback, link-local or reserved are refused where the runtime can resolve; no redirects; 8 s timeout; 64 KB cap; strict shape checks; provider text never shown to payers |
+| `direct-invoice` | Public (payers have no account), like `create-invoice`: operator stop, switch, Turnstile required (no new invoice unless `TURNSTILE_MODE=enforce`), per-address, per-link and per-owner limits, request-id idempotency. Prices from public exchange tickers: at least two that agree within 2 %, else no invoice. Status reads ask the provider at most once every 3 s per payment however many pages poll. `reconcile` sweeps open payments with its own secret |
+| Provider client | https only, port 443; no IP literals or internal names; every request needs a DNS answer whose A/AAAA addresses are all public (private, loopback, link-local, CGNAT, reserved, IPv4-mapped and NAT64 forms refused), and **fails closed** when DNS cannot be checked; optional owner list of provider hosts (`DIRECT_PROVIDER_HOSTS`, exact names); no redirects; 8 s timeout; 64 KB cap; strict shape checks; provider text never shown to payers |
 | Desk | "Get paid straight to your own wallet" card (check, save, remove), "Payments go to" per link, new-link choice, a separate Direct payments list. Hidden while the switch is off |
 | Payer pages | Say where the money goes ("Goes straight to … own wallet (address). CPAY does not hold this payment."), show "This link isn't taking payments right now" when the merchant has no usable address, and put the proof of payment on the receipt |
 | Admin | The switch (turning on needs aal2; a signed-in direct write of the setting is refused by a trigger, so it can only change through the audited toggle); `admin_set_direct_settlement_blocked` stops an account's direct links (never redirects them); `admin_list_direct_payments` |
@@ -177,11 +177,11 @@ Payment states (direct):
 | CPAY (or someone who controls CPAY's servers or database) points future invoices elsewhere | Audit log; the payer sees the destination address on the page; the merchant sees every payment in their own wallet and can compare | This is the irreducible trust in an invoice-showing service. It cannot touch money already paid |
 | A provider sends an invoice for another amount, purpose or network, or one about to expire | Refused before the payer sees it | — |
 | A provider says "paid" falsely | Paid only with the preimage that matches this invoice; checked again by the database CHECK; an answer for another invoice is refused | The merchant's own provider knows the preimage from the start, so it could claim "paid" for an invoice nobody paid: that misleads only its own merchant's records, and the payer's own wallet shows whether they paid. A custodial provider that receives but never credits the merchant: the merchant's choice of provider |
-| Server-side request forgery through a crafted address | §4 provider client rules | DNS rebinding between check and request (GET only, no credentials, nothing reflected) |
+| Server-side request forgery through a crafted address | §4 provider client rules. The open-source Supabase Edge runtime gives functions unrestricted outbound network access and does offer `Deno.resolveDns` (checked in its source, `ext/runtime/js/denoOverrides.js` and `crates/base/src/runtime/permissions.rs`); whether the hosted platform also filters private destinations is not documented, so CPAY does not rely on it | DNS rebinding between the check and the connection: the connection can only go to port 443 and TLS is verified against the merchant's host name, so no HTTP request is sent unless that server holds a valid certificate for it. Left: a TCP/TLS connection attempt to port 443 of an address chosen by the attacker. Closed completely by `DIRECT_PROVIDER_HOSTS` |
 | Payer's browser claims "paid" | Status only from the server's check | — |
 | Duplicate, replayed or out-of-order events | Unique payment hash; one invoice per (link, request id); proof idempotent; `paid` final; late proof accepted | — |
 | Bad price | Two agreeing sources or no invoice; the rate and sources are stored with each payment | All sources wrong the same way |
-| Flooding the public endpoint | Per-address, per-link, per-owner limits; Turnstile when enforced; provider calls throttled per payment | Same open item as `create-invoice` (Turnstile, unsigned client-IP header) |
+| Flooding the public endpoint | No new direct invoice unless Turnstile is enforced (in code); per-address, per-link, per-owner limits; provider calls throttled per payment | The per-address limit keys on the unsigned client-IP header (same open item as `create-invoice`); Turnstile and the per-link and per-owner limits do not depend on it |
 | Admin abuse | Admins can only stop direct links (block) or turn the switch; they cannot set or change an address or a link's mode | — |
 | Payer confusion about refunds | The receipt says CPAY did not hold the payment and a refund is between payer and merchant | Needs the refund policy text (legal) |
 
@@ -194,10 +194,16 @@ These change custody, trust or costs, so they are yours. Everything else is deci
 2. **The custodial CPAY balance:** keep it as the opt-in "My CPAY balance" per link (recommended during the
    move), stop offering it for new links later, or retire it after balances are paid out. Retiring needs
    counsel (it holds customer money today).
-3. **Fees on direct payments:** CPAY cannot deduct from a payment it never holds. Options: no fee
-   (current code), a monthly plan, or a separate fee invoice billed to the merchant. None is built
-   beyond "no fee".
-4. **Which addresses to allow:** any LUD-21 provider (current code), or only self-custodial wallets.
+3. **Fees on direct payments:** CPAY cannot deduct from a payment it never holds, so **the current
+   platform fee model is not implemented for direct payments**: CPAY collects nothing from them.
+   The link cost (`cost_percent`) is separate: the merchant's own markup, added to what the payer
+   pays and received by the merchant's wallet; on direct links the payer page says "added by the
+   merchant (not a CPAY fee)". Options for a CPAY fee: none (current code), a monthly plan, or a
+   separate fee invoice billed to the merchant. Any of them needs your approval, its own disclosure
+   and its own tests before it is built or described.
+4. **Which addresses to allow:** any LUD-21 provider on a public host (current default), or only the
+   providers you list in `DIRECT_PROVIDER_HOSTS` (recommended for the pilot), or only self-custodial
+   wallets.
    CPAY cannot verify that a provider is self-custodial, so the honest claim is "CPAY does not hold it",
    not "your wallet is self-custodial".
 5. **CPAY Wallet:** publish it (gates G1–G8), then add Lightning-address registration so members can use
@@ -209,9 +215,11 @@ These change custody, trust or costs, so they are yours. Everything else is deci
 |---|---|---|
 | Counsel has reviewed the direct model, payer and merchant terms, privacy notice and refund text ([LEGAL-REVIEW-BRIEF.md](LEGAL-REVIEW-BRIEF.md)) | Owner | — |
 | One real payment on mainnet: a merchant's real Lightning address (LUD-21), a $1–$5 payment from Cash App, proof recorded, merchant's wallet shows it | Owner | §9 |
-| The Edge runtime reaches the merchant's provider and the price sources; check whether `Deno.resolveDns` is available there (the DNS check is skipped where it is not) | Owner, with logs | Function logs after the test |
-| Turnstile enforced for payer endpoints (existing blocker) | Owner | `TURNSTILE_MODE=enforce` |
-| Reconcile schedule with its own secret | Owner | §8 |
+| The deployed runtime reaches the merchant's provider and the price sources, and DNS checks work there (a `dns_unavailable` refusal in the logs means they do not, and no direct invoice is made) | Owner, with logs | Function logs after the pilot payment |
+| `DIRECT_PROVIDER_HOSTS` set to the pilot provider's hosts (recommended) | Owner | Edge secret |
+| Turnstile enforced for payer endpoints (existing blocker), verified on the deployed runtime. `direct-invoice` refuses new invoices until it is | Owner | `TURNSTILE_MODE=enforce` |
+| Reconcile schedule with its own secret, seen running on the deployed project | Owner | §8 |
+| A separately approved, low-value pilot (one account, $1–$5) with the rollback in §10 ready. Green CI and preview deployments prove build and test status only, not the provider's live LUD-21 behaviour | Owner | §9 |
 | Public copy updated to describe direct payments (only then) | Engineering, after the decision | — |
 | Solvency check for the custodial wallet, while the CPAY balance exists | Owner decision | Compare the platform wallet balance with the sum of `get_balance_for` daily |
 
@@ -225,7 +233,7 @@ These change custody, trust or costs, so they are yours. Everything else is deci
   `DIRECT_RECONCILE_SECRET` (a new random value, not `CRON_SECRET`) and schedule
   `POST /functions/v1/direct-invoice` with body `{"action":"reconcile"}` and header
   `x-direct-reconcile-secret` every few minutes (pg_cron + vault, as the other jobs).
-- **Environment:** `DIRECT_SETTLEMENT_NETWORK` (default `bitcoin`). `E2E_LNURL_GATEWAY` and
+- **Environment:** `DIRECT_SETTLEMENT_NETWORK` (default `bitcoin`); `DIRECT_PROVIDER_HOSTS` (optional list of provider hosts); `TURNSTILE_MODE=enforce` is required for new direct invoices. `E2E_LNURL_GATEWAY` and
   `E2E_FIXED_BTC_USD` are honoured only when `SUPABASE_URL` is a loopback address (the local test stack);
   never set them on the hosted project.
 - **A payer says they paid, the page says waiting:** look up the row in `direct_payments`; the

@@ -6,7 +6,7 @@ Rows last checked against production on 2026-10-16 (Supabase SQL, Auth logs, sec
 
 | Finding | Severity | Status | Owner / PR |
 |---|---|---|---|
-| Direct settlement is built and off. Turning it on needs the gates in docs/NON-CUSTODIAL-ARCHITECTURE.md §7: counsel's review, one real mainnet payment to a merchant's own Lightning address, Turnstile enforced, the reconcile secret | Medium | open | Owner decision (direct settlement) |
+| Direct settlement is built and off. Turning it on needs the gates in docs/NON-CUSTODIAL-ARCHITECTURE.md §7: counsel's review, a separately approved low-value mainnet pilot to a merchant's own Lightning address, Turnstile enforced (direct invoices refuse without it), DNS checks confirmed on the deployed runtime (fail closed), the reconcile schedule, owner sign-off on fees (none collected on direct payments) | Medium | open | Owner decision (direct settlement) |
 | The pooled platform wallet has no check that it covers every CPAY balance (solvency); payouts check the wallet's own balance per withdrawal | Medium | open | Owner: daily comparison or a health check, see docs/NON-CUSTODIAL-ARCHITECTURE.md §7 |
 | Draft legal pages (terms, privacy, refund, contact). Since 2026-10-16 the Google sign-in consent screen links privacy.html and terms.html | Medium | open | Owner legal sign-off (#97, Draft); gate also checks text |
 | Admin MFA: `admin_mfa_required` is on (2026-10-16), so every admin session needs its code. Remaining: enrol a second authenticator (a passkey does not replace it: it is a first factor and the code is still asked), then set the Edge secret `ADMIN_MFA_EXPECTED=true` so the health check alerts if the flag is ever turned off | Medium | open | Owner (RUNBOOKS "Two-step sign-in") |

@@ -4,7 +4,8 @@
 // Secrets / env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
 // (set by Supabase), ALLOWED_ORIGINS (optional, as user-withdraw),
 // STEP_UP_MAX_AGE_SECONDS (optional, as user-withdraw),
-// DIRECT_SETTLEMENT_NETWORK (optional; bitcoin by default).
+// DIRECT_SETTLEMENT_NETWORK (optional; bitcoin by default),
+// DIRECT_PROVIDER_HOSTS (optional; only these provider hosts).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { cachedHosts, corsFor } from "../_shared/cors.ts";
 import { checkStepUp, stepUpWindow } from "../_shared/step-up.ts";
@@ -19,7 +20,7 @@ const sb = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 const STEP_UP_SECONDS = stepUpWindow(Deno.env.get("STEP_UP_MAX_AGE_SECONDS"));
 const NETWORK = directNetwork(Deno.env.get("DIRECT_SETTLEMENT_NETWORK"));
 // The local E2E stack only (see _shared/direct-env.ts).
-const net = merchantFetch(SUPABASE_URL, Deno.env.get("E2E_LNURL_GATEWAY"));
+const net = merchantFetch(SUPABASE_URL, Deno.env.get("E2E_LNURL_GATEWAY"), Deno.env.get("DIRECT_PROVIDER_HOSTS"));
 
 const hosts = cachedHosts(
   (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean),

@@ -137,11 +137,17 @@ Used by `direct-invoice` and `settlement-destination` (direct settlement,
 - [ ] `DIRECT_SETTLEMENT_NETWORK` *(optional)* — `bitcoin` (default),
       `testnet`, `signet` or `regtest`: the network merchant invoices must be
       for. Leave unset in production.
+- [ ] `DIRECT_PROVIDER_HOSTS` *(optional)* — comma-separated host names
+      (exact, no wildcards), e.g. the address domain and callback host of each
+      provider the owner accepts. Set = CPAY only talks to these hosts for
+      direct settlement; unset = any public host that passes the DNS check.
 - `E2E_LNURL_GATEWAY`, `E2E_FIXED_BTC_USD` — the local test stack only. Both
   functions ignore them unless `SUPABASE_URL` is a loopback address; never set
   them on the hosted project.
 - `TURNSTILE_SECRET_KEY`, `TURNSTILE_MODE`, `STEP_UP_MAX_AGE_SECONDS`,
   `ALLOWED_ORIGINS` — the same values as `create-invoice` / `user-withdraw`.
+  `direct-invoice` makes **no new invoice** unless `TURNSTILE_MODE=enforce`
+  (with its secret); status checks of existing payments still work.
 
 ## Payment service
 

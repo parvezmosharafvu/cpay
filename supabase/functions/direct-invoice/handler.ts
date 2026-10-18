@@ -4,9 +4,10 @@
 // the money never passes through CPAY, so nothing here credits a balance.
 //
 // Public and unauthenticated like create-invoice (payers have no account),
-// with the same brakes: operator stop, optional Turnstile, per-address,
-// per-link and per-owner limits, request-id idempotency. Off unless the
-// owner turns direct_settlement_enabled on.
+// with the same brakes: operator stop, Turnstile (required: no new invoice
+// unless it is enforced), per-address, per-link and per-owner limits,
+// request-id idempotency. Off unless the owner turns
+// direct_settlement_enabled on.
 //
 // Actions (POST JSON, "action"):
 //   create     { slug, amount, requestId?, turnstileToken? } -> the invoice
@@ -99,6 +100,8 @@ export type Deps = {
   provider: SettlementProvider;
   rate: () => Promise<Rate>;
   turnstile: (token: unknown, ip: string) => Promise<{ ok: boolean; reason?: string }>;
+  /** False while Turnstile is not enforced: no new invoices (status and reconcile still work). */
+  createAllowed: boolean;
   reconcileSecret: string;
   now?: () => number;
   log?: (msg: string, extra?: unknown) => void;
@@ -194,6 +197,10 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
     const enabled = await db.directEnabled();
     if (enabled === undefined) return json({ error: "Payment service temporarily unavailable" }, 503);
     if (!enabled) return json({ error: "Direct payments are not available." }, 503);
+    if (!deps.createAllowed) {
+      log("direct invoices refused: TURNSTILE_MODE is not enforce");
+      return json({ error: "Direct payments are not available." }, 503);
+    }
 
     const slug = String(body.slug ?? "").trim();
     const amountCents = parseAmountToCents(body.amount as number | string | undefined);

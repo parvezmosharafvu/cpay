@@ -12,7 +12,7 @@ const RATE = { usdPerBtc: 100_000, usdPerBtcCents: 10_000_000n, sources: ["a", "
 
 type Row = NewRow & { id: string; status: "pending" | "paid" | "expired"; preimage: string | null; paid_at: string | null };
 
-function world(over: Partial<{ stopped: boolean | undefined; enabled: boolean | undefined; link: Link | null | undefined; dest: typeof DEST | null; maxCents: number }> = {}) {
+function world(over: Partial<{ createAllowed: boolean; stopped: boolean | undefined; enabled: boolean | undefined; link: Link | null | undefined; dest: typeof DEST | null; maxCents: number }> = {}) {
   const rows = new Map<string, Row>();
   const preimages = new Map<string, string>();
   const verdicts = new Map<string, Verification | "throw">();
@@ -88,6 +88,7 @@ function world(over: Partial<{ stopped: boolean | undefined; enabled: boolean | 
   const handler = createHandler({
     db, provider, rate: () => Promise.resolve(RATE),
     turnstile: (token) => Promise.resolve(token === "bad" ? { ok: false } : { ok: true }),
+    createAllowed: over.createAllowed ?? true,
     reconcileSecret: "s3cret", now: () => now, log: () => {},
   });
   const post = async (body: unknown, headers: Record<string, string> = {}) => {
@@ -116,6 +117,16 @@ Deno.test("create refuses while stopped, switched off, or unreadable", async () 
   const off = await world({ enabled: false }).post({ slug: "alice-pay", amount: 10 });
   assertEquals([off.status, off.body.error], [503, "Direct payments are not available."]);
   assertEquals((await world({ enabled: undefined }).post({ slug: "alice-pay", amount: 10 })).status, 503);
+});
+
+Deno.test("create refuses while Turnstile is not enforced; status and reconcile still work", async () => {
+  const w = world({ createAllowed: false });
+  const r = await w.post({ slug: "alice-pay", amount: 10 });
+  assertEquals([r.status, r.body.error], [503, "Direct payments are not available."]);
+  assertEquals(w.rows.size, 0);
+  assertEquals(w.calls.provider, 0);
+  const rec = await w.post({ action: "reconcile" }, { "x-direct-reconcile-secret": "s3cret" });
+  assertEquals(rec.status, 200);
 });
 
 Deno.test("create validates input, Turnstile and the link", async () => {
@@ -227,7 +238,7 @@ Deno.test("reconcile: secret required; checks open payments", async () => {
   const r = await w.post({ action: "reconcile" }, { "x-direct-reconcile-secret": "s3cret" });
   assertEquals([r.status, r.body], [200, { checked: 1, paid: 1, expired: 0 }]);
   const unset = createHandler({
-    db: {} as Db, provider: {} as SettlementProvider, rate: () => Promise.reject(new Error()), turnstile: () => Promise.resolve({ ok: true }), reconcileSecret: "",
+    db: {} as Db, provider: {} as SettlementProvider, rate: () => Promise.reject(new Error()), turnstile: () => Promise.resolve({ ok: true }), createAllowed: true, reconcileSecret: "",
   });
   assertEquals((await unset(new Request("https://fn", { method: "POST", body: JSON.stringify({ action: "reconcile" }) }))).status, 503);
 });

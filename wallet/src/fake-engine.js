@@ -6,7 +6,7 @@
 // and read what was "connected" (a fingerprint of the phrase, never the
 // phrase itself).
 export function createFakeEngine() {
-  const state = { balance: 0, payments: [], connected: null, onEvent: null };
+  const state = { balance: 0, payments: [], connected: null, onEvent: null, lnAddress: null };
   const fingerprint = async (m) => {
     const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(m)));
     return Array.from(d.slice(0, 4), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -26,6 +26,7 @@ export function createFakeEngine() {
       if (p) p.status = status;
       state.onEvent?.('paymentSucceeded');
     },
+    takenNames: ['satoshi'],
     get sendCount() { return state.payments.filter((p) => p.type === 'send').length; },
   };
   return {
@@ -68,6 +69,17 @@ export function createFakeEngine() {
     },
     async payments() { return state.payments.slice(); },
     async exportExitState() { return JSON.stringify({ fake: true, balanceSats: state.balance }); },
+    // Lightning address: names in __fakeWallet.takenNames are someone
+    // else's; a deleted name stays reserved for this wallet (like the server).
+    async lightningAddress() { return state.lnAddress ? { ...state.lnAddress } : null; },
+    async lightningAddressAvailable(username) { return !globalThis.__fakeWallet.takenNames.includes(username); },
+    async registerLightningAddress(username) {
+      if (globalThis.__fakeWallet.takenNames.includes(username)) throw new Error('Username is already taken');
+      const domain = (globalThis.CPAY_WALLET_CONFIG || {}).lnAddressDomain;
+      state.lnAddress = { address: `${username}@${domain}`, username, lnurl: `lnurl1fake${username}` };
+      return { ...state.lnAddress };
+    },
+    async deleteLightningAddress() { state.lnAddress = null; },
     async disconnect() { state.connected = null; },
   };
 }

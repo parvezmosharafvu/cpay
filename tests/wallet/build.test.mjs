@@ -118,3 +118,23 @@ test('passkeys: production pinned to wallet.pay-cashapp.buzz, switch off by defa
   assert.match(cfgOf(reg), /"rpId": null/);
   assert.match(build({ WALLET_NETWORK: 'regtest', WALLET_LINK: 'off', WALLET_PASSKEYS: 'on' }).stderr, /WALLET_PASSKEYS=on needs WALLET_RP_ID/);
 });
+
+test('lightning address: off unless a domain is named; the domain is the only new connection', () => {
+  const off = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key' });
+  assert.equal(off.status, 0, off.stderr);
+  assert.match(readFileSync(join(off.out, 'config.js'), 'utf8'), /"lnAddressDomain": null/);
+  assert.doesNotMatch(readFileSync(join(off.out, '_headers'), 'utf8'), /breez\.tips|pay-cashapp\.buzz/);
+  const on = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key', LIGHTNING_ADDRESS_DOMAIN: 'Pay-Cashapp.Buzz' });
+  assert.equal(on.status, 0, on.stderr);
+  assert.match(readFileSync(join(on.out, 'config.js'), 'utf8'), /"lnAddressDomain": "pay-cashapp\.buzz"/);
+  const csp = readFileSync(join(on.out, '_headers'), 'utf8').match(/connect-src ([^;]+)/)[1];
+  assert.ok(csp.split(' ').includes('https://pay-cashapp.buzz'), csp);
+  assert.doesNotMatch(csp, /breez\.tips/, 'the library default domain is never contacted');
+  assert.match(on.stdout, /lightning address @pay-cashapp\.buzz/);
+  assert.ok(JSON.parse(readFileSync(join(on.out, 'version.json'), 'utf8')).files['lnaddress.js']);
+  for (const bad of ['https://pay-cashapp.buzz', 'pay-cashapp.buzz/x', 'localhost', '1.2.3.4', "a.com'; script-src *"]) {
+    const r = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key', LIGHTNING_ADDRESS_DOMAIN: bad });
+    assert.notEqual(r.status, 0, bad);
+    assert.match(r.stderr, /LIGHTNING_ADDRESS_DOMAIN must be a host name/, bad);
+  }
+});

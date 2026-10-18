@@ -45,6 +45,9 @@ export async function createEngine() {
       // Real-time sync shares wallet records with the library's sync
       // service. Off unless the build turned it on (WALLET_SYNC=on).
       if (!c.sync) config.realTimeSyncServerUrl = undefined;
+      // Lightning addresses only on the domain this build names; the
+      // library's own default domain is never used.
+      config.lnurlDomain = c.lnAddressDomain || undefined;
       sdk = await sdkMod.connect({ config, seed: { type: 'mnemonic', mnemonic }, storageDir: storageDir() });
       if (onEvent) listenerId = await sdk.addEventListener({ onEvent: (e) => onEvent(e?.type || 'event') });
     },
@@ -118,6 +121,22 @@ export async function createEngine() {
         id: p.id, type: p.paymentType, status: p.status,
         amountSats: Number(p.amount), feesSats: Number(p.fees), timestamp: Number(p.timestamp),
       }));
+    },
+    // Lightning address (name@domain), registered with the vendor's LNURL
+    // server, which creates invoices for this wallet when someone pays it.
+    async lightningAddress() {
+      const a = await sdk.getLightningAddress();
+      return a ? { address: a.lightningAddress, username: a.username, lnurl: a.lnurl?.bech32 || null } : null;
+    },
+    async lightningAddressAvailable(username) {
+      return sdk.checkLightningAddressAvailable({ username });
+    },
+    async registerLightningAddress(username) {
+      const a = await sdk.registerLightningAddress({ username });
+      return { address: a.lightningAddress, username: a.username, lnurl: a.lnurl?.bech32 || null };
+    },
+    async deleteLightningAddress() {
+      await sdk.deleteLightningAddress();
     },
     // Exit backup: the pre-signed Bitcoin transactions that let this wallet
     // leave Spark on its own if the Spark operators stop working. It holds

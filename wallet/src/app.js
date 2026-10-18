@@ -17,6 +17,7 @@ import { PASSKEY_LABEL, passkeyAvailability, passkeyErrorKind, passkeyMessage, r
 import { configProblem, createEngine, wipeEngineStorage } from './engine.js';
 import { link, linkAvailable, linkedAccount, unlink, websiteBalance } from './link.js';
 import { bitcoinUri, drawQr, lightningUri } from './qr.js';
+import { lightningName } from './lnaddress.js';
 
 const $ = (id) => document.getElementById(id);
 const cfg = globalThis.CPAY_WALLET_CONFIG || {};
@@ -303,7 +304,10 @@ async function reconcileSends() {
   $('pendingSends').hidden = !open;
 }
 
-$('receiveBtn').onclick = () => { $('receivePanel').hidden = !$('receivePanel').hidden; $('sendPanel').hidden = true; };
+$('receiveBtn').onclick = () => {
+  $('receivePanel').hidden = !$('receivePanel').hidden; $('sendPanel').hidden = true;
+  if (!$('receivePanel').hidden) renderLightningAddress();
+};
 $('sendBtn').onclick = () => { $('sendPanel').hidden = !$('sendPanel').hidden; $('receivePanel').hidden = true; };
 
 $('receiveForm').onsubmit = async (e) => {
@@ -321,6 +325,69 @@ $('receiveForm').onsubmit = async (e) => {
   }
 };
 $('rcvCopy').onclick = () => navigator.clipboard?.writeText($('rcvInvoice').value);
+
+// ---- Lightning address -------------------------------------------------
+// Only on builds that name a domain (LIGHTNING_ADDRESS_DOMAIN). Names are
+// checked when the person taps Check, not on every keystroke: each check is
+// a signed request to the server.
+let lnaChecked = null; // the name that was last found available
+async function renderLightningAddress() {
+  const domain = cfg.lnAddressDomain;
+  $('lnaBox').hidden = !domain;
+  if (!domain) return;
+  $('lnaExample').textContent = `name@${domain}`;
+  $('lnaAt').textContent = `@${domain}`;
+  let a = null;
+  try { a = await engine.lightningAddress(); } catch { /* shown as not set; Check will report a real failure */ }
+  $('lnaHave').hidden = !a;
+  $('lnaForm').hidden = Boolean(a);
+  if (a) {
+    $('lnaAddress').textContent = a.address;
+    drawQr($('lnaQr'), lightningUri(a.lnurl || a.address));
+    $('lnaShare').hidden = !navigator.share;
+  }
+}
+$('lnaName').oninput = () => { lnaChecked = null; $('lnaSave').disabled = true; err('lnaErr'); $('lnaOk').hidden = true; };
+$('lnaCheck').onclick = async () => {
+  err('lnaErr'); $('lnaOk').hidden = true;
+  const name = lightningName($('lnaName').value);
+  if (!name.ok) { err('lnaErr', name.why); return; }
+  $('lnaCheck').disabled = true;
+  try {
+    if (await engine.lightningAddressAvailable(name.value)) {
+      lnaChecked = name.value;
+      $('lnaOk').textContent = `${name.value}@${cfg.lnAddressDomain} is available.`;
+      $('lnaOk').hidden = false;
+      $('lnaSave').disabled = false;
+    } else {
+      err('lnaErr', 'That name is taken. Try another.');
+    }
+  } catch {
+    err('lnaErr', 'Could not check the name. Check the connection and try again.');
+  } finally {
+    $('lnaCheck').disabled = false;
+  }
+};
+$('lnaForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const name = lightningName($('lnaName').value);
+  if (!name.ok || name.value !== lnaChecked) return;
+  $('lnaSave').disabled = true;
+  try {
+    await engine.registerLightningAddress(name.value);
+    $('lnaName').value = ''; lnaChecked = null; $('lnaOk').hidden = true;
+    await renderLightningAddress();
+  } catch (x) {
+    err('lnaErr', /taken|unavailable|exists/i.test(x?.message || '') ? 'That name was just taken. Try another.' : 'Could not save the name. Check the connection and try again.');
+  }
+};
+$('lnaCopy').onclick = () => navigator.clipboard?.writeText($('lnaAddress').textContent);
+$('lnaShare').onclick = () => navigator.share?.({ text: $('lnaAddress').textContent }).catch(() => {});
+$('lnaRemove').onclick = async () => {
+  if (!confirm(`Remove ${$('lnaAddress').textContent}? People who saved it can no longer pay you there.`)) return;
+  try { await engine.deleteLightningAddress(); } catch { /* re-read below shows what is true */ }
+  await renderLightningAddress();
+};
 $('rcvShare').onclick = () => navigator.share?.({ text: $('rcvInvoice').value }).catch(() => {});
 
 let prepared = null;

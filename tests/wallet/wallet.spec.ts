@@ -537,12 +537,12 @@ test('lost passkey: the 12 words restore the same wallet with a passphrase, no R
   await expect(page.locator('#unlockPasskey')).toBeHidden();
 });
 
-// ---- Lightning address (LIGHTNING_ADDRESS_DOMAIN=pay-cashapp.buzz) -------
+// ---- Lightning address (LIGHTNING_ADDRESS_DOMAIN=ln.pay-cashapp.buzz) -------
 test('lightning address: check, register, show as QR, remove', async ({ page }) => {
   await createWallet(page);
   await page.getByRole('button', { name: 'Receive' }).click();
   await expect(page.locator('#lnaBox')).toBeVisible();
-  await expect(page.locator('#lnaAt')).toHaveText('@pay-cashapp.buzz');
+  await expect(page.locator('#lnaAt')).toHaveText('@ln.pay-cashapp.buzz');
   // Bad names are refused before any request; a taken one is reported.
   for (const bad of ['', 'a..b', '-ab', 'ab-', 'a/b', 'a@b']) {
     await page.fill('#lnaName', bad);
@@ -558,13 +558,13 @@ test('lightning address: check, register, show as QR, remove', async ({ page }) 
   // editing the name after the check disables saving again.
   await page.fill('#lnaName', 'Alice.Shop');
   await page.getByRole('button', { name: 'Check' }).click();
-  await expect(page.locator('#lnaOk')).toHaveText('alice.shop@pay-cashapp.buzz is available.');
+  await expect(page.locator('#lnaOk')).toHaveText('alice.shop@ln.pay-cashapp.buzz is available.');
   await page.fill('#lnaName', 'alice.shopx');
   await expect(page.getByRole('button', { name: 'Use this name' })).toBeDisabled();
   await page.fill('#lnaName', 'alice.shop');
   await page.getByRole('button', { name: 'Check' }).click();
   await page.getByRole('button', { name: 'Use this name' }).click();
-  await expect(page.locator('#lnaAddress')).toHaveText('alice.shop@pay-cashapp.buzz');
+  await expect(page.locator('#lnaAddress')).toHaveText('alice.shop@ln.pay-cashapp.buzz');
   expect(await decodeCanvas(page, 'lnaQr')).toBe('lightning:lnurl1fakealice.shop');
   await expect(page.locator('#lnaForm')).toBeHidden();
   page.once('dialog', (d) => d.accept());
@@ -581,7 +581,7 @@ test('lightning address → CPAY direct payments: the desk opens with it filled 
   await page.getByRole('button', { name: 'Check' }).click();
   await page.getByRole('button', { name: 'Use this name' }).click();
   const use = page.getByRole('link', { name: 'Use for CPAY direct payments' });
-  await expect(use).toHaveAttribute('href', 'http://127.0.0.1:8791/dashboard.html#direct=alice.shop%40pay-cashapp.buzz');
+  await expect(use).toHaveAttribute('href', 'http://127.0.0.1:8791/dashboard.html#direct=alice.shop%40ln.pay-cashapp.buzz');
   await expect(use).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(page.locator('#lnaCpayState')).toBeHidden(); // not linked: nothing read from CPAY
 

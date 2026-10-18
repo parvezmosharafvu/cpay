@@ -101,7 +101,7 @@ Record the device, OS and browser versions, and each step's result.
 ## Lightning address and CPAY direct payments (mainnet, gate G7)
 
 Only on the production build, after the domain is registered with the
-vendor and the website forwards the LNURL paths
+vendor and the `ln.pay-cashapp.buzz` DNS record exists
 ([wallet/LIGHTNING-ADDRESS.md](../wallet/LIGHTNING-ADDRESS.md)):
 
 1. **Receive → Lightning address**: choose a name, **Check**, **Use this

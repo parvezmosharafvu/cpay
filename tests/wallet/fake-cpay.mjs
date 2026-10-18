@@ -54,7 +54,7 @@ createServer(async (req, res) => {
     const token = (req.headers.authorization || '').replace(/^Bearer /, '');
     if (!sessions.has(token)) return json(res, 401, { message: 'Not authenticated' });
     // Read-only: the wallet only shows where direct payments go.
-    return json(res, 200, { enabled: true, blocked: false, current: null, pending: { id: 'd1', address: 'alice.shop@pay-cashapp.buzz', ready_at: '2026-10-19T12:00:00Z' } });
+    return json(res, 200, { enabled: true, blocked: false, current: null, pending: { id: 'd1', address: 'alice.shop@ln.pay-cashapp.buzz', ready_at: '2026-10-19T12:00:00Z' } });
   }
   json(res, 404, { message: `not mocked: ${url.pathname}` });
 }).listen(port, '127.0.0.1', () => console.log(`fake CPAY API: http://127.0.0.1:${port}/`));

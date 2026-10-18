@@ -206,12 +206,12 @@ These change custody, trust or costs, so they are yours. Everything else is deci
    wallets.
    CPAY cannot verify that a provider is self-custodial, so the honest claim is "CPAY does not hold it",
    not "your wallet is self-custodial".
-5. **CPAY Wallet:** publish it (gates G1–G9). Its Lightning address (`name@pay-cashapp.buzz`,
+5. **CPAY Wallet:** publish it (gates G1–G9). Its Lightning address (`name@ln.pay-cashapp.buzz`,
    [wallet/LIGHTNING-ADDRESS.md](../wallet/LIGHTNING-ADDRESS.md)) can then be a member's direct-payment
    address: the wallet's "Use for CPAY direct payments" opens the desk at `dashboard.html#direct=<address>`
    with it filled in, and the member still checks and saves it here (fresh sign-in, used 24 hours later).
    The wallet never writes to CPAY; with the optional CPAY link it only reads where direct payments go.
-   If `DIRECT_PROVIDER_HOSTS` is set, it must include `pay-cashapp.buzz` for these addresses.
+   If `DIRECT_PROVIDER_HOSTS` is set, it must include `ln.pay-cashapp.buzz` for these addresses.
 
 ## 7. Gates before turning direct settlement on
 

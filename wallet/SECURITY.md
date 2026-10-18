@@ -23,8 +23,9 @@ CPAY). This document covers only the wallet.
 
 ## Passkey login
 
-A wallet can be created with a passkey instead of a passphrase
-(`WALLET_RP_ID` set at build time).
+A wallet can be created with a passkey instead of a passphrase. It is
+**off in production** until release gate G9: the build offers it only with
+`WALLET_PASSKEYS=on`, and only on the RP ID's own host.
 
 - **How the phrase is made.** The wallet library asks the passkey for a
   WebAuthn PRF output and turns it into a standard 12-word BIP-39 phrase.
@@ -37,11 +38,38 @@ A wallet can be created with a passkey instead of a passphrase
   checks three of them against the paper, exactly like a generated phrase.
   A passkey can be lost, deleted from the device's passkey list, or left
   behind on a domain change; the words are then the only way back.
-- **Relying Party.** Our own host (`WALLET_RP_ID`, normally the wallet's
-  hostname). Every passkey is bound to it for good. If the wallet moves to
-  another domain, keep the old one serving `/.well-known/webauthn` with the
-  new origin in `related_origins` (Chrome, Safari, Edge); Firefox users
-  restore with the words.
+- **Relying Party: `wallet.pay-cashapp.buzz`, for good.** The production
+  build pins `WALLET_RP_ID` to the wallet's hostname (release gate G3) and
+  refuses any other value; the release check fails unless the served
+  `config.js` names the host it is served from. The page uses a passkey
+  only over https on exactly that host (`passkeyOriginOk` in
+  `src/passkey.js`). The website (`pay-cashapp.buzz`) cannot ask for these
+  passkeys: WebAuthn lets an origin use only its own host or a parent
+  domain as the RP ID, never a sibling or child.
+- **Changing the hostname or RP ID is never safe to assume.** Every passkey
+  made under `wallet.pay-cashapp.buzz` works only there. Moving the wallet,
+  or building with a different RP ID, leaves every passkey wallet unable to
+  open with its passkey; its owner must restore with the **12 words**. A
+  move would need a planned migration: keep the old host serving
+  `/.well-known/webauthn` with the new origin in `related_origins` (Chrome,
+  Safari, Edge only; Firefox users restore with the words), tell every user
+  to check their paper first, and change `PRODUCTION_RP_ID` in
+  `build.mjs` in a reviewed PR. Without that, keep the hostname.
+- **Subdomains under the wallet host.** Any page on `*.wallet.pay-cashapp.buzz`
+  could use the RP ID `wallet.pay-cashapp.buzz` and, with the user's
+  biometric prompt, derive the words. Never create a DNS record, route or
+  service under it; the DNS zone's account must use MFA (G3).
+- **Same site as the website.** The wallet shares the registrable domain
+  `pay-cashapp.buzz` with the website, but it is a separate origin: its
+  storage, service worker and passkeys are out of the website's reach. It
+  uses no cookies, so cookies the website sets for the parent domain carry
+  nothing it relies on.
+- **The website's own passkeys.** CPAY account passkeys (RP ID
+  `pay-cashapp.buzz`) could be requested from a subdomain, but the
+  assertion names its origin, and the account service must accept only the
+  website's origin. Never add `https://wallet.pay-cashapp.buzz` to the
+  account passkeys' allowed origins. The wallet never asks for any RP ID
+  but its own.
 - **Who can derive the words.** Anyone who can use the passkey on this
   origin: the device's screen lock or biometrics, and, for a synced passkey,
   the cloud account it syncs through (iCloud Keychain, Google Password

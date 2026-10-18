@@ -83,21 +83,38 @@ test('vendor real-time sync is off by default and only on when asked', () => {
   assert.match(readFileSync(join(on.out, '_headers'), 'utf8'), /datasync\.breez\.technology:442/);
 });
 
-test('passkeys: off without WALLET_RP_ID, on with a host name, a bad value refused', () => {
-  const off = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key' });
-  assert.equal(off.status, 0, off.stderr);
-  assert.match(readFileSync(join(off.out, 'config.js'), 'utf8'), /"rpId": null/);
-  const on = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key', WALLET_RP_ID: 'Wallet.Pay-Cashapp.Buzz' });
+test('passkeys: production pinned to wallet.pay-cashapp.buzz, switch off by default', () => {
+  const cfgOf = (r) => readFileSync(join(r.out, 'config.js'), 'utf8');
+  // Production with nothing set: the pinned RP ID, passkeys off.
+  const prod = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key' });
+  assert.equal(prod.status, 0, prod.stderr);
+  assert.match(cfgOf(prod), /"rpId": "wallet\.pay-cashapp\.buzz"/);
+  assert.match(cfgOf(prod), /"passkeys": false/);
+  assert.match(prod.stdout, /passkeys off, rp id wallet\.pay-cashapp\.buzz/);
+  // The same value given explicitly (any case) is accepted; the switch turns them on.
+  const on = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key', WALLET_RP_ID: 'Wallet.Pay-Cashapp.Buzz', WALLET_PASSKEYS: 'on' });
   assert.equal(on.status, 0, on.stderr);
-  assert.match(readFileSync(join(on.out, 'config.js'), 'utf8'), /"rpId": "wallet\.pay-cashapp\.buzz"/);
+  assert.match(cfgOf(on), /"rpId": "wallet\.pay-cashapp\.buzz"/);
+  assert.match(cfgOf(on), /"passkeys": true/);
   const release = JSON.parse(readFileSync(join(on.out, 'version.json'), 'utf8'));
   assert.ok(release.files['passkey.js']);
   assert.ok(release.files['vendor/sdk/passkey-prf-provider/index.js'], 'the browser passkey provider ships');
   const headers = readFileSync(join(on.out, '_headers'), 'utf8');
   assert.match(headers, /publickey-credentials-get=\(self\), publickey-credentials-create=\(self\)/);
+  // Any other RP ID on production is refused: it would strand every passkey wallet.
+  for (const other of ['pay-cashapp.buzz', 'mycpaywallet.com', 'x.wallet.pay-cashapp.buzz', 'localhost']) {
+    const r = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key', WALLET_RP_ID: other });
+    assert.notEqual(r.status, 0, other);
+    assert.match(r.stderr, /must be wallet\.pay-cashapp\.buzz/, other);
+  }
   for (const bad of ['https://wallet.example.com', '127.0.0.1', 'wallet', 'a b.com']) {
     const r = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key', WALLET_RP_ID: bad });
     assert.notEqual(r.status, 0, bad);
     assert.match(r.stderr + r.stdout, /WALLET_RP_ID must be a host name/, bad);
   }
+  assert.match(build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key', WALLET_PASSKEYS: 'yes' }).stderr, /WALLET_PASSKEYS must be on or off/);
+  // Non-production builds: no RP ID unless given; the switch needs one.
+  const reg = build({ WALLET_NETWORK: 'regtest', WALLET_LINK: 'off' });
+  assert.match(cfgOf(reg), /"rpId": null/);
+  assert.match(build({ WALLET_NETWORK: 'regtest', WALLET_LINK: 'off', WALLET_PASSKEYS: 'on' }).stderr, /WALLET_PASSKEYS=on needs WALLET_RP_ID/);
 });

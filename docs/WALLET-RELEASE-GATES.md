@@ -16,12 +16,13 @@ CPAY website balance is held by CPAY and never moves into it.
 |---|---|---|---|---|
 | G1 | **Dedicated wallet API key.** A key the wallet library's vendor issued for CPAY Wallet, set only as the `WALLET_API_KEY` build variable of the production project `cpay-wallet`. Never the website's server key, never on staging, never in the repository | Owner | OPEN | |
 | G2 | **Separate Workers projects.** `cpay-wallet-staging` and `cpay-wallet`, both Workers Builds from `parvezmosharafvu/cpay` with root directory `wallet`. Not a Pages project, not the website's `cpay` Worker, not connected to the separate `cpay-wallet` repository | Owner | OPEN | |
-| G3 | **Separate hostname.** Production has its own custom domain on `cpay-wallet`, not `pay-cashapp.buzz` or a path or subdomain of it. Staging uses its `workers.dev` address, so no DNS change is needed. With passkey login, `WALLET_RP_ID` on `cpay-wallet` equals this hostname, set before the first passkey wallet is made | Owner | OPEN | |
+| G3 | **Wallet hostname `wallet.pay-cashapp.buzz`** (owner decision, 2026-10-18). A custom domain on `cpay-wallet` only: never on the website's `cpay` Worker, never a path of the website. It is a separate origin, so the website's scripts cannot read the wallet's storage. No other DNS record, route or service under `*.wallet.pay-cashapp.buzz` (any page there could claim the passkey RP ID), and the DNS zone's account has MFA. The passkey RP ID is this hostname: a production build pins `WALLET_RP_ID` to it and refuses any other value, and the release check fails unless the served `config.js` names this exact host. Staging uses its `workers.dev` address, so no DNS change is needed | Owner | OPEN | |
 | G4 | **Staging works on test coins.** The staging address passes the "Wallet release check" workflow with network `regtest`, and a two-wallet regtest payment succeeds ([WALLET-TESTING.md](WALLET-TESTING.md)) | Owner | OPEN | |
 | G5 | **Integrity.** The production address passes the "Wallet release check" workflow with network `mainnet` and the `version.json` sha256 the build printed: every file matches its manifest and the strict headers are served | Owner (one click) | OPEN | |
 | G6 | **Real devices.** Android (Chrome) and iPhone (Safari): install, create, back up, lock, unlock offline, restore on a second phone; first on staging, then on production | Owner | OPEN | |
 | G7 | **Mainnet, small amount.** On the production build with the dedicated key: receive at most $5, check the fee shown, send it back | Owner | OPEN | |
 | G8 | **Owner sign-off.** The limitations in [wallet/README.md](../wallet/README.md) are accepted for a beta, and the owner has decided whether the wallet needs its own terms or privacy notice (legal question, separate from #97) | Owner | OPEN | |
+| G9 | **Passkey switch.** `WALLET_PASSKEYS` on `cpay-wallet` stays unset (off: no passkey create or sign-in) until CI on `main` is green (including Playwright E2E and Migrations), G1 to G8 pass, and the owner records a final security review of passkey login ([wallet/SECURITY.md](../wallet/SECURITY.md), "Passkey login"). PASS records either "off, passkeys not offered" or "on" with that review's date. The release check prints `passkeys ON/off, rp id …` | Owner | OPEN | |
 
 Mark a gate PASS only with a date (YYYY-MM-DD) and what was seen, for
 example "2026-11-02: workflow run 123 PASS, 28 files". Never put a key, a
@@ -51,8 +52,11 @@ Filled in when every gate passes, in the same change that sets
 - **Production project** (G1 to G3): the same, named `cpay-wallet`, build
   command `npm ci --ignore-scripts && npm run build`, deploy command
   `npx wrangler deploy`, build variable `WALLET_API_KEY` (the dedicated
-  key), then Settings → Domains & Routes → add the wallet's own custom
-  domain. A mainnet build without the key is inert ("Not available yet").
+  key), then Settings → Domains & Routes → add the custom domain
+  `wallet.pay-cashapp.buzz`. A mainnet build without the key is inert
+  ("Not available yet"). No `WALLET_RP_ID` is needed: the production build
+  pins it to `wallet.pay-cashapp.buzz` and refuses another value. Leave
+  `WALLET_PASSKEYS` unset until G9.
 
 ## Rollback
 

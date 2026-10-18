@@ -9,9 +9,15 @@
 // credential id (to ask for that passkey again) and the label. The phrase
 // is derived on each unlock, handed to the engine and dropped.
 //
-// The Relying Party is our own domain (WALLET_RP_ID at build time). Every
-// passkey is bound to it for good: changing it strands existing passkeys,
-// so their owners would restore with the 12 words.
+// The Relying Party is the wallet's own hostname (WALLET_RP_ID at build
+// time; production is pinned to wallet.pay-cashapp.buzz). Every passkey is
+// bound to it for good: changing it strands existing passkeys, so their
+// owners would restore with the 12 words. The wallet uses a passkey only
+// when the page is served from exactly that host, over https.
+//
+// Creating or signing in with a passkey also needs the build's passkey
+// switch (WALLET_PASSKEYS=on). Unlocking a passkey wallet this phone
+// already has needs only the RP ID and the origin check.
 //
 // Test builds (engine 'fake') use the fake in fake-engine.js; production
 // builds do not ship that file.
@@ -21,8 +27,19 @@ const cfg = () => globalThis.CPAY_WALLET_CONFIG || {};
 // One wallet per passkey for now. Changing this derives a different wallet.
 export const PASSKEY_LABEL = 'Default';
 
-/** Whether this build offers passkeys at all (an RP id was configured). */
-export const passkeyConfigured = () => cfg().engine === 'fake' || Boolean(cfg().rpId);
+/** Whether this page is on the RP ID's own host (https, or localhost in tests). */
+export function passkeyOriginOk(loc = globalThis.location) {
+  const rp = cfg().rpId;
+  if (!rp || !loc) return false;
+  const secure = loc.protocol === 'https:' || (loc.hostname === 'localhost' && loc.protocol === 'http:');
+  return secure && String(loc.hostname).toLowerCase() === rp;
+}
+
+/** Whether a passkey wallet this phone already has can be unlocked here. */
+export const passkeyUsable = () => cfg().engine === 'fake' || passkeyOriginOk();
+
+/** Whether this build offers creating or signing in with a passkey. */
+export const passkeyConfigured = () => cfg().passkeys === true && passkeyUsable();
 
 let client = null;
 async function getClient() {
@@ -46,12 +63,13 @@ async function getClient() {
 }
 
 /**
- * 'available', or why not: 'unconfigured', 'unsupported' (no PRF on this
- * device or browser), 'misconfigured' (the RP id does not cover this
- * origin).
+ * 'available', or why not: 'unconfigured' (passkeys off in this build),
+ * 'unsupported' (no PRF on this device or browser), 'misconfigured' (this
+ * page is not on the RP ID's host).
  */
 export async function passkeyAvailability() {
-  if (!passkeyConfigured()) return 'unconfigured';
+  if (cfg().passkeys !== true) return 'unconfigured';
+  if (!passkeyUsable()) return 'misconfigured';
   try {
     const a = await (await getClient()).checkAvailability();
     if (a.type === 'available' || a.type === 'skipped') return 'available';
@@ -72,6 +90,7 @@ function phraseOf(wallet) {
 
 /** First-time setup: create a passkey and derive its wallet. */
 export async function registerPasskey() {
+  if (!passkeyConfigured()) throw new Error('Passkey configuration: not offered on this copy of the wallet');
   const res = await (await getClient()).register({ label: PASSKEY_LABEL });
   const id = res.credential?.credentialId;
   return { phrase: phraseOf(res.wallet), credentialId: id ? b64(Uint8Array.from(id)) : null };
@@ -80,8 +99,12 @@ export async function registerPasskey() {
 /**
  * Sign in with a passkey. With a credential id (this phone's wallet), the
  * browser asks for that passkey only; without, it shows its picker.
+ * `existing` marks this phone's own passkey wallet (unlock, reveal).
  */
-export async function signInPasskey(credentialId) {
+export async function signInPasskey(credentialId, { existing = false } = {}) {
+  // A new sign-in needs the switch; this phone's own wallet (unlock,
+  // reveal) does not.
+  if (!(existing ? passkeyUsable() : passkeyConfigured())) throw new Error('Passkey configuration: not offered on this copy of the wallet');
   const req = { label: PASSKEY_LABEL };
   if (credentialId) req.allowCredentials = [unb64(credentialId)];
   const res = await (await getClient()).signIn(req);

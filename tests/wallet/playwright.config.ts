@@ -27,6 +27,8 @@ export default defineConfig({
     { name: 'real-sdk', testMatch: 'sdk.spec.ts', use: { baseURL: 'http://127.0.0.1:8792' } },
     // Real library + Chromium's virtual authenticator with PRF, on
     // localhost (a valid WebAuthn RP id, unlike an IP address).
+    // 8794 is the same build with the passkey switch off (production's
+    // setting until release gate G9).
     { name: 'real-passkey', testMatch: 'passkey.spec.ts', use: { baseURL: 'http://localhost:8793' } },
   ],
   webServer: [
@@ -34,7 +36,7 @@ export default defineConfig({
     {
       command: 'node wallet/build.mjs && node wallet/serve.mjs 8790',
       url: 'http://127.0.0.1:8790/', reuseExistingServer: false, cwd: '../..',
-      env: { WALLET_TEST: '1', WALLET_ENGINE: 'fake', WALLET_NETWORK: 'regtest', CPAY_SUPABASE_URL: 'http://127.0.0.1:8791', CPAY_SUPABASE_ANON_KEY: 'anon-test-key' },
+      env: { WALLET_TEST: '1', WALLET_ENGINE: 'fake', WALLET_NETWORK: 'regtest', WALLET_PASSKEYS: 'on', CPAY_SUPABASE_URL: 'http://127.0.0.1:8791', CPAY_SUPABASE_ANON_KEY: 'anon-test-key' },
     },
     {
       // Real library, regtest (no API key needed), production build rules.
@@ -43,5 +45,6 @@ export default defineConfig({
       url: 'http://127.0.0.1:8792/', reuseExistingServer: false, cwd: '../..',
     },
     { command: 'node tests/wallet/build-real.mjs 8793 localhost', url: 'http://127.0.0.1:8793/', reuseExistingServer: false, cwd: '../..' },
+    { command: 'node tests/wallet/build-real.mjs 8794 localhost off', url: 'http://127.0.0.1:8794/', reuseExistingServer: false, cwd: '../..' },
   ],
 });

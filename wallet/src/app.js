@@ -151,7 +151,7 @@ async function finishPasskey(phrase, cred, how) {
 }
 $('unlockPkBtn').onclick = () => passkeyAttempt($('unlockPkBtn'), 'unlockPkErr', async () => {
   const v = vaultStore.load();
-  const r = await signInPasskey(v?.cred);
+  const r = await signInPasskey(v?.cred, { existing: true });
   if (store.get(ID_SLOT) && store.get(ID_SLOT) !== (await walletId(r.phrase))) throw new Error('A different passkey was used.');
   await start(r.phrase);
 });
@@ -441,7 +441,7 @@ $('showPhraseBtn').onclick = async () => {
   const v = vaultStore.load();
   if (!isPasskeyVault(v)) { $('revealForm').hidden = false; return; }
   // A passkey wallet keeps no copy: the passkey derives the words again.
-  try { revealWords((await signInPasskey(v.cred)).phrase); } catch (x) { err('revealErr', passkeyMessage(passkeyErrorKind(x))); }
+  try { revealWords((await signInPasskey(v.cred, { existing: true })).phrase); } catch (x) { err('revealErr', passkeyMessage(passkeyErrorKind(x))); }
 };
 $('revealForm').onsubmit = async (e) => {
   e.preventDefault();

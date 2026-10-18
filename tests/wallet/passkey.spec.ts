@@ -53,3 +53,37 @@ test('real library: the wallet\'s passkey screens create it and show its words',
   await page.waitForTimeout(3000);
   expect(violations.filter((v) => !/Refused to connect to 'wss:\/\//.test(v))).toEqual([]);
 });
+
+test('real library: no passkey off the RP ID host (127.0.0.1 is not localhost)', async ({ page }) => {
+  const { cdp, authenticatorId } = await virtualAuthenticator(page);
+  await page.goto('http://127.0.0.1:8793/');
+  await expect(page.getByRole('button', { name: 'Create a new wallet' })).toBeVisible();
+  await expect(page.locator('#passkeyChoice')).toBeHidden();
+  const r = await page.evaluate(async () => {
+    const pk = await import('./passkey.js');
+    return { avail: await pk.passkeyAvailability(), reg: await pk.registerPasskey().then(() => 'made', (e) => pk.passkeyErrorKind(e)) };
+  });
+  expect(r).toEqual({ avail: 'misconfigured', reg: 'config' });
+  const { credentials } = await cdp.send('WebAuthn.getCredentials', { authenticatorId });
+  expect(credentials).toHaveLength(0);
+});
+
+test('real library: RP ID set, switch off (production until G9): nothing offered or made', async ({ page }) => {
+  const { cdp, authenticatorId } = await virtualAuthenticator(page);
+  await page.goto('http://localhost:8794/');
+  await expect(page.getByRole('button', { name: 'Create a new wallet' })).toBeVisible();
+  await expect(page.locator('#passkeyChoice')).toBeHidden();
+  const r = await page.evaluate(async () => {
+    const pk = await import('./passkey.js');
+    return {
+      rpId: (window as unknown as { CPAY_WALLET_CONFIG: { rpId: string } }).CPAY_WALLET_CONFIG.rpId,
+      avail: await pk.passkeyAvailability(),
+      reg: await pk.registerPasskey().then(() => 'made', (e) => pk.passkeyErrorKind(e)),
+      signIn: await pk.signInPasskey(null).then(() => 'in', (e) => pk.passkeyErrorKind(e)),
+      unlockable: pk.passkeyUsable(),
+    };
+  });
+  expect(r).toEqual({ rpId: 'localhost', avail: 'unconfigured', reg: 'config', signIn: 'config', unlockable: true });
+  const { credentials } = await cdp.send('WebAuthn.getCredentials', { authenticatorId });
+  expect(credentials).toHaveLength(0);
+});

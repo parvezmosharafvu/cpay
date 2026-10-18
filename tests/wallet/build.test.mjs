@@ -138,3 +138,15 @@ test('lightning address: off unless a domain is named; the domain is the only ne
     assert.match(r.stderr, /LIGHTNING_ADDRESS_DOMAIN must be a host name/, bad);
   }
 });
+
+test('CPAY_SITE_URL: the website origin by default, off with the link, only an origin accepted', () => {
+  const cfgOf = (r) => readFileSync(join(r.out, 'config.js'), 'utf8');
+  const def = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key' });
+  assert.match(cfgOf(def), /"cpaySiteUrl": "https:\/\/pay-cashapp\.buzz"/);
+  assert.match(cfgOf(build({ WALLET_NETWORK: 'regtest', WALLET_LINK: 'off' })), /"cpaySiteUrl": null/);
+  for (const bad of ['http://pay-cashapp.buzz', 'https://pay-cashapp.buzz/dashboard.html', 'https://u:p@pay-cashapp.buzz', 'javascript:alert(1)', 'pay-cashapp.buzz']) {
+    const r = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key', CPAY_SITE_URL: bad });
+    assert.notEqual(r.status, 0, bad);
+    assert.match(r.stderr, /CPAY_SITE_URL must be the website origin/, bad);
+  }
+});

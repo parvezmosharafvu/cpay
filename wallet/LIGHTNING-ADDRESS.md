@@ -59,6 +59,17 @@ registration calls.
    so a real address can only be tested on the production build with a
    small amount (gate G7).
 
+## Using it for CPAY direct payments
+
+After registering, the wallet shows **Use for CPAY direct payments**. It
+opens `https://pay-cashapp.buzz/dashboard.html#direct=<address>` with the
+address filled in on the desk. The member still taps Check and Save there:
+CPAY checks the address with its provider, asks for a fresh sign-in and
+uses it 24 hours later. The wallet never writes to CPAY. With the optional
+CPAY link, it reads where direct payments go (`get_my_direct_settlement`)
+and says so. If the owner sets `DIRECT_PROVIDER_HOSTS`, it must include
+`pay-cashapp.buzz`.
+
 ## Risks the owner accepts
 
 - **Same domain as the website.** `name@pay-cashapp.buzz` reads as CPAY.

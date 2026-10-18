@@ -156,6 +156,11 @@
           <canvas class="qr" id="lnaQr" role="img" aria-label="QR code of the Lightning address" hidden></canvas>
           <div class="row"><button type="button" id="lnaCopy">Copy</button><button type="button" id="lnaShare" hidden>Share</button><button type="button" class="danger" id="lnaRemove">Remove address</button></div>
           <p class="muted small">Removing it stops new payments to this address. The name stays reserved for this wallet, so nobody else can take it.</p>
+          <div id="lnaCpay" hidden>
+            <p class="small" id="lnaCpayState" role="status" hidden></p>
+            <div class="row"><a class="button" id="lnaUseCpay" target="_blank" rel="noopener noreferrer">Use for CPAY direct payments</a></div>
+            <p class="muted small">Opens your CPAY desk with this address filled in. You check and save it there; CPAY asks you to sign in again and uses it 24 hours later. Direct payments then come straight to this wallet: CPAY never holds them, and they are not part of your CPAY balance.</p>
+          </div>
         </div>
         <form id="lnaForm" autocomplete="off" hidden>
           <label for="lnaName">Choose a name</label>

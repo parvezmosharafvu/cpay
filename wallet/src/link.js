@@ -53,6 +53,19 @@ export async function websiteBalance() {
   return { available: Number(row?.available ?? 0), earned: Number(row?.earned ?? 0) };
 }
 
+// Where this CPAY account's direct payments go (direct settlement), read
+// only: get_my_direct_settlement() returns the signed-in user's own
+// addresses. Changing it happens on the website, with a fresh sign-in.
+export async function directSettlement() {
+  const { data, error } = await sb().rpc('get_my_direct_settlement');
+  if (error || !data) return null;
+  return {
+    enabled: data.enabled === true,
+    current: data.current?.address || null,
+    pending: data.pending ? { address: data.pending.address, readyAt: data.pending.ready_at } : null,
+  };
+}
+
 export async function unlink({ everywhere = false } = {}) {
   if (!client) return;
   try {

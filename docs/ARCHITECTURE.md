@@ -68,6 +68,16 @@ not a current payout path.
 Spendable is wallet balance minus what creators are owed. Do not send the
 creator portion from the admin wallet form.
 
+## Direct settlement (built, off by default)
+
+A second receive path, separate from everything above: a link switched to
+direct payments gets its invoice from the owner's own wallet provider
+(Lightning address, LUD-06/16) through the `direct-invoice` function, and is
+marked paid only with the provider's LUD-21 proof (a preimage that hashes to
+the payment hash). The money never reaches the platform wallet or a CPAY
+balance; `direct_payments` is a record table only. Off until the owner sets
+`direct_settlement_enabled`. See [NON-CUSTODIAL-ARCHITECTURE.md](NON-CUSTODIAL-ARCHITECTURE.md).
+
 ## CPAY Wallet (separate product)
 
 `wallet/` is an optional, non-custodial phone wallet on its own hostname.

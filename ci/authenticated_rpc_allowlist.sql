@@ -45,6 +45,7 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('admin_link_payment_count(uuid)',                                          'admin',         'admin: link payment count; refuses without an active admin'),
   ('admin_link_usage()',                                                      'admin',         'admin: link usage; refuses without an active admin'),
   ('admin_list_account_applications(text)',                                   'admin',         'admin: list account applications; refuses without an active admin'),
+  ('admin_list_direct_payments(integer, integer)',                          'admin',         'admin: list direct payments (paid straight to merchants, 20261018010000); refuses without an active admin'),
   ('admin_list_business_profiles()',                                          'admin',         'admin: list business profiles; refuses without an active admin'),
   ('admin_list_creators()',                                                   'admin',         'admin: list creators; refuses without an active admin'),
   ('admin_list_domains()',                                                    'admin',         'admin: list domains; refuses without an active admin'),
@@ -63,6 +64,7 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('admin_set_creator_amount_display(uuid, text)',                            'admin',         'admin: set creator amount display; refuses without an active admin'),
   ('admin_set_default_platform_fee(numeric)',                                 'admin',         'admin: set default platform fee; refuses without an active admin'),
   ('admin_set_default_withdrawal_fee(numeric)',                               'admin',         'admin: set default withdrawal fee; refuses without an active admin'),
+  ('admin_set_direct_settlement_blocked(uuid, boolean)',                    'admin',         'admin: stop an account''s direct links taking payments (never redirects them); refuses without an active admin'),
   ('admin_set_feature_toggle(text, boolean)',                                 'admin',         'admin: set feature toggle; refuses without an active admin'),
   ('admin_set_hide_small_payments(boolean, numeric)',                         'admin',         'admin: set hide small payments; refuses without an active admin'),
   ('admin_set_link_limit(uuid, integer)',                                     'admin',         'admin: set link limit; refuses without an active admin'),
@@ -81,6 +83,7 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('revenue_desk()',                                                          'admin',         'platform revenue report, is_admin() (20261003040000)'),
   ('daily_link_breakdown(integer, uuid)',                                     'self_or_admin', 'own links, or anyone''s for an active admin'),
   ('set_link_cost_percent(uuid, numeric)',                                    'self_or_admin', 'own link, or any link for an active admin'),
+  ('set_link_settlement_mode(uuid, text)',                                   'self',          'own link only, admins included: where its payments go (20261018010000)'),
   ('set_payment_link_experience(uuid, text, text, text)',                     'self_or_admin', 'own link, or any link for an active admin'),
   ('set_payment_link_theme(uuid, text)',                                      'self_or_admin', 'own link, or any link for an active admin'),
   ('create_link_variants(text, text[])',                                      'self',          'creates links for auth.uid() only'),
@@ -88,6 +91,7 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('get_my_account_state()',                                                  'self',          'caller''s own data: get my account state (auth.uid())'),
   ('get_my_analytics()',                                                      'self',          'caller''s own data: get my analytics (auth.uid())'),
   ('get_my_balance()',                                                        'self',          'caller''s own data: get my balance (auth.uid())'),
+  ('get_my_direct_settlement()',                                              'self',          'caller''s own direct-settlement state and Lightning address (auth.uid())'),
   ('record_mfa_challenge_failure()',                                          'self',          'writes one audit row for the caller (auth.uid()) after a wrong MFA code; at most 20 an hour'),
   ('get_my_insights()',                                                       'self',          'caller''s own data: get my insights (auth.uid())'),
   ('get_my_payment_marks()',                                                  'self',          'caller''s own data: get my payment marks (auth.uid())'),
@@ -135,7 +139,16 @@ insert into internal_only values
   ('hide_threshold_for(uuid)',                  'dashboard, balance and Telegram SECURITY DEFINER functions'),
   ('system_flag_receipt(text, text, bigint, text)', 'payment-service after settle_breez_payment (service role; 20261007130000)'),
   ('system_sweep_receipt_reviews()',             'pg_cron receipt-review-sweep (20261007130000)'),
-  ('telegram_context(text, integer)',           'telegram-report Edge Function (service role; deployed outside this repo)');
+  ('telegram_context(text, integer)',           'telegram-report Edge Function (service role; deployed outside this repo)'),
+  ('direct_settlement_enabled()',               'direct settlement functions and get_link_preview() (20261018010000)'),
+  ('system_direct_destination_for(uuid)',       'direct-invoice Edge Function, get_link_preview() (20261018010000)'),
+  ('system_set_settlement_destination(uuid, text, text, bigint, bigint)', 'settlement-destination Edge Function after a fresh sign-in (20261018010000)'),
+  ('system_remove_settlement_destinations(uuid)', 'settlement-destination Edge Function after a fresh sign-in (20261018010000)'),
+  ('system_claim_direct_check(uuid, integer)',  'direct-invoice Edge Function status read (20261018010000)'),
+  ('system_claim_direct_checks(integer, integer)', 'direct-invoice Edge Function reconcile sweep (20261018010000)'),
+  ('system_record_direct_payment_proof(uuid, text)', 'direct-invoice Edge Function, with a verified preimage (20261018010000)'),
+  ('system_expire_direct_payment(uuid, integer)', 'direct-invoice Edge Function (20261018010000)'),
+  ('system_direct_payment_public(uuid)',        'direct-invoice Edge Function: the payer page''s fields (20261018010000)');
 
 -- The SECURITY DEFINER functions authenticated can execute right now, with
 -- comments stripped from the source for the tripwire.

@@ -314,6 +314,7 @@ async function renderFlags() {
     ['auto_withdraw_enabled', 'Auto-queue USDT payouts when a threshold is set'],
     ['hide_small_payments_enabled', 'Global hide-small-payments'],
     ['admin_mfa_required', 'Require two-step sign-in for admins (enrol in Security first)'],
+    ['direct_settlement_enabled', 'Direct payments: Freelancers may take payments straight to their own wallet (turning on needs two-step sign-in; see docs/NON-CUSTODIAL-ARCHITECTURE.md)'],
   ];
   const { data, error } = await sb.from('app_settings').select('key, value').in('key', keys.map((r) => r[0]));
   const map = {};

@@ -610,6 +610,10 @@ body.checkout .brand .mark,body.store .brand .mark,.theme-stage .brand .mark{bac
 .status-msg.err{color:var(--danger)}
 .status-msg.loading{color:var(--muted)}
 #walletHint{text-align:center;font-size:13px;color:var(--faint);margin:10px 0}
+/* Direct payments (20261018010000): where the money goes, said plainly. */
+.direct-note{margin:8px 0 10px;padding:10px 12px;border-radius:var(--radius-sm);background:var(--info-soft);border:1px solid var(--info-line);color:var(--info-fg);font-size:13px;line-height:1.45;text-align:left}
+.direct-note[hidden]{display:none}
+.direct-note code{font-size:12px;word-break:break-all}
 .pay-btn,.btn-pay{background:var(--btn-bg,var(--accent));color:var(--on-accent)}
 .pay-btn{width:100%;border:0;border-radius:var(--btn-radius,10px);font-size:16px;font-weight:600;padding:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px}
 .pay-btn:hover:not(:disabled),.btn-pay:hover{background:var(--btn-hover,var(--accent-hover))}

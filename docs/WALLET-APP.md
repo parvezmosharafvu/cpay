@@ -72,7 +72,9 @@ Bitcoin blockchain alone.
 What exists today:
 
 - **Exit backup** in the app (Security → Save exit backup). Users are told
-  to save a fresh one after receiving money. It holds no keys.
+  to save a fresh one after receiving money. It holds no keys. The app says
+  it is one part of an exit, not an exit by itself, and the security page
+  lists what an exit needs (on-chain bitcoin for fees, time, an exit tool).
 - The library (pinned 0.26.0) implements the exit itself:
   `checkUnilateralExit`, `prepareUnilateralExit`, `unilateralExit`,
   `importUnilateralExitState`.

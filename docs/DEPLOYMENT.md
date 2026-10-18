@@ -17,11 +17,16 @@
       supabase functions deploy ledger-backup   --no-verify-jwt
       supabase functions deploy og-image        --no-verify-jwt
       supabase functions deploy health          --no-verify-jwt
+      supabase functions deploy direct-invoice  --no-verify-jwt
+      supabase functions deploy settlement-destination
 
       Why the flags differ:
-        * create-invoice  — paying customers have no account, so there is no
-                            JWT to send. Abuse is capped by a per-link rate
-                            limit inside the function.
+        * create-invoice,
+          direct-invoice  — paying customers have no account, so there is no
+                            JWT to send. Abuse is capped by per-address,
+                            per-link and per-owner limits inside the function.
+        * settlement-destination — a signed-in Freelancer's own Lightning
+                            address: JWT verification ON.
         * user-withdraw,
           admin-actions,
           auth-settings   — always called by a signed-in creator or admin, so

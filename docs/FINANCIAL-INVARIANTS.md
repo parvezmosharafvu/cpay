@@ -17,3 +17,5 @@ database ("Payment service against the migrated database" step, `npm test`).
 | Persisted USD is exact (integer cents / numeric) | `ci/money_types_test.sql`, `money.test.mjs`, `withdraw.test.mjs` splitFee sweep |
 | Another creator cannot read or change my financial rows | `invariants.test.mjs` (RLS, with an owner positive control), `ci/authenticated_rpc_sweep_test.sql` |
 | Public invoice lookup returns only allowlisted fields | `invariants.test.mjs` (`get_invoice_public`, `lookup_payment_status` column sets as anon), `ci/public_exposure_test.sql` |
+| A direct payment is paid only with a preimage that hashes to its payment hash; paid is final | `ci/direct_settlement_test.sql`, `supabase/functions/direct-invoice/handler_test.ts`, `tests/e2e/direct-settlement.spec.ts` |
+| Direct payments never change a CPAY balance, and a direct link never creates a custodial payment | `ci/direct_settlement_test.sql` (balance compared before/after; payments insert refused), `tests/e2e/direct-settlement.spec.ts` |

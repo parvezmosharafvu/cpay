@@ -5,6 +5,7 @@ const OPS_LABEL = {
   manual_withdrawals_enabled: 'Manual withdrawals',
   auto_withdraw_enabled: 'Auto-queue USDT payouts',
   admin_mfa_required: 'Require two-step sign-in for admins',
+  direct_settlement_enabled: 'Direct payments to Freelancers\' own wallets',
   pending_count: 'Waiting', pending_amount: 'Waiting amount', processing_count: 'Processing',
   last_webhook_at: 'Last webhook', last_daily_stat_at: 'Last daily close',
   last_settled_at: 'Last settled payment', oldest_pending_payment_at: 'Oldest unpaid invoice',
@@ -42,6 +43,7 @@ const FLAG_ROWS = [
   ['manual_withdrawals_enabled', 'Manual withdrawals enabled'],
   ['hide_small_payments_enabled', 'Global hide-small-payments'],
   ['admin_mfa_required', 'Require two-step sign-in for admins'],
+  ['direct_settlement_enabled', 'Direct payments to Freelancers\' own wallets'],
 ];
 async function renderFlagsLive() {
   if (typeof renderFlags === 'function') return renderFlags();

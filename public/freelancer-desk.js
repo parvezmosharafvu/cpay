@@ -122,24 +122,33 @@ function bindJumps(root) {
 async function renderLinks() {
   const el = document.getElementById('links');
   el.innerHTML = deskSkeleton(3);
-  const { data: links, error } = await sb.from('payment_links').select('*').eq('user_id', me.id).is('deleted_at', null).order('created_at', { ascending: false });
+  const [{ data: links, error }, ds] = await Promise.all([
+    sb.from('payment_links').select('*').eq('user_id', me.id).is('deleted_at', null).order('created_at', { ascending: false }),
+    window.cpayDirect ? window.cpayDirect.state() : Promise.resolve(null),
+  ]);
   if (error) { el.innerHTML = deskError(error.message); return; }
+  // Direct payments (direct-settlement.js): a "Payments go to" column once
+  // the switch is on or a link already pays the owner's own wallet.
+  const direct = window.cpayDirect;
+  const showMode = Boolean(direct && ds && (direct.visible(ds) || (links || []).some((l) => l.settlement_mode === 'direct')));
   const list = (links || []).map((l) => `<tr>
     <td data-label="Link"><a href="/${escapeHtml(l.slug)}" target="_blank" rel="noopener">/${escapeHtml(l.slug)}</a></td>
     <td data-label="Name">${escapeHtml(l.display_name || '')}</td>
     <td data-label="Design">${escapeHtml(layoutLabel(l.theme))}</td>
     <td data-label="Wallets">${l.wallet_mode === 'cashapp' ? 'Cash App only' : 'All wallets'}</td>
     <td data-label="Status">${badge(l.is_active ? 'live' : 'off')}</td>
+    ${showMode ? direct.linkCell(l, ds) || '<td data-label="Payments go to">CPAY balance</td>' : ''}
     <td class="table-actions">
       <button type="button" class="btn ghost sm" data-copy-link="${escapeHtml(l.slug)}" aria-label="Copy the link /${escapeHtml(l.slug)}">Copy link</button>
       <button type="button" class="btn ghost sm" data-toggle-link="${escapeHtml(l.id)}" data-active="${l.is_active ? '1' : '0'}">${l.is_active ? 'Turn off' : 'Turn on'}</button>
+      ${showMode ? direct.linkButton(l, ds) : ''}
     </td>
   </tr>`).join('');
   el.innerHTML = `
     <div class="card flush">
       <div class="card-head"><div><h3>Your links</h3><div class="faint">Share a link; payers choose an amount and pay a Lightning invoice.</div></div><span class="meta-count">${(links || []).length} total</span></div>
-      <div class="scroll"><table class="table rtable"><thead><tr><th>Link</th><th>Name</th><th>Design</th><th>Wallets</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
-      <tbody>${list || `<tr><td colspan="6">${deskEmpty('No links yet', 'Create a payment link to start collecting.')}</td></tr>`}</tbody></table></div>
+      <div class="scroll"><table class="table rtable"><thead><tr><th>Link</th><th>Name</th><th>Design</th><th>Wallets</th><th>Status</th>${showMode ? '<th>Payments go to</th>' : ''}<th><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>${list || `<tr><td colspan="${showMode ? 7 : 6}">${deskEmpty('No links yet', 'Create a payment link to start collecting.')}</td></tr>`}</tbody></table></div>
     </div>
     <div class="card">
       <h3>New payment link</h3>
@@ -148,6 +157,7 @@ async function renderLinks() {
       <div class="field"><label for="linkCost">Link cost %</label><input id="linkCost" type="number" min="0" step="0.1" value="${Number(me.cost_percent || 0)}"></div>
       <p class="hint">Added on top of what the payer pays. This is separate from the platform fee.</p>
       ${layoutPicker(exp.theme, exp.wallet, exp.invoice)}
+      ${direct && ds ? direct.newLinkChoice(ds) : ''}
       <button class="btn primary" id="makeLink" type="button">Create link</button>
     </div>`;
   bindExperience(exp);
@@ -158,6 +168,7 @@ async function renderLinks() {
       try { await navigator.clipboard.writeText(url); toast('Link copied', true); } catch (e) { toast(url, true); }
     };
   });
+  if (showMode) direct.bindLinkButtons(el, renderLinks);
   el.querySelectorAll('[data-toggle-link]').forEach((btn) => {
     btn.onclick = async () => {
       const next = btn.dataset.active !== '1';
@@ -187,6 +198,10 @@ async function makeLink() {
     }
     const costError = await applyLinkCost(link?.id);
     if (costError) { btn.disabled = false; return toast(costError); }
+    if (link?.id && window.cpayDirect && window.cpayDirect.chosenMode() === 'direct') {
+      const { error: modeError } = await sb.rpc('set_link_settlement_mode', { p_link_id: link.id, p_mode: 'direct' });
+      if (modeError) { btn.disabled = false; return toast(`Link created, paying your CPAY balance: ${modeError.message}`); }
+    }
   }
   toast('Link ready', true);
   await renderLinks();
@@ -239,7 +254,9 @@ async function renderPays() {
     <div class="card-head"><h3>Payment history</h3><span class="meta-count">${total} match${total === 1 ? '' : 'es'}</span></div>
     <div class="scroll"><table class="table rtable"><thead><tr><th class="num">Amount</th><th>Status</th><th>Link</th><th>Invoice</th><th>When</th></tr></thead>
     <tbody>${rows || `<tr><td colspan="5">${deskEmpty('No payments match', 'Try another status or clear filters.')}</td></tr>`}</tbody></table></div>
-  </div>`;
+  </div>
+  <div id="directPays" hidden></div>`;
+  if (window.cpayDirect) window.cpayDirect.paymentsCard(document.getElementById('directPays'));
   const statusEl = document.getElementById('payStatus');
   if (statusEl) statusEl.value = payFilter.status || '';
   document.getElementById('payApply').onclick = () => {
@@ -378,7 +395,8 @@ async function renderProfile() {
     return `<tr><td data-label="Network">${escapeHtml(netLabel(w.network))}</td><td data-label="Address" class="mono"><code>${escapeHtml(w.address)}</code></td><td data-label="Status">${readyText(w)}</td>
       <td class="table-actions"><button type="button" class="btn ghost sm" data-del-net="${escapeHtml(w.network)}">Remove</button></td></tr>`;
   }).join('');
-  el.innerHTML = `<div class="grid split">
+  el.innerHTML = `<div id="directCard" hidden></div>
+  <div class="grid split">
     <div class="card">
       <h3>Public profile</h3>
       <p class="role-note">Storefront settings for your public page. Display name is what payers see.</p>
@@ -404,6 +422,7 @@ async function renderProfile() {
       <button class="btn ghost" id="savePrefs" type="button">Save payout settings</button>
     </div>
   </div>`;
+  if (window.cpayDirect) window.cpayDirect.card(document.getElementById('directCard'), () => { renderProfile(); renderLinks(); });
   document.getElementById('saveProf').onclick = async () => {
     const { error: e } = await sb.rpc('update_my_public_profile', {
       p_display_name: document.getElementById('pName').value,

@@ -38,3 +38,17 @@ Owner decision 2026-10-13: only an admin may reverse a settled payment. `payment
 | anything else (→ `new`, → `pending` from non-new, `settled` → `new`/`pending`/`expired`) | nobody (check_violation) |
 
 Admin means `is_admin()` (active admin JWT) or a server-side role (not anon/authenticated) that ran `set_config('cpay.payment_admin_context', 'on', true)` in the same transaction. Non-admin attempts fail with insufficient_privilege. `admin_mark_payment()` is unchanged and still refuses settled payments; a reversal is a deliberate admin action, never a settlement-path side effect. Settlement (`settle_breez_payment`: new/pending/expired → settled, duplicate and already-settled no-ops), the expiry loop (new → expired) and late payment are all inside the always-allowed set; `ci/payment_transitions_test.sql` runs them with the trigger active.
+
+## Direct payments (`direct_payments.status`, 20261018010000)
+
+Payments that go straight to a Freelancer's own wallet. A separate table: never
+counted in a balance. Pinned by `ci/direct_settlement_test.sql`.
+
+| From → To | Writer | Guard |
+|---|---|---|
+| (insert) → `pending` | direct-invoice Edge Function | idempotent per (link, client_request_id); unique payment hash |
+| `pending`/`expired` → `paid` | `system_record_direct_payment_proof()` (service role) | CHECK: the preimage's SHA-256 equals the payment hash; idempotent |
+| `pending` → `expired` | `system_expire_direct_payment()` | only after `expires_at` (+ grace); trigger refuses earlier |
+
+Never: `paid` → anything (trigger); `expired` → `pending`; any change to the
+invoice details; deleting a row.

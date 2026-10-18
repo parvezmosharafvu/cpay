@@ -127,6 +127,17 @@ Admin panel (emergency controls): **emergency payments stop** (create-invoice re
 new invoices) and **emergency withdrawals stop** (every withdrawal path
 refuses). Both are checked server-side.
 
+`emergency_payments_stop` also stops direct-payment invoices
+(`direct-invoice`). Direct payments have their own switch as well (next
+section).
+
+## Direct payments (payer pays the Freelancer's own wallet)
+
+Off by default. Turning it on, stopping one account, the reconcile sweep and
+what to do when a payer says they paid: [NON-CUSTODIAL-ARCHITECTURE.md](NON-CUSTODIAL-ARCHITECTURE.md)
+§8. CPAY never holds these payments, so there is nothing to refund or move
+from CPAY's side; the merchant's own wallet has the money.
+
 ## Two-step sign-in (admin MFA)
 
 Admin → **Security** turns on two-step sign-in (TOTP authenticator apps).

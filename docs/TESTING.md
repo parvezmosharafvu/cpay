@@ -22,6 +22,7 @@ Timezone for evidence stamps: **Asia/Dhaka (UTC+6)**.
 | Role / approval / dashboards / telegram / receipts / sweep | `ci/*_test.sql` on migrated DB | `telegram_test` and `financial_invariants` are isolation-safe on a shared DB |
 | Anon + authenticated allowlists | On a DB with `ci/supabase_default_privileges.sql` | `privcheck` in CI |
 | Deno edge unit | CI uses Deno 1.x. Local Deno 2.9+: `deno test --no-check --allow-net=127.0.0.1 …` | `auth-settings/`, `admin-actions/`, `telegram-notify/`, `create-invoice/invoice-amount_test.ts` |
+| Direct settlement | `deno test supabase/functions/_shared/ supabase/functions/direct-invoice/ supabase/functions/settlement-destination/`, `ci/direct_settlement_test.sql`, `tests/e2e/direct-settlement.spec.ts` | BOLT #11 vectors, Lightning-address client (SSRF rules, LUD-21 proof), price agreement, handlers against fakes; SQL: switch, owner-only mode, proof CHECK, balance untouched, isolation; E2E with a fake merchant provider |
 | Verify workflow | `.github/workflows/verify.yml` | Migrations, SQL, Deno, payment-service |
 
 `ci/production_drift_test.sql` is **historical**: it runs on a schema stopped

@@ -51,6 +51,14 @@ a time; the control row's `owner` says which host may hold it.
 is created with `receiptRecording: "off"`). Health was `200 healthy` at
 20:30 UTC with no failing check.
 
+## Direct settlement (not live)
+
+Migration `20261018010000` and the `direct-invoice` and
+`settlement-destination` functions add payments that go straight to a
+Freelancer's own wallet. They take effect when merged and deployed, but
+`direct_settlement_enabled` is `false`, so no link can use them until the
+owner turns the switch on. See [NON-CUSTODIAL-ARCHITECTURE.md](NON-CUSTODIAL-ARCHITECTURE.md).
+
 ## The standalone CPAY Wallet
 
 A separate, optional phone app in `wallet/`. It is not part of anything

@@ -75,7 +75,10 @@ export async function createEngine() {
       return (deposits || []).map((d) => ({ txid: d.txid, vout: d.vout, amountSats: Number(d.amountSats) }));
     },
     // Same two-step send the CPAY server wallet uses: parse, prepare (shows
-    // the fee), then send only after the user confirms.
+    // the fee), then send only after the user confirms. The idempotency key
+    // is chosen here, once per prepared payment: the library returns the
+    // existing payment for a key it has seen, so sending the same prepared
+    // payment again (after a timeout, say) can never pay twice.
     async prepareSend(input, amountSats) {
       const text = String(input || '').trim();
       const parsed = await sdk.parse(text);
@@ -93,11 +96,21 @@ export async function createEngine() {
       });
       const m = prepared.paymentMethod || {};
       const feeSats = m.type === 'bolt11Invoice' ? Number(m.lightningFeeSats ?? 0) + Number(m.sparkTransferFeeSats ?? 0) : Number(m.fee ?? 0);
-      return { amountSats: sats, feeSats, kind: parsed.type, handle: prepared };
+      return { amountSats: sats, feeSats, kind: parsed.type, handle: prepared, idempotencyKey: globalThis.crypto.randomUUID(), to: text };
     },
     async send(prepared) {
-      const { payment } = await sdk.sendPayment({ prepareResponse: prepared.handle, idempotencyKey: globalThis.crypto.randomUUID() });
+      const { payment } = await sdk.sendPayment({ prepareResponse: prepared.handle, idempotencyKey: prepared.idempotencyKey });
       return { id: payment.id, status: payment.status };
+    },
+    // One payment by id (a send's id is its idempotency key), or null when
+    // the library has no such payment.
+    async payment(id) {
+      try {
+        const { payment: p } = await sdk.getPayment({ paymentId: id });
+        return p ? { id: p.id, status: p.status, type: p.paymentType, amountSats: Number(p.amount), feesSats: Number(p.fees) } : null;
+      } catch {
+        return null;
+      }
     },
     async payments() {
       const { payments } = await sdk.listPayments({ offset: 0, limit: 50, sortAscending: false });

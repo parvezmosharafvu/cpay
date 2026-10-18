@@ -45,3 +45,5 @@ a { color: var(--accent); }
 .banner.beta { background: #fff7ed; color: #7c2d12; border: 1px solid #fdba74; }
 @media (prefers-color-scheme: dark) { .banner.beta { background: #3b1d0a; color: #fed7aa; border-color: #9a3412; } }
 canvas.qr { display: block; margin: 8px auto; width: 240px; max-width: 100%; height: auto; image-rendering: pixelated; border-radius: 8px; }
+.notice { margin: 12px 0; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--danger); color: var(--danger); background: transparent; font-size: 14px; }
+.notice[hidden] { display: none; }

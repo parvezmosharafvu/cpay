@@ -22,6 +22,12 @@ a person with a phone or real money.
 | Real library loads under the strict CSP; fake engine not shipped in production builds | `sdk.spec.ts`, `build.test.mjs` | regtest |
 | Vendor real-time sync off and blocked by CSP | `build.test.mjs` | build |
 | Optional CPAY link: consent, read-only, separate labelled balance, revocable | `wallet.spec.ts` "optional CPAY link" | fake CPAY API |
+| Passkey wallet: the passkey derives a valid 12-word phrase, the same one on every sign-in; only the credential id is stored | `passkey.spec.ts` (real library, Chromium virtual authenticator with PRF), `wallet.spec.ts` "passkey …" | none (in the page) |
+| Passkey errors: cancelled, timed out, already exists, created but not derived, none on the device, no PRF support | `wallet.spec.ts` "passkey errors", "no passkey choice" | fake passkey |
+| Lost passkey: the 12 words restore the same wallet | `wallet.spec.ts` "lost passkey" | fake engine |
+| Passkeys only on the RP ID's own host over https; off unless `WALLET_PASSKEYS=on`; production RP ID pinned to `wallet.pay-cashapp.buzz` | `passkey-origin.test.mjs`, `passkey.spec.ts` (wrong host, switch off), `build.test.mjs`, `verify-release.test.mjs` | build / none |
+| Lightning address: name rules, check, register, QR, remove; off unless a domain is set; only that domain in the CSP | `lnaddress.test.mjs`, `wallet.spec.ts` "lightning address", `build.test.mjs` | fake engine |
+| "Use for CPAY direct payments": the desk opens with the address filled in (through the login page), nothing saved without Check and Save; the wallet only reads | `wallet.spec.ts` "lightning address → CPAY", `direct-prefill.test.mjs`, `tests/e2e/direct-settlement.spec.ts` "opened from CPAY Wallet" | fake CPAY API, local stack |
 
 ## Not yet proven (needs a person)
 
@@ -31,6 +37,11 @@ a person with a phone or real money.
 - **A real phone.** Chromium's installability check passes, and the tests
   run with a Pixel 7 profile, but no physical Android or iPhone has been used.
 - **Mainnet.** Never tested. Needs a wallet API key and the plan below.
+- **Passkeys on real devices**, including synced passkeys (iCloud Keychain,
+  Google Password Manager) and a hardware security key. The virtual
+  authenticator proves the library path, not each platform.
+- **A real Lightning address.** The vendor's LNURL server is mainnet only,
+  and needs the domain registered (wallet/LIGHTNING-ADDRESS.md).
 
 ## Android: install and test the preview (regtest, no real money)
 
@@ -62,6 +73,45 @@ a person with a phone or real money.
 
 Record the phone model, Android and Chrome versions, the release
 `version.json` sha256, and the result of each step.
+
+## Passkeys on a phone (staging, regtest, no real money)
+
+Passkeys are off on staging too unless its project sets two build
+variables: `WALLET_RP_ID` = the staging address's host name (for example
+`cpay-wallet-staging.<account>.workers.dev`) and `WALLET_PASSKEYS=on`.
+Passkeys made there work only on that host; they are test passkeys.
+
+1. **Android (Chrome, Google Password Manager)** and **iPhone (Safari 18 or
+   later, iCloud Keychain)**: open the staging address, **Create with a
+   passkey**, confirm with the fingerprint or face. Write the 12 words down;
+   enter the requested ones.
+2. **Lock**, then **Unlock with passkey**. **Security → Show recovery
+   phrase** asks for the passkey and shows the same words.
+3. **Second device** with the same Google or Apple account: **Sign in with a
+   passkey**. The same wallet opens; the backup line says the words were
+   not checked on this phone.
+4. **Lost passkey:** delete the passkey from the device's password manager.
+   **Unlock with passkey** fails with a clear message; **Restore with your
+   recovery phrase** (the 12 words) opens the same wallet.
+5. Check the release with "Wallet release check" (network `regtest`): it
+   prints `passkeys ON, rp id <staging host>` and fails if they differ.
+
+Record the device, OS and browser versions, and each step's result.
+
+## Lightning address and CPAY direct payments (mainnet, gate G7)
+
+Only on the production build, after the domain is registered with the
+vendor and the website forwards the LNURL paths
+([wallet/LIGHTNING-ADDRESS.md](../wallet/LIGHTNING-ADDRESS.md)):
+
+1. **Receive → Lightning address**: choose a name, **Check**, **Use this
+   name**. Pay it at most $1 from an outside wallet; the balance rises.
+2. **Use for CPAY direct payments**: the desk opens with the address filled
+   in. **Check address** (CPAY confirms the provider supports payment
+   proofs), **Save address** (fresh sign-in). It is used 24 hours later.
+3. After the wait, switch one payment link to "Pay to my wallet" and pay it
+   ($1–$5, NON-CUSTODIAL-ARCHITECTURE.md §9). The payment arrives in the
+   wallet; the CPAY balance does not change.
 
 ## Mainnet test plan (only after the owner decides to go ahead)
 

@@ -18,6 +18,38 @@ CPAY). This document covers only the wallet.
 | The CPAY account link never touches the vault, the phrase or the engine | `src/link.js`, `tests/frontend/wallet-config.test.mjs` |
 | The CPAY password is not used to derive or protect wallet keys (separate passphrase) | `src/app.js`, UI copy |
 | The app opens, unlocks and reveals the phrase with no network | service worker; offline test in `wallet.spec.ts` |
+| A passkey wallet stores nothing secret: only the passkey's credential id and the label | `src/vault.js` (`passkeyRecord`), `src/passkey.js`, `wallet.spec.ts` |
+| A passkey wallet's phrase is derived in the page by the wallet library from the passkey's WebAuthn PRF output, the same 12 words each time | `src/passkey.js`, `tests/wallet/passkey.spec.ts` (real library, PRF virtual authenticator) |
+
+## Passkey login
+
+A wallet can be created with a passkey instead of a passphrase
+(`WALLET_RP_ID` set at build time).
+
+- **How the phrase is made.** The wallet library asks the passkey for a
+  WebAuthn PRF output and turns it into a standard 12-word BIP-39 phrase.
+  The same passkey always gives the same words, so a passkey wallet is a
+  12-word wallet: the words restore it anywhere, with or without the passkey.
+- **What is stored.** Only the credential id (to ask for that passkey again)
+  and the label. No phrase, no ciphertext. Unlocking and "Show recovery
+  phrase" derive the words again; they are dropped after use.
+- **Backup is required.** Creating a passkey wallet shows the 12 words and
+  checks three of them against the paper, exactly like a generated phrase.
+  A passkey can be lost, deleted from the device's passkey list, or left
+  behind on a domain change; the words are then the only way back.
+- **Relying Party.** Our own host (`WALLET_RP_ID`, normally the wallet's
+  hostname). Every passkey is bound to it for good. If the wallet moves to
+  another domain, keep the old one serving `/.well-known/webauthn` with the
+  new origin in `related_origins` (Chrome, Safari, Edge); Firefox users
+  restore with the words.
+- **Who can derive the words.** Anyone who can use the passkey on this
+  origin: the device's screen lock or biometrics, and, for a synced passkey,
+  the cloud account it syncs through (iCloud Keychain, Google Password
+  Manager). Treat that account like the paper.
+- **Label publishing is blocked.** The library publishes wallet labels to
+  public Nostr relays for multi-wallet discovery. The wallet uses one fixed
+  label, and the CSP does not allow those relays, so no passkey-linked
+  record leaves the device.
 
 ## The wallet library and the Spark network
 
@@ -116,7 +148,9 @@ phrase back) to tell them apart. The Security card shows whether the words were
 checked against the paper at creation or used to restore.
 
 The 12 words restore the wallet in CPAY Wallet on any device. The
-passphrase is device-local and not a backup. Clearing site data or
+passphrase is device-local and not a backup. A passkey wallet's words
+restore it the same way (into a passphrase wallet), and "Sign in with a
+passkey" opens it on another device where the same passkey is available. Clearing site data or
 "Remove wallet from this phone" deletes the device copy only.
 
 ## Not in scope (by design)

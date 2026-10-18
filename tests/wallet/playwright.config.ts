@@ -25,6 +25,9 @@ export default defineConfig({
   projects: [
     { name: 'fake-engine', testMatch: 'wallet.spec.ts', use: { baseURL: 'http://127.0.0.1:8790' } },
     { name: 'real-sdk', testMatch: 'sdk.spec.ts', use: { baseURL: 'http://127.0.0.1:8792' } },
+    // Real library + Chromium's virtual authenticator with PRF, on
+    // localhost (a valid WebAuthn RP id, unlike an IP address).
+    { name: 'real-passkey', testMatch: 'passkey.spec.ts', use: { baseURL: 'http://localhost:8793' } },
   ],
   webServer: [
     { command: 'node tests/wallet/fake-cpay.mjs 8791', url: 'http://127.0.0.1:8791/__log', reuseExistingServer: false, cwd: '../..' },
@@ -39,5 +42,6 @@ export default defineConfig({
       command: 'node tests/wallet/build-real.mjs 8792',
       url: 'http://127.0.0.1:8792/', reuseExistingServer: false, cwd: '../..',
     },
+    { command: 'node tests/wallet/build-real.mjs 8793 localhost', url: 'http://127.0.0.1:8793/', reuseExistingServer: false, cwd: '../..' },
   ],
 });

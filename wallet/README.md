@@ -27,6 +27,12 @@ npx playwright test -c tests/wallet/playwright.config.ts
 ```
 
 `WALLET_LIVE=1` also runs a real regtest wallet session (needs internet).
+`passkey.spec.ts` runs the real library against Chromium's virtual
+authenticator (PRF on), on `localhost`.
+
+Passkey login is on when the build sets `WALLET_RP_ID` (the Relying Party
+ID, normally the wallet's own hostname, e.g. `wallet.pay-cashapp.buzz`).
+Choose it once: passkeys are bound to it for good. See SECURITY.md.
 
 ## Publish (owner steps; nothing here deploys on merge)
 
@@ -47,8 +53,10 @@ the website's download link off until all of them pass.
 3. **Workers project.** In Cloudflare, create a Workers Builds project
    from this repository: root directory `wallet`, build command
    `npm ci --ignore-scripts && npm run build`, deploy command
-   `npx wrangler deploy`, build variable `WALLET_API_KEY`. Attach the
-   hostname as a custom domain.
+   `npx wrangler deploy`, build variables `WALLET_API_KEY` and, for passkey
+   login, `WALLET_RP_ID` set to that hostname. Attach the hostname as a
+   custom domain. Set `WALLET_RP_ID` before anyone makes a passkey wallet:
+   changing it later strands their passkeys.
 4. **Test on real phones.** Android (Chrome) and iPhone (Safari): create,
    back up, receive a small amount, send it back, lock, restore on a
    second phone.
@@ -63,6 +71,9 @@ the website's download link off until all of them pass.
 
 ## Limitations of this version
 
+- Passkey login needs a browser and authenticator with the WebAuthn PRF
+  extension (recent Chrome, Edge, Safari 18+; Android with Google Password
+  Manager, iOS 18+). Elsewhere only the 12-word option shows.
 - No unilateral-exit button yet. The app saves an exit backup file;
   the exit itself is a later milestone (see SECURITY.md).
 - Real-time sync with the library vendor is off (`WALLET_SYNC=on` to

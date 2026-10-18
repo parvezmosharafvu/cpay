@@ -7,9 +7,13 @@
 //              (vault.js), handed to the engine, then dropped from memory
 //   unlock  -> opened from the vault, handed to the engine, dropped
 //   reveal  -> opened from the vault on request, shown, hidden again
+// A passkey wallet (passkey.js) has the same 12 words but keeps no copy:
+// the passkey derives them at creation (shown once for the paper backup,
+// checked), at every unlock and on reveal, and they are dropped after.
 // It is never sent anywhere: not to CPAY, not in a URL, not in a log.
 import { generateMnemonic, normalizeMnemonic, validateMnemonic } from './bip39.js';
-import { MIN_PASSPHRASE, openPhrase, sealPhrase, vaultStore } from './vault.js';
+import { MIN_PASSPHRASE, isPasskeyVault, openPhrase, passkeyRecord, sealPhrase, vaultStore } from './vault.js';
+import { PASSKEY_LABEL, passkeyAvailability, passkeyErrorKind, passkeyMessage, registerPasskey, signInPasskey } from './passkey.js';
 import { configProblem, createEngine, wipeEngineStorage } from './engine.js';
 import { link, linkAvailable, linkedAccount, unlink, websiteBalance } from './link.js';
 import { bitcoinUri, drawQr, lightningUri } from './qr.js';
@@ -30,6 +34,7 @@ const sats = (n) => Number(n || 0).toLocaleString('en-US');
 let engine = null;
 let pending = null; // phrase being set up (create/restore), dropped once sealed
 let pendingHow = null; // 'created' (words checked against the paper) or 'restored'
+let pendingPasskey = null; // { cred } while a passkey wallet's words are being checked
 let lockTimer = null;
 
 // ---- small records on this phone (no keys, no phrase) --------------------
@@ -67,6 +72,8 @@ function renderWords(listId, phrase) {
 // ---- create ----------------------------------------------------------
 $('createBtn').onclick = async () => {
   pending = await generateMnemonic(12);
+  pendingPasskey = null;
+  $('backupPasskeyNote').hidden = true;
   renderWords('words', pending);
   $('wroteIt').checked = false;
   $('backupNext').disabled = true;
@@ -98,17 +105,77 @@ $('confirmForm').onsubmit = (e) => {
   const ok = confirmAt.every((i) => normalizeMnemonic($(`cw${i}`).value) === words[i]);
   if (!ok) { err('confirmErr', 'That does not match. Check your paper, or show the words again.'); return; }
   pendingHow = 'created';
+  if (pendingPasskey) { finishPasskey(pending, pendingPasskey.cred, 'created'); return; }
   show('setpass');
 };
 
+// ---- passkey ---------------------------------------------------------
+// Create: the passkey derives the words, which are then shown and checked
+// exactly like generated ones; no passphrase is set.
+async function passkeyAttempt(btn, errId, fn) {
+  btn.disabled = true;
+  err(errId);
+  try { await fn(); } catch (x) { err(errId, passkeyMessage(passkeyErrorKind(x))); } finally { btn.disabled = false; }
+}
+$('pkCreateBtn').onclick = () => passkeyAttempt($('pkCreateBtn'), 'welcomeErr', async () => {
+  const r = await registerPasskey();
+  pending = r.phrase;
+  pendingPasskey = { cred: r.credentialId };
+  $('backupPasskeyNote').hidden = false;
+  renderWords('words', pending);
+  $('wroteIt').checked = false;
+  $('backupNext').disabled = true;
+  show('backup');
+});
+// Sign in on a phone without a wallet yet (a new phone, or after removing
+// it). The words were written down when the passkey wallet was created.
+$('pkSignInBtn').onclick = () => passkeyAttempt($('pkSignInBtn'), 'welcomeErr', async () => {
+  const r = await signInPasskey(null);
+  await finishPasskey(r.phrase, r.credentialId, 'signedin');
+});
+async function finishPasskey(phrase, cred, how) {
+  try {
+    const id = await walletId(phrase);
+    if (vaultStore.load() && store.get(ID_SLOT) !== id) { await wipeEngineStorage(); store.del(SENDS_SLOT); }
+    vaultStore.save(passkeyRecord(cred, PASSKEY_LABEL));
+    store.set(ID_SLOT, id);
+    // h: 1 = words checked against the paper at creation, 3 = opened with
+    // the passkey on this phone (words not checked here).
+    store.set(BACKUP_SLOT, { h: how === 'created' ? 1 : 3, t: Date.now() });
+    await start(phrase);
+  } catch (x) {
+    err(how === 'created' ? 'confirmErr' : 'welcomeErr', x.message || 'Could not open the wallet.');
+  } finally {
+    pending = null; pendingHow = null; pendingPasskey = null;
+  }
+}
+$('unlockPkBtn').onclick = () => passkeyAttempt($('unlockPkBtn'), 'unlockPkErr', async () => {
+  const v = vaultStore.load();
+  const r = await signInPasskey(v?.cred);
+  if (store.get(ID_SLOT) && store.get(ID_SLOT) !== (await walletId(r.phrase))) throw new Error('A different passkey was used.');
+  await start(r.phrase);
+});
+$('pkLostLink').onclick = (e) => { e.preventDefault(); startRestore(); };
+
+// The unlock screen matches how this phone's wallet is kept.
+function showUnlock() {
+  const pk = isPasskeyVault(vaultStore.load());
+  $('unlockPasskey').hidden = !pk;
+  $('unlockForm').hidden = pk;
+  $('forgotNote').hidden = pk;
+  err('unlockPkErr');
+  show('unlock');
+}
+
 // ---- restore ---------------------------------------------------------
 function startRestore() {
+  pendingPasskey = null;
   $('restoreWords').value = ''; err('restoreErr');
   $('restoreReplace').hidden = true; $('replaceOk').checked = false; $('replaceText').value = '';
   show('restore');
 }
 $('restoreStartBtn').onclick = startRestore;
-$('restoreCancel').onclick = () => show(vaultStore.load() ? 'unlock' : 'welcome');
+$('restoreCancel').onclick = () => (vaultStore.load() ? showUnlock() : showWelcome());
 $('forgotLink').onclick = (e) => { e.preventDefault(); startRestore(); };
 $('restoreForm').onsubmit = async (e) => {
   e.preventDefault();
@@ -192,7 +259,9 @@ function renderBackupStatus() {
     ? 'Recovery phrase: not recorded on this phone. Show it and check it against your paper copy.'
     : b.h === 1
       ? `Recovery phrase: you checked your paper copy when you created this wallet (${when}).`
-      : `Recovery phrase: this wallet was restored from it on this phone (${when}).`;
+      : b.h === 3
+        ? `Recovery phrase: not checked on this phone. This wallet was opened with its passkey (${when}). Show the words and check them against your paper copy.`
+        : `Recovery phrase: this wallet was restored from it on this phone (${when}).`;
 }
 
 // ---- home ------------------------------------------------------------
@@ -361,15 +430,23 @@ $('fundBtn').onclick = async () => {
 $('fundCopy').onclick = () => navigator.clipboard?.writeText($('fundAddr').value);
 
 // ---- security --------------------------------------------------------
-$('showPhraseBtn').onclick = () => { $('revealForm').hidden = false; $('wipeForm').hidden = true; err('revealErr'); };
+function revealWords(phrase) {
+  renderWords('revealWords', phrase);
+  $('revealWords').hidden = false;
+  $('revealForm').hidden = true;
+  setTimeout(() => { $('revealWords').replaceChildren(); $('revealWords').hidden = true; }, 60_000);
+}
+$('showPhraseBtn').onclick = async () => {
+  $('wipeForm').hidden = true; err('revealErr');
+  const v = vaultStore.load();
+  if (!isPasskeyVault(v)) { $('revealForm').hidden = false; return; }
+  // A passkey wallet keeps no copy: the passkey derives the words again.
+  try { revealWords((await signInPasskey(v.cred)).phrase); } catch (x) { err('revealErr', passkeyMessage(passkeyErrorKind(x))); }
+};
 $('revealForm').onsubmit = async (e) => {
   e.preventDefault();
   try {
-    const phrase = await openPhrase(vaultStore.load(), $('revealPass').value);
-    renderWords('revealWords', phrase);
-    $('revealWords').hidden = false;
-    $('revealForm').hidden = true;
-    setTimeout(() => { $('revealWords').replaceChildren(); $('revealWords').hidden = true; }, 60_000);
+    revealWords(await openPhrase(vaultStore.load(), $('revealPass').value));
   } catch {
     err('revealErr', 'Wrong passphrase.');
   } finally {
@@ -403,7 +480,7 @@ $('wipeForm').onsubmit = async (e) => {
   store.del(ID_SLOT); store.del(BACKUP_SLOT); store.del(SENDS_SLOT);
   $('wipeText').value = '';
   $('wipeForm').hidden = true;
-  show('welcome');
+  await showWelcome();
 };
 
 async function lock() {
@@ -421,10 +498,10 @@ async function lock() {
   prepared = null;
   unsure = null;
 }
-$('lockBtn').onclick = async () => { await lock(); show('unlock'); };
+$('lockBtn').onclick = async () => { await lock(); showUnlock(); };
 function armLock() {
   clearTimeout(lockTimer);
-  lockTimer = setTimeout(async () => { await lock(); show('unlock'); }, AUTO_LOCK_MS);
+  lockTimer = setTimeout(async () => { await lock(); showUnlock(); }, AUTO_LOCK_MS);
 }
 for (const ev of ['pointerdown', 'keydown']) document.addEventListener(ev, () => { if (!$('s-home').hidden) armLock(); }, { passive: true });
 
@@ -461,6 +538,13 @@ $('linkForm').onsubmit = async (e) => {
 $('unlinkBtn').onclick = async () => { await unlink(); await renderLink(); };
 $('unlinkAllBtn').onclick = async () => { await unlink({ everywhere: true }); await renderLink(); };
 
+// The passkey choice shows only where this device can use one.
+async function showWelcome() {
+  err('welcomeErr');
+  show('welcome');
+  $('passkeyChoice').hidden = (await passkeyAvailability()) !== 'available';
+}
+
 // ---- boot ------------------------------------------------------------
 window.addEventListener('online', () => { $('offline').hidden = true; });
 window.addEventListener('offline', () => { $('offline').hidden = false; });
@@ -477,6 +561,8 @@ const problem = configProblem();
 if (problem) {
   $('cfgProblem').textContent = problem;
   show('notconfigured');
+} else if (vaultStore.load()) {
+  showUnlock();
 } else {
-  show(vaultStore.load() ? 'unlock' : 'welcome');
+  showWelcome();
 }

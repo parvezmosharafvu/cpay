@@ -82,3 +82,22 @@ test('vendor real-time sync is off by default and only on when asked', () => {
   assert.match(readFileSync(join(on.out, 'config.js'), 'utf8'), /"sync": true/);
   assert.match(readFileSync(join(on.out, '_headers'), 'utf8'), /datasync\.breez\.technology:442/);
 });
+
+test('passkeys: off without WALLET_RP_ID, on with a host name, a bad value refused', () => {
+  const off = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key' });
+  assert.equal(off.status, 0, off.stderr);
+  assert.match(readFileSync(join(off.out, 'config.js'), 'utf8'), /"rpId": null/);
+  const on = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key', WALLET_RP_ID: 'Wallet.Pay-Cashapp.Buzz' });
+  assert.equal(on.status, 0, on.stderr);
+  assert.match(readFileSync(join(on.out, 'config.js'), 'utf8'), /"rpId": "wallet\.pay-cashapp\.buzz"/);
+  const release = JSON.parse(readFileSync(join(on.out, 'version.json'), 'utf8'));
+  assert.ok(release.files['passkey.js']);
+  assert.ok(release.files['vendor/sdk/passkey-prf-provider/index.js'], 'the browser passkey provider ships');
+  const headers = readFileSync(join(on.out, '_headers'), 'utf8');
+  assert.match(headers, /publickey-credentials-get=\(self\), publickey-credentials-create=\(self\)/);
+  for (const bad of ['https://wallet.example.com', '127.0.0.1', 'wallet', 'a b.com']) {
+    const r = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key', WALLET_RP_ID: bad });
+    assert.notEqual(r.status, 0, bad);
+    assert.match(r.stderr + r.stdout, /WALLET_RP_ID must be a host name/, bad);
+  }
+});

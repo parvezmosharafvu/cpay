@@ -33,8 +33,9 @@ registration calls.
 1. **Dedicated API key ([release gate G1](../docs/WALLET-RELEASE-GATES.md)).** The domain is registered with
    the vendor for the wallet's own key.
 2. **Register the domain with the vendor.** `pay-cashapp.buzz` also serves
-   the CPAY website, so it needs the vendor's **reverse proxy** option, not a
-   CNAME. A CNAME would send the whole website to the vendor. Email
+   the CPAY website, so it needs the vendor's **reverse proxy** option. A
+   CNAME on the root would send the whole website to the vendor (a CNAME on a
+   subdomain is fine: see the simpler option below). Email
    `contact@breez.technology` (draft below). The vendor replies with a
    shared secret.
 3. **Forward three paths on `pay-cashapp.buzz` to `https://breez.tips`.**
@@ -54,7 +55,21 @@ registration calls.
    The forwarder will also refuse names that could pass for CPAY itself
    (`support`, `admin`, `cpay`, `billing`, `security` and similar), both
    on registration and on lookup.
-4. **Build the wallet with `LIGHTNING_ADDRESS_DOMAIN=pay-cashapp.buzz`.**
+   **Open question:** a Cloudflare Worker cannot set a `Host` header that
+   differs from the target's host, which this option asks for. The email
+   asks the vendor for an alternative header. If there is none, use the
+   simpler option below.
+
+   **Simpler option, no website code: a CNAME subdomain.** Add a DNS record
+   `ln.pay-cashapp.buzz` → CNAME `breez.tips`, set to **DNS only** (not
+   proxied), and register `ln.pay-cashapp.buzz` with the vendor. Addresses
+   become `name@ln.pay-cashapp.buzz`. The vendor serves that subdomain
+   entirely, so it needs no shared secret and no forwarder. The website
+   cannot filter names there; ask the vendor about restrictions. Build with
+   `LIGHTNING_ADDRESS_DOMAIN=ln.pay-cashapp.buzz` and include that host in
+   `DIRECT_PROVIDER_HOSTS` if it is set.
+4. **Build the wallet with `LIGHTNING_ADDRESS_DOMAIN=pay-cashapp.buzz`**
+   (or `ln.pay-cashapp.buzz` with the CNAME option).
    Test on staging first (regtest). Note: the vendor's server is mainnet,
    so a real address can only be tested on the production build with a
    small amount (gate G7).
@@ -110,10 +125,16 @@ and says so. If the owner sets `DIRECT_PROVIDER_HOSTS`, it must include
 >   the key id, over the channel you prefer)
 >
 > Could you add the domain and send us the shared secret? We would also
-> like to confirm two things: that the `/lnurlpay/*` endpoints send CORS
-> headers for browser wallets on another origin (our wallet runs at
-> https://wallet.pay-cashapp.buzz), and whether usernames can be restricted
-> server-side for the domain.
+> like to confirm three things:
+>
+> 1. Our forwarder is a Cloudflare Worker, which cannot set a `Host` header
+>    different from the target URL's host. Does your server also accept
+>    the domain in another header (for example `X-Forwarded-Host`), or
+>    should we use a CNAME subdomain instead (for example
+>    `ln.pay-cashapp.buzz` → `breez.tips`)?
+> 2. Do the `/lnurlpay/*` endpoints send CORS headers for browser wallets on
+>    another origin? Our wallet runs at https://wallet.pay-cashapp.buzz.
+> 3. Can usernames be restricted server-side for the domain?
 >
 > Thank you,
 > CPAY

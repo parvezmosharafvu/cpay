@@ -37,6 +37,11 @@ stays off until release gate G9. Passkeys are bound to that hostname for
 good: changing it later means every passkey user restores with the 12
 words. See SECURITY.md.
 
+Lightning addresses (`name@pay-cashapp.buzz`) are on when the build sets
+`LIGHTNING_ADDRESS_DOMAIN`. They work only after the domain is registered
+with the vendor and the website forwards the LNURL paths. See
+[LIGHTNING-ADDRESS.md](LIGHTNING-ADDRESS.md).
+
 ## Publish (owner steps; nothing here deploys on merge)
 
 Every step is a release gate in

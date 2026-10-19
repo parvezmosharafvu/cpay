@@ -536,3 +536,39 @@ test('lost passkey: the 12 words restore the same wallet with a passphrase, no R
   await expect(page.locator('#unlockForm')).toBeVisible();
   await expect(page.locator('#unlockPasskey')).toBeHidden();
 });
+
+// ---- Lightning address (LIGHTNING_ADDRESS_DOMAIN=pay-cashapp.buzz) -------
+test('lightning address: check, register, show as QR, remove', async ({ page }) => {
+  await createWallet(page);
+  await page.getByRole('button', { name: 'Receive' }).click();
+  await expect(page.locator('#lnaBox')).toBeVisible();
+  await expect(page.locator('#lnaAt')).toHaveText('@pay-cashapp.buzz');
+  // Bad names are refused before any request; a taken one is reported.
+  for (const bad of ['', 'a..b', '-ab', 'ab-', 'a/b', 'a@b']) {
+    await page.fill('#lnaName', bad);
+    await page.getByRole('button', { name: 'Check' }).click();
+    await expect(page.locator('#lnaErr'), bad).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Use this name' })).toBeDisabled();
+  }
+  await page.fill('#lnaName', 'satoshi');
+  await page.getByRole('button', { name: 'Check' }).click();
+  await expect(page.locator('#lnaErr')).toContainText('taken');
+  await expect(page.getByRole('button', { name: 'Use this name' })).toBeDisabled();
+  // Available: uppercase is lowered; saving needs the checked name, and
+  // editing the name after the check disables saving again.
+  await page.fill('#lnaName', 'Alice.Shop');
+  await page.getByRole('button', { name: 'Check' }).click();
+  await expect(page.locator('#lnaOk')).toHaveText('alice.shop@pay-cashapp.buzz is available.');
+  await page.fill('#lnaName', 'alice.shopx');
+  await expect(page.getByRole('button', { name: 'Use this name' })).toBeDisabled();
+  await page.fill('#lnaName', 'alice.shop');
+  await page.getByRole('button', { name: 'Check' }).click();
+  await page.getByRole('button', { name: 'Use this name' }).click();
+  await expect(page.locator('#lnaAddress')).toHaveText('alice.shop@pay-cashapp.buzz');
+  expect(await decodeCanvas(page, 'lnaQr')).toBe('lightning:lnurl1fakealice.shop');
+  await expect(page.locator('#lnaForm')).toBeHidden();
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Remove address' }).click();
+  await expect(page.locator('#lnaForm')).toBeVisible();
+  await expect(page.locator('#lnaHave')).toBeHidden();
+});

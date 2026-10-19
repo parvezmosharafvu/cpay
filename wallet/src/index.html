@@ -147,6 +147,25 @@
         <textarea id="rcvInvoice" rows="4" readonly></textarea>
         <div class="row"><button type="button" id="rcvCopy">Copy</button><button type="button" id="rcvShare" hidden>Share</button></div>
       </div>
+      <div id="lnaBox" hidden>
+        <h3>Lightning address</h3>
+        <p class="muted small">A short address like an email (<span id="lnaExample"></span>) that anyone can pay at any time. The vendor's server for that domain makes an invoice for this wallet when someone pays it; the money comes straight here.</p>
+        <div id="lnaHave" hidden>
+          <p class="label">Your Lightning address</p>
+          <p class="big mono" id="lnaAddress"></p>
+          <canvas class="qr" id="lnaQr" role="img" aria-label="QR code of the Lightning address" hidden></canvas>
+          <div class="row"><button type="button" id="lnaCopy">Copy</button><button type="button" id="lnaShare" hidden>Share</button><button type="button" class="danger" id="lnaRemove">Remove address</button></div>
+          <p class="muted small">Removing it stops new payments to this address. The name stays reserved for this wallet, so nobody else can take it.</p>
+        </div>
+        <form id="lnaForm" autocomplete="off" hidden>
+          <label for="lnaName">Choose a name</label>
+          <div class="row"><input id="lnaName" type="text" maxlength="32" autocapitalize="none" spellcheck="false" inputmode="email"><span class="muted" id="lnaAt"></span></div>
+          <p class="muted small">Lowercase letters, digits, dot, dash or underscore. Anyone who sees it can pay you, and it is public.</p>
+          <p class="err" id="lnaErr" role="alert" hidden></p>
+          <p class="ok" id="lnaOk" hidden></p>
+          <div class="row"><button type="button" id="lnaCheck">Check</button><button class="primary" type="submit" id="lnaSave" disabled>Use this name</button></div>
+        </form>
+      </div>
     </div>
 
     <div class="card" id="sendPanel" hidden>

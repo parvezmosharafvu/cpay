@@ -36,7 +36,7 @@ export default defineConfig({
     {
       command: 'node wallet/build.mjs && node wallet/serve.mjs 8790',
       url: 'http://127.0.0.1:8790/', reuseExistingServer: false, cwd: '../..',
-      env: { WALLET_TEST: '1', WALLET_ENGINE: 'fake', WALLET_NETWORK: 'regtest', WALLET_PASSKEYS: 'on', CPAY_SUPABASE_URL: 'http://127.0.0.1:8791', CPAY_SUPABASE_ANON_KEY: 'anon-test-key' },
+      env: { WALLET_TEST: '1', WALLET_ENGINE: 'fake', WALLET_NETWORK: 'regtest', WALLET_PASSKEYS: 'on', LIGHTNING_ADDRESS_DOMAIN: 'pay-cashapp.buzz', CPAY_SUPABASE_URL: 'http://127.0.0.1:8791', CPAY_SUPABASE_ANON_KEY: 'anon-test-key' },
     },
     {
       // Real library, regtest (no API key needed), production build rules.

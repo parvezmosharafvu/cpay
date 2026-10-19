@@ -79,6 +79,21 @@ A wallet can be created with a passkey instead of a passphrase. It is
   label, and the CSP does not allow those relays, so no passkey-linked
   record leaves the device.
 
+## Lightning address
+
+Optional (`LIGHTNING_ADDRESS_DOMAIN`), see
+[LIGHTNING-ADDRESS.md](LIGHTNING-ADDRESS.md).
+
+- **No custody.** The vendor's LNURL server for the domain makes invoices
+  for this wallet; the money settles to this wallet's keys. Neither CPAY
+  nor the server can spend it.
+- **What the server learns.** The name, this wallet's identity public key,
+  and each payment's amount and comment.
+- **Only the named domain.** The library's default domain is switched off;
+  the CSP allows exactly `https://<domain>` for registration.
+- **Names.** Plain names only (`src/lnaddress.js`); a website forwarder
+  will refuse names that pass for CPAY.
+
 ## The wallet library and the Spark network
 
 The engine is the Breez SDK (Spark), MIT licensed, pinned to **0.26.0**

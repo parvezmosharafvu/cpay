@@ -4,8 +4,12 @@ let me = null;
 let payFilter = { status: '', search: '' };
 let wdFilter = { status: '' };
 
-// Saved payout addresses are usable at once after a fresh sign-in
-// (20261020040000; before that, 24 hours later). my_payout_book returns usable_after.
+// Saved payout addresses are usable at once after a fresh sign-in when the
+// account has an authenticator, otherwise 24 hours later (20261020060000).
+// my_payout_book returns usable_after.
+const PAYOUT_WAIT = 'It is used right away if your account has an authenticator, otherwise after 24 hours. You get a notice in your inbox.';
+const RECEIVE_HINT = `Changing this asks you to sign in again. ${PAYOUT_WAIT}`;
+const USDT_HINT = `One address per network. Used for withdrawals, and for receiving if you pick USDT above. Saving or changing an address asks you to sign in again. ${PAYOUT_WAIT}`;
 function netLabel(id) {
   return (USDT_NETWORKS.find(([n]) => n === id) || [id, id])[1];
 }
@@ -442,6 +446,8 @@ async function renderProfile() {
       <button class="btn ghost" id="savePrefs" type="button">Save payout settings</button>
     </div>
   </div>`;
+  el.querySelector('#saveRecv').nextElementSibling.textContent = RECEIVE_HINT;
+  el.querySelector('#usdtNet').closest('.card').querySelector('.hint').textContent = USDT_HINT;
   const recvNetField = document.getElementById('recvNetField');
   document.querySelectorAll('input[name="recvMethod"]').forEach((r) => {
     r.onchange = () => { recvNetField.hidden = !(r.value === 'usdt' && r.checked && wallets.length); };

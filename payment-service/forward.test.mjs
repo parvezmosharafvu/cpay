@@ -192,3 +192,30 @@ test('balance mode: nothing is claimed or sent', async () => {
     await db.query(`update platform_settings set value = '"instant_forward"' where key = 'payment_mode'`);
   }
 });
+
+test('send error and the lookup fails too: left sending, never retried blind', async () => {
+  const u = await makeUser();
+  const f = await pay(u, 3, 3_000);
+  const w = fakeWallet();
+  w.mode = 'lost-reply';
+  const real = w.getPayment;
+  // Lookups for this forward fail once its send was tried.
+  w.getPayment = async (a) => {
+    if (a.paymentId === f.id && w.calls.some((c) => c[0] === 'pay' && c[1] === f.id)) throw new Error('Network error: timeout');
+    return real(a);
+  };
+  await createForwarder({ breez: w, db, ...quiet }).run({ synced: true });
+  assert.equal((await row(f.id)).status, 'sending');
+  w.getPayment = real;
+  const c = await db.connect();
+  try {
+    await c.query('begin');
+    await c.query('alter table payment_forwards disable trigger trg_payment_forwards_guard');
+    await c.query(`update payment_forwards set updated_at = now() - interval '10 minutes' where id = $1`, [f.id]);
+    await c.query('alter table payment_forwards enable trigger trg_payment_forwards_guard');
+    await c.query('commit');
+  } finally { c.release(); }
+  await createForwarder({ breez: w, db, ...quiet }).run({ synced: true });
+  assert.equal((await row(f.id)).status, 'forwarded');
+  assert.equal(w.calls.filter((c) => c[0] === 'pay' && c[1] === f.id).length, 1);
+});

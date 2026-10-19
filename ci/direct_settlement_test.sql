@@ -6,7 +6,7 @@
 -- payment is paid only with a preimage that hashes to its payment hash,
 -- paid is final, expiry waits for the invoice; direct payments never touch
 -- a CPAY balance; accounts cannot see each other's rows; a new Lightning
--- address is used at once (after the caller's fresh sign-in); the internal functions are service-only; turning
+-- address is used at once (after a fresh sign-in, with an authenticator); the internal functions are service-only; turning
 -- the switch on needs aal2. BEGIN/ROLLBACK.
 \set ON_ERROR_STOP on
 begin;
@@ -100,7 +100,11 @@ do $$ begin
   if not direct_settlement_enabled() then raise exception 'switch did not turn on'; end if;
 end $$;
 
--- 3. Destination: saved by the service role, used at once, same address is a no-op.
+-- 3. Destination: saved by the service role, used at once (the account has an
+--    authenticator; without one it waits 24 h, ci/forward_safety_test.sql),
+--    same address is a no-op.
+insert into auth.mfa_factors(id, user_id, friendly_name, factor_type, status)
+values (gen_random_uuid(), 'd5000000-0000-0000-0000-0000000000f1', 'test', 'totp', 'verified');
 do $$
 declare r record;
 begin

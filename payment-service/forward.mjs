@@ -11,15 +11,20 @@
 // USDT forwards (kind 'usdt') are grouped per user and network: queued rows
 // wait ('accumulating') until together they reach the route's minimum, then
 // one forward_batches row is sent. The batch id is the idempotency key; the
-// quote is prepared right before the send, so an expired quote is just a retry
-// with a fresh quote under a new batch.
-import { retryLeafErrors, wait, outcomeOf, failedBeforeSend, UserError } from './withdraw.mjs';
+// quote is prepared right before the send and its expiry recorded first. A
+// batch with no payment in the wallet is sent again (fresh quote, new batch)
+// only once that quote expired plus ORPHAN_GRACE_MS, after a completed sync,
+// and not while this process is still sending it: the stablecoin withdrawal
+// rule, so a slow or lost send is never paid twice.
+import { retryLeafErrors, wait, outcomeOf, failedBeforeSend, UserError, ORPHAN_GRACE_MS } from './withdraw.mjs';
 
 const STUCK_SECS = 120;
 // Short: the sync tick runs every minute; a leaf error just retries next tick.
 const LEAF_MS = 20_000;
 
 export function createForwarder({ breez, db, withdrawals = null, btcUsdRate = null, log = () => {}, now = () => Date.now(), sleep = wait, batch = 5 }) {
+  // Batches this process is sending right now.
+  const inFlight = new Set();
   async function findPayment(id) {
     try {
       return (await breez.getPayment({ paymentId: id })).payment ?? null;
@@ -98,7 +103,8 @@ export function createForwarder({ breez, db, withdrawals = null, btcUsdRate = nu
       }));
     } catch (e) {
       error = e;
-      payment = await findPayment(row.id).catch(() => null);
+      try { payment = await findPayment(row.id); }
+      catch { return 'sending'; } // the lookup failed: recover() decides next tick
     }
     if (payment) return fromPayment(row, payment);
     // Nothing was found under this key: safe to try again later with the
@@ -157,6 +163,10 @@ export function createForwarder({ breez, db, withdrawals = null, btcUsdRate = nu
       return finishBatch(b.id, 'retry', { error: e?.message ?? e });
     }
     const feeUsd = Math.max(0, Number(b.amount_usd ?? 0) - Number(prep.receive ?? 0));
+    // Recorded before the send: recoverUsdt never re-sends while it could land.
+    await db.query('select public.system_usdt_batch_quoted($1, $2)',
+      [b.id, new Date(prep.expiresAtMs || now() + 10 * 60_000)]);
+    inFlight.add(b.id);
     let payment = null, error = null;
     try {
       ({ payment } = await retryLeafErrors({
@@ -168,15 +178,22 @@ export function createForwarder({ breez, db, withdrawals = null, btcUsdRate = nu
     } catch (e) {
       error = e;
       payment = await findPayment(b.id).catch(() => null);
+    } finally {
+      inFlight.delete(b.id);
     }
     if (payment) {
       return fromBatchPayment(b, payment, Number(feeUsd.toFixed(2)));
     }
     // Refused before anything left (an expired quote, a provider error):
-    // retry with a fresh quote. Otherwise recoverUsdt decides after a sync.
+    // retry with a fresh quote. Otherwise recoverUsdt decides after a sync
+    // and once the quote expired.
     if (error && failedBeforeSend(error)) return finishBatch(b.id, 'retry', { error: `send failed: ${error?.message ?? error}` });
-    if (!error) return finishBatch(b.id, 'retry', { error: 'no payment returned' });
     return 'sending';
+  }
+
+  function quoteDead(b) {
+    if (!b.quote_expires_at) return true; // never quoted: nothing was sent
+    return now() > new Date(b.quote_expires_at).getTime() + ORPHAN_GRACE_MS;
   }
 
   async function recoverUsdt(synced) {
@@ -184,7 +201,7 @@ export function createForwarder({ breez, db, withdrawals = null, btcUsdRate = nu
     for (const b of rows) {
       const p = await findPayment(b.id);
       if (p) await fromBatchPayment(b, p);
-      else if (synced) await finishBatch(b.id, 'retry', { error: 'no send found after restart' });
+      else if (synced && !inFlight.has(b.id) && quoteDead(b)) await finishBatch(b.id, 'retry', { error: 'no send found after the quote expired' });
     }
     return rows.length;
   }

@@ -47,16 +47,31 @@ do $$ begin
   raise exception 'recovery-link session saved an address';
 exception when raise_exception then if sqlerrm not like 'reauth_required:%' then raise; end if; end $$;
 
--- 2. Fresh sign-in: usable at once; a client-supplied usable_after is ignored.
+-- 2. Fresh sign-in, no authenticator: usable in 24 hours (20261020060000);
+--    a client-supplied usable_after is ignored.
 select pg_temp.claims(30);
 insert into usdt_wallets(user_id, network, address, usable_after)
 values ('7c000000-0000-0000-0000-0000000000f1', 'tron', 'TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL', now() + interval '30 days');
 do $$ begin
-  if (select usable_after from usdt_wallets where network = 'tron') > now() then raise exception 'client-supplied usable_after accepted'; end if;
+  if (select usable_after from usdt_wallets where network = 'tron') not between now() + interval '23 hours' and now() + interval '25 hours' then
+    raise exception 'client-supplied usable_after accepted, or no 24 h wait without an authenticator'; end if;
 end $$;
 select set_my_usdt_wallet('ethereum', '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063');
 do $$ begin
-  if (select count(*) from my_usdt_wallet_status() where ready) <> 2 then raise exception 'saved addresses not ready at once'; end if;
+  if (select count(*) from my_usdt_wallet_status() where ready) <> 0 then raise exception 'addresses ready at once without an authenticator'; end if;
+end $$;
+-- Pass the wait (test only: rewrite the rows with the trigger off).
+reset role;
+do $$ begin
+  if (select count(*) from support_messages where user_id = '7c000000-0000-0000-0000-0000000000f1' and message like '%24 hours, because this account has no authenticator%') <> 2 then
+    raise exception 'notice does not say when the address is used'; end if;
+end $$;
+alter table usdt_wallets disable trigger usdt_wallets_cooldown;
+update usdt_wallets set usable_after = now() - interval '1 minute' where user_id = '7c000000-0000-0000-0000-0000000000f1';
+alter table usdt_wallets enable trigger usdt_wallets_cooldown;
+set local role authenticated;
+do $$ begin
+  if (select count(*) from my_usdt_wallet_status() where ready) <> 2 then raise exception 'addresses not ready after the wait'; end if;
 end $$;
 do $$ begin
   perform withdraw_destination_status('7c000000-0000-0000-0000-0000000000f1', 'x');
@@ -109,7 +124,8 @@ do $$ begin
   if has_function_privilege('anon', 'public.my_usdt_wallet_status()', 'execute') then raise exception 'anon can read wallet status'; end if;
   if has_function_privilege('anon', 'public.withdraw_destination_status(uuid, text)', 'execute') then raise exception 'anon can run the destination check'; end if;
   if has_function_privilege('authenticated', 'public.payout_step_up_ok(integer)', 'execute') then raise exception 'step-up check exposed'; end if;
-  if has_function_privilege('authenticated', 'public.notify_payout_address_changed(uuid, text)', 'execute') then raise exception 'notify exposed'; end if;
+  if has_function_privilege('authenticated', 'public.notify_payout_address_changed(uuid, text, timestamptz)', 'execute') then raise exception 'notify exposed'; end if;
+  if has_function_privilege('authenticated', 'public.payout_ready_at(uuid)', 'execute') then raise exception 'payout_ready_at exposed'; end if;
 end $$;
 \echo 'payout address changes: PASS'
 rollback;

@@ -384,6 +384,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/direct_settlement_test.sql
+      - name: Platform settings, aal2 admins only, audited, defaults unchanged (20261020010000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/platform_settings_test.sql
       - name: Money is exact (no float columns or float casts in public)
         env:
           PGPASSWORD: postgres

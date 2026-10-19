@@ -266,8 +266,8 @@ async function renderFees() {
   const hideAmt = Number(byKey.hide_small_payments_threshold ?? 10);
   const hideOnNow = byKey.hide_small_payments_enabled === true || byKey.hide_small_payments_enabled === 'true';
   document.getElementById('fees').innerHTML = `<div class="card narrow">
-    <h3>Withdrawal fee</h3>
-    <p class="muted">The platform fee on a withdrawal. Each account uses its own fee if one is set, else this default. 0 means no platform fee; users then see only the network fee.</p>
+    <h3>Withdrawal fee (Balance mode only)</h3>
+    <p class="muted">The platform fee on a USDT withdrawal from a CPAY balance. Not used for instant forwarding, which takes only the payment platform fee; the network fee is always automatic. Each account uses its own fee if one is set, else this default. 0 means no platform fee; users then see only the network fee.</p>
     <div class="field short"><label for="defWfee">Default withdrawal fee %</label><input id="defWfee" type="number" min="0" max="100" step="0.1" value="${globalWfee}"></div>
     <button class="btn primary" id="saveDefWfee">Save withdrawal fee</button>
   </div>

@@ -200,11 +200,13 @@ function withdrawForm(whoHtml){
       <dl>
         <div><dt>Network</dt><dd id="sumMethod">-</dd></div>
         <div><dt>Amount</dt><dd id="sumAmount">$0.00</dd></div>
-        <div id="sumFeeRow" hidden><dt id="sumFeeLabel">Platform fee</dt><dd id="sumFee">$0.00</dd></div>
-        <div id="sumNetRow" hidden><dt>Network fee</dt><dd id="sumNet">-</dd></div>
         <div id="sumToRow" hidden><dt>To</dt><dd id="sumTo">-</dd></div>
         <div class="total"><dt>You receive</dt><dd id="sumGet">$0.00</dd></div>
       </dl>
+      <details class="fee-details"><summary>Fee details</summary><dl>
+        <div id="sumFeeRow" hidden><dt id="sumFeeLabel">Platform fee</dt><dd id="sumFee">$0.00</dd></div>
+        <div id="sumNetRow" hidden><dt>Network fee</dt><dd id="sumNet">-</dd></div>
+      </dl><p class="faint">"You receive" already has both fees taken off.</p></details>
       <p class="faint" id="sumNote"></p>
       <button class="btn primary block lg" id="wBtn" type="button">Confirm withdrawal</button>
     </aside>

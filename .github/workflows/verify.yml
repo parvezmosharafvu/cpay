@@ -396,6 +396,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/instant_forward_test.sql
+      - name: Instant forward to USDT (20261020050000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/usdt_forward_test.sql
       - name: Money is exact (no float columns or float casts in public)
         env:
           PGPASSWORD: postgres

@@ -89,6 +89,8 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('daily_link_breakdown(integer, uuid)',                                     'self_or_admin', 'own links, or anyone''s for an active admin'),
   ('set_link_cost_percent(uuid, numeric)',                                    'self_or_admin', 'own link, or any link for an active admin'),
   ('set_link_settlement_mode(uuid, text)',                                   'self',          'own link only, admins included: where its payments go (20261018010000)'),
+  ('set_my_receive_method(text, text)',                                      'self',          'own receive choice (Lightning or a saved USDT address); fresh sign-in, audited, inbox notice (20261020050000)'),
+  ('my_receive_settings()',                                                   'self',          'own receive choice and addresses (20261020050000)'),
   ('set_payment_link_experience(uuid, text, text, text)',                     'self_or_admin', 'own link, or any link for an active admin'),
   ('set_payment_link_theme(uuid, text)',                                      'self_or_admin', 'own link, or any link for an active admin'),
   ('create_link_variants(text, text[])',                                      'self',          'creates links for auth.uid() only'),

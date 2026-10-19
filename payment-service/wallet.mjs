@@ -88,6 +88,21 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     return s;
   }
 
+  // Owner limits from Admin → Settings (admin_send_daily_cap_usd,
+  // admin_send_allowed_destinations), enforced by the database function
+  // system_admin_send_check(). Checked at prepare and again right before the
+  // send. Both are off by default.
+  async function limits(destination, usdCents) {
+    try {
+      await db.query('select public.system_admin_send_check($1, $2)', [String(destination ?? ''), usdCents]);
+    } catch (e) {
+      const m = String(e?.message ?? e);
+      if (/allow-list|daily cap|unknown amount/.test(m)) throw new UserError(422, m);
+      throw e;
+    }
+  }
+  const usdCentsOf = (v) => (v.kind === 'stablecoin' ? decimalToCents(v.amountUsd) : decimalToCents(v.totalUsd));
+
   async function info() {
     const { balanceSats } = await breez.getInfo({ ensureSynced: false });
     let rate = null, rateError = null;
@@ -218,6 +233,7 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
       throw new UserError(422, `Could not prepare this send: ${e?.message ?? e}`);
     }
     const s = await guard(sat + feeSat);
+    await limits(input, satsToUsdCents(sat + feeSat, s.rate));
     const expiresAtMs = now() + PREPARE_TTL_MS;
     const view = {
       kind, destination: input, amountSat: sat, feeSat, totalSat: sat + feeSat,
@@ -244,6 +260,7 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     const rate = await btcUsdRate();
     const amountSat = usdCentsToSats(amountCents, rate, 'floor');
     await guard(amountSat);
+    await limits(dest, amountCents);
     const q = await withdrawals.prepareCrossChain({
       route, address: dest, amountSat,
       lowBalanceMessage: 'The platform wallet does not hold enough sats for this send',
@@ -290,7 +307,9 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
   async function run(p) {
     const v = p.view;
     await guard(v.totalSat);
-    const record = { kind: v.kind, destination: v.destination, amountSat: v.amountSat, feeSat: v.feeSat, asset: v.asset ?? null, chain: v.route?.chain ?? null, amountUsd: v.amountUsd ?? null };
+    const usdCents = usdCentsOf(v);
+    await limits(v.destination, usdCents);
+    const record = { kind: v.kind, destination: v.destination, amountSat: v.amountSat, feeSat: v.feeSat, asset: v.asset ?? null, chain: v.route?.chain ?? null, amountUsd: v.amountUsd ?? null, usdCents };
     // Written before the send, so a send the process dies in the middle of
     // still has a trace.
     await audit(p.adminId, 'platform_wallet.send', p.prepareId, { status: 'sending', ...record });

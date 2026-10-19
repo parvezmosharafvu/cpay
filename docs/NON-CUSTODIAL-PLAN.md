@@ -32,7 +32,7 @@ CPAY's own revenue.
 | # | Place | Code | Custodial power | Target |
 |---|---|---|---|---|
 | C1 | Platform Lightning wallet (one pooled wallet, recovery phrase is an Edge secret) | the wallet Edge Function and its schema | Receives every custodial payment; can send anything | CPAY revenue only (§4) |
-| C2 | Custodial receive | `create-invoice` → wallet function; `settle_breez_payment` | Payer pays CPAY's invoice | Off by flag, then removed |
+| C2 | Custodial receive | `create-invoice` → wallet function; the settlement SQL function | Payer pays CPAY's invoice | Off by flag, then removed |
 | C3 | Member / org balances | `get_balance_for()`, `payments`, `withdrawals`; desk "held by CPAY" | A claim on CPAY | Read-only history, then retired |
 | C4 | Platform fee deducted at settlement | `stamp_payment_platform_fee`, `payments.platform_fee_*`, `profiles.platform_fee_percent` | Only possible because CPAY holds the money | Replaced by billing (§2) |
 | C5 | Link cost / markup (`cost_percent`) | links, payer page | Merchant's own markup; custodial today only because the payment is | Unchanged: goes to merchant's wallet on direct links |

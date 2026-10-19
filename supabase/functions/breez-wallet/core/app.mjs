@@ -119,7 +119,7 @@ export function createApp({
   }
 
   const withdrawals = createWithdrawals({ breez: sdk, db, btcUsdRate, log, track, ...(confirmWaitMs ? { confirmWaitMs } : {}) });
-  const forwards = createForwarder({ breez: sdk, db, log });
+  const forwards = createForwarder({ breez: sdk, db, withdrawals, btcUsdRate, log });
   const wallet = createWallet({ breez: sdk, db, btcUsdRate, withdrawals, log, track });
   const adminWalletRoute = createAdminWalletRoute({ wallet, withdrawals });
   const requestAuth = createRequestAuth({ secret, mode: requestAuthMode, now });

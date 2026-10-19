@@ -7,13 +7,19 @@
 //     for that key first, so a crash or retry never pays twice;
 //   - the network fee is paid out of the forward (the user's share), capped by
 //     instant_forward_max_fee_pct; sent + fee never exceeds forward_sat.
-import { retryLeafErrors, wait } from './withdraw.mjs';
+//
+// USDT forwards (kind 'usdt') are grouped per user and network: queued rows
+// wait ('accumulating') until together they reach the route's minimum, then
+// one forward_batches row is sent. The batch id is the idempotency key; the
+// quote is prepared right before the send, so an expired quote is just a retry
+// with a fresh quote under a new batch.
+import { retryLeafErrors, wait, outcomeOf, failedBeforeSend, UserError } from './withdraw.mjs';
 
 const STUCK_SECS = 120;
 // Short: the sync tick runs every minute; a leaf error just retries next tick.
 const LEAF_MS = 20_000;
 
-export function createForwarder({ breez, db, log = () => {}, now = () => Date.now(), sleep = wait, batch = 5 }) {
+export function createForwarder({ breez, db, withdrawals = null, btcUsdRate = null, log = () => {}, now = () => Date.now(), sleep = wait, batch = 5 }) {
   async function findPayment(id) {
     try {
       return (await breez.getPayment({ paymentId: id })).payment ?? null;
@@ -112,9 +118,108 @@ export function createForwarder({ breez, db, log = () => {}, now = () => Date.no
     return rows.length;
   }
 
+  // ---- USDT ----------------------------------------------------------------
+  async function finishBatch(id, outcome, { ref = null, receive = null, feeUsd = null, error = null } = {}) {
+    const { rows } = await db.query('select public.system_usdt_batch_finish($1, $2, $3, $4, $5, $6) as r',
+      [id, outcome, ref, receive, feeUsd, error ? String(error).slice(0, 500) : null]);
+    log({ event: 'forward-usdt', batchId: id, outcome: rows[0].r, ...(error ? { error: String(error).slice(0, 200) } : {}) });
+    return rows[0].r;
+  }
+
+  async function fromBatchPayment(b, p, feeUsd = null) {
+    const o = outcomeOf(p);
+    if (o.status === 'paid') return finishBatch(b.id, 'forwarded', { ref: String(p.id), receive: o.delivered != null ? String(o.delivered) : null, feeUsd });
+    if (o.status === 'failed') return finishBatch(b.id, 'retry', { error: o.note ?? 'send failed' });
+    if (o.status === 'stuck') log({ event: 'forward-usdt-stuck', batchId: b.id, paymentId: p.id });
+    return 'sending';
+  }
+
+  const routeFor = (routes, network) => routes.find((r) => String(r.chain).toLowerCase() === network && String(r.asset).toUpperCase() === 'USDT');
+
+  async function usdOf(group) {
+    if (btcUsdRate) {
+      try { return Number(group.total_sat) / 1e8 * Number(await btcUsdRate()); } catch { /* fall back */ }
+    }
+    return Number(group.total_usd ?? 0);
+  }
+
+  async function sendBatch(b, route) {
+    let prep;
+    try {
+      const address = await withdrawals.validateAddress(String(b.address), route.family);
+      prep = await withdrawals.prepareCrossChain({
+        route, address, amountSat: Number(b.amount_sat),
+        lowBalanceMessage: 'wallet balance too low', failMessage: 'could not prepare the USDT send',
+      });
+    } catch (e) {
+      // A bad address will not fix itself: hold for the owner. Anything else retries.
+      if (e instanceof UserError && /not a valid/i.test(e.message)) return finishBatch(b.id, 'held', { error: 'invalid_address' });
+      return finishBatch(b.id, 'retry', { error: e?.message ?? e });
+    }
+    const feeUsd = Math.max(0, Number(b.amount_usd ?? 0) - Number(prep.receive ?? 0));
+    let payment = null, error = null;
+    try {
+      ({ payment } = await retryLeafErrors({
+        breez, key: b.id, now, sleep, log,
+        deadlineMs: Math.min(now() + LEAF_MS, (prep.expiresAtMs || now() + LEAF_MS) - 5_000),
+        attempt: () => breez.sendPayment({ prepareResponse: prep.prepared, idempotencyKey: b.id }),
+        existing: () => findPayment(b.id),
+      }));
+    } catch (e) {
+      error = e;
+      payment = await findPayment(b.id).catch(() => null);
+    }
+    if (payment) {
+      return fromBatchPayment(b, payment, Number(feeUsd.toFixed(2)));
+    }
+    // Refused before anything left (an expired quote, a provider error):
+    // retry with a fresh quote. Otherwise recoverUsdt decides after a sync.
+    if (error && failedBeforeSend(error)) return finishBatch(b.id, 'retry', { error: `send failed: ${error?.message ?? error}` });
+    if (!error) return finishBatch(b.id, 'retry', { error: 'no payment returned' });
+    return 'sending';
+  }
+
+  async function recoverUsdt(synced) {
+    const { rows } = await db.query('select * from public.system_usdt_batches_open($1)', [STUCK_SECS]);
+    for (const b of rows) {
+      const p = await findPayment(b.id);
+      if (p) await fromBatchPayment(b, p);
+      else if (synced) await finishBatch(b.id, 'retry', { error: 'no send found after restart' });
+    }
+    return rows.length;
+  }
+
+  async function runUsdt(synced, out) {
+    if (!withdrawals) return;
+    out.usdtRecovered = await recoverUsdt(synced);
+    const { rows: groups } = await db.query('select * from public.system_usdt_due()');
+    if (!groups.length) return;
+    let routes;
+    try { routes = await withdrawals.listRoutes(); } catch (e) { log({ event: 'forward-usdt', error: `routes: ${e?.message ?? e}` }); return; }
+    for (const g of groups) {
+      const route = routeFor(routes, g.network);
+      if (!route) { log({ event: 'forward-usdt', network: g.network, error: 'no USDT route for this network right now' }); continue; }
+      // 2% headroom over the minimum so price movement does not bounce the send.
+      const minUsd = route.minUsdCents != null ? (route.minUsdCents / 100) * 1.02 : 0;
+      if ((await usdOf(g)) < minUsd) {
+        await db.query('select public.system_usdt_mark_accumulating($1, $2)', [g.user_id, g.network]);
+        out.accumulating = (out.accumulating ?? 0) + 1;
+        continue;
+      }
+      const { rows: [b] } = await db.query('select * from public.system_usdt_batch_create($1, $2, $3)', [g.user_id, g.network, route.id]);
+      if (!b?.id) continue;
+      let r;
+      try { r = await sendBatch(b, route); }
+      catch (e) { log({ event: 'forward-usdt-error', batchId: b.id, error: String(e?.message ?? e).slice(0, 300) }); r = 'sending'; }
+      out[`usdt_${r}`] = (out[`usdt_${r}`] ?? 0) + 1;
+    }
+  }
+
   async function run({ synced = false } = {}) {
     const out = { recovered: 0 };
     out.recovered = await recover(synced);
+    try { await runUsdt(synced, out); }
+    catch (e) { log({ event: 'forward-usdt-error', error: String(e?.message ?? e).slice(0, 300) }); }
     const { rows } = await db.query('select * from public.system_forward_claim($1)', [batch]);
     if (!rows.length) return out;
     const cfg = await settings();
@@ -131,5 +236,5 @@ export function createForwarder({ breez, db, log = () => {}, now = () => Date.no
     return out;
   }
 
-  return { run, forwardOne, recover };
+  return { run, forwardOne, recover, sendBatch, recoverUsdt };
 }

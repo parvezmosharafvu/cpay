@@ -13,6 +13,8 @@
   // removed from the address bar; kept in this tab for 10 minutes so it
   // survives a trip through the login page.
   const PREFILL_SLOT = 'cpay-direct-prefill';
+  // 20261020060000: without an authenticator a new address waits 24 hours.
+  const DIRECT_HINT = 'Use the Lightning address of a wallet you control. CPAY checks that the wallet provider can confirm payments before you can save it. Payers see this address on the payment page. Saving or changing it asks you to sign in again. With an authenticator on your account it is used right away; without one it is used 24 hours later, and until then payments go to the address you had before. You get a notice in your inbox each time it changes.';
   const ADDRESS = /^[a-z0-9._+-]{1,64}@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
   let prefill = null;
   {
@@ -79,7 +81,7 @@
       <div id="directStatus">${statusLines(s)}</div>
       <div class="field"><label for="directAddr">Lightning address</label>
         <input id="directAddr" placeholder="name@your-wallet-provider.com" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="email" aria-describedby="directHint"></div>
-      <p class="hint" id="directHint">Use the Lightning address of a wallet you control. CPAY checks that the wallet provider can confirm payments before you can save it. Payers see this address on the payment page. Saving or changing it asks you to sign in again. With an authenticator on your account it is used right away; without one it is used 24 hours later, and until then payments go to the address you had before. You get a notice in your inbox each time it changes.</p>
+      <p class="hint" id="directHint">Use the Lightning address of a wallet you control. CPAY checks that the wallet provider can confirm payments before you can save it. Payers see this address on the payment page. Saving or changing it asks you to sign in again, and it is used right away. You get a notice in your inbox each time it changes.</p>
       <p class="hint">${forwardOnly(s)
         ? 'Fees: CPAY keeps its platform fee from each payment. The small Lightning network fee for sending it on comes out of your amount. Your wallet provider may charge its own fees.'
         : 'Fees: CPAY takes no fee from direct payments. A link cost you set is added for the payer and goes to your wallet with the rest. Your wallet provider may charge its own fees.'}</p>
@@ -90,6 +92,7 @@
         ${s.current || s.pending ? '<button class="btn quiet" id="directRemove" type="button">Remove address</button>' : ''}
       </div>
     </div>`;
+    el.querySelector('#directHint').textContent = DIRECT_HINT;
     const addr = el.querySelector('#directAddr');
     const result = el.querySelector('#directResult');
     const save = el.querySelector('#directSave');

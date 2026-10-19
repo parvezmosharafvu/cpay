@@ -39,6 +39,39 @@
     render();
   }
 
+  // Built with DOM nodes and textContent: nothing from the database is parsed as HTML.
+  function node(tag, attrs, ...kids) {
+    const n = document.createElement(tag);
+    Object.entries(attrs || {}).forEach(([k, v]) => { if (k === 'text') n.textContent = v; else n.setAttribute(k, v); });
+    kids.forEach((k) => n.append(k));
+    return n;
+  }
+
+  function stuckBatches(list) {
+    if (!list.length) return null;
+    const body = node('tbody');
+    for (const b of list) {
+      const arrived = node('button', { class: 'btn ghost sm', type: 'button', text: 'It arrived' });
+      arrived.onclick = () => batchAct(b.id, 'delivered');
+      const hold = node('button', { class: 'btn ghost sm', type: 'button', text: 'Hold for review' });
+      hold.onclick = () => batchAct(b.id, 'hold');
+      body.append(node('tr', null,
+        node('td', { text: new Date(b.created_at).toLocaleString() }),
+        node('td', { text: b.user_email || '' }),
+        node('td', { text: b.network }),
+        node('td', { class: 'mono', text: b.address }),
+        node('td', { class: 'num', text: `$${Number(b.amount_usd).toFixed(2)}` }),
+        node('td', { class: 'faint', text: b.last_error || '' }),
+        node('td', { class: 'num', style: 'white-space:nowrap' }, arrived, ' ', hold)));
+    }
+    const head = node('tr');
+    ['Started', 'User', 'Network', 'Address', 'Amount', 'Last error', ''].forEach((h) => head.append(node('th', { text: h })));
+    return node('div', null,
+      node('h3', { text: 'USDT sends with no result for over an hour' }),
+      node('p', { class: 'muted', text: 'Check the provider and the chain first. The wallet may still settle these by itself.' }),
+      node('div', { class: 'card flush' }, node('table', { class: 'table' }, node('thead', null, head), body)));
+  }
+
   async function render() {
     const el = document.getElementById('instantForwards');
     if (!el || !client) return;
@@ -55,11 +88,6 @@
       <td>${esc(STATUS[f.status] || f.status)}${f.reason ? `<div class="faint">${esc(REASON[f.reason] || f.reason)}</div>` : ''}${f.last_error ? `<div class="faint">${esc(f.last_error)}</div>` : ''}</td>
       <td class="num">${esc(f.attempts)}</td>
       <td class="num" style="white-space:nowrap">${f.status === 'owed' ? `<button class="btn ghost sm" data-fw-retry="${esc(f.id)}">Try again</button> <button class="btn ghost sm" data-fw-release="${esc(f.id)}">Move to balance</button>` : ''}${f.status === 'queued' || f.status === 'retry' ? `<button class="btn ghost sm" data-fw-hold="${esc(f.id)}">Hold</button>` : ''}</td></tr>`).join('');
-    const stuck = (data.stuck_batches || []).map((b) => `<tr>
-      <td>${esc(new Date(b.created_at).toLocaleString())}</td><td>${esc(b.user_email || '')}</td><td>${esc(b.network)}</td>
-      <td class="mono">${esc(b.address)}</td><td class="num">$${esc(Number(b.amount_usd).toFixed(2))}</td>
-      <td>${b.last_error ? `<span class="faint">${esc(b.last_error)}</span>` : ''}</td>
-      <td class="num" style="white-space:nowrap"><button class="btn ghost sm" data-fb-delivered="${esc(b.id)}">It arrived</button> <button class="btn ghost sm" data-fb-hold="${esc(b.id)}">Hold for review</button></td></tr>`).join('');
     el.innerHTML = `<h2>Instant forwards</h2>
       <p class="muted">Payment mode: <strong>${esc(MODE[data.mode] || data.mode)}</strong>. Each payment’s fee stays with CPAY; the rest is sent to the user’s Lightning address.</p>
       <div class="row" style="gap:16px;flex-wrap:wrap">
@@ -68,18 +96,14 @@
         <span>Totals check: <strong class="${t.ok ? 'ok' : 'err'}">${t.ok ? 'OK' : 'Mismatch'}</strong></span>
       </div>
       <p class="faint">Received ${esc(sats(t.received_sat))} = fees ${esc(sats(t.fee_sat))} + sent ${esc(sats(t.sent_sat))} + network fees ${esc(sats(t.network_fee_sat))} + left over ${esc(sats(t.remainder_sat))} + held ${esc(sats(t.owed_sat))} + waiting ${esc(sats(t.in_flight_sat))} + moved ${esc(sats(t.released_sat))}</p>
-      ${stuck ? `<h3>USDT sends with no result for over an hour</h3>
-      <p class="muted">Check the provider and the chain first. The wallet may still settle these by itself.</p>
-      <div class="card flush"><table class="table"><thead><tr><th>Started</th><th>User</th><th>Network</th><th>Address</th><th>Amount</th><th>Last error</th><th></th></tr></thead>
-      <tbody>${stuck}</tbody></table></div>` : ''}
       <div class="field short"><label for="fwFilter">Show</label><select id="fwFilter">
         ${[['', 'All'], ['owed', 'Held'], ['retry', 'Will retry'], ['queued', 'Waiting'], ['sending', 'Sending'], ['forwarded', 'Sent'], ['released', 'Moved to balance']].map(([v, l]) => `<option value="${v}" ${v === filter ? 'selected' : ''}>${l}</option>`).join('')}
       </select></div>
       <div class="card flush"><table class="table"><thead><tr><th>When</th><th>User</th><th>Address</th><th>Paid</th><th>Fee</th><th>Sent</th><th>Status</th><th>Tries</th><th></th></tr></thead>
       <tbody>${rows || '<tr><td colspan="9" class="empty">No forwards yet</td></tr>'}</tbody></table></div>`;
     document.getElementById('fwFilter').onchange = (e) => { filter = e.target.value; render(); };
-    el.querySelectorAll('[data-fb-delivered]').forEach((b) => { b.onclick = () => batchAct(b.dataset.fbDelivered, 'delivered'); });
-    el.querySelectorAll('[data-fb-hold]').forEach((b) => { b.onclick = () => batchAct(b.dataset.fbHold, 'hold'); });
+    const stuck = stuckBatches(data.stuck_batches || []);
+    if (stuck) el.insertBefore(stuck, el.querySelector('.field.short'));
     el.querySelectorAll('[data-fw-hold]').forEach((b) => { b.onclick = () => act(b.dataset.fwHold, 'hold'); });
     el.querySelectorAll('[data-fw-retry]').forEach((b) => { b.onclick = () => act(b.dataset.fwRetry, 'retry'); });
     el.querySelectorAll('[data-fw-release]').forEach((b) => { b.onclick = () => act(b.dataset.fwRelease, 'release'); });

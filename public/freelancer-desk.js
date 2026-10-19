@@ -7,6 +7,9 @@ let wdFilter = { status: '' };
 // Saved payout addresses are usable at once after a fresh sign-in when the
 // account has an authenticator, otherwise 24 hours later (20261020060000).
 // my_payout_book returns usable_after.
+const PAYOUT_WAIT = 'It is used right away if your account has an authenticator, otherwise after 24 hours. You get a notice in your inbox.';
+const RECEIVE_HINT = `Changing this asks you to sign in again. ${PAYOUT_WAIT}`;
+const USDT_HINT = `One address per network. Used for withdrawals, and for receiving if you pick USDT above. Saving or changing an address asks you to sign in again. ${PAYOUT_WAIT}`;
 function netLabel(id) {
   return (USDT_NETWORKS.find(([n]) => n === id) || [id, id])[1];
 }
@@ -414,7 +417,7 @@ async function renderProfile() {
     </fieldset>
     <div class="field" id="recvNetField" ${method === 'usdt' && wallets.length ? '' : 'hidden'}><label for="recvNet">USDT address to use</label><select id="recvNet">${usdtChoiceOpts}</select></div>
     <button class="btn primary" id="saveRecv" type="button">Save choice</button>
-    <p class="hint">Changing this asks you to sign in again. It is used right away if your account has an authenticator, otherwise after 24 hours. You get a notice in your inbox.</p>
+    <p class="hint">Changing this asks you to sign in again. It is used right away, and you get a notice in your inbox.</p>
   </div>
   <div id="directCard" hidden></div>
   <div class="grid split">
@@ -428,7 +431,7 @@ async function renderProfile() {
     </div>
     <div class="card">
       <h3>USDT addresses</h3>
-      <p class="hint">One address per network. Used for withdrawals, and for receiving if you pick USDT above. Saving or changing an address asks you to sign in again; it works right away if your account has an authenticator, otherwise after 24 hours. You get a notice in your inbox.</p>
+      <p class="hint">One address per network. Used for withdrawals, and for receiving if you pick USDT above. Saving or changing an address asks you to sign in again; it works right away and you get a notice in your inbox.</p>
       <div class="field"><label for="usdtNet">Network</label><select id="usdtNet">${netOpts}</select></div>
       <div class="field"><label for="usdtAddr">Wallet address</label><input id="usdtAddr" placeholder="Address for that network" autocomplete="off" spellcheck="false"></div>
       <button class="btn primary" id="saveUsdt" type="button">Save address</button>
@@ -443,6 +446,8 @@ async function renderProfile() {
       <button class="btn ghost" id="savePrefs" type="button">Save payout settings</button>
     </div>
   </div>`;
+  el.querySelector('#saveRecv').nextElementSibling.textContent = RECEIVE_HINT;
+  el.querySelector('#usdtNet').closest('.card').querySelector('.hint').textContent = USDT_HINT;
   const recvNetField = document.getElementById('recvNetField');
   document.querySelectorAll('input[name="recvMethod"]').forEach((r) => {
     r.onchange = () => { recvNetField.hidden = !(r.value === 'usdt' && r.checked && wallets.length); };

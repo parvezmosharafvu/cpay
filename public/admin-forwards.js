@@ -11,6 +11,7 @@
   const MODE = { balance: 'Balance', instant_forward: 'Instant forward', direct: 'Direct (no fee)' };
   const sats = (n) => (n == null ? '—' : Number(n).toLocaleString('en-US') + ' sats');
   let filter = '';
+  let seq = 0;
 
   async function act(id, action) {
     const msg = action === 'retry'
@@ -25,7 +26,9 @@
   async function render() {
     const el = document.getElementById('instantForwards');
     if (!el || !client) return;
+    const mine = ++seq;
     const { data, error } = await client.rpc('admin_list_forwards', { p_status: filter || null, p_limit: 200 });
+    if (mine !== seq) return;  // a newer render is under way
     if (error) { el.innerHTML = `<h2>Instant forwards</h2><p class="err" role="alert">${esc(error.message)}</p>`; return; }
     const c = data.counts || {};
     const t = data.totals || {};

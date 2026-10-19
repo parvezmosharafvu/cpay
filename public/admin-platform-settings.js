@@ -133,16 +133,20 @@
     });
   }
 
+  let seq = 0;
   async function render() {
     const el = host();
     if (!el || !client) return;
+    const mine = ++seq;
     const { data, error } = await client.rpc('admin_platform_settings');
+    const fee = error ? '' : await feeHtml();
+    if (mine !== seq) return;  // a newer render is under way
     if (error) { el.innerHTML = `<p class="err" role="alert">${esc(error.message)}</p>`; return; }
     const byKey = Object.fromEntries((data || []).map((r) => [r.key, r]));
     el.innerHTML = `<h2>Settings</h2>
       <p class="muted">Changes need two-step sign-in and are recorded below. Settings marked ⚠ ask for confirmation.</p>
       ${modeHtml(byKey.payment_mode)}
-      ${await feeHtml()}
+      ${fee}
       ${groupsHtml(MAIN, byKey)}
       <div id="platformSettingsAudit"></div>`;
     wire(el, byKey);
@@ -156,8 +160,10 @@
     };
     document.getElementById('psFeeSave').onclick = async () => {
       const st = document.getElementById('psFeeStatus');
-      const n = Number(document.getElementById('psFee').value);
-      if (!Number.isFinite(n) || n < 0 || n > 90) { st.textContent = 'Enter a number from 0 to 90'; st.className = 'err'; return; }
+      const raw = String(document.getElementById('psFee').value ?? '').trim();
+      const n = Number(raw);
+      if (!/^\d+(\.\d{1,3})?$/.test(raw) || n > 90) { st.textContent = 'Enter a number from 0 to 90'; st.className = 'err'; return; }
+      if (!window.confirm(`Set the platform fee to ${n}% for every account without its own fee? This is recorded in the audit log.`)) return;
       st.textContent = 'Saving…';
       const { error: e } = await client.rpc('admin_set_default_platform_fee', { p_percent: n });
       st.textContent = e ? e.message : 'Saved'; st.className = e ? 'err' : 'ok';

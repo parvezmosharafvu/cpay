@@ -7,7 +7,7 @@
 //                        LUD-21 confirmation; nothing is saved
 //   save    { address }  needs a fresh sign-in (step-up, like a payout); the
 //                        address is checked again here, then saved and used
-//                        24 hours later (the wait is in SQL)
+//                        at once (20261020040000; the user gets an inbox notice)
 //   remove               needs a fresh sign-in; direct links stop taking
 //                        payments at once (they are never switched to the
 //                        CPAY balance)

@@ -37,7 +37,7 @@ begin
   execute 'reset role';
   if jsonb_array_length(b->'wallets') <> 1 then raise exception 'saw another user''s wallet: %', b; end if;
   if (b->'wallets'->0->>'usable_after') is null then raise exception 'usable_after missing: %', b; end if;
-  if (b->'wallets'->0->>'usable_after')::timestamptz < now() + interval '23 hours' then raise exception 'usable_after not ~24h ahead: %', b; end if;
+  if (b->'wallets'->0->>'usable_after')::timestamptz > now() + interval '1 minute' then raise exception 'usable_after not now (20261020040000): %', b; end if;
   raise notice 'ok: my_payout_book returns only own wallets with usable_after';
 end $$;
 rollback;

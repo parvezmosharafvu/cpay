@@ -47,7 +47,7 @@ test.describe.serial('direct payments to the Freelancer\'s own wallet', () => {
     expect((await r.json()).error).toBe('Direct payments are not available.');
   });
 
-  test('a Lightning address is checked with its provider, saved after a fresh sign-in, and used 24 hours later', async ({ page }) => {
+  test('a Lightning address is checked with its provider, saved after a fresh sign-in, and used at once', async ({ page }) => {
     await hook('direct-switch?on=1');
     await desk(page, u, 'profile');
     await expect(page.locator('#directCard')).toBeVisible();
@@ -61,14 +61,11 @@ test.describe.serial('direct payments to the Freelancer\'s own wallet', () => {
     await page.click('#directCheck');
     await expect(page.locator('#directResult')).toContainText('alice@pay.example.com works and confirms payments');
     await page.click('#directSave');
-    await expect(page.locator('#directStatus')).toContainText('waiting');
-    const { rows: [d] } = await db.query(`select address, ready_at > now() + interval '23 hours' as waits from settlement_destinations where user_id = $1`, [u.id]);
-    expect(d).toEqual({ address: 'alice@pay.example.com', waits: true });
-    // Still waiting: no link can be made direct yet (it would take no payment).
-    await page.click('.navi[data-tab="links"]');
-    await expect(page.locator('#links table')).toContainText('Payments go to');
-    await expect(page.locator('#newLinkMode')).toHaveCount(0);
-    await expect(page.locator('[data-settle-link][data-mode="direct"]')).toHaveCount(0);
+    // Since 20261020040000: in use at once (the fresh sign-in is the protection), and the user is told.
+    await expect(page.locator('#directStatus')).toContainText('in use');
+    const { rows: [d] } = await db.query(`select address, ready_at > now() + interval '1 minute' as waits from settlement_destinations where user_id = $1 and status = 'active'`, [u.id]);
+    expect(d).toEqual({ address: 'alice@pay.example.com', waits: false });
+    expect((await db.query(`select count(*)::int as n from support_messages where user_id = $1 and message like 'Security notice: your Lightning payout address%'`, [u.id])).rows[0].n).toBe(1);
   });
 
   test('opened from CPAY Wallet: the address is filled in through the login page, nothing is saved until Check and Save', async ({ page }) => {

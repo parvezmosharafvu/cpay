@@ -312,8 +312,9 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     return { request: { userId, routeId: id, address: dest, amountUsd: cents(amountCents) }, prepared, expiresAtMs, view };
   }
 
-  // 20261009010000: a payout goes only to an address the account saved at
-  // least 24 hours ago. Checked at quote and again right before reserving,
+  // A payout goes only to an address the account saved (20261009010000).
+  // Since 20261020040000 a saved address is usable at once (a change needs a
+  // fresh sign-in); 'cooling_down' only remains for rows saved before that. Checked at quote and again right before reserving,
   // so an address deleted or changed after the quote cannot be paid.
   async function requireReadyDestination(userId, address) {
     const { rows } = await db.query('select withdraw_destination_status($1, $2) as s', [userId, address]);
@@ -323,7 +324,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
       const until = new Date(s.usable_after).toISOString().replace('T', ' ').slice(0, 16);
       throw new UserError(403, `This address was saved less than 24 hours ago. For your safety, withdrawals to it open at ${until} UTC.`, { code: 'address_cooling_down', usableAfter: new Date(s.usable_after).toISOString() });
     }
-    throw new UserError(403, 'Save this address in Profile first. Withdrawals only go to an address saved at least 24 hours ago.', { code: 'address_not_saved' });
+    throw new UserError(403, 'Save this address in Profile first. Withdrawals only go to a saved address.', { code: 'address_not_saved' });
   }
 
   async function rowByQuote(quoteId, userId) {

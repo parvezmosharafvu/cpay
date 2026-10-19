@@ -57,7 +57,11 @@ end $$;
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
 
--- 3. Address still waiting (24 h): policy 'balance' -> no row, stays in balance.
+-- 3. No address in use (simulated: an old row still waiting from before
+--    20261020040000): policy 'balance' -> no row, stays in balance.
+alter table settlement_destinations disable trigger trg_guard_settlement_destination_changes;
+update settlement_destinations set ready_at = now() + interval '1 hour' where user_id = 'e8000000-0000-0000-0000-0000000000a1';
+alter table settlement_destinations enable trigger trg_guard_settlement_destination_changes;
 select pg_temp.pay('e8000000-0000-0000-0000-0000000002a1', 'e8000000-0000-0000-0000-0000000000a1', 'e8000000-0000-0000-0000-0000000001a1', 5, 5000);
 do $$ begin
   if exists (select 1 from payment_forwards where payment_id = 'e8000000-0000-0000-0000-0000000002a1') then raise exception 'forwarded to a waiting address'; end if;

@@ -1,22 +1,25 @@
 // Admin → Instant forwards (docs/INSTANT-FORWARD.md). Reads
-// admin_list_forwards(); "Try again" and "Move to balance" call
-// admin_forward_action() (active admin at aal2, audited). Only held
-// ('owed') forwards can be changed. No globals.
+// admin_list_forwards(); "Hold", "Try again" and "Move to balance" call
+// admin_forward_action() (active admin at aal2, audited). Waiting forwards
+// can be held (e.g. after switching the payment mode off); held ('owed')
+// forwards can be tried again or moved to the balance. No globals.
 (function () {
   'use strict';
   const client = window.supabaseClient;
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const STATUS = { queued: 'Waiting', sending: 'Sending', retry: 'Will retry', owed: 'Held', forwarded: 'Sent', released: 'Moved to balance' };
-  const REASON = { failed: 'Failed too many times', no_address: 'No Lightning address', below_minimum: 'Too small', over_limit: 'Over the limit', no_amount: 'Amount unknown', outside_address_limits: 'Address does not accept this amount' };
+  const REASON = { failed: 'Failed too many times', no_address: 'No Lightning address', below_minimum: 'Too small', over_limit: 'Over the limit', no_amount: 'Amount unknown', outside_address_limits: 'Address does not accept this amount', held_by_admin: 'Held by an admin', stuck_admin_review: 'Stuck send, check before releasing', invalid_address: 'Address rejected' };
   const MODE = { balance: 'Balance', instant_forward: 'Instant forward', direct: 'Direct (no fee)' };
   const sats = (n) => (n == null ? '—' : Number(n).toLocaleString('en-US') + ' sats');
   let filter = '';
   let seq = 0;
 
   async function act(id, action) {
-    const msg = action === 'retry'
-      ? 'Try this forward again now? It is sent to the user’s current Lightning address.'
-      : 'Move this amount to the user’s CPAY balance instead? It will not be forwarded.';
+    const msg = action === 'hold'
+      ? 'Hold this forward? It is not sent until you try it again or move it to the balance.'
+      : action === 'retry'
+        ? 'Try this forward again now? It is sent to the user’s current payout address.'
+        : 'Move this amount to the user’s CPAY balance instead? It will not be forwarded.';
     if (!window.confirm(msg)) return;
     const { error } = await client.rpc('admin_forward_action', { p_id: id, p_action: action });
     if (error) window.alert(error.message);
@@ -38,7 +41,7 @@
       <td class="num">${esc(sats(f.sent_sat ?? f.forward_sat))}</td>
       <td>${esc(STATUS[f.status] || f.status)}${f.reason ? `<div class="faint">${esc(REASON[f.reason] || f.reason)}</div>` : ''}${f.last_error ? `<div class="faint">${esc(f.last_error)}</div>` : ''}</td>
       <td class="num">${esc(f.attempts)}</td>
-      <td class="num" style="white-space:nowrap">${f.status === 'owed' ? `<button class="btn ghost sm" data-fw-retry="${esc(f.id)}">Try again</button> <button class="btn ghost sm" data-fw-release="${esc(f.id)}">Move to balance</button>` : ''}</td></tr>`).join('');
+      <td class="num" style="white-space:nowrap">${f.status === 'owed' ? `<button class="btn ghost sm" data-fw-retry="${esc(f.id)}">Try again</button> <button class="btn ghost sm" data-fw-release="${esc(f.id)}">Move to balance</button>` : ''}${f.status === 'queued' || f.status === 'retry' ? `<button class="btn ghost sm" data-fw-hold="${esc(f.id)}">Hold</button>` : ''}</td></tr>`).join('');
     el.innerHTML = `<h2>Instant forwards</h2>
       <p class="muted">Payment mode: <strong>${esc(MODE[data.mode] || data.mode)}</strong>. Each payment’s fee stays with CPAY; the rest is sent to the user’s Lightning address.</p>
       <div class="row" style="gap:16px;flex-wrap:wrap">
@@ -53,6 +56,7 @@
       <div class="card flush"><table class="table"><thead><tr><th>When</th><th>User</th><th>Address</th><th>Paid</th><th>Fee</th><th>Sent</th><th>Status</th><th>Tries</th><th></th></tr></thead>
       <tbody>${rows || '<tr><td colspan="9" class="empty">No forwards yet</td></tr>'}</tbody></table></div>`;
     document.getElementById('fwFilter').onchange = (e) => { filter = e.target.value; render(); };
+    el.querySelectorAll('[data-fw-hold]').forEach((b) => { b.onclick = () => act(b.dataset.fwHold, 'hold'); });
     el.querySelectorAll('[data-fw-retry]').forEach((b) => { b.onclick = () => act(b.dataset.fwRetry, 'retry'); });
     el.querySelectorAll('[data-fw-release]').forEach((b) => { b.onclick = () => act(b.dataset.fwRelease, 'release'); });
   }

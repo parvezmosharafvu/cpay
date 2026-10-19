@@ -32,7 +32,7 @@ payer ──pays──► CPAY platform wallet (invoice, as today)
    `fee_sat = round(amount_sat × platform_fee_amount / amount_settled)`, `forward_sat = amount_sat − fee_sat`.
    Sats are what the wallet received, so no exchange-rate risk between receive and forward.
 4. **Forward:** to the user's newest **active, ready** `settlement_destinations` Lightning address (the
-   same verified address flow as direct settlement: provider check, fresh sign-in, audited, inbox notice; usable at once since 20261020040000).
+   same verified address flow as direct settlement: provider check, fresh sign-in, audited, inbox notice; usable at once with an authenticator, otherwise after 24 hours, see section 13).
 
 ## 2. Idempotency (one forward per payment)
 
@@ -107,12 +107,13 @@ Counsel should confirm whether brief receipt-and-forward needs a licence where C
 ## 9. Rollout and rollback
 
 1. Ship DB + worker with the mode at `balance` (nothing changes).
-2. Owner: own account adds a Lightning address (fresh sign-in, works at once), sets mode `instant_forward`, pays $1, checks
+2. Owner: own account (authenticator on) adds a Lightning address (fresh sign-in, works at once), sets mode `instant_forward`, pays $1, checks
    the forward in Admin → Payouts → Instant forwards and in their own wallet.
-3. Rollback: set mode back to `balance`. Queued rows stop; owed/retry rows stay visible for the admin.
+3. Rollback: set mode back to `balance`. Queued rows stop; owed/retry rows stay visible for the admin,
+   who can **Hold** waiting rows (Admin → Instant forwards) and then move them to the balance.
    No money is lost: unforwarded amounts are owed, and can be released to balance.
 
-## 10. Addresses work at once (20261020040000)
+## 10. Addresses work at once (20261020040000; narrowed by section 13)
 
 The 24-hour wait on a newly saved Lightning or USDT address is gone. Instead,
 saving, changing or removing one needs the payout step-up: a fresh first
@@ -142,7 +143,10 @@ fresh sign-in.
   or any refusal before money left marks the batch failed and the rows retry
   with backoff under a new batch, then `owed` after max attempts.
 - A lost reply leaves the batch `sending`; it is settled from the wallet's
-  record (find by batch id) after a sync, never re-sent blindly. An address
+  record (find by batch id). It is sent again under a new batch only after a
+  completed sync, when this worker is not sending it, and once the recorded
+  quote expiry (`quote_expires_at`, saved before the send) plus 10 minutes
+  has passed, the same rule as stablecoin withdrawals (section 13). An address
   the wallet rejects holds the rows as `owed` (`invalid_address`).
 - Per-row `sent_sat = forward_sat`; the USDT received and the network fee are
   on the batch and shown in the admin forwards list.
@@ -160,3 +164,33 @@ under "Fee details". The admin keeps the platform fee %. The network fee is
 automatic. The withdrawal fee setting stays, labelled "Balance mode only": it
 applies only to USDT withdrawals from a CPAY balance and never to instant
 forwards. Nothing in the database fee logic changed.
+
+## 13. Forward and payout-address safety (20261020060000)
+
+- **No second USDT payment.** Before, a batch whose send had an unknown
+  outcome (lost reply, nothing in the wallet yet) was retried under a new
+  batch id after 2 minutes, while the first send could still complete: the
+  user could be paid twice. Now the quote expiry is stored before the send
+  (`system_usdt_batch_quoted`) and a new batch is only made as described in
+  section 11. A send with no error and no payment stays `sending`.
+- **Lightning:** if the wallet cannot be asked about a send after an error,
+  the row stays `sending` and the recovery step decides after a sync. Retries
+  always reuse the forward id, which the wallet refuses to pay twice.
+- **Payout addresses need an authenticator to work at once.** A new or
+  changed USDT or Lightning address is used at once only when the account
+  has a verified authenticator (`payout_ready_at`). Otherwise it is used 24
+  hours later and, for Lightning, the address in use keeps receiving until
+  then. Reason: a stolen password alone always passes the fresh sign-in check.
+- **Security notices stay visible.** The inbox message about a payout change
+  says when the address starts being used and cannot be hidden by the account
+  (`support_messages.security_notice`). Email notices are not sent yet
+  (only sign-in emails exist): owner follow-up.
+- **Admin:** `admin_forward_action(id, 'hold')` holds a waiting (queued or
+  retry) forward, e.g. after switching the mode off. `admin_forward_batch_action(id,
+  'delivered', ref)` or `(id, 'hold')` closes a USDT batch stuck in `sending`
+  for over an hour, after checking the provider and the chain. Release held
+  rows of a stuck batch only once the provider shows the order failed or was
+  refunded. Both need an active admin at aal2 and are audited. The batch
+  action has no button yet; call it from a signed-in admin session.
+- `'refuse'` mode also accepts a payment for an account whose receive choice
+  is a usable USDT address. Batches are made only for active accounts.

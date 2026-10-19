@@ -9,7 +9,7 @@
 
   // CPAY Wallet opens dashboard.html#direct=<lightning address> so the
   // address is typed for the Freelancer. It is only filled in: they still
-  // tap Check and Save (fresh sign-in, used right away). Read once and
+  // tap Check and Save (fresh sign-in; used at once with an authenticator, otherwise after 24 hours). Read once and
   // removed from the address bar; kept in this tab for 10 minutes so it
   // survives a trip through the login page.
   const PREFILL_SLOT = 'cpay-direct-prefill';
@@ -79,7 +79,7 @@
       <div id="directStatus">${statusLines(s)}</div>
       <div class="field"><label for="directAddr">Lightning address</label>
         <input id="directAddr" placeholder="name@your-wallet-provider.com" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="email" aria-describedby="directHint"></div>
-      <p class="hint" id="directHint">Use the Lightning address of a wallet you control. CPAY checks that the wallet provider can confirm payments before you can save it. Payers see this address on the payment page. Saving or changing it asks you to sign in again, and it is used right away. You get a notice in your inbox each time it changes.</p>
+      <p class="hint" id="directHint">Use the Lightning address of a wallet you control. CPAY checks that the wallet provider can confirm payments before you can save it. Payers see this address on the payment page. Saving or changing it asks you to sign in again. With an authenticator on your account it is used right away; without one it is used 24 hours later, and until then payments go to the address you had before. You get a notice in your inbox each time it changes.</p>
       <p class="hint">${forwardOnly(s)
         ? 'Fees: CPAY keeps its platform fee from each payment. The small Lightning network fee for sending it on comes out of your amount. Your wallet provider may charge its own fees.'
         : 'Fees: CPAY takes no fee from direct payments. A link cost you set is added for the payer and goes to your wallet with the rest. Your wallet provider may charge its own fees.'}</p>

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <meta name="color-scheme" content="light">
-<title>Contact and Support (draft) · CPAY</title>
+<title>Contact and complaints · CPAY</title>
 <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -17,13 +17,28 @@
   .draft{border:2px dashed #b45309;background:#fffbeb;color:#78350f;padding:12px 16px;border-radius:10px;margin-bottom:24px}
   h1{font-size:1.8rem;margin:0 0 12px} h2{font-size:1.15rem;margin-top:28px}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
+<script src="config.js"></script>
+<script src="legal-fields.js?v=1"></script>
 </head>
 <body>
 <main>
-<div class="draft" role="note"><strong>DRAFT, not final legal text.</strong> This page is a placeholder for the owner and legal review. It is not indexed and is not linked from the site. Text in [brackets] must be filled in or replaced before launch.</div>
-<h1>Contact and Support</h1>
-<p><em>Last updated: [date]</em></p>
-<p>Email: <a href="mailto:[support@your-domain]">[support@your-domain]</a></p><p>Response time: [e.g. within 2 business days].</p><p>For a payment question, include the invoice link (it looks like <code>/invoice-cpay-v2.html?id=…</code>) and the time you paid. Never send your password or wallet recovery words; we will never ask for them.</p><p>Security issues: see SECURITY.md in our repository or email [security contact].</p>
+<div class="draft" role="note" data-legal-note><strong>Not yet published.</strong> The text is complete. Items in [brackets] are facts only the owner can supply (legal entity, address, jurisdiction, contact addresses, dates). Until they are filled in, this page stays unlinked and not indexed.</div>
+<h1>Contact and complaints</h1>
+<p><em>Last updated: <span data-legal="legal_effective_date">[Effective date]</span>. CPAY is operated by <span data-legal="legal_entity_name">[Legal entity name]</span>, <span data-legal="legal_address">[Registered address]</span>.</em></p>
+<h2>Contact</h2>
+<p>Support: <span data-legal="legal_support_email">[Support email address]</span><br>Postal address: <span data-legal="legal_address">[Registered address]</span></p>
+<p>We aim to reply within 2 business days.</p>
+<p>CPAY staff will never ask for your password, your sign-in code, or a wallet recovery phrase. CPAY never holds your money, so nobody from CPAY will ask you to send funds to "unlock", "verify" or "recover" anything.</p>
+<h2>Making a complaint</h2>
+<ol>
+<li>Write to <span data-legal="legal_support_email">[Support email address]</span> with "Complaint" in the subject, your account email if you have one, what happened, and any payment link, payment time or proof of payment.</li>
+<li>We acknowledge it within 2 business days and give you a reference.</li>
+<li>We send a final answer within 15 business days, or tell you why we need longer and when you will hear from us.</li>
+<li>If you are not satisfied, you may have the right to refer your complaint to a consumer or data-protection authority where you live.</li>
+</ol>
+<h2>Report fraud or a security issue</h2>
+<p>If a payment link is being used for fraud or impersonation, or you have found a security problem, write to <span data-legal="legal_support_email">[Support email address]</span> with "Urgent" in the subject. We can stop a link from taking new payments while we investigate. Please give us reasonable time to fix a security issue before publishing it.</p>
 <p><a href="/">Back to CPAY</a></p>
 </main>
 </body>

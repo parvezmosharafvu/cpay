@@ -54,6 +54,12 @@ if (paymentStopError) {
 if (paymentStop?.value === true || String(paymentStop?.value) === "true") {
   return json({ error: "New payments are temporarily paused by the platform operator" }, 503);
 }
+// Non-custodial plan: the owner can turn CPAY balance payments off in
+// Admin → Settings. The payments insert trigger is the guarantee; this read
+// only answers early, before a platform-wallet invoice is made.
+const { data: custodialOn, error: custodialErr } = await supabaseAdmin.rpc("platform_setting", { p_key: "custodial_receive_enabled" });
+if (custodialErr) console.error("custodial receive setting read failed (the insert trigger still guards):", custodialErr.message);
+else if (custodialOn === false) return json({ error: "This link isn't taking payments right now" }, 503);
 // Case matters: /taylor-james, /TaylorJames and /taylorjames are three
 // different links.
 const slug = String(body.slug ?? "").trim();

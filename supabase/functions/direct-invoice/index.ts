@@ -44,7 +44,9 @@ const db: Db = {
     return data?.value === true || String(data?.value) === "true";
   },
   async directEnabled() {
-    const { data, error } = await sb.rpc("direct_settlement_enabled");
+    // On for everyone, or for pilot accounts (Admin → Settings); the link
+    // owner is then checked by system_direct_destination_for.
+    const { data, error } = await sb.rpc("direct_settlement_available");
     if (error) return fail("direct switch read", error);
     return data === true;
   },

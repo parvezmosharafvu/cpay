@@ -562,3 +562,37 @@ test('an expired quote is refused on another instance and nothing is sent', asyn
   await assert.rejects(a.route('POST', '/admin/wallet/send-confirm', { adminId: admin, prepareId: prep.prepareId }), /already confirmed/);
   assert.equal(breez.calls.filter((c) => c[0] === 'sendPayment').length, 0);
 });
+
+test('admin sends respect the owner allow-list and daily cap from Admin → Settings', async () => {
+  const { route } = setup();
+  const admin = await makeUser({ role: 'admin' });
+  const setLimits = async (allow, cap) => {
+    await db.query(`insert into platform_settings(key, value) values ('admin_send_allowed_destinations', $1::jsonb), ('admin_send_daily_cap_usd', $2::jsonb)
+                    on conflict (key) do update set value = excluded.value`, [JSON.stringify(allow), JSON.stringify(cap)]);
+  };
+  const sent24 = async () => Number((await db.query(`select coalesce(sum((new_value->>'usdCents')::bigint), 0) c from audit_log where action = 'platform_wallet.send' and occurred_at > now() - interval '24 hours'`)).rows[0].c) / 100;
+  try {
+    await setLimits(['someone@else.example'], null);
+    await assert.rejects(route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 }), /allow-list/);
+    await setLimits([BOLT11], null);
+    const [, ok] = await route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 });
+    assert.equal(ok.totalUsd, '5.01');
+    await setLimits([], (await sent24()) + 5);
+    await assert.rejects(route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 }), /daily cap/);
+    // A quote made before the cap is refused at confirm, before any send.
+    await setLimits([], null);
+    const [, prep] = await route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 });
+    await setLimits([], (await sent24()) + 5);
+    await assert.rejects(route('POST', '/admin/wallet/send-confirm', { adminId: admin, prepareId: prep.prepareId }), /daily cap/);
+    assert.deepEqual(await auditRows(prep.prepareId), [], 'nothing audited as sent');
+    // Under the cap it sends, and the sent amount counts toward the next one.
+    await setLimits([], (await sent24()) + 6);
+    const [, p2] = await route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 });
+    const [, sent] = await route('POST', '/admin/wallet/send-confirm', { adminId: admin, prepareId: p2.prepareId });
+    assert.equal(sent.status, 'completed');
+    assert.equal((await auditRows(p2.prepareId))[0].new_value.usdCents, 501);
+    await assert.rejects(route('POST', '/admin/wallet/send-prepare', { adminId: admin, destination: BOLT11 }), /daily cap/);
+  } finally {
+    await db.query(`delete from platform_settings where key in ('admin_send_allowed_destinations', 'admin_send_daily_cap_usd')`);
+  }
+});

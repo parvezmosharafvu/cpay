@@ -36,9 +36,19 @@
     <p>CPAY Wallet keeps its keys on this phone. CPAY cannot see, move or recover the money in it. It is separate from your CPAY website account and its balance.</p>
     <ul class="points">
       <li>Payments run on the Spark network. Each transfer needs your phone's signature <strong>and</strong> co-signing by Spark operators (two of Lightspark, Breez and Flashnet). They cannot move your money without you, but while they are working, payments depend on them. <a href="security.html">How this works</a></li>
-      <li>You get a 12-word recovery phrase. Write it on paper. It is the only way back in if this phone is lost or reset.</li>
+      <li>You get a 12-word recovery phrase. Write it on paper. It is the only way back in if this phone is lost or reset, even if you use a passkey.</li>
       <li>Never type it into a website, a chat or an email. CPAY staff will never ask for it.</li>
     </ul>
+    <div id="passkeyChoice" hidden>
+      <h2>With a passkey</h2>
+      <p class="muted small">Unlock with your fingerprint, face or screen lock instead of a passphrase. The passkey makes the wallet's 12 words each time you unlock; nothing secret is stored on this phone. You still write the 12 words down once: if the passkey is ever lost or deleted, they are the only way back to the money.</p>
+      <div class="row">
+        <button type="button" class="primary" id="pkCreateBtn">Create with a passkey</button>
+        <button type="button" id="pkSignInBtn">Sign in with a passkey</button>
+      </div>
+      <h2>With a passphrase</h2>
+    </div>
+    <p class="err" id="welcomeErr" role="alert" hidden></p>
     <div class="row">
       <button type="button" class="primary" id="createBtn">Create a new wallet</button>
       <button type="button" id="restoreStartBtn">Restore with a recovery phrase</button>
@@ -48,6 +58,7 @@
   <section id="s-backup" hidden>
     <h1>Write down your recovery phrase</h1>
     <p>Write these 12 words, in order, on paper. Keep the paper somewhere safe and private. Do not take a screenshot.</p>
+    <p class="notice" id="backupPasskeyNote" hidden>Your passkey makes these same 12 words each time you unlock. If the passkey is lost, deleted or stops working, these words on paper are the only way back to your money.</p>
     <ol class="words" id="words"></ol>
     <label class="check"><input type="checkbox" id="wroteIt"> I wrote the 12 words down on paper.</label>
     <div class="row"><button type="button" class="primary" id="backupNext" disabled>Next</button></div>
@@ -94,13 +105,19 @@
 
   <section id="s-unlock" hidden>
     <h1>Unlock</h1>
+    <div id="unlockPasskey" hidden>
+      <p>Unlock with the passkey this wallet was made with.</p>
+      <p class="err" id="unlockPkErr" role="alert" hidden></p>
+      <div class="row"><button type="button" class="primary" id="unlockPkBtn">Unlock with passkey</button></div>
+      <p class="muted small">Lost the passkey? Use <a href="#" id="pkLostLink">Restore with your recovery phrase</a>.</p>
+    </div>
     <form id="unlockForm" autocomplete="off">
       <label for="unlockPass">Passphrase</label>
       <input id="unlockPass" type="password" autocomplete="current-password" required>
       <p class="err" id="unlockErr" role="alert" hidden></p>
       <div class="row"><button class="primary" type="submit" id="unlockBtn">Unlock</button></div>
     </form>
-    <p class="muted small">Forgot the passphrase? Use <a href="#" id="forgotLink">Restore with your recovery phrase</a>. That replaces the wallet stored on this phone.</p>
+    <p class="muted small" id="forgotNote">Forgot the passphrase? Use <a href="#" id="forgotLink">Restore with your recovery phrase</a>. That replaces the wallet stored on this phone.</p>
   </section>
 
   <section id="s-home" hidden>

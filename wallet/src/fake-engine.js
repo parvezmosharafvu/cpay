@@ -71,3 +71,36 @@ export function createFakeEngine() {
     async disconnect() { state.connected = null; },
   };
 }
+
+// Fake passkey (test builds only), shaped like the library's PasskeyClient.
+// One "passkey" per browser profile, kept in localStorage, always deriving
+// the same valid 12-word phrase. window.__fakePasskey lets Playwright make
+// the next call fail with a given library message, or switch PRF support
+// off, to drive the error screens.
+const FAKE_PASSKEY_PHRASE = 'legal winner thank year wave sausage worth useful legal winner thank yellow';
+const FAKE_PASSKEY_SLOT = 'cpay-wallet.test.fake-passkey';
+export function createFakePasskey() {
+  // window.__fakePasskeyPreset (set before load) seeds the controls.
+  const ctl = { failNext: null, supported: true, calls: [], ...(globalThis.__fakePasskeyPreset || {}) };
+  globalThis.__fakePasskey = ctl;
+  const fail = () => { const m = ctl.failNext; ctl.failNext = null; if (m) throw new Error(m); };
+  const cred = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  return {
+    async checkAvailability() { return ctl.supported ? { type: 'available' } : { type: 'prfUnsupported' }; },
+    async register(req) {
+      ctl.calls.push({ op: 'register', ...req });
+      fail();
+      if (localStorage.getItem(FAKE_PASSKEY_SLOT)) throw new Error('Credential already exists: fake');
+      const id = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+      localStorage.setItem(FAKE_PASSKEY_SLOT, id);
+      return { wallet: { seed: { type: 'mnemonic', mnemonic: FAKE_PASSKEY_PHRASE }, label: req.label }, credential: { credentialId: cred(id) } };
+    },
+    async signIn(req) {
+      ctl.calls.push({ op: 'signIn', label: req.label, pinned: Boolean(req.allowCredentials?.length) });
+      fail();
+      const id = localStorage.getItem(FAKE_PASSKEY_SLOT);
+      if (!id) throw new Error('Credential not found: fake');
+      return { wallet: { seed: { type: 'mnemonic', mnemonic: FAKE_PASSKEY_PHRASE }, label: req.label }, labels: [req.label], credential: { credentialId: cred(id) } };
+    },
+  };
+}

@@ -7,8 +7,12 @@
 //        [--network mainnet|regtest] [--sha256 <version.json sha256>]
 //
 // Passes only when:
-//   - the address is https on its own host (never the CPAY website), with no
-//     path, query or credentials;
+//   - the address is https on its own host (never the CPAY website itself;
+//     wallet.pay-cashapp.buzz is the one subdomain allowed, release gate
+//     G3), with no path, query or credentials;
+//   - config.js names this exact host as the passkey RP ID when it names
+//     one (a production build always does), so passkeys made here can be
+//     used here;
 //   - version.json is a release build (not a test build), for the expected
 //     network, and its sha256 equals --sha256 when given (the value the
 //     build printed, also recorded in public/wallet-release.js);
@@ -22,6 +26,8 @@
 import { createHash } from 'node:crypto';
 
 const WEBSITE_HOSTS = /(^|\.)pay-cashapp\.buzz$/i;
+// The wallet's production hostname (G3): a separate origin from the website.
+export const WALLET_HOST = 'wallet.pay-cashapp.buzz';
 
 function parse(argv) {
   const o = { url: null, network: null, sha256: null, insecureLocal: false };
@@ -45,7 +51,7 @@ function origin(raw, insecureLocal) {
   if (u.protocol !== 'https:' && !(insecureLocal && local && u.protocol === 'http:')) throw new Error(`${raw}: must be https`);
   if (u.username || u.password) throw new Error(`${raw}: no credentials in the address`);
   if ((u.pathname !== '/' && u.pathname !== '') || u.search || u.hash) throw new Error(`${raw}: give the wallet's own host only, no path or query`);
-  if (WEBSITE_HOSTS.test(u.hostname)) throw new Error(`${u.hostname}: the wallet needs its own hostname, not the CPAY website's`);
+  if (WEBSITE_HOSTS.test(u.hostname) && u.hostname.toLowerCase() !== WALLET_HOST) throw new Error(`${u.hostname}: the wallet needs its own hostname, not the CPAY website's`);
   return u.origin;
 }
 
@@ -70,6 +76,20 @@ export async function verify(opts) {
   const files = Object.entries(release.files || {});
   if (!files.length) problems.push('version.json lists no files');
 
+  // Passkeys are bound to config.js's RP ID; it must be this very host.
+  const host = new URL(base).hostname;
+  let config = null;
+  if (release.files?.['config.js']) {
+    try {
+      const text = (await get(base, 'config.js')).body.toString('utf8');
+      config = JSON.parse(text.slice(text.indexOf('Object.freeze(') + 14, text.lastIndexOf(');')));
+    } catch {
+      problems.push('config.js: could not read the wallet configuration');
+    }
+  }
+  if (config?.rpId && config.rpId !== host) problems.push(`config.js passkey RP ID ${config.rpId}, but the wallet is served from ${host}: passkeys made here would not work`);
+  if (config && release.network === 'mainnet' && !config.rpId) problems.push('config.js names no passkey RP ID; a production build always does');
+
   let checked = 0;
   for (const [path, want] of files) {
     if (path === '_headers' || path === 'version.json') continue;
@@ -92,7 +112,7 @@ export async function verify(opts) {
   if (/unsafe-inline/.test(csp)) problems.push('page CSP allows unsafe-inline');
   if ((page.headers.get('x-frame-options') || '').toUpperCase() !== 'DENY') problems.push('X-Frame-Options is not DENY');
 
-  return { ok: problems.length === 0, problems, origin: base, version: release.version, network: release.network, manifestSha, checked };
+  return { ok: problems.length === 0, problems, origin: base, version: release.version, network: release.network, manifestSha, checked, rpId: config?.rpId ?? null, passkeys: config?.passkeys === true };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -101,6 +121,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const r = await verify(opts);
     console.log(`wallet release check: ${r.origin} v${r.version} ${r.network}, ${r.checked} files checked`);
     console.log(`wallet release check: version.json sha256 ${r.manifestSha}`);
+    console.log(`wallet release check: passkeys ${r.passkeys ? 'ON' : 'off'}, rp id ${r.rpId || 'none'}`);
     if (!r.ok) {
       for (const p of r.problems) console.error(`FAIL ${p}`);
       process.exit(1);

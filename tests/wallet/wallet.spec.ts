@@ -414,3 +414,125 @@ test('restoring a different phrase over this phone\'s wallet needs REPLACE; the 
   expect(await page.evaluate(() => (window as any).__fakeWallet.fingerprint)).toBe(await fingerprintOf(page, VECTOR));
   assertNoLeak(VECTOR);
 });
+
+// ---- passkey login (fake passkey: test builds only) ---------------------
+// The fake derives VECTOR, as the library derives a 12-word phrase from the
+// passkey's PRF output.
+async function createPasskeyWallet(page: Page) {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Create with a passkey' }).click();
+  const phrase = await readWords(page);
+  expect(phrase).toBe(VECTOR);
+  await expect(page.locator('#backupPasskeyNote')).toBeVisible();
+  await page.getByLabel('I wrote the 12 words down on paper.').check();
+  await page.locator('#backupNext').click();
+  const words = phrase.split(' ');
+  for (const input of await page.locator('#confirmFields input').all()) {
+    await input.fill(words[Number((await input.getAttribute('id'))!.slice(2))]);
+  }
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByText('This wallet · your keys')).toBeVisible();
+  return phrase;
+}
+
+test('passkey create: words shown and checked, no passphrase, nothing secret stored', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Create with a passkey' }).click();
+  const phrase = await readWords(page);
+  await page.getByLabel('I wrote the 12 words down on paper.').check();
+  await page.locator('#backupNext').click();
+  for (const input of await page.locator('#confirmFields input').all()) await input.fill('wrong');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByText('That does not match.')).toBeVisible();
+  const words = phrase.split(' ');
+  for (const input of await page.locator('#confirmFields input').all()) {
+    await input.fill(words[Number((await input.getAttribute('id'))!.slice(2))]);
+  }
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByText('This wallet · your keys')).toBeVisible();
+  await expect(page.locator('#s-setpass')).toBeHidden();
+  await expect(page.locator('#backupStatus')).toContainText('you checked your paper copy when you created this wallet');
+
+  const vault = JSON.parse(await page.evaluate(() => localStorage.getItem('cpay-wallet.vault.v1') || 'null'));
+  expect(Object.keys(vault).sort()).toEqual(['cred', 'kind', 'label', 'v']);
+  expect(vault).toMatchObject({ v: 1, kind: 'passkey', label: 'Default' });
+  const stored = await page.evaluate(() => JSON.stringify(Object.fromEntries(Object.entries(localStorage).filter(([k]) => !k.startsWith('cpay-wallet.test.')))));
+  for (const w of new Set(words)) expect(stored.includes(`"${w}`) || stored.includes(` ${w} `), w).toBe(false);
+  expect(await page.evaluate(() => (window as any).__fakeWallet.fingerprint)).toBe(await fingerprintOf(page, phrase));
+  assertNoLeak(phrase);
+});
+
+test('passkey unlock asks for this wallet\'s passkey; reveal derives the same words', async ({ page }) => {
+  const phrase = await createPasskeyWallet(page);
+  await page.getByRole('button', { name: 'Lock' }).click();
+  await expect(page.locator('#unlockPkBtn')).toBeVisible();
+  await expect(page.locator('#unlockForm')).toBeHidden();
+  await expect(page.locator('#forgotNote')).toBeHidden();
+  await page.evaluate(() => { (window as any).__fakePasskey.failNext = 'Passkey error: User cancelled authentication'; });
+  await page.locator('#unlockPkBtn').click();
+  await expect(page.locator('#unlockPkErr')).toContainText('was closed');
+  await page.locator('#unlockPkBtn').click();
+  await expect(page.getByText('This wallet · your keys')).toBeVisible();
+  const calls = await page.evaluate(() => (window as any).__fakePasskey.calls);
+  expect(calls.at(-1)).toMatchObject({ op: 'signIn', label: 'Default', pinned: true });
+  await page.getByRole('button', { name: 'Show recovery phrase' }).click();
+  await expect(page.locator('#revealForm')).toBeHidden();
+  await expect(page.locator('#revealWords li')).toHaveCount(12);
+  expect((await page.locator('#revealWords li').allTextContents()).join(' ')).toBe(phrase);
+  assertNoLeak(phrase);
+});
+
+test('passkey sign-in on a phone without the wallet; backup shown as not checked here', async ({ page }) => {
+  await createPasskeyWallet(page);
+  await page.getByRole('button', { name: 'Remove wallet from this phone' }).click();
+  await page.locator('#wipeText').fill('DELETE');
+  await page.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Sign in with a passkey' })).toBeVisible();
+  await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
+  await expect(page.getByText('This wallet · your keys')).toBeVisible();
+  await expect(page.locator('#backupStatus')).toContainText('not checked on this phone');
+  expect(await page.evaluate(() => (window as any).__fakeWallet.fingerprint)).toBe(await fingerprintOf(page, VECTOR));
+});
+
+test('passkey errors: existing passkey, created-but-not-derived, none on device', async ({ page }) => {
+  await createPasskeyWallet(page);
+  await page.getByRole('button', { name: 'Remove wallet from this phone' }).click();
+  await page.locator('#wipeText').fill('DELETE');
+  await page.getByRole('button', { name: 'Remove', exact: true }).click();
+  // The fake passkey still exists on the "device": creating another is refused.
+  await page.getByRole('button', { name: 'Create with a passkey' }).click();
+  await expect(page.locator('#welcomeErr')).toContainText('already has a CPAY Wallet passkey');
+  await page.evaluate(() => { (window as any).__fakePasskey.failNext = 'Passkey created but derivation failed: PRF evaluation failed: x'; });
+  await page.getByRole('button', { name: 'Create with a passkey' }).click();
+  await expect(page.locator('#welcomeErr')).toContainText('Do not create another one');
+  await page.evaluate(() => localStorage.removeItem('cpay-wallet.test.fake-passkey'));
+  await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
+  await expect(page.locator('#welcomeErr')).toContainText('No CPAY Wallet passkey was found');
+  await expect(page.locator('#s-welcome')).toBeVisible();
+});
+
+test('no passkey choice where the device cannot do PRF; 12 words still work', async ({ page }) => {
+  await page.addInitScript(() => { (window as any).__fakePasskeyPreset = { supported: false }; });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Create a new wallet' })).toBeVisible();
+  await expect(page.locator('#passkeyChoice')).toBeHidden();
+});
+
+test('lost passkey: the 12 words restore the same wallet with a passphrase, no REPLACE', async ({ page }) => {
+  const phrase = await createPasskeyWallet(page);
+  await page.getByRole('button', { name: 'Lock' }).click();
+  await page.locator('#pkLostLink').click();
+  await page.locator('#restoreWords').fill(phrase);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.locator('#restoreReplace')).toBeHidden();
+  await expect(page.locator('#s-setpass')).toBeVisible();
+  await page.locator('#pass1').fill(PASS);
+  await page.locator('#pass2').fill(PASS);
+  await page.getByRole('button', { name: 'Create wallet' }).click();
+  await expect(page.getByText('This wallet · your keys')).toBeVisible();
+  const vault = JSON.parse(await page.evaluate(() => localStorage.getItem('cpay-wallet.vault.v1') || 'null'));
+  expect(vault).toMatchObject({ kdf: 'PBKDF2-SHA256' });
+  await page.getByRole('button', { name: 'Lock' }).click();
+  await expect(page.locator('#unlockForm')).toBeVisible();
+  await expect(page.locator('#unlockPasskey')).toBeHidden();
+});

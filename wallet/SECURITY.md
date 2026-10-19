@@ -18,6 +18,66 @@ CPAY). This document covers only the wallet.
 | The CPAY account link never touches the vault, the phrase or the engine | `src/link.js`, `tests/frontend/wallet-config.test.mjs` |
 | The CPAY password is not used to derive or protect wallet keys (separate passphrase) | `src/app.js`, UI copy |
 | The app opens, unlocks and reveals the phrase with no network | service worker; offline test in `wallet.spec.ts` |
+| A passkey wallet stores nothing secret: only the passkey's credential id and the label | `src/vault.js` (`passkeyRecord`), `src/passkey.js`, `wallet.spec.ts` |
+| A passkey wallet's phrase is derived in the page by the wallet library from the passkey's WebAuthn PRF output, the same 12 words each time | `src/passkey.js`, `tests/wallet/passkey.spec.ts` (real library, PRF virtual authenticator) |
+
+## Passkey login
+
+A wallet can be created with a passkey instead of a passphrase. It is
+**off in production** until release gate G9: the build offers it only with
+`WALLET_PASSKEYS=on`, and only on the RP ID's own host.
+
+- **How the phrase is made.** The wallet library asks the passkey for a
+  WebAuthn PRF output and turns it into a standard 12-word BIP-39 phrase.
+  The same passkey always gives the same words, so a passkey wallet is a
+  12-word wallet: the words restore it anywhere, with or without the passkey.
+- **What is stored.** Only the credential id (to ask for that passkey again)
+  and the label. No phrase, no ciphertext. Unlocking and "Show recovery
+  phrase" derive the words again; they are dropped after use.
+- **Backup is required.** Creating a passkey wallet shows the 12 words and
+  checks three of them against the paper, exactly like a generated phrase.
+  A passkey can be lost, deleted from the device's passkey list, or left
+  behind on a domain change; the words are then the only way back.
+- **Relying Party: `wallet.pay-cashapp.buzz`, for good.** The production
+  build pins `WALLET_RP_ID` to the wallet's hostname (release gate G3) and
+  refuses any other value; the release check fails unless the served
+  `config.js` names the host it is served from. The page uses a passkey
+  only over https on exactly that host (`passkeyOriginOk` in
+  `src/passkey.js`). The website (`pay-cashapp.buzz`) cannot ask for these
+  passkeys: WebAuthn lets an origin use only its own host or a parent
+  domain as the RP ID, never a sibling or child.
+- **Changing the hostname or RP ID is never safe to assume.** Every passkey
+  made under `wallet.pay-cashapp.buzz` works only there. Moving the wallet,
+  or building with a different RP ID, leaves every passkey wallet unable to
+  open with its passkey; its owner must restore with the **12 words**. A
+  move would need a planned migration: keep the old host serving
+  `/.well-known/webauthn` with the new origin in `related_origins` (Chrome,
+  Safari, Edge only; Firefox users restore with the words), tell every user
+  to check their paper first, and change `PRODUCTION_RP_ID` in
+  `build.mjs` in a reviewed PR. Without that, keep the hostname.
+- **Subdomains under the wallet host.** Any page on `*.wallet.pay-cashapp.buzz`
+  could use the RP ID `wallet.pay-cashapp.buzz` and, with the user's
+  biometric prompt, derive the words. Never create a DNS record, route or
+  service under it; the DNS zone's account must use MFA (G3).
+- **Same site as the website.** The wallet shares the registrable domain
+  `pay-cashapp.buzz` with the website, but it is a separate origin: its
+  storage, service worker and passkeys are out of the website's reach. It
+  uses no cookies, so cookies the website sets for the parent domain carry
+  nothing it relies on.
+- **The website's own passkeys.** CPAY account passkeys (RP ID
+  `pay-cashapp.buzz`) could be requested from a subdomain, but the
+  assertion names its origin, and the account service must accept only the
+  website's origin. Never add `https://wallet.pay-cashapp.buzz` to the
+  account passkeys' allowed origins. The wallet never asks for any RP ID
+  but its own.
+- **Who can derive the words.** Anyone who can use the passkey on this
+  origin: the device's screen lock or biometrics, and, for a synced passkey,
+  the cloud account it syncs through (iCloud Keychain, Google Password
+  Manager). Treat that account like the paper.
+- **Label publishing is blocked.** The library publishes wallet labels to
+  public Nostr relays for multi-wallet discovery. The wallet uses one fixed
+  label, and the CSP does not allow those relays, so no passkey-linked
+  record leaves the device.
 
 ## The wallet library and the Spark network
 
@@ -116,7 +176,9 @@ phrase back) to tell them apart. The Security card shows whether the words were
 checked against the paper at creation or used to restore.
 
 The 12 words restore the wallet in CPAY Wallet on any device. The
-passphrase is device-local and not a backup. Clearing site data or
+passphrase is device-local and not a backup. A passkey wallet's words
+restore it the same way (into a passphrase wallet), and "Sign in with a
+passkey" opens it on another device where the same passkey is available. Clearing site data or
 "Remove wallet from this phone" deletes the device copy only.
 
 ## Not in scope (by design)

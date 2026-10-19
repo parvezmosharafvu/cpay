@@ -2,8 +2,8 @@
 //
 // public/wallet-release.js drives the website's Download wallet page. It
 // must name the same version as the wallet, and may only point at a
-// separate https hostname once published (never this website, never a
-// placeholder).
+// separate https hostname once published (wallet.pay-cashapp.buzz, never
+// the website itself, never a placeholder).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -23,7 +23,10 @@ test('release data matches the wallet and is either unpublished or a real https 
   const u = new URL(r.url);
   assert.equal(u.protocol, 'https:');
   assert.equal(u.username + u.password, '');
-  assert.doesNotMatch(u.hostname, /example|localhost|127\.0\.0\.1|pay-cashapp\.buzz$/, 'a real, separate hostname');
+  // A real, separate hostname: wallet.pay-cashapp.buzz (release gate G3),
+  // never the website itself or another of its subdomains.
+  assert.equal(u.hostname, 'wallet.pay-cashapp.buzz', 'the wallet\'s hostname from release gate G3');
+  assert.equal(u.pathname, '/');
   assert.match(String(r.publishedAt), /^\d{4}-\d{2}-\d{2}/);
   assert.match(String(r.versionJsonSha256), /^[0-9a-f]{64}$/);
 });
@@ -39,7 +42,7 @@ function gates() {
 
 test('the release gates are all listed, and a PASS always carries a dated note', () => {
   const { rows } = gates();
-  assert.deepEqual(rows.map((r) => r.id), ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8']);
+  assert.deepEqual(rows.map((r) => r.id), ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9']);
   for (const r of rows.filter((x) => x.status === 'PASS')) {
     assert.match(r.evidence, /\b\d{4}-\d{2}-\d{2}\b/, `${r.id} PASS needs a date and what was seen`);
   }

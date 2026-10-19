@@ -27,6 +27,15 @@ npx playwright test -c tests/wallet/playwright.config.ts
 ```
 
 `WALLET_LIVE=1` also runs a real regtest wallet session (needs internet).
+`passkey.spec.ts` runs the real library against Chromium's virtual
+authenticator (PRF on), on `localhost`.
+
+Passkey login needs `WALLET_PASSKEYS=on` and the Relying Party ID
+`WALLET_RP_ID`, the wallet's own hostname. Production is pinned to
+`wallet.pay-cashapp.buzz` (set by the build, any other value refused) and
+stays off until release gate G9. Passkeys are bound to that hostname for
+good: changing it later means every passkey user restores with the 12
+words. See SECURITY.md.
 
 ## Publish (owner steps; nothing here deploys on merge)
 
@@ -42,20 +51,22 @@ the website's download link off until all of them pass.
    address. The build refuses anything else.
 1. **API key.** Request a key for this wallet from the wallet library's
    vendor. Do not reuse the website's server key.
-2. **Hostname.** Choose a separate hostname, for example
-   `wallet.<your-domain>`. Not a path on the website.
+2. **Hostname.** `wallet.pay-cashapp.buzz` (release gate G3). Not a path
+   on the website, and nothing else under it.
 3. **Workers project.** In Cloudflare, create a Workers Builds project
    from this repository: root directory `wallet`, build command
    `npm ci --ignore-scripts && npm run build`, deploy command
-   `npx wrangler deploy`, build variable `WALLET_API_KEY`. Attach the
-   hostname as a custom domain.
+   `npx wrangler deploy`, build variable `WALLET_API_KEY`. Attach
+   `wallet.pay-cashapp.buzz` as a custom domain. The build sets
+   `WALLET_RP_ID` to that hostname itself; leave `WALLET_PASSKEYS` unset
+   (passkeys off) until gate G9.
 4. **Test on real phones.** Android (Chrome) and iPhone (Safari): create,
    back up, receive a small amount, send it back, lock, restore on a
    second phone.
 5. **Check the release.** GitHub → Actions → "Wallet release check": the
    production address, network `mainnet`, and the sha256 the build printed.
-   Every file must match its manifest
-   (`scripts/wallet-verify-release.mjs`).
+   Every file must match its manifest, and `config.js` must name this host
+   as the passkey RP ID (`scripts/wallet-verify-release.mjs`).
 6. **Turn on the download link.** In `public/wallet-release.js` set
    `url` to the hostname and `publishedAt`, and `versionJsonSha256` to the
    value the build printed, and record them in the gates page. Until then the website's Download wallet page
@@ -63,6 +74,9 @@ the website's download link off until all of them pass.
 
 ## Limitations of this version
 
+- Passkey login needs a browser and authenticator with the WebAuthn PRF
+  extension (recent Chrome, Edge, Safari 18+; Android with Google Password
+  Manager, iOS 18+). Elsewhere only the 12-word option shows.
 - No unilateral-exit button yet. The app saves an exit backup file;
   the exit itself is a later milestone (see SECURITY.md).
 - Real-time sync with the library vendor is off (`WALLET_SYNC=on` to

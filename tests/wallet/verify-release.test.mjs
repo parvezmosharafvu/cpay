@@ -33,11 +33,16 @@ async function serve(dir, t) {
 
 const prod = build({ WALLET_NETWORK: 'mainnet', WALLET_API_KEY: 'test-wallet-key' });
 
-test('a release build served as built passes, file by file', async (t) => {
+test('a release build served as built matches file by file; its RP ID must be the serving host', async (t) => {
   const url = await serve(prod.out, t);
   const r = await verify({ url, network: 'mainnet', sha256: prod.sha, insecureLocal: true });
-  assert.deepEqual(r.problems, []);
-  assert.equal(r.ok, true);
+  // Every file matches. The one problem: a production build's passkey RP
+  // ID is wallet.pay-cashapp.buzz, and this copy is served from 127.0.0.1.
+  assert.equal(r.problems.length, 1, r.problems.join('\n'));
+  assert.match(r.problems[0], /passkey RP ID wallet\.pay-cashapp\.buzz, but the wallet is served from 127\.0\.0\.1/);
+  assert.equal(r.ok, false);
+  assert.equal(r.rpId, 'wallet.pay-cashapp.buzz');
+  assert.equal(r.passkeys, false, 'production passkeys stay off until G9');
   assert.equal(r.manifestSha, prod.sha);
   const listed = Object.keys(JSON.parse(readFileSync(join(prod.out, 'version.json'), 'utf8')).files).filter((f) => f !== '_headers');
   assert.equal(r.checked, listed.length, 'every served file was downloaded and hashed');
@@ -72,11 +77,21 @@ test('a staging build passes as regtest and is refused as a mainnet release', as
   assert.ok(asRelease.problems.some((p) => /network regtest, expected mainnet/.test(p)));
 });
 
-test('only the wallet\'s own https host is checked', async () => {
+test('served from the RP ID host, the same kind of build passes', async (t) => {
+  const b = build({ WALLET_NETWORK: 'regtest', WALLET_LINK: 'off', WALLET_RP_ID: 'localhost' });
+  const url = (await serve(b.out, t)).replace('127.0.0.1', 'localhost');
+  const r = await verify({ url, network: 'regtest', sha256: b.sha, insecureLocal: true });
+  assert.deepEqual(r.problems, []);
+  assert.equal(r.rpId, 'localhost');
+});
+
+test('only the wallet\'s own https host is checked (wallet.pay-cashapp.buzz is the one subdomain allowed)', async () => {
   for (const [url, why] of [
     ['http://wallet.example.org', /must be https/],
     ['https://pay-cashapp.buzz', /own hostname/],
-    ['https://wallet.pay-cashapp.buzz', /own hostname/],
+    ['https://www.pay-cashapp.buzz', /own hostname/],
+    ['https://x.wallet.pay-cashapp.buzz', /own hostname/],
+    ['http://wallet.pay-cashapp.buzz', /must be https/],
     ['https://wallet.example.org/app', /no path/],
     ['https://user:pw@wallet.example.org', /no credentials/],
   ]) {

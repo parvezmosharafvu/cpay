@@ -53,6 +53,12 @@ export async function openPhrase(blob, passphrase) {
   }
 }
 
+// A passkey wallet (passkey.js) stores no secret at all: only which
+// passkey to ask for and the label it derives under. The phrase comes from
+// the passkey on each unlock.
+export const passkeyRecord = (credentialId, label) => ({ v: VAULT_VERSION, kind: 'passkey', cred: credentialId || null, label });
+export const isPasskeyVault = (blob) => blob?.kind === 'passkey';
+
 // Storage is this wallet's own origin (never the CPAY website's origin).
 const SLOT = 'cpay-wallet.vault.v1'; // localStorage item name
 export const vaultStore = {

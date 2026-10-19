@@ -11,6 +11,8 @@
 <link rel="stylesheet" href="/cpay.css">
 <link rel="stylesheet" href="/a11y.css">
 <script src="/wallet-release.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
+<script src="/config.js"></script>
 </head>
 <body class="auth doc">
   <a class="skip-link" href="#walletMain">Skip to content</a>
@@ -80,24 +82,37 @@
   const r = window.CPAY_WALLET_RELEASE || {};
   const $ = (id) => document.getElementById(id);
   $('curVer').textContent = r.version || 'unknown';
-  // A link is shown only for a published release on the wallet's own
-  // https hostname. Anything else (missing, http, this site's own host,
-  // credentials or a path trick) keeps the "Not available yet" notice.
-  let u = null;
-  try { u = r.url ? new URL(r.url) : null; } catch (e) { u = null; }
-  const ok = u && u.protocol === 'https:' && !u.username && !u.password
-    && u.hostname !== location.hostname && /^[a-z0-9.-]+$/.test(u.hostname) && r.publishedAt;
-  if (!ok) return;
-  const base = u.origin + '/';
-  $('relLink').href = base;
-  $('relHost').textContent = u.hostname;
-  $('relVer').textContent = r.version;
-  $('relDate').textContent = String(r.publishedAt);
-  if (r.versionJsonSha256) { $('relHash').textContent = r.versionJsonSha256; $('relHashRow').hidden = false; }
-  $('secLink').href = base + 'security.html';
-  $('secMore').hidden = false;
-  $('relOff').hidden = true;
-  $('relOn').hidden = false;
+  // A link is shown only for the wallet's own https hostname. Anything else
+  // (missing, http, this site's own host, credentials or a path trick)
+  // keeps the "Not available yet" notice. The address comes from the
+  // release record, or from Admin → Settings (CPAY Wallet: address and
+  // "Show the CPAY Wallet download link"), read with get_public_site_settings.
+  const safe = (raw) => {
+    let u = null;
+    try { u = raw ? new URL(raw) : null; } catch (e) { u = null; }
+    return u && u.protocol === 'https:' && !u.username && !u.password
+      && u.hostname !== location.hostname && /^[a-z0-9.-]+$/.test(u.hostname) ? u : null;
+  };
+  function show(u, date) {
+    const base = u.origin + '/';
+    $('relLink').href = base;
+    $('relHost').textContent = u.hostname;
+    $('relVer').textContent = r.version || 'unknown';
+    $('relDate').textContent = date ? String(date) : 'recently';
+    if (r.versionJsonSha256) { $('relHash').textContent = r.versionJsonSha256; $('relHashRow').hidden = false; }
+    $('secLink').href = base + 'security.html';
+    $('secMore').hidden = false;
+    $('relOff').hidden = true;
+    $('relOn').hidden = false;
+  }
+  const rec = safe(r.url);
+  if (rec && r.publishedAt) { show(rec, r.publishedAt); return; }
+  const client = window.supabaseClient;
+  if (!client) return;
+  client.rpc('get_public_site_settings').then(({ data }) => {
+    const u = data && data.wallet_link_enabled === true ? safe(data.wallet_url) : null;
+    if (u) show(u, null);
+  }, () => {});
 })();
 </script>
 </body>

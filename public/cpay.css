@@ -1321,3 +1321,61 @@ body.auth.doc .hero-card h1{font-size:clamp(26px,4vw,32px)}
   .rtable tbody tr{gap:8px 14px;padding:12px 16px}
 }
 body.auth.doc .alert{display:block}
+
+/* ---------- Standard (default) design: express checkout ----------
+   The default payment and invoice look since 20261020: a full-bleed green
+   amount page with a large number pad and a black pay button, then a dark
+   scanner-style invoice with a framed QR and pill buttons. Same markup and
+   tokens as every other design; only the Standard tokens change. */
+[data-layout="keypad"] body.checkout:not(.invoice){--page-bg:#00D632;--page-base:#00D632;--page-fg:#000;--page-muted:rgba(0,0,0,.7);--page-mark:#000;--page-mark-fg:#00D632;--text:#000;--muted:rgba(0,0,0,.72);--faint:rgba(0,0,0,.66);--accent:#000;--accent-text:#000;--accent-soft:rgba(0,0,0,.1);--accent-ring:rgba(0,0,0,.25);--on-accent:#fff;--line:rgba(0,0,0,.12);--line-strong:rgba(0,0,0,.22);--surface-2:rgba(0,0,0,.06);--danger:#6B0016;--ck-font:"DM Sans",var(--font);--ck-card:transparent;--ck-border:0;--ck-shadow:none;--ck-pad:20px;--key-bg:transparent;--key-border:0;--key-hover:rgba(0,0,0,.08);--key-fg:#000;--key-height:64px;--key-radius:16px;--key-weight:500;--amount-size:80px;--num-weight:700;--num-spacing:-.04em;--btn-bg:#000;--btn-hover:#1c1c1c;--btn-radius:18px;--chip-radius:999px;--input-radius:16px;--avatar-radius:50%;--merchant-accent:rgba(0,0,0,.12)}
+[data-layout="keypad"] body.checkout:not(.invoice) .key{font-size:32px}
+[data-layout="keypad"] body.checkout:not(.invoice) .merchant-avatar{color:#000;font-weight:800}
+[data-layout="keypad"] body.checkout:not(.invoice) .merchant-name{font-size:18px;font-weight:700}
+[data-layout="keypad"] body.checkout:not(.invoice) .amount-text.long{font-size:56px}
+[data-layout="keypad"] body.checkout:not(.invoice) .quick-btn{background:rgba(0,0,0,.08);border-radius:18px;padding:16px;font-size:16px;font-weight:700;color:#000}
+[data-layout="keypad"] body.checkout:not(.invoice) .quick-chip{background:rgba(0,0,0,.1);border:0;color:#000;padding:12px 20px;font-size:16px}
+[data-layout="keypad"] body.checkout:not(.invoice) .quick-chip.selected,[data-layout="keypad"] body.checkout:not(.invoice) .classic-chip.selected{background:#000;color:#00D632}
+[data-layout="keypad"] body.checkout:not(.invoice) .pay-btn{padding:18px;font-size:18px;font-weight:700}
+[data-layout="keypad"] body.checkout:not(.invoice) .resume-box{background:rgba(0,0,0,.08)}
+[data-layout="keypad"] body.checkout:not(.invoice) .direct-note{background:rgba(255,255,255,.55);border-color:rgba(0,0,0,.15);color:#000}
+@media (min-width:600px){
+  [data-layout="keypad"] body.checkout:not(.invoice){--page-bg:#0a0a0a;--page-base:#0a0a0a;--page-fg:#fff;--page-muted:rgba(255,255,255,.7);--page-mark:#00D632;--page-mark-fg:#000;justify-content:center}
+  [data-layout="keypad"] body.checkout:not(.invoice) .checkout-card{--ck-pad:28px;background:#00D632;border-radius:36px;box-shadow:0 24px 80px rgba(0,0,0,.6),0 0 0 10px #111,0 0 0 14px #222;max-width:400px}
+  [data-layout="keypad"] body.checkout:not(.invoice) .checkout-head,[data-layout="keypad"] body.checkout:not(.invoice) .checkout-foot{max-width:400px}
+}
+[data-layout="keypad"] body.checkout.invoice{color-scheme:dark;--bg:#000;--page-bg:#000;--page-base:#000;--page-fg:#fff;--page-muted:rgba(255,255,255,.7);--page-mark:#00D632;--page-mark-fg:#000;--surface:#111;--surface-2:rgba(255,255,255,.08);--line:rgba(255,255,255,.12);--line-strong:rgba(255,255,255,.22);--text:#fff;--muted:rgba(255,255,255,.75);--faint:rgba(255,255,255,.62);--accent:#00D632;--accent-text:#00D632;--accent-soft:rgba(0,214,50,.14);--on-accent:#000;--btn-bg:#fff;--btn-hover:#e8e8e8;--btn-radius:999px;--ck-font:"DM Sans",var(--font);--ck-card:transparent;--ck-border:0;--ck-shadow:none;--ck-pad:20px;--qr-border:0;--qr-radius:16px;--qr-mark:#00D632;--modal-bg:#111;--success:#00C851;--success-soft:rgba(0,200,81,.16);--warn:#FFD60A;--warn-soft:rgba(255,214,10,.12);--danger:#FF6B60;--danger-soft:rgba(255,69,58,.18);--info:#64D2FF;--info-soft:rgba(100,210,255,.12);--info-line:rgba(100,210,255,.3);--info-fg:#cdefff;--avatar-radius:50%;--merchant-accent:rgba(255,255,255,.12);--shadow-sm:none}
+[data-layout="keypad"] body.invoice .qr-link-button{padding:12px;border:1px solid rgba(255,255,255,.15);border-radius:28px}
+[data-layout="keypad"] body.invoice .timer-pill{background:rgba(255,255,255,.08);border-color:transparent;color:#fff;font-weight:700;letter-spacing:.03em}
+[data-layout="keypad"] body.invoice .timer-pill.urgent{background:rgba(255,69,58,.18);color:#FF6B60}
+[data-layout="keypad"] body.invoice .btn-copy{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff}
+[data-layout="keypad"] body.invoice .btn-copy.done{background:#00C851;border-color:#00C851;color:#000}
+[data-layout="keypad"] body.invoice .btn-pay{color:#000;font-weight:700}
+[data-layout="keypad"] body.invoice .btn-alt{background:#00D632;color:#000}
+[data-layout="keypad"] body.invoice .pill-btn{font-weight:700}
+[data-layout="keypad"] body.invoice .success-icon{width:80px;height:80px;background:#00C851;color:#000}
+[data-layout="keypad"] body.invoice .success-icon svg{width:44px;height:44px}
+[data-layout="keypad"] body.invoice .success-amount{color:#00C851;font-size:44px;font-weight:800}
+[data-layout="keypad"] body.invoice .receipt{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);border-radius:16px}
+[data-layout="keypad"] body.invoice .float-toast{background:#fff;color:#000;border-radius:999px;font-weight:700}
+[data-layout="keypad"] body.invoice .status-chip[data-state="waiting"]{color:rgba(255,255,255,.8);background:transparent;border-color:transparent}
+
+/* ---------- Freelancer overview and payment details (20261020) ---------- */
+.home-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.home-actions .btn{justify-content:center;min-height:52px}
+@media (max-width:520px){.home-actions{grid-template-columns:1fr}}
+.summary-card .summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.summary-card .summary-grid > div + div{border-left:1px solid var(--line);padding-left:18px}
+@media (max-width:720px){.summary-card .summary-grid{grid-template-columns:1fr}.summary-card .summary-grid > div + div{border-left:0;padding-left:0;border-top:1px solid var(--line);padding-top:14px}}
+.activity li.act-open,.table tr.row-open{cursor:pointer}
+.activity li.act-open:hover,.table tr.row-open:hover{background:var(--surface-2)}
+.activity li.act-open:focus-visible,.table tr.row-open:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+dialog.pay-details{width:min(460px,calc(100vw - 24px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid var(--line);border-radius:16px;padding:20px;background:var(--surface);color:var(--text);box-shadow:var(--shadow-lg)}
+dialog.pay-details::backdrop{background:rgba(16,24,40,.5)}
+.pd-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.pd-head h3{margin:0}
+.pd-amount{text-align:center;padding:10px 0 14px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.pd-amount .kpi{margin:2px 0 6px}
+.pd-list{margin:0}
+.pd-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.pd-row dt{color:var(--muted)}
+.pd-row dd{margin:0;font-weight:600;text-align:right;overflow-wrap:anywhere}

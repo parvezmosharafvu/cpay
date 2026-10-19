@@ -20,6 +20,7 @@ const requiredFiles = [
   "login.html",
   "register.html",
   "invoice-cpay-v2.html",
+  "invoice-view.js",
   "_headers",
   "config.js",
   "favicon-site.svg",

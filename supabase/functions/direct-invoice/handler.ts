@@ -27,6 +27,7 @@ import {
 } from "../_shared/direct-settlement.ts";
 import type { Verification } from "../_shared/lnurl.ts";
 import { secretMatches } from "../_shared/secret-compare.ts";
+import { coarseGeo } from "../_shared/geo.ts";
 
 export type Link = { link_id: string; user_id: string; is_active: boolean; cost_percent: number | string | null; settlement_mode: string };
 
@@ -74,6 +75,7 @@ export type NewRow = {
   expires_at: string;
   customer_country: string | null;
   customer_city: string | null;
+  customer_region: string | null;
 };
 
 /** undefined = could not read (fail closed); null = nothing there. */
@@ -282,8 +284,10 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
       payment_hash: created.invoice.paymentHash,
       verify_url: created.verifyUrl,
       expires_at: new Date(created.invoice.expiresAtMs).toISOString(),
-      customer_country: req.headers.get("cf-ipcountry") || null,
-      customer_city: req.headers.get("cf-ipcity") || null,
+      // Coarse payer location (country / region / city), never the IP.
+      customer_country: coarseGeo(req.headers).country,
+      customer_city: coarseGeo(req.headers).city,
+      customer_region: coarseGeo(req.headers).region,
     };
     const ins = await db.insert(row);
     if (ins === "request_conflict" && requestId) {

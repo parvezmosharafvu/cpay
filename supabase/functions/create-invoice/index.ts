@@ -5,6 +5,7 @@ import {
   checkTurnstile, clientKey, type ExistingPayment, parseRequestId, PUBLIC_LIMITS, replayDecision, sha256Hex, turnstileMode,
 } from "./guards.ts";
 import { serviceAuthHeaders, serviceAuthMode } from "../_shared/service-auth.ts";
+import { coarseGeo } from "../_shared/geo.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -197,6 +198,7 @@ const releaseRateClaim = async () => {
 // The row comes first and the invoice second, so a payment can never
 // arrive for a row that does not exist yet.
 const expiresAt = new Date(Date.now() + INVOICE_MINUTES * 60 * 1000).toISOString();
+const geo = coarseGeo(req.headers);
 const { data: payment, error: insertErr } = await supabaseAdmin
   .from("payments")
   .insert({
@@ -210,8 +212,10 @@ const { data: payment, error: insertErr } = await supabaseAdmin
     amount_requested: formatCents(chargedAmountCents),
     status: "new",
     expires_at: expiresAt,
-    customer_city: req.headers.get("cf-ipcity") || null,
-    customer_country: req.headers.get("cf-ipcountry") || null,
+    // Coarse payer location (country / region / city), never the IP.
+    customer_city: geo.city,
+    customer_country: geo.country,
+    customer_region: geo.region,
     client_request_id: requestId,
   })
   .select("id")

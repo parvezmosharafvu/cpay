@@ -9,7 +9,7 @@ test('customer-entered amount creates one invoice through the real Edge Function
   await page.keyboard.type('12.50');
   await expect(page.locator('#amountDisplay')).toHaveText('$12.50');
   await page.click('#payBtn');
-  await page.waitForURL(/invoice-cpay-v2\.html\?id=/);
+  await page.waitForURL(/[?&]id=/);
   await expect(page.locator('#amountDue')).toContainText('12.50');
   await expect(page.locator('#invoiceText')).toHaveText(/^lnbcrt/, { useInnerText: false });
   await expectCleanCopy(page);
@@ -25,7 +25,7 @@ test('a prefilled amount (?amount=) is used as is', async ({ page }) => {
   await page.goto(`/${slug}?amount=25`);
   await expect(page.locator('#amountDisplay')).toHaveText('$25');
   await page.click('#payBtn');
-  await page.waitForURL(/invoice-cpay-v2/);
+  await page.waitForURL(/[?&]id=/);
   expect((await paymentsFor(u.id))[0].amount_requested).toBe('25.00000000');
 });
 
@@ -51,7 +51,7 @@ test('double-clicking pay creates exactly one invoice', async ({ page }) => {
   await page.keyboard.type('7');
   await page.locator('#payBtn').dblclick();
   await page.keyboard.press('Enter');
-  await page.waitForURL(/invoice-cpay-v2/);
+  await page.waitForURL(/[?&]id=/);
   expect(await paymentsFor(u.id)).toHaveLength(1);
 });
 
@@ -64,7 +64,7 @@ test('a link cost is shown to the payer before paying and charged on the invoice
   await page.keyboard.type('20');
   await expect(page.locator('#chargeSummary')).toHaveText(/You pay \$22\.00 · includes 10% service fee/);
   await page.click('#payBtn');
-  await page.waitForURL(/invoice-cpay-v2/);
+  await page.waitForURL(/[?&]id=/);
   await expect(page.locator('#amountDue')).toContainText('22.00');
 });
 

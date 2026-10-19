@@ -32,7 +32,7 @@ test.describe('320px wide phone', () => {
     await expect(page.locator('#payBtn')).toBeEnabled();
     await page.keyboard.type('12');
     await page.click('#payBtn');
-    await page.waitForURL(/invoice-cpay-v2/);
+    await page.waitForURL(/[?&]id=/);
     await expect(page.locator('#step2')).toBeVisible();
     await noHorizontalOverflow(page, 'invoice');
   });
@@ -59,7 +59,7 @@ test('keyboard only: type an amount and pay from the payment page', async ({ pag
   await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('9');
   await page.keyboard.press('Enter');
-  await page.waitForURL(/invoice-cpay-v2/);
+  await page.waitForURL(/[?&]id=/);
 });
 
 test('wallet dialog: focus moves in, Escape closes it, focus returns to the opener', async ({ page }) => {
@@ -69,7 +69,7 @@ test('wallet dialog: focus moves in, Escape closes it, focus returns to the open
   await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('9');
   await page.click('#payBtn');
-  await page.waitForURL(/invoice-cpay-v2/);
+  await page.waitForURL(/[?&]id=/);
   await page.locator('#otherWalletsBtn').focus();
   await page.keyboard.press('Enter');
   const dialog = page.locator('#walletSheet [role="dialog"]');

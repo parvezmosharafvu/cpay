@@ -11,7 +11,7 @@ test('an amount typed while the resume check runs is kept, and a different amoun
   await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('11');
   await page.click('#payBtn');
-  await page.waitForURL(/invoice-cpay-v2\.html\?id=/);
+  await page.waitForURL(/[?&]id=/);
   const id = new URL(page.url()).searchParams.get('id')!;
 
   // Back on the link, hold the resume lookup and type during the hold.
@@ -28,6 +28,6 @@ test('an amount typed while the resume check runs is kept, and a different amoun
   await expect(page.locator('#resumeBox')).toBeVisible();
   await page.unroute('**/rest/v1/rpc/get_invoice_public');
   await page.click('#payBtn');
-  await page.waitForURL((url) => url.searchParams.get('id') !== id && /invoice-cpay-v2/.test(url.href));
+  await page.waitForURL((url) => url.searchParams.get('id') !== id && /[?&]id=/.test(url.href));
   expect(await paymentsFor(u.id)).toHaveLength(2);
 });

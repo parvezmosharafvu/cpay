@@ -16,7 +16,7 @@ CPAY's own revenue.
 | Migrations | 145, latest `20261018010000_direct_settlement` | 145 applied, same latest | Same, plus the flag migrations in §5 |
 | `direct_settlement_enabled` | default `false` | `false` | `true` after gates G1–G6 |
 | `direct-invoice`, `settlement-destination` | present | v1 each, deployed 2026-10-18 14:57 +06 | Live, switch on |
-| `breez-wallet` function | changed after Oct 13 (#106, #107, #113, #115, #122) | **v21, deployed 2026-10-13 23:28 +06 (older code)** | Redeploy current main once before the wind-down; then CPAY-revenue-only (§4) |
+| wallet Edge Function | changed after Oct 13 (#106, #107, #113, #115, #122) | **v21, deployed 2026-10-13 23:28 +06 (older code)** | Redeploy current main once before the wind-down; then CPAY-revenue-only (§4) |
 | `direct_payments` / `settlement_destinations` rows | — | 0 / 0 | Growing |
 | Payment links by mode | — | 2 custodial, 0 direct | All direct; custodial mode removed |
 | Settled custodial payments | — | 5, $77.03 settled, $1.15 platform fees | Frozen history |
@@ -31,14 +31,14 @@ CPAY's own revenue.
 
 | # | Place | Code | Custodial power | Target |
 |---|---|---|---|---|
-| C1 | Platform Lightning wallet (one pooled wallet, recovery phrase is an Edge secret) | `supabase/functions/breez-wallet`, schema `breez_wallet` | Receives every custodial payment; can send anything | CPAY revenue only (§4) |
+| C1 | Platform Lightning wallet (one pooled wallet, recovery phrase is an Edge secret) | the wallet Edge Function and its schema | Receives every custodial payment; can send anything | CPAY revenue only (§4) |
 | C2 | Custodial receive | `create-invoice` → wallet function; `settle_breez_payment` | Payer pays CPAY's invoice | Off by flag, then removed |
 | C3 | Member / org balances | `get_balance_for()`, `payments`, `withdrawals`; desk "held by CPAY" | A claim on CPAY | Read-only history, then retired |
 | C4 | Platform fee deducted at settlement | `stamp_payment_platform_fee`, `payments.platform_fee_*`, `profiles.platform_fee_percent` | Only possible because CPAY holds the money | Replaced by billing (§2) |
 | C5 | Link cost / markup (`cost_percent`) | links, payer page | Merchant's own markup; custodial today only because the payment is | Unchanged: goes to merchant's wallet on direct links |
-| C6 | Freelancer USDT withdraw (quote, confirm, step-up, 24 h wait) | `user-withdraw`, `breez_wallet.withdraw_quotes` | CPAY converts and pays out | Removed: nothing to withdraw |
+| C6 | Freelancer USDT withdraw (quote, confirm, step-up, 24 h wait) | `user-withdraw`, `withdraw_quotes` | CPAY converts and pays out | Removed: nothing to withdraw |
 | C7 | Auto-payout | `system_queue_withdrawal`, `profiles.auto_withdraw_enabled`, `withdraw_threshold` | Queued payouts from CPAY's wallet | Removed (0 opted in) |
-| C8 | Admin send from platform wallet | `admin-actions`, `breez_wallet.admin_send_quotes` | Any admin (aal2) can send pooled funds | Limited to CPAY's own revenue, capped (§4) |
+| C8 | Admin send from platform wallet | `admin-actions`, `admin_send_quotes` | Any admin (aal2) can send pooled funds | Limited to CPAY's own revenue, capped (§4) |
 | C9 | Receipt recording / receipt reviews | `receipt_reviews`, `RECEIPT_RECORDING` | Credits deposits found in the wallet | Removed |
 | C10 | Ledger | `payments`, `withdrawals`, ledger-backup job, financial invariants | Record of custodial money | Kept read-only as history; backups continue |
 | C11 | Legacy payout fields on profiles (local-payout and exchange-ID columns) | `profiles.*` | Stored payout destinations for methods CPAY does not run | Drop after export (data minimisation) |
@@ -90,7 +90,7 @@ Steps (owner-run, nothing by the agent):
 - No member-facing feature reads it. Health keeps checking it (lease, sync), but solvency checks retire
   once `sum(get_balance_for) = 0`.
 - Longer term option: replace the hosted platform wallet with a simple receive-only revenue address on
-  the owner's own wallet, and retire the `breez-wallet` function entirely (fewer secrets, no hot wallet).
+  the owner's own wallet, and retire the wallet Edge Function entirely (fewer secrets, no hot wallet).
 
 ## 5. Migration and rollout (behind flags)
 
@@ -105,7 +105,7 @@ New `app_settings` booleans, all changed only through `admin_set_feature_toggle(
 | F-D `fee_billing_enabled` (new, later) | false | No subscription invoices |
 
 Phases:
-1. **P0 – prerequisites:** legal pages final (PR for non-custodial terms); redeploy current `breez-wallet`;
+1. **P0 – prerequisites:** legal pages final (PR for non-custodial terms); redeploy current the wallet Edge Function;
    G1–G6 gates of NON-CUSTODIAL-ARCHITECTURE §7 (Turnstile enforce, `DIRECT_PROVIDER_HOSTS`, reconcile
    schedule, one real $1–$5 direct payment).
 2. **P1 – pilot:** direct on for one owner account; F-B false for that account only.
@@ -141,4 +141,4 @@ owner sign-off and a full ledger export. Direct payments need no money rollback:
 6. D6 Publish CPAY Wallet (release gates) and add Lightning-address registration.
 7. D7 Legal: entity name, registered address, governing law, contact addresses (see the legal PR);
    counsel sign-off that a non-custodial model needs no licence where CPAY and its users are.
-8. D8 Turnstile enforce, reconcile secret, redeploy of `breez-wallet` (secrets/deploys are owner actions).
+8. D8 Turnstile enforce, reconcile secret, redeploy of the wallet Edge Function (secrets/deploys are owner actions).

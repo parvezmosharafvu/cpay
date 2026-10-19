@@ -25,6 +25,7 @@ insert into anon_rpc_allowlist(signature, reason) values
   ('get_link_preview(text)',                 'public payment link page / OG preview'),
   ('get_public_store(uuid)',                 'public creator store: active accounts, public fields only'),
   ('lookup_payment_status(text)',            'public payment status lookup'),
+  ('get_public_site_settings()',             'public legal fields and wallet link only (20261020010000)'),
   ('is_admin()',                             'returns false for callers without a session');
 
   -- 20261004010000 removed anon from the eleven internally guarded

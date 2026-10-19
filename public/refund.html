@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <meta name="color-scheme" content="light">
-<title>Refund Policy (draft) · CPAY</title>
+<title>Refund and Dispute Policy · CPAY</title>
 <link rel="icon" type="image/svg+xml" href="/favicon-site.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -17,16 +17,35 @@
   .draft{border:2px dashed #b45309;background:#fffbeb;color:#78350f;padding:12px 16px;border-radius:10px;margin-bottom:24px}
   h1{font-size:1.8rem;margin:0 0 12px} h2{font-size:1.15rem;margin-top:28px}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
+<script src="config.js"></script>
+<script src="legal-fields.js?v=1"></script>
 </head>
 <body>
 <main>
-<div class="draft" role="note"><strong>DRAFT, not final legal text.</strong> This page is a placeholder for the owner and legal review. It is not indexed and is not linked from the site. Text in [brackets] must be filled in or replaced before launch.</div>
-<h1>Refund Policy</h1>
-<p><em>Last updated: [date]</em></p>
-<p>Lightning payments settle instantly and cannot be reversed by CPAY or by the payer's wallet.</p>
-<h2>Paying a Freelancer</h2><p>Payments made through a payment link go to that Freelancer. Questions about goods or services, or a refund for them, are between you and the Freelancer. [Whether CPAY mediates disputes.]</p>
-<h2>Wrong amount or expired invoice</h2><p>If an invoice is underpaid, expires, or is paid twice, contact support with the invoice link and payment details. [Process, time limits, whether network fees are deducted.]</p>
-<h2>Fees</h2><p>[Are CPAY fees refundable?]</p>
+<div class="draft" role="note" data-legal-note><strong>Not yet published.</strong> The text is complete. Items in [brackets] are facts only the owner can supply (legal entity, address, jurisdiction, contact addresses, dates). Until they are filled in, this page stays unlinked and not indexed.</div>
+<h1>Refund and Dispute Policy</h1>
+<p><em>Last updated: <span data-legal="legal_effective_date">[Effective date]</span>. CPAY is operated by <span data-legal="legal_entity_name">[Legal entity name]</span>, <span data-legal="legal_address">[Registered address]</span>.</em></p>
+<h2>Payments go to the merchant, not to CPAY</h2>
+<p>When you pay through a CPAY link, your payment goes directly to the merchant's own wallet. CPAY never holds it, so CPAY cannot refund it, reverse it or move it.</p>
+<h2>Bitcoin and Lightning payments are final</h2>
+<p>Once a Lightning payment completes it cannot be reversed or charged back by CPAY, by the payer's wallet or by any network. Check the amount and the merchant name on the payment page before you pay.</p>
+<h2>Asking for a refund</h2>
+<ol>
+<li>Contact the merchant you paid. The merchant is responsible for the goods or services they sell and for their own refund policy.</li>
+<li>If the merchant agrees, they send the refund from their own wallet to a Lightning invoice or address that you give them. A refund is a new payment; the amount in bitcoin may differ from the original if the price has changed, unless you and the merchant agree otherwise.</li>
+<li>If you cannot reach an agreement, report it through our <a href="/contact.html">complaints procedure</a> with the payment link, the time you paid and, if you have it, the proof of payment from the receipt. CPAY can confirm whether the merchant's wallet confirmed the payment and can act under the Terms against an account used for fraud, but cannot make the refund itself.</li>
+</ol>
+<h2>Invoice problems</h2>
+<ul>
+<li><strong>Expired invoice:</strong> if an invoice expires before it is paid, no money moves. Ask for a new link.</li>
+<li><strong>Paid but the page still waits:</strong> CPAY keeps checking with the merchant's wallet for several days and updates the receipt when proof arrives. Your own wallet's history shows whether you paid. Report it if it is not resolved.</li>
+<li><strong>Paid twice or overpaid:</strong> each invoice is for an exact amount. If you paid two invoices by mistake, ask the merchant to refund one; CPAY cannot.</li>
+</ul>
+<h2>Merchants</h2>
+<p>Merchants should publish their own refund terms to customers and handle refund requests promptly from their own wallets. CPAY fees, where they apply, are not refundable once the billing period has started, unless the problem was caused by CPAY.</p>
+<h2>Previous CPAY balances</h2>
+<p>For accounts that still have a balance recorded by CPAY from before CPAY became non-custodial, withdrawals sent to the address saved on the account cannot be recalled. A withdrawal that fails before it is sent returns to that balance.</p>
 <p><a href="/">Back to CPAY</a></p>
 </main>
 </body>

@@ -34,7 +34,7 @@
 <ul>
 <li><strong>Account data:</strong> email address, display name, account type, business name if you give one, and the store details you choose to publish. Passwords are stored only as a hash by our authentication provider. Purpose: to provide your account (contract).</li>
 <li><strong>Sign-in security data:</strong> whether you set up two-step sign-in or passkeys, and times of sign-in attempts. Purpose: to protect your account (legitimate interest, security).</li>
-<li><strong>Receiving address:</strong> the Lightning address you save for payments and when it was checked. Purpose: to create invoices that pay you (contract).</li>
+<li><strong>Receiving address:</strong> the Lightning address you save for payments and when it was checked. Purpose: to create invoices that pay you, or to forward your payments to you (contract).</li>
 <li><strong>Payment records:</strong> invoice amount, price reference, status, time, Lightning payment identifiers and proof of payment, and an approximate payer country and city from the network connection. Purpose: to show you your payments and investigate problems (contract, legitimate interest).</li>
 <li><strong>Abuse-prevention data:</strong> IP address and browser information, used for rate limits and bot checks, and an audit log of sensitive account and admin actions. Purpose: to prevent fraud and abuse (legitimate interest, legal obligation).</li>
 </ul>
@@ -43,7 +43,7 @@
 <ul>
 <li>Database, authentication and server functions: Supabase (servers in Singapore).</li>
 <li>Website delivery, security and bot protection: Cloudflare.</li>
-<li>Invoice creation and payment confirmation: the Lightning wallet provider behind the address you choose, which receives the invoice amount and description.</li>
+<li>Invoice creation and payment confirmation: for direct payments, the Lightning wallet provider behind the address you choose, which receives the invoice amount and description. With instant forward, CPAY's own platform wallet creates and receives the invoice, then sends a separate payment to the provider behind your saved address.</li>
 <li>Price references: public exchange-rate sources (no personal data is sent).</li>
 <li>Operator alerts: Telegram, for CPAY staff only; alerts contain payment amounts and the receiving account's display name.</li>
 <li>Backups: an encrypted-at-rest private code repository on GitHub, containing payment and account records without email addresses.</li>

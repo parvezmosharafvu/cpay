@@ -33,9 +33,9 @@ test('quote shows platform fee, network fee, masked destination and a countdown,
   await expect(page.locator('#wHist table')).toContainText(/paid|sending/i);
 });
 
-test('an address saved less than 24 h ago gets no quote', async ({ page }) => {
+test('an address still waiting from before instant saving gets no quote', async ({ page }) => {
   const u = await openWithdraw(page, 50, 0, false);
-  await db.query(`insert into usdt_wallets(user_id, network, address) values ($1, 'tron', $2)`, [u.id, TRON]);
+  await db.query(`begin; set local session_replication_role = replica; insert into usdt_wallets(user_id, network, address, usable_after) values ('${u.id}', 'tron', '${TRON}', now() + interval '20 hours'); commit;`);
   await page.fill('#wDest', TRON);
   await page.fill('#wAmt', '10');
   await page.click('#wBtn');

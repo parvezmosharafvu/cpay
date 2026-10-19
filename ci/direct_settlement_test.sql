@@ -6,7 +6,7 @@
 -- payment is paid only with a preimage that hashes to its payment hash,
 -- paid is final, expiry waits for the invoice; direct payments never touch
 -- a CPAY balance; accounts cannot see each other's rows; a new Lightning
--- address waits 24 h; the internal functions are service-only; turning
+-- address is used at once (after the caller's fresh sign-in); the internal functions are service-only; turning
 -- the switch on needs aal2. BEGIN/ROLLBACK.
 \set ON_ERROR_STOP on
 begin;
@@ -100,15 +100,18 @@ do $$ begin
   if not direct_settlement_enabled() then raise exception 'switch did not turn on'; end if;
 end $$;
 
--- 3. Destination: saved by the service role, waits 24 h, same address is a no-op.
+-- 3. Destination: saved by the service role, used at once, same address is a no-op.
 do $$
 declare r record;
 begin
   select * into r from system_set_settlement_destination('d5000000-0000-0000-0000-0000000000f1', 'Alice@Pay.Example.com', 'pay.example.com', 1000, 1000000000);
   if r.address <> 'alice@pay.example.com' or r.unchanged then raise exception 'destination not saved: %', r; end if;
-  if r.ready_at < now() + interval '23 hours 59 minutes' then raise exception 'no 24 h wait: %', r.ready_at; end if;
-  if exists (select 1 from system_direct_destination_for('d5000000-0000-0000-0000-0000000000f1')) then
-    raise exception 'destination usable before its wait';
+  if r.ready_at > now() + interval '1 minute' then raise exception 'address not usable at once: %', r.ready_at; end if;
+  if not exists (select 1 from system_direct_destination_for('d5000000-0000-0000-0000-0000000000f1')) then
+    raise exception 'destination not usable at once';
+  end if;
+  if not exists (select 1 from support_messages where user_id = 'd5000000-0000-0000-0000-0000000000f1' and message like 'Security notice: your Lightning payout address%') then
+    raise exception 'user not told about the new address';
   end if;
   select * into r from system_set_settlement_destination('d5000000-0000-0000-0000-0000000000f1', 'alice@pay.example.com', 'pay.example.com', 1000, 1000000000);
   if not r.unchanged then raise exception 'saving the same address started a new wait'; end if;
@@ -122,32 +125,24 @@ do $$ begin
   raise exception 'a malformed address was stored';
 exception when check_violation then null;
 end $$;
--- While the address waits, a link cannot pay it yet.
-set local role authenticated;
-select set_config('request.jwt.claim.sub', 'd5000000-0000-0000-0000-0000000000f1', true);
-do $$ begin
-  perform set_link_settlement_mode('d5000000-0000-0000-0000-0000000001f1', 'direct');
-  raise exception 'a link was made direct while its address still waits';
-exception when raise_exception then
-  if sqlerrm not like 'Your Lightning address is not in use yet%' then raise; end if;
-end $$;
-reset role;
-select set_config('request.jwt.claim.sub', '', true);
 -- Pass the wait (test only: rewrite the row with the guard off).
 alter table settlement_destinations disable trigger trg_guard_settlement_destination_changes;
 update settlement_destinations set ready_at = now() - interval '1 minute' where user_id = 'd5000000-0000-0000-0000-0000000000f1';
 alter table settlement_destinations enable trigger trg_guard_settlement_destination_changes;
 -- Another address saved (waiting), then the one in use saved again: the
 -- waiting one is cancelled and the one in use keeps going, with no new wait.
+-- A new address replaces the one in use at once (the old one is retired);
+-- saving the first one again brings it back, again at once.
 do $$
-declare r record; v_ready timestamptz;
+declare r record;
 begin
-  select ready_at into v_ready from settlement_destinations where user_id = 'd5000000-0000-0000-0000-0000000000f1' and status = 'active';
   perform system_set_settlement_destination('d5000000-0000-0000-0000-0000000000f1', 'mallory@evil.example.com', 'evil.example.com', 1000, 1000000000);
+  if (select address from system_direct_destination_for('d5000000-0000-0000-0000-0000000000f1')) <> 'mallory@evil.example.com' then raise exception 'new address not in use at once'; end if;
+  if (select count(*) from settlement_destinations where user_id = 'd5000000-0000-0000-0000-0000000000f1' and status = 'active') <> 1 then raise exception 'old address not retired'; end if;
   select * into r from system_set_settlement_destination('d5000000-0000-0000-0000-0000000000f1', 'alice@pay.example.com', 'pay.example.com', 1000, 1000000000);
-  if not r.unchanged or r.ready_at <> v_ready then raise exception 're-saving the address in use started a new wait: %', r; end if;
+  if r.unchanged then raise exception 'switch back not saved'; end if;
   if exists (select 1 from settlement_destinations where address = 'mallory@evil.example.com' and status = 'active') then
-    raise exception 'the waiting address was not cancelled';
+    raise exception 'the replaced address is still active';
   end if;
 end $$;
 do $$ begin
@@ -312,7 +307,7 @@ exception when insufficient_privilege then null;
 end $$;
 select set_config('request.jwt.claim.sub', 'd5000000-0000-0000-0000-0000000000f1', true);
 do $$ begin
-  if (select count(*) from direct_payments) <> 2 or (select count(*) from settlement_destinations) <> 2 then raise exception 'A cannot read own direct rows'; end if;
+  if (select count(*) from direct_payments) <> 2 or (select count(*) from settlement_destinations) <> 3 then raise exception 'A cannot read own direct rows'; end if;
   insert into settlement_destinations(user_id, address, callback_host, min_sendable_msat, max_sendable_msat, checked_at, ready_at)
   values ('d5000000-0000-0000-0000-0000000000f1', 'self@pay.example.com', 'pay.example.com', 1, 2, now(), now());
   raise exception 'a Freelancer inserted a destination without the wait';

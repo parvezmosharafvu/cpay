@@ -94,7 +94,8 @@ test('Continue with Google: new account starts pending with the Google name; aft
 test('the desk lists saved payout networks by name with their ready time', async ({ page }) => {
   const u = await makeUser({ name: 'Net Check' });
   await readyAddress(u.id, 'tron');
-  await db.query(`insert into usdt_wallets(user_id, network, address) values ($1, 'bsc', '0x52908400098527886E0F7030069857D2E4169EE7')`, [u.id]);
+  // Saving is instant now; a row still waiting from before that change is simulated with triggers off.
+  await db.query(`begin; set local session_replication_role = replica; insert into usdt_wallets(user_id, network, address, usable_after) values ('${u.id}', 'bsc', '0x52908400098527886E0F7030069857D2E4169EE7', now() + interval '20 hours'); commit;`);
   await login(page, u);
   await page.waitForURL(/dashboard\.html/);
   await page.click('.navi[data-tab="profile"]');

@@ -30,6 +30,11 @@ end $$;
 -- A just-saved address (as after an account takeover): cooling down.
 insert into usdt_wallets(user_id, network, address)
 values ('8c000000-0000-0000-0000-0000000000f1', 'tron', 'TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL');
+-- Since 20261020040000 a new address is usable at once (after a fresh sign-in);
+-- an address still in its wait only exists from before that, simulated here.
+set local session_replication_role = replica;
+update usdt_wallets set usable_after = now() + interval '24 hours' where user_id = '8c000000-0000-0000-0000-0000000000f1';
+set local session_replication_role = origin;
 
 do $$
 declare u uuid := '8c000000-0000-0000-0000-0000000000f1'; v uuid;

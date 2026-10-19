@@ -4,8 +4,8 @@ let me = null;
 let payFilter = { status: '', search: '' };
 let wdFilter = { status: '' };
 
-// Saved payout addresses can be used 24 hours after they are saved or
-// changed (20261009010000); my_payout_book returns usable_after.
+// Saved payout addresses are usable at once after a fresh sign-in
+// (20261020040000; before that, 24 hours later). my_payout_book returns usable_after.
 function netLabel(id) {
   return (USDT_NETWORKS.find(([n]) => n === id) || [id, id])[1];
 }
@@ -345,7 +345,7 @@ async function renderCash() {
   const wallets = book?.wallets || [];
   const savedNote = wallets.length
     ? `<p class="hint">Saved USDT wallets: ${wallets.map((w) => `${escapeHtml(netLabel(w.network))} (${readyText(w)})`).join(', ')}. Open Profile to add more networks.</p>`
-    : `<p class="hint">Save a USDT address in Profile first. Withdrawals only go to a saved address, starting 24 hours after you save or change it.</p>`;
+    : `<p class="hint">Save a USDT address in Profile first. Withdrawals only go to a saved address.</p>`;
   el.innerHTML = withdrawForm(`<p class="muted">Available balance <strong id="wAvail">${money(b.available)}</strong>, held by CPAY</p>`
     + savedNote)
     + '<div id="wHist"></div>';
@@ -409,7 +409,7 @@ async function renderProfile() {
     </div>
     <div class="card">
       <h3>USDT payout</h3>
-      <p class="hint">One address per network. Withdraw sends USDT there. For your safety, a new or changed address can receive withdrawals 24 hours after you save it. Lightning collect only — payouts are USDT.</p>
+      <p class="hint">One address per network. Withdraw sends USDT there. Saving or changing an address asks you to sign in again; it works right away and you get a notice in your inbox.</p>
       <div class="field"><label for="usdtNet">Network</label><select id="usdtNet">${netOpts}</select></div>
       <div class="field"><label for="usdtAddr">Wallet address</label><input id="usdtAddr" placeholder="Address for that network" autocomplete="off" spellcheck="false"></div>
       <button class="btn primary" id="saveUsdt" type="button">Save address</button>
@@ -435,11 +435,15 @@ async function renderProfile() {
     toast('Saved', true);
   };
   document.getElementById('saveUsdt').onclick = async () => {
-    const { error: e } = await sb.rpc('set_my_usdt_wallet', {
+    // A change needs a fresh sign-in (20261020040000): the database answers
+    // "reauth_required: ..." and the step-up dialog asks once, then retries.
+    const call = () => sb.rpc('set_my_usdt_wallet', {
       p_network: document.getElementById('usdtNet').value,
       p_address: document.getElementById('usdtAddr').value.trim(),
     });
-    if (e) return toast(e.message);
+    const needsReauth = (r) => /^reauth_required/.test(String(r?.error?.message || ''));
+    const { error: e } = window.cpayWithStepUp ? await window.cpayWithStepUp(call, needsReauth) : await call();
+    if (e) return toast(String(e.message).replace(/^reauth_required:\s*/, ''));
     toast('USDT address saved', true);
     renderProfile();
   };

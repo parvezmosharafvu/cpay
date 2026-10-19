@@ -79,7 +79,7 @@
       <div id="directStatus">${statusLines(s)}</div>
       <div class="field"><label for="directAddr">Lightning address</label>
         <input id="directAddr" placeholder="name@your-wallet-provider.com" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="email" aria-describedby="directHint"></div>
-      <p class="hint" id="directHint">Use the Lightning address of a wallet you control. CPAY checks that the wallet provider can confirm payments before you can save it. Payers see this address on the payment page. For your safety, a new address is used 24 hours after you save it.</p>
+      <p class="hint" id="directHint">Use the Lightning address of a wallet you control. CPAY checks that the wallet provider can confirm payments before you can save it. Payers see this address on the payment page. Saving or changing it asks you to sign in again, and it is used right away. You get a notice in your inbox each time it changes.</p>
       <p class="hint">${forwardOnly(s)
         ? 'Fees: CPAY keeps its platform fee from each payment. The small Lightning network fee for sending it on comes out of your amount. Your wallet provider may charge its own fees.'
         : 'Fees: CPAY takes no fee from direct payments. A link cost you set is added for the payer and goes to your wallet with the rest. Your wallet provider may charge its own fees.'}</p>

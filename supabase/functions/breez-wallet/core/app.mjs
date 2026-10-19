@@ -6,6 +6,7 @@ import * as ledger from './ledger.mjs';
 import { createReceiptRecorder, settleWithReceipt } from './receipts.mjs';
 import { createWithdrawals, UserError, wait } from './withdraw.mjs';
 import { createWallet, createAdminWalletRoute } from './wallet.mjs';
+import { createForwarder } from './forward.mjs';
 import { createRequestAuth, resolveAdmin } from './auth.mjs';
 
 export const MAX_BODY_BYTES = 10_000;
@@ -118,6 +119,7 @@ export function createApp({
   }
 
   const withdrawals = createWithdrawals({ breez: sdk, db, btcUsdRate, log, track, ...(confirmWaitMs ? { confirmWaitMs } : {}) });
+  const forwards = createForwarder({ breez: sdk, db, log });
   const wallet = createWallet({ breez: sdk, db, btcUsdRate, withdrawals, log, track });
   const adminWalletRoute = createAdminWalletRoute({ wallet, withdrawals });
   const requestAuth = createRequestAuth({ secret, mode: requestAuthMode, now });
@@ -211,6 +213,12 @@ export function createApp({
     });
     if (synced) lastSyncedAt = now();
     const withdrawalOutcomes = await withdrawals.reconcile({ synced });
+    // Instant forward (off unless payment_mode = 'instant_forward'): after
+    // settlement and the sync, so "not found" for a stuck send is trusted.
+    const forwardOutcomes = await forwards.run({ synced }).catch((e) => {
+      log({ event: 'forward-run-failed', error: errorText(e) });
+      return null;
+    });
     metrics.catchUps += 1;
     metrics.lastCatchUpAt = new Date(now()).toISOString();
     // reconcile() returns { outcome: count }; add the count, not 1 per pass.
@@ -219,7 +227,7 @@ export function createApp({
       metrics.withdrawalsFinalized[k] = (metrics.withdrawalsFinalized[k] ?? 0) + n;
     }
     log({
-      event: 'catch-up', since, outcomes, expired, withdrawals: withdrawalOutcomes,
+      event: 'catch-up', since, outcomes, expired, withdrawals: withdrawalOutcomes, forwards: forwardOutcomes,
       ...(receipts.enabled ? { receipts: receipts.stats() } : {}),
     });
   }

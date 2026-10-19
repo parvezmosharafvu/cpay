@@ -141,7 +141,7 @@ Deno.test("health never takes the lease", async () => {
 });
 
 Deno.test("core/ matches payment-service byte for byte", async () => {
-  for (const m of ["app", "ledger", "receipts", "withdraw", "wallet", "auth", "money", "fake-breez"]) {
+  for (const m of ["app", "ledger", "receipts", "withdraw", "wallet", "forward", "auth", "money", "fake-breez"]) {
     const a = await Deno.readTextFile(new URL(`./core/${m}.mjs`, import.meta.url));
     const b = await Deno.readTextFile(new URL(`../../../payment-service/${m}.mjs`, import.meta.url));
     assertEquals(a, b, `${m}.mjs drifted; run scripts/sync-breez-core.sh`);

@@ -46,12 +46,14 @@ function wholeSats(value, { min = 1, max = MAX_SEND_SAT, label = 'Amount' } = {}
   return n;
 }
 
-// What the platform owes creators, in USD: every available balance plus
-// withdrawals that are requested but not yet paid out.
+// What the platform owes creators, in USD: every available balance,
+// withdrawals that are requested but not yet paid out, and instant forwards
+// not yet sent (queued, retrying or held).
 export async function owedToCreatorsUsd(db) {
   const { rows } = await db.query(
     `select (coalesce((select sum(greatest(b.available, 0)) from profiles p cross join lateral get_balance_for(p.id) b), 0)
-           + coalesce((select sum(amount_requested) from withdrawals where status in ('pending','approved','processing','sending')), 0))::text as owed`,
+           + coalesce((select sum(amount_requested) from withdrawals where status in ('pending','approved','processing','sending')), 0)
+           + public.forwards_owed_usd())::text as owed`,
   );
   return rows[0].owed;
 }

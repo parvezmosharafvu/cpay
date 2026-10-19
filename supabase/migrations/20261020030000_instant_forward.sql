@@ -61,6 +61,7 @@ begin
                           and (v#>>'{}')::numeric = trunc((v#>>'{}')::numeric);
   else return false;
   end case;$r$);
+  if pg_get_functiondef('public.platform_setting_valid(text,jsonb)'::regprocedure) like '%payment_mode%' then return; end if;
   if src not like '%payment_mode%' then raise exception 'platform_setting_valid: patch point not found'; end if;
   execute src;
 end $do$;
@@ -94,13 +95,19 @@ do $do$
 declare src text;
 begin
   src := pg_get_functiondef('public.system_set_settlement_destination(uuid,text,text,bigint,bigint)'::regprocedure);
+  if src like '%settlement_address_allowed_for%' then return; end if;
   if src not like '%if not direct_settlement_enabled_for(p_user_id) then raise exception ''Direct payments are not available yet''; end if;%' then
     raise exception 'system_set_settlement_destination: patch point not found';
   end if;
   execute replace(src, 'if not direct_settlement_enabled_for(p_user_id) then raise exception ''Direct payments are not available yet''; end if;',
     'if not settlement_address_allowed_for(p_user_id) then raise exception ''Direct payments are not available yet''; end if;');
 
+end $do$;
+do $do$
+declare src text;
+begin
   src := pg_get_functiondef('public.get_my_direct_settlement()'::regprocedure);
+  if src like '%address_enabled%' then return; end if;
   if src not like '%''enabled'', direct_settlement_enabled_for(v_uid),%' then
     raise exception 'get_my_direct_settlement: patch point not found';
   end if;
@@ -111,7 +118,7 @@ begin
 end $do$;
 
 -- 4. Forwards table and state machine ---------------------------------------
-create table public.payment_forwards (
+create table if not exists public.payment_forwards (
   id               uuid primary key default gen_random_uuid(),
   payment_id       uuid not null unique references public.payments(id),
   user_id          uuid not null references public.profiles(id),
@@ -141,12 +148,13 @@ create table public.payment_forwards (
 );
 comment on table public.payment_forwards is
   'Instant forward (docs/INSTANT-FORWARD.md): one row per settled payment; written only by triggers and SECURITY DEFINER functions.';
-create index payment_forwards_due_idx on public.payment_forwards (status, next_attempt_at, created_at)
+create index if not exists payment_forwards_due_idx on public.payment_forwards (status, next_attempt_at, created_at)
   where status in ('queued','sending','retry');
-create index payment_forwards_user_idx on public.payment_forwards (user_id, created_at desc);
+create index if not exists payment_forwards_user_idx on public.payment_forwards (user_id, created_at desc);
 alter table public.payment_forwards enable row level security;
 revoke all on public.payment_forwards from public, anon, authenticated;
 grant select on public.payment_forwards to authenticated;
+drop policy if exists payment_forwards_owner_read on public.payment_forwards;
 create policy payment_forwards_owner_read on public.payment_forwards
   for select to authenticated using (user_id = auth.uid() or is_admin());
 
@@ -173,10 +181,12 @@ begin
   return new;
 end;
 $$;
+drop trigger if exists trg_payment_forwards_guard on public.payment_forwards;
 create trigger trg_payment_forwards_guard before update on public.payment_forwards
   for each row execute function public.payment_forwards_guard();
 create or replace function public.payment_forwards_no_delete()
 returns trigger language plpgsql as $$ begin raise exception 'payment_forwards rows are never deleted'; end $$;
+drop trigger if exists trg_payment_forwards_no_delete on public.payment_forwards;
 create trigger trg_payment_forwards_no_delete before delete on public.payment_forwards
   for each row execute function public.payment_forwards_no_delete();
 
@@ -230,6 +240,7 @@ begin
 end;
 $$;
 revoke all on function public.instant_forward_enqueue() from public, anon, authenticated;
+drop trigger if exists trg_instant_forward_enqueue on public.payments;
 create trigger trg_instant_forward_enqueue after update of status on public.payments
   for each row when (new.status = 'settled' and old.status is distinct from 'settled')
   execute function public.instant_forward_enqueue();
@@ -427,6 +438,7 @@ grant execute on function public.admin_forward_action(uuid, text) to authenticat
 do $do$
 declare src text := pg_get_functiondef('public.admin_system_alerts()'::regprocedure);
 begin
+  if src like '%forward_owed%' then return; end if;
   if src not like '%return jsonb_build_object(''checked_at''%' then raise exception 'admin_system_alerts: patch point not found'; end if;
   execute replace(src, ' return jsonb_build_object(''checked_at''',
     ' if exists (select 1 from payment_forwards where status = ''owed'') then a:=a||jsonb_build_array(jsonb_build_object(''code'',''forward_owed'',''severity'',''warning'',''title'',''Instant forwards are waiting'',''detail'',(select count(*) from payment_forwards where status=''owed'')||'' held; see Payouts → Instant forwards.'')); end if;

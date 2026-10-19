@@ -9,7 +9,7 @@
 
   // CPAY Wallet opens dashboard.html#direct=<lightning address> so the
   // address is typed for the Freelancer. It is only filled in: they still
-  // tap Check and Save (fresh sign-in, used 24 hours later). Read once and
+  // tap Check and Save (fresh sign-in, used right away). Read once and
   // removed from the address bar; kept in this tab for 10 minutes so it
   // survives a trip through the login page.
   const PREFILL_SLOT = 'cpay-direct-prefill';

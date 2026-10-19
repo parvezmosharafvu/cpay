@@ -32,7 +32,7 @@ payer ──pays──► CPAY platform wallet (invoice, as today)
    `fee_sat = round(amount_sat × platform_fee_amount / amount_settled)`, `forward_sat = amount_sat − fee_sat`.
    Sats are what the wallet received, so no exchange-rate risk between receive and forward.
 4. **Forward:** to the user's newest **active, ready** `settlement_destinations` Lightning address (the
-   same verified address flow as direct settlement: provider check, fresh sign-in, 24-hour wait, audited).
+   same verified address flow as direct settlement: provider check, fresh sign-in, audited, inbox notice; usable at once since 20261020040000).
 
 ## 2. Idempotency (one forward per payment)
 
@@ -107,7 +107,56 @@ Counsel should confirm whether brief receipt-and-forward needs a licence where C
 ## 9. Rollout and rollback
 
 1. Ship DB + worker with the mode at `balance` (nothing changes).
-2. Owner: own account adds a Lightning address, waits 24 h, sets mode `instant_forward`, pays $1, checks
+2. Owner: own account adds a Lightning address (fresh sign-in, works at once), sets mode `instant_forward`, pays $1, checks
    the forward in Admin → Payouts → Instant forwards and in their own wallet.
 3. Rollback: set mode back to `balance`. Queued rows stop; owed/retry rows stay visible for the admin.
    No money is lost: unforwarded amounts are owed, and can be released to balance.
+
+## 10. Addresses work at once (20261020040000)
+
+The 24-hour wait on a newly saved Lightning or USDT address is gone. Instead,
+saving, changing or removing one needs the payout step-up: a fresh first
+factor (password, passkey or provider sign-in within 10 minutes), plus aal2
+when the account has a verified second factor. Every change is audited
+(`payout_wallet.saved`, settlement destination events) and the user gets a
+"Security notice" message in their inbox. Rows saved before the change that
+still had a future `usable_after`/`ready_at` keep it. An admin setting a
+user's USDT address (`admin_set_user_usdt_wallet`) also needs the admin's
+fresh sign-in.
+
+## 11. USDT instant forward (20261020050000, worker in forward.mjs)
+
+- The user picks "Where to receive" on Profile: Lightning address or one of
+  their saved USDT addresses (`set_my_receive_method`, step-up, audited,
+  notice). Stored in `receive_settings` (profiles are guarded).
+- On settlement the forward row gets `kind = 'usdt'` and the network. The
+  Lightning minimum (`instant_forward_min_sat`) does not apply to USDT.
+- Accumulation: queued USDT rows per user+network are summed. Below the
+  route's provider minimum (+2% headroom, valued at the current BTC/USD rate)
+  they stay queued with reason `accumulating`; the admin alert
+  `forward_accumulating` fires when a group waits over 3 days.
+- At or above it, `system_usdt_batch_create` opens one `forward_batches` row
+  (unique open batch per user+network) and attaches the rows. The batch id is
+  the wallet's idempotency key. The address is re-validated for the network,
+  the quote (fees included) is prepared right before sending; an expired quote
+  or any refusal before money left marks the batch failed and the rows retry
+  with backoff under a new batch, then `owed` after max attempts.
+- A lost reply leaves the batch `sending`; it is settled from the wallet's
+  record (find by batch id) after a sync, never re-sent blindly. An address
+  the wallet rejects holds the rows as `owed` (`invalid_address`).
+- Per-row `sent_sat = forward_sat`; the USDT received and the network fee are
+  on the batch and shown in the admin forwards list.
+
+## 12. Fee simplification
+
+Before: payment platform fee (`platform_fee_percent` / default) on every
+payment, plus a separate withdrawal platform fee
+(`default_withdrawal_fee_percent`, per-account override via
+`resolve_withdrawal_fee`) shown as its own line on the withdraw form, plus the
+network fee line.
+
+Now: the user sees one "You receive" figure; platform and network fees are
+under "Fee details". The admin keeps the platform fee %. The network fee is
+automatic. The withdrawal fee setting stays, labelled "Balance mode only": it
+applies only to USDT withdrawals from a CPAY balance and never to instant
+forwards. Nothing in the database fee logic changed.

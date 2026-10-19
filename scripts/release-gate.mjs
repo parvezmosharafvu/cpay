@@ -7,7 +7,7 @@
 //   4. the latest restore drill in docs/BACKUP-RECOVERY.md passed and is
 //      younger than --drill-max-days (default 90)
 //   5. docs/RELEASE-BLOCKERS.md lists no open Critical/High item
-//   6. legal pages carry no DRAFT/placeholder text (ci/check_legal.py --release)
+//   6. legal pages published from Admin → Settings with every field filled (ci/check_legal.py --release)
 // Read-only: it never deploys anything. Usage:
 //   node scripts/release-gate.mjs [--sha <sha>] [--drill-max-days 90] [--skip-legal]
 // Exit 0 = GO for this SHA, 1 = refused (reasons printed).
@@ -65,7 +65,7 @@ function main(argv) {
   const blockers = openBlockers(readFileSync('docs/RELEASE-BLOCKERS.md', 'utf8'));
   if (blockers.length) fails.push(`${blockers.length} open Critical/High item(s) in docs/RELEASE-BLOCKERS.md`);
   if (!argv.includes('--skip-legal')) {
-    try { sh('python3', ['ci/check_legal.py', '--release']); } catch { fails.push('legal pages still contain DRAFT/placeholder text'); }
+    try { sh('python3', ['ci/check_legal.py', '--release']); } catch { fails.push('legal pages not published: fill every legal field and turn on Publish in Admin → Settings (ci/check_legal.py --release)'); }
   }
   console.log(`checked: sha=origin/main, clean worktree, Verify, Workers Builds: cpay, restore drill, blockers${argv.includes('--skip-legal') ? '' : ', legal'}`);
   console.log(fails.length ? `RELEASE REFUSED for ${sha}:\n- ${fails.join('\n- ')}` : `RELEASE GATE PASSED for ${sha}`);

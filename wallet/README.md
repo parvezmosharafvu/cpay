@@ -30,6 +30,13 @@ npx playwright test -c tests/wallet/playwright.config.ts
 
 ## Publish (owner steps; nothing here deploys on merge)
 
+**Website link:** once the wallet is live on its hostname (`wallet.pay-cashapp.buzz`), open
+Admin → Settings → CPAY Wallet, save the address (`https://wallet.pay-cashapp.buzz`), then turn on
+**Show the CPAY Wallet download link** (two-step sign-in, audited). The Download wallet page
+(`/assets/wallet.html`) then shows *Open CPAY Wallet*. It never links this website's own host or a
+non-https address. Turn the toggle off to hide the link at once. `public/wallet-release.js` (version
+and version.json sha256) is still the record checked against the release gates.
+
 Every step is a release gate in
 [docs/WALLET-RELEASE-GATES.md](../docs/WALLET-RELEASE-GATES.md); CI keeps
 the website's download link off until all of them pass.

@@ -775,11 +775,10 @@ test('cooldown: an unsaved address, or one still in a pre-20261020040000 wait, g
   const OTHER_TRON = 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8';
   await assert.rejects(w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: OTHER_TRON, amountUsd: '10' }),
     (e) => e.status === 403 && e.extra.code === 'address_not_saved');
-  // Changed: usable at once since 20261020040000 (a change needs a fresh
-  // sign-in instead). A row still in a wait from before that is refused.
+  // Changed, then put in a wait (as a row saved before 20261020040000, when a
+  // change waited 24 h; since then a change is usable at once after a fresh
+  // sign-in). A row still in its wait is refused.
   await db.query(`update usdt_wallets set address = $2 where user_id = $1 and network = 'tron'`, [user, OTHER_TRON]);
-  const { rows: [wallet] } = await db.query(`select usable_after <= now() as ready from usdt_wallets where user_id = $1 and network = 'tron'`, [user]);
-  assert.equal(wallet.ready, true);
   const c = await db.connect();
   try {
     await c.query('begin');

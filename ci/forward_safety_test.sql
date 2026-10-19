@@ -208,6 +208,9 @@ reset role;
 update forward_batches set updated_at = now() - interval '2 hours' where id in ('f6000000-0000-0000-0000-0000000003a2', (select id from b1));
 set local role authenticated;
 do $$ begin
+  if jsonb_array_length(admin_list_forwards()->'stuck_batches') <> 2 then raise exception 'stuck batches not listed for the admin'; end if;
+end $$;
+do $$ begin
   perform admin_forward_batch_action('f6000000-0000-0000-0000-0000000003a2', 'delivered', '  ');
   raise exception 'delivered without a reference';
 exception when raise_exception then if sqlerrm not like 'Give the transaction hash%' then raise; end if; end $$;

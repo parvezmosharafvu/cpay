@@ -220,6 +220,21 @@ $$;
 revoke all on function public.admin_forward_batch_action(uuid, text, text) from public, anon;
 grant execute on function public.admin_forward_batch_action(uuid, text, text) to authenticated;
 
+-- The admin list shows batches stuck in 'sending' for over an hour.
+do $do$
+declare src text := pg_get_functiondef('public.admin_list_forwards(text,integer)'::regprocedure);
+begin
+  if src like '%stuck_batches%' then return; end if;
+  if src not like '%''totals'', instant_forward_invariants(),%' then raise exception 'admin_list_forwards: patch point not found'; end if;
+  execute replace(src, '''totals'', instant_forward_invariants(),',
+    '''totals'', instant_forward_invariants(),
+    ''stuck_batches'', coalesce((select jsonb_agg(jsonb_build_object(''id'', b.id, ''user_email'', p.email, ''network'', b.network,
+        ''address'', b.address, ''amount_usd'', b.amount_usd, ''amount_sat'', b.amount_sat, ''created_at'', b.created_at,
+        ''updated_at'', b.updated_at, ''last_error'', b.last_error) order by b.created_at)
+      from forward_batches b left join profiles p on p.id = b.user_id
+     where b.status = ''sending'' and b.updated_at < now() - interval ''1 hour''), ''[]''::jsonb),');
+end $do$;
+
 -- 5. 'refuse' also counts a USDT receive address -----------------------------
 create or replace function public.gate_custodial_payment()
 returns trigger language plpgsql security definer set search_path = public

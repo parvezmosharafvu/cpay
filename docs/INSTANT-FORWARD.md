@@ -190,7 +190,7 @@ forwards. Nothing in the database fee logic changed.
   'delivered', ref)` or `(id, 'hold')` closes a USDT batch stuck in `sending`
   for over an hour, after checking the provider and the chain. Release held
   rows of a stuck batch only once the provider shows the order failed or was
-  refunded. Both need an active admin at aal2 and are audited. The batch
-  action has no button yet; call it from a signed-in admin session.
+  refunded. Both need an active admin at aal2 and are audited. Stuck batches are
+  listed in Admin → Instant forwards with "It arrived" and "Hold for review".
 - `'refuse'` mode also accepts a payment for an account whose receive choice
   is a usable USDT address. Batches are made only for active accounts.

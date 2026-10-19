@@ -769,16 +769,23 @@ test('the browser roles cannot call the fee resolvers or the compatibility shim'
 });
 
 // 20261009010000: payouts only to an address saved at least 24 h earlier.
-test('cooldown: an unsaved address, or one saved under 24 h ago, gets no quote and no withdrawal', async () => {
+test('cooldown: an unsaved address, or one still in a pre-20261020040000 wait, gets no quote and no withdrawal', async () => {
   const user = await makeUser({ earned: 100 });
   const w = service(fakeBreez());
   const OTHER_TRON = 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8';
   await assert.rejects(w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: OTHER_TRON, amountUsd: '10' }),
     (e) => e.status === 403 && e.extra.code === 'address_not_saved');
-  // Saved just now (and a client trying to backdate it): still cooling down.
-  await db.query(`update usdt_wallets set address = $2, usable_after = now() - interval '2 days' where user_id = $1 and network = 'tron'`, [user, OTHER_TRON]);
-  const { rows: [wallet] } = await db.query(`select usable_after > now() + interval '23 hours' as cooling from usdt_wallets where user_id = $1 and network = 'tron'`, [user]);
-  assert.equal(wallet.cooling, true);
+  // Changed, then put in a wait (as a row saved before 20261020040000, when a
+  // change waited 24 h; since then a change is usable at once after a fresh
+  // sign-in). A row still in its wait is refused.
+  await db.query(`update usdt_wallets set address = $2 where user_id = $1 and network = 'tron'`, [user, OTHER_TRON]);
+  const c = await db.connect();
+  try {
+    await c.query('begin');
+    await c.query('set local session_replication_role = replica');
+    await c.query(`update usdt_wallets set usable_after = now() + interval '24 hours' where user_id = $1 and network = 'tron'`, [user]);
+    await c.query('commit');
+  } finally { c.release(); }
   await assert.rejects(w.quote({ userId: user, routeId: 'orchestra:tron:usdt', address: OTHER_TRON, amountUsd: '10' }),
     (e) => e.status === 403 && e.extra.code === 'address_cooling_down' && /24 hours/.test(e.message));
   // The old address is no longer saved either.

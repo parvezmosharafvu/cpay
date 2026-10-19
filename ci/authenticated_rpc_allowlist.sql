@@ -35,6 +35,8 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('request_withdrawal(numeric, text, text)',                                 'public',        'retired: always raises'),
   ('admin_platform_settings()',                                               'admin',         'admin: platform settings; refuses without an active admin'),
   ('admin_set_platform_setting(text, jsonb)',                                 'admin',         'admin: write a platform setting; refuses without an active admin at aal2; audited'),
+  ('admin_list_forwards(text, integer)',                                    'admin',         'admin: instant forwards and totals; refuses without an active admin'),
+  ('admin_forward_action(uuid, text)',                                       'admin',         'admin: retry or release a held forward; refuses without an active admin at aal2; audited'),
   ('get_public_site_settings()',                                              'public',        'public legal fields and wallet link only'),
   ('admin_audit_log(integer, integer, text)',                                 'admin',         'admin: audit log; refuses without an active admin'),
   ('admin_customer_directory()',                                              'admin',         'admin: customer directory; refuses without an active admin'),

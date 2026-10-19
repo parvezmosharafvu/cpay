@@ -17,14 +17,17 @@
   .draft{border:2px dashed #b45309;background:#fffbeb;color:#78350f;padding:12px 16px;border-radius:10px;margin-bottom:24px}
   h1{font-size:1.8rem;margin:0 0 12px} h2{font-size:1.15rem;margin-top:28px}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
+<script src="config.js"></script>
+<script src="legal-fields.js?v=1"></script>
 </head>
 <body>
 <main>
-<div class="draft" role="note"><strong>Not yet published.</strong> The text is complete. Items in [brackets] are facts only the owner can supply (legal entity, address, jurisdiction, contact addresses, dates). Until they are filled in, this page stays unlinked and not indexed.</div>
+<div class="draft" role="note" data-legal-note><strong>Not yet published.</strong> The text is complete. Items in [brackets] are facts only the owner can supply (legal entity, address, jurisdiction, contact addresses, dates). Until they are filled in, this page stays unlinked and not indexed.</div>
 <h1>Terms of Service</h1>
-<p><em>Last updated: [Effective date]. CPAY is operated by [Legal entity name], [Registered address].</em></p>
+<p><em>Last updated: <span data-legal="legal_effective_date">[Effective date]</span>. CPAY is operated by <span data-legal="legal_entity_name">[Legal entity name]</span>, <span data-legal="legal_address">[Registered address]</span>.</em></p>
 <h2>1. Who we are and what these terms cover</h2>
-<p>These terms are an agreement between you and [Legal entity name] ("CPAY", "we", "us") for the CPAY website, payment links, merchant desk and the optional CPAY Wallet app (together, "the Service"). By creating an account or using a payment link you accept them. If you use CPAY for a business, you accept them for that business and confirm you may bind it.</p>
+<p>These terms are an agreement between you and <span data-legal="legal_entity_name">[Legal entity name]</span> ("CPAY", "we", "us") for the CPAY website, payment links, merchant desk and the optional CPAY Wallet app (together, "the Service"). By creating an account or using a payment link you accept them. If you use CPAY for a business, you accept them for that business and confirm you may bind it.</p>
 <h2>2. CPAY is software, not a custodian</h2>
 <p>CPAY is payment software for the Bitcoin Lightning Network. When a customer pays you through a CPAY link, the payment goes directly from the customer's wallet to a wallet that you control, such as your own Lightning address, your own node or the CPAY Wallet app on your phone.</p>
 <ul>
@@ -69,7 +72,7 @@
 <h2>14. Changes to these terms</h2>
 <p>We may change these terms. We post the new version on this page and, for material changes, email account holders at least 30 days before they apply. If you do not agree, stop using the Service and close your account before the change applies.</p>
 <h2>15. Governing law and disputes</h2>
-<p>These terms are governed by the laws of [Governing law jurisdiction]. Disputes go to the courts of [Courts with jurisdiction], unless the law where you live gives you the right to bring a claim in your local courts. Please use the <a href="/contact.html">complaints procedure</a> first.</p>
+<p>These terms are governed by the laws of <span data-legal="legal_jurisdiction">[Governing law jurisdiction]</span>. Disputes go to the courts of <span data-legal="legal_courts">[Courts with jurisdiction]</span>, unless the law where you live gives you the right to bring a claim in your local courts. Please use the <a href="/contact.html">complaints procedure</a> first.</p>
 <h2>16. Contact</h2>
 <p>See <a href="/contact.html">Contact and complaints</a>.</p>
 <p><a href="/">Back to CPAY</a></p>

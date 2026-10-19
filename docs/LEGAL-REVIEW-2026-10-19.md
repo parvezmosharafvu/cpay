@@ -22,7 +22,12 @@ clause for remaining pre-non-custodial CPAY balances.
 | `[Privacy contact email]` | privacy |
 | `[Support email address]` | contact |
 
-Then: remove the "Not yet published" note and the `noindex` meta, link the pages from the footer.
+How to publish (no code change): Admin → Settings → Legal pages: fill every field, then turn on
+**Publish legal pages** (refused until every field is filled; needs two-step sign-in; audited).
+`public/legal-fields.js` then fills the fields, removes the note and `noindex`; `public/site-settings.js`
+adds the footer links. `ci/check_legal.py --release` (run by `scripts/release-gate.mjs`) asks
+production's `get_public_site_settings()` and passes once published. The static HTML stays `noindex`
+with bracketed labels by design.
 
 ## Publish only when true
 - Publish **after** custodial receive is frozen (plan phase P3). Until then production is still custodial

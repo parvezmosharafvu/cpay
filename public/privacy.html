@@ -17,14 +17,17 @@
   .draft{border:2px dashed #b45309;background:#fffbeb;color:#78350f;padding:12px 16px;border-radius:10px;margin-bottom:24px}
   h1{font-size:1.8rem;margin:0 0 12px} h2{font-size:1.15rem;margin-top:28px}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
+<script src="config.js"></script>
+<script src="legal-fields.js?v=1"></script>
 </head>
 <body>
 <main>
-<div class="draft" role="note"><strong>Not yet published.</strong> The text is complete. Items in [brackets] are facts only the owner can supply (legal entity, address, jurisdiction, contact addresses, dates). Until they are filled in, this page stays unlinked and not indexed.</div>
+<div class="draft" role="note" data-legal-note><strong>Not yet published.</strong> The text is complete. Items in [brackets] are facts only the owner can supply (legal entity, address, jurisdiction, contact addresses, dates). Until they are filled in, this page stays unlinked and not indexed.</div>
 <h1>Privacy Policy</h1>
-<p><em>Last updated: [Effective date]. CPAY is operated by [Legal entity name], [Registered address].</em></p>
+<p><em>Last updated: <span data-legal="legal_effective_date">[Effective date]</span>. CPAY is operated by <span data-legal="legal_entity_name">[Legal entity name]</span>, <span data-legal="legal_address">[Registered address]</span>.</em></p>
 <h2>Who is responsible</h2>
-<p>[Legal entity name] runs CPAY and decides how your personal data is used (the "controller"). Privacy contact: [Privacy contact email].</p>
+<p><span data-legal="legal_entity_name">[Legal entity name]</span> runs CPAY and decides how your personal data is used (the "controller"). Privacy contact: <span data-legal="legal_privacy_email">[Privacy contact email]</span>.</p>
 <h2>What CPAY does not have</h2>
 <p>CPAY does not hold your funds and never receives your wallet's recovery phrase, passphrase or private keys. If you use the CPAY Wallet app, its recovery phrase stays on your device, encrypted with your passphrase. We do not receive payers' card details, payment-account details or wallet balances.</p>
 <h2>What we collect and why</h2>
@@ -49,7 +52,7 @@
 <h2>How long we keep it</h2>
 <p>Account data: while your account is open and up to 12 months after closure. Payment and audit records: up to 6 years after the payment or action, or longer if the law requires. Security logs: up to 90 days. Backups are rotated on the same schedule.</p>
 <h2>Your rights</h2>
-<p>Depending on where you live, you can ask to access, correct, delete or export your data, to restrict or object to some uses, and to withdraw consent where we rely on it. Write to [Privacy contact email]. We answer within one month. Some payment and audit records must be kept even after an account is closed. You may also complain to your data-protection authority.</p>
+<p>Depending on where you live, you can ask to access, correct, delete or export your data, to restrict or object to some uses, and to withdraw consent where we rely on it. Write to <span data-legal="legal_privacy_email">[Privacy contact email]</span>. We answer within one month. Some payment and audit records must be kept even after an account is closed. You may also complain to your data-protection authority.</p>
 <h2>Security</h2>
 <p>Data is encrypted in transit, access is limited to staff who need it, and administrators must use two-step sign-in. No system is perfectly secure; tell us about any concern at the address on the <a href="/contact.html">contact page</a>.</p>
 <h2>Children</h2>

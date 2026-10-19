@@ -37,6 +37,8 @@ try {
   const saved = localStorage.getItem('cpay-freelancer-tab');
   if (saved && document.getElementById(saved)) show(saved);
 } catch (e) {}
+// Opened from CPAY Wallet with an address to fill in (direct-settlement.js).
+if (window.cpayDirect && window.cpayDirect.hasPrefill()) show('profile');
 
 async function boot() {
   me = await loadProfile();

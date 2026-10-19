@@ -15,7 +15,7 @@ import { generateMnemonic, normalizeMnemonic, validateMnemonic } from './bip39.j
 import { MIN_PASSPHRASE, isPasskeyVault, openPhrase, passkeyRecord, sealPhrase, vaultStore } from './vault.js';
 import { PASSKEY_LABEL, passkeyAvailability, passkeyErrorKind, passkeyMessage, registerPasskey, signInPasskey } from './passkey.js';
 import { configProblem, createEngine, wipeEngineStorage } from './engine.js';
-import { link, linkAvailable, linkedAccount, unlink, websiteBalance } from './link.js';
+import { directSettlement, link, linkAvailable, linkedAccount, unlink, websiteBalance } from './link.js';
 import { bitcoinUri, drawQr, lightningUri } from './qr.js';
 import { lightningName } from './lnaddress.js';
 
@@ -346,6 +346,25 @@ async function renderLightningAddress() {
     drawQr($('lnaQr'), lightningUri(a.lnurl || a.address));
     $('lnaShare').hidden = !navigator.share;
   }
+  await renderCpayDirect(a);
+}
+
+// "Use for CPAY direct payments": the website does the saving (check,
+// fresh sign-in, 24-hour wait); the wallet only opens it with the address
+// filled in. With the CPAY link on, it also shows where direct payments go.
+async function renderCpayDirect(a) {
+  $('lnaCpay').hidden = !a || !cfg.cpaySiteUrl;
+  if ($('lnaCpay').hidden) return;
+  $('lnaUseCpay').href = `${cfg.cpaySiteUrl}/dashboard.html#direct=${encodeURIComponent(a.address)}`;
+  let d = null;
+  try { d = (await linkedAccount()) ? await directSettlement() : null; } catch { d = null; }
+  const line = !d ? ''
+    : d.current === a.address ? 'CPAY direct payments come to this address.'
+      : d.pending?.address === a.address ? `CPAY starts sending direct payments here on ${new Date(d.pending.readyAt).toLocaleString()}.`
+        : d.current ? `CPAY direct payments go to a different address: ${d.current}.`
+          : '';
+  $('lnaCpayState').textContent = line;
+  $('lnaCpayState').hidden = !line;
 }
 $('lnaName').oninput = () => { lnaChecked = null; $('lnaSave').disabled = true; err('lnaErr'); $('lnaOk').hidden = true; };
 $('lnaCheck').onclick = async () => {

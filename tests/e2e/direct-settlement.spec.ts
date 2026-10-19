@@ -71,6 +71,33 @@ test.describe.serial('direct payments to the Freelancer\'s own wallet', () => {
     await expect(page.locator('[data-settle-link][data-mode="direct"]')).toHaveCount(0);
   });
 
+  test('opened from CPAY Wallet: the address is filled in through the login page, nothing is saved until Check and Save', async ({ page }) => {
+    const before = (await db.query('select count(*)::int as n from settlement_destinations where user_id = $1', [u.id])).rows[0].n;
+    // Signed out: the login page comes first; the address survives it.
+    await page.goto('/dashboard.html#direct=carol.shop%40pay.example.com');
+    await page.waitForURL(/login\.html/);
+    await page.fill('#email', u.email);
+    await page.fill('#password', u.password);
+    await page.click('#submitBtn');
+    await page.waitForURL(/dashboard\.html/);
+    await expect(page.locator('#profile')).toBeVisible();
+    await expect(page.locator('#directAddr')).toHaveValue('carol.shop@pay.example.com');
+    await expect(page.locator('#directResult')).toContainText('Filled in from your CPAY Wallet');
+    await expect(page.locator('#directSave')).toBeDisabled();
+    expect(new URL(page.url()).hash).toBe('');
+    expect((await db.query('select count(*)::int as n from settlement_destinations where user_id = $1', [u.id])).rows[0].n).toBe(before);
+    // Used once: a reload does not fill it again.
+    await page.reload();
+    await page.click('.navi[data-tab="profile"]');
+    await expect(page.locator('#directCard')).toBeVisible();
+    await expect(page.locator('#directAddr')).toHaveValue('');
+    // Anything that is not a plain Lightning address is ignored.
+    await page.goto('/dashboard.html#direct=%3Cimg%20src%3Dx%3E%40pay.example.com');
+    await page.click('.navi[data-tab="profile"]');
+    await expect(page.locator('#directCard')).toBeVisible();
+    await expect(page.locator('#directAddr')).toHaveValue('');
+  });
+
   test('a direct link: the payer pays the merchant\'s wallet, proof marks it paid, the CPAY balance does not move', async ({ page }) => {
     await hook('direct-ready', { userId: u.id });
     const before = await balance(u.id);

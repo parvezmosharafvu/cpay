@@ -91,8 +91,14 @@ Optional (`LIGHTNING_ADDRESS_DOMAIN`), see
   and each payment's amount and comment.
 - **Only the named domain.** The library's default domain is switched off;
   the CSP allows exactly `https://<domain>` for registration.
-- **Names.** Plain names only (`src/lnaddress.js`); a website forwarder
-  will refuse names that pass for CPAY.
+- **Domain `ln.pay-cashapp.buzz`**, a DNS-only CNAME to the vendor's
+  server: a third party serves a subdomain of the website. The website
+  keeps its session in browser storage (no parent-domain cookies), account
+  passkeys are checked against the website's own origin, and wallet
+  passkeys are bound to `wallet.pay-cashapp.buzz`, which a sibling cannot
+  use.
+- **Names.** Plain names only (`src/lnaddress.js`). CPAY cannot refuse
+  names that pass for CPAY on a domain the vendor serves.
 
 ## The wallet library and the Spark network
 

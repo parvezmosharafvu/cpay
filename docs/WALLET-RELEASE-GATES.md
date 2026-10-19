@@ -48,7 +48,9 @@ Filled in when every gate passes, in the same change that sets
   `cpay-wallet-staging`, root directory `wallet`, build command
   `npm ci --ignore-scripts && npm run build:staging`, deploy command
   `npx wrangler deploy --env staging`, no build variables. The build refuses
-  mainnet, an API key or the CPAY link on staging.
+  mainnet, an API key or the CPAY link on staging. For the passkey phone
+  test only, add `WALLET_RP_ID` (the staging host name) and
+  `WALLET_PASSKEYS=on` ([WALLET-TESTING.md](WALLET-TESTING.md)).
 - **Production project** (G1 to G3): the same, named `cpay-wallet`, build
   command `npm ci --ignore-scripts && npm run build`, deploy command
   `npx wrangler deploy`, build variable `WALLET_API_KEY` (the dedicated

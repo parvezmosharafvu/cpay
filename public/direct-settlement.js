@@ -7,6 +7,34 @@
   const sb = () => window.supabaseClient;
   let cached = null;
 
+  // CPAY Wallet opens dashboard.html#direct=<lightning address> so the
+  // address is typed for the Freelancer. It is only filled in: they still
+  // tap Check and Save (fresh sign-in, used 24 hours later). Read once and
+  // removed from the address bar; kept in this tab for 10 minutes so it
+  // survives a trip through the login page.
+  const PREFILL_SLOT = 'cpay-direct-prefill';
+  const ADDRESS = /^[a-z0-9._+-]{1,64}@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+  let prefill = null;
+  {
+    const m = /^#direct=([^&]{3,320})$/.exec(location.hash || '');
+    if (m) {
+      let a = '';
+      try { a = decodeURIComponent(m[1]).trim().toLowerCase(); } catch (e) { a = ''; }
+      if (ADDRESS.test(a)) {
+        prefill = a;
+        try { sessionStorage.setItem(PREFILL_SLOT, JSON.stringify({ a, t: Date.now() })); } catch (e) {}
+      }
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    } else {
+      try {
+        const v = JSON.parse(sessionStorage.getItem(PREFILL_SLOT) || 'null');
+        if (v && ADDRESS.test(v.a) && Date.now() - v.t < 600000) prefill = v.a;
+        else sessionStorage.removeItem(PREFILL_SLOT);
+      } catch (e) {}
+    }
+  }
+  const usePrefill = () => { prefill = null; try { sessionStorage.removeItem(PREFILL_SLOT); } catch (e) {} };
+
   async function state(force) {
     if (cached && !force) return cached;
     const { data, error } = await sb().rpc('get_my_direct_settlement');
@@ -34,7 +62,11 @@
   async function card(el, onChange) {
     if (!el) return;
     const s = await state(true);
-    if (!visible(s)) { el.hidden = true; el.innerHTML = ''; return; }
+    if (!visible(s)) {
+      el.hidden = true; el.innerHTML = '';
+      if (prefill) { usePrefill(); toast('Direct payments are not available for this account yet, so the wallet address was not filled in.'); }
+      return;
+    }
     el.hidden = false;
     el.innerHTML = `<div class="card" id="directCardInner">
       <div class="card-title"><div><h3>Get paid straight to your own wallet</h3>
@@ -56,6 +88,13 @@
     const save = el.querySelector('#directSave');
     let checked = '';
     const say = (text) => { result.textContent = text; result.hidden = !text; };
+    if (prefill) {
+      addr.value = prefill;
+      usePrefill();
+      say('Filled in from your CPAY Wallet. Tap "Check address", then save it.');
+      el.scrollIntoView({ block: 'start' });
+      addr.focus();
+    }
     addr.addEventListener('input', () => { if (addr.value.trim().toLowerCase() !== checked) { save.disabled = true; say(''); } });
     el.querySelector('#directCheck').onclick = async () => {
       const btn = el.querySelector('#directCheck');
@@ -163,5 +202,5 @@
     </div>`;
   }
 
-  window.cpayDirect = { state, card, linkCell, linkButton, bindLinkButtons, newLinkChoice, chosenMode, paymentsCard, visible, readyNow };
+  window.cpayDirect = { hasPrefill: () => Boolean(prefill), state, card, linkCell, linkButton, bindLinkButtons, newLinkChoice, chosenMode, paymentsCard, visible, readyNow };
 })();

@@ -12,6 +12,9 @@
 //   CPAY_SUPABASE_URL       } for the optional CPAY account link; default
 //   CPAY_SUPABASE_ANON_KEY  } is the website's public config (public/config.js)
 //   WALLET_LINK=off         build without the CPAY account link
+//   CPAY_SITE_URL           the CPAY website, for "Use for CPAY direct
+//                           payments" (default https://pay-cashapp.buzz; off
+//                           with the link)
 //   WALLET_SYNC=on          turn on the wallet library's real-time sync
 //                           service (datasync.breez.technology). Off by
 //                           default: the wallet works without it, and with it
@@ -104,6 +107,13 @@ if (env('WALLET_LINK') !== 'off' && (!supabaseUrl || !anonKey)) {
 }
 if (env('WALLET_LINK') === 'off') { supabaseUrl = ''; anonKey = ''; }
 if (supabaseUrl && !/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(supabaseUrl) && !test) fail('CPAY_SUPABASE_URL must be https://<project>.supabase.co');
+let siteUrl = env('WALLET_LINK') === 'off' ? '' : env('CPAY_SITE_URL', 'https://pay-cashapp.buzz');
+if (siteUrl) {
+  let u = null;
+  try { u = new URL(siteUrl); } catch { /* refused below */ }
+  if (!u || (u.protocol !== 'https:' && !test) || u.username || u.password || (u.pathname !== '/' && u.pathname !== '') || u.search || u.hash) fail('CPAY_SITE_URL must be the website origin, such as https://pay-cashapp.buzz');
+  siteUrl = u.origin;
+}
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
@@ -134,6 +144,7 @@ const sdkVersion = JSON.parse(readFileSync(join(here, 'node_modules', '@breeztec
 const config = {
   version: pkg.version, network, engine, apiKey: apiKey || null,
   cpaySupabaseUrl: supabaseUrl || null, cpaySupabaseAnonKey: anonKey || null,
+  cpaySiteUrl: siteUrl || null,
   serviceWorker: env('WALLET_SW') !== 'off',
   sync: env('WALLET_SYNC') === 'on',
   rpId: rpId || null,

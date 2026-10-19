@@ -537,12 +537,12 @@ test('lost passkey: the 12 words restore the same wallet with a passphrase, no R
   await expect(page.locator('#unlockPasskey')).toBeHidden();
 });
 
-// ---- Lightning address (LIGHTNING_ADDRESS_DOMAIN=pay-cashapp.buzz) -------
+// ---- Lightning address (LIGHTNING_ADDRESS_DOMAIN=ln.pay-cashapp.buzz) -------
 test('lightning address: check, register, show as QR, remove', async ({ page }) => {
   await createWallet(page);
   await page.getByRole('button', { name: 'Receive' }).click();
   await expect(page.locator('#lnaBox')).toBeVisible();
-  await expect(page.locator('#lnaAt')).toHaveText('@pay-cashapp.buzz');
+  await expect(page.locator('#lnaAt')).toHaveText('@ln.pay-cashapp.buzz');
   // Bad names are refused before any request; a taken one is reported.
   for (const bad of ['', 'a..b', '-ab', 'ab-', 'a/b', 'a@b']) {
     await page.fill('#lnaName', bad);
@@ -558,17 +558,44 @@ test('lightning address: check, register, show as QR, remove', async ({ page }) 
   // editing the name after the check disables saving again.
   await page.fill('#lnaName', 'Alice.Shop');
   await page.getByRole('button', { name: 'Check' }).click();
-  await expect(page.locator('#lnaOk')).toHaveText('alice.shop@pay-cashapp.buzz is available.');
+  await expect(page.locator('#lnaOk')).toHaveText('alice.shop@ln.pay-cashapp.buzz is available.');
   await page.fill('#lnaName', 'alice.shopx');
   await expect(page.getByRole('button', { name: 'Use this name' })).toBeDisabled();
   await page.fill('#lnaName', 'alice.shop');
   await page.getByRole('button', { name: 'Check' }).click();
   await page.getByRole('button', { name: 'Use this name' }).click();
-  await expect(page.locator('#lnaAddress')).toHaveText('alice.shop@pay-cashapp.buzz');
+  await expect(page.locator('#lnaAddress')).toHaveText('alice.shop@ln.pay-cashapp.buzz');
   expect(await decodeCanvas(page, 'lnaQr')).toBe('lightning:lnurl1fakealice.shop');
   await expect(page.locator('#lnaForm')).toBeHidden();
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Remove address' }).click();
   await expect(page.locator('#lnaForm')).toBeVisible();
   await expect(page.locator('#lnaHave')).toBeHidden();
+});
+
+test('lightning address → CPAY direct payments: the desk opens with it filled in; the wallet only reads', async ({ page, request }) => {
+  await createWallet(page);
+  await page.request.post(`${CPAY}/__reset`).catch(() => {});
+  await page.getByRole('button', { name: 'Receive' }).click();
+  await page.fill('#lnaName', 'alice.shop');
+  await page.getByRole('button', { name: 'Check' }).click();
+  await page.getByRole('button', { name: 'Use this name' }).click();
+  const use = page.getByRole('link', { name: 'Use for CPAY direct payments' });
+  await expect(use).toHaveAttribute('href', 'http://127.0.0.1:8791/dashboard.html#direct=alice.shop%40ln.pay-cashapp.buzz');
+  await expect(use).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(page.locator('#lnaCpayState')).toBeHidden(); // not linked: nothing read from CPAY
+
+  // Linked: where CPAY sends direct payments is shown, read only.
+  await page.locator('#linkEmail').fill('member@example.test');
+  await page.locator('#linkPass').fill('site-password-123');
+  await page.getByLabel('I want this app to sign in to my CPAY account and show its balance.').check();
+  await page.getByRole('button', { name: 'Link account' }).click();
+  await expect(page.locator('#siteBal')).toHaveText('$12.50 available');
+  await page.getByRole('button', { name: 'Receive' }).click(); // close
+  await page.getByRole('button', { name: 'Receive' }).click(); // open again: re-read
+  await expect(page.locator('#lnaCpayState')).toContainText('CPAY starts sending direct payments here on');
+  const log = await (await request.get(`${CPAY}/__log`)).json();
+  const rpcs = log.map((r: any) => r.path).filter((p: string) => p.startsWith('/rest/'));
+  expect(new Set(rpcs)).toEqual(new Set(['/rest/v1/rpc/get_my_balance', '/rest/v1/rpc/get_my_direct_settlement']));
+  expect(log.every((r: any) => !/settlement-destination|functions\/v1/.test(r.path))).toBe(true);
 });

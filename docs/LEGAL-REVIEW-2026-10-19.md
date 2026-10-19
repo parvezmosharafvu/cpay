@@ -37,3 +37,11 @@ with bracketed labels by design.
   record-keeping law.
 - Counsel should still confirm that the non-custodial model needs no licence where CPAY and its users
   are, and the trademark risk of the current domain name.
+
+## Update 2026-10-20: instant forward
+
+The pages no longer claim CPAY never receives funds. They now say: depending on the account set-up,
+payments either go directly to the user's wallet, or CPAY briefly receives them, deducts the disclosed
+fee and immediately forwards the rest (docs/INSTANT-FORWARD.md); CPAY keeps no balances; unforwarded
+amounts are owed to the user. **Counsel should confirm** whether brief receipt-and-forward needs a
+licence or registration where CPAY operates.

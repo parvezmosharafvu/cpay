@@ -1,4 +1,4 @@
-// Locations and payment details on the Freelancer desk (20261020060000).
+// Locations and payment details on the Freelancer desk (20261020070000).
 // Coarse only: country / division / district / area the user types, the
 // country Cloudflare reports for the request, and the payer's country,
 // region and city recorded server-side. Uses app.js helpers (escapeHtml,

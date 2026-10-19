@@ -43,7 +43,9 @@
     return cached;
   }
 
-  const visible = (s) => Boolean(s && (s.enabled || s.current || s.pending));
+  const visible = (s) => Boolean(s && (s.enabled || s.address_enabled || s.current || s.pending));
+  // Instant forward: CPAY receives, keeps its fee, sends the rest to this address.
+  const forwardOnly = (s) => Boolean(s && s.instant_forward && !s.enabled);
   const readyNow = (s) => Boolean(s && s.enabled && !s.blocked && s.current);
 
   function statusLines(s) {
@@ -54,7 +56,7 @@
     }
     if (!s.current && !s.pending) out.push('<p class="faint">No Lightning address yet.</p>');
     if (s.blocked) out.push('<p class="alert alert-warn">Direct payments are turned off for this account. Contact support.</p>');
-    if (!s.enabled) out.push('<p class="alert alert-info">Direct payments are paused by CPAY. Your direct links are not taking payments.</p>');
+    if (!s.enabled && !s.address_enabled) out.push('<p class="alert alert-info">Direct payments are paused by CPAY. Your direct links are not taking payments.</p>');
     return out.join('');
   }
 
@@ -69,16 +71,21 @@
     }
     el.hidden = false;
     el.innerHTML = `<div class="card" id="directCardInner">
-      <div class="card-title"><div><h3>Get paid straight to your own wallet</h3>
-        <p class="faint">With direct payments, payers pay your own Lightning wallet. The money goes straight there: CPAY never holds it, cannot withdraw, refund or move it, and it is not part of your CPAY balance.</p></div></div>
+      <div class="card-title"><div>${forwardOnly(s)
+        ? `<h3>Where CPAY sends your payments</h3>
+        <p class="faint">CPAY receives each payment, keeps its fee and sends the rest to this Lightning address right away. Nothing is kept in a CPAY balance once an address is in use.</p>`
+        : `<h3>Get paid straight to your own wallet</h3>
+        <p class="faint">With direct payments, payers pay your own Lightning wallet. The money goes straight there: CPAY never holds it, cannot withdraw, refund or move it, and it is not part of your CPAY balance.</p>`}</div></div>
       <div id="directStatus">${statusLines(s)}</div>
       <div class="field"><label for="directAddr">Lightning address</label>
         <input id="directAddr" placeholder="name@your-wallet-provider.com" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="email" aria-describedby="directHint"></div>
       <p class="hint" id="directHint">Use the Lightning address of a wallet you control. CPAY checks that the wallet provider can confirm payments before you can save it. Payers see this address on the payment page. For your safety, a new address is used 24 hours after you save it.</p>
-      <p class="hint">Fees: CPAY takes no fee from direct payments. A link cost you set is added for the payer and goes to your wallet with the rest. Your wallet provider may charge its own fees.</p>
+      <p class="hint">${forwardOnly(s)
+        ? 'Fees: CPAY keeps its platform fee from each payment. The small Lightning network fee for sending it on comes out of your amount. Your wallet provider may charge its own fees.'
+        : 'Fees: CPAY takes no fee from direct payments. A link cost you set is added for the payer and goes to your wallet with the rest. Your wallet provider may charge its own fees.'}</p>
       <p class="hint" id="directResult" role="status" hidden></p>
       <div class="row">
-        <button class="btn ghost" id="directCheck" type="button"${s.enabled && !s.blocked ? '' : ' disabled'}>Check address</button>
+        <button class="btn ghost" id="directCheck" type="button"${(s.enabled || s.address_enabled) && !s.blocked ? '' : ' disabled'}>Check address</button>
         <button class="btn primary" id="directSave" type="button" disabled>Save address</button>
         ${s.current || s.pending ? '<button class="btn quiet" id="directRemove" type="button">Remove address</button>' : ''}
       </div>
@@ -119,7 +126,9 @@
     const remove = el.querySelector('#directRemove');
     if (remove) {
       remove.onclick = async () => {
-        if (!window.confirm('Remove your Lightning address? Your direct links stop taking payments until you add one again. They are not switched to your CPAY balance.')) return;
+        if (!window.confirm(forwardOnly(s)
+          ? 'Remove your Lightning address? CPAY cannot send you payments until you add one again.'
+          : 'Remove your Lightning address? Your direct links stop taking payments until you add one again. They are not switched to your CPAY balance.')) return;
         remove.disabled = true;
         const call = () => callFunction('settlement-destination', { action: 'remove' });
         const r = window.cpayWithStepUp ? await window.cpayWithStepUp(call) : await call();

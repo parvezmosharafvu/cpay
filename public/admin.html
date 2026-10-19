@@ -75,6 +75,7 @@
     <p class="side-label" aria-hidden="true">Money</p>
     <button type="button" class="navi" data-tab="payments"><svg class="navi-ico" aria-hidden="true"><use href="#i-in"/></svg><span class="navi-label">Payments</span></button>
     <button type="button" class="navi" data-tab="payouts"><svg class="navi-ico" aria-hidden="true"><use href="#i-out"/></svg><span class="navi-label">Payouts</span></button>
+    <button type="button" class="navi" data-tab="forwards"><svg class="navi-ico" aria-hidden="true"><use href="#i-out"/></svg><span class="navi-label">Instant forwards</span></button>
     <button type="button" class="navi" data-tab="links"><svg class="navi-ico" aria-hidden="true"><use href="#i-link"/></svg><span class="navi-label">Links</span></button>
     <a class="navi" data-tab="wallet" href="#wallet"><svg class="navi-ico" aria-hidden="true"><use href="#i-wallet"/></svg><span class="navi-label">Wallet</span></a>
     <p class="side-label" aria-hidden="true">Operations</p>
@@ -104,13 +105,18 @@
     <section id="people" hidden></section>
     <section id="payments" hidden></section>
     <section id="payouts" hidden></section>
+    <section id="forwards" hidden><div id="instantForwards"></div></section>
     <section id="links" hidden></section>
     <section id="wallet" hidden></section>
     <section id="settings" hidden>
-      <div id="fees"></div>
-      <div id="flags"></div>
-      <div id="alerts"></div>
       <div id="platformSettings"></div>
+      <details id="settingsAdvanced" class="card">
+        <summary><strong>Advanced</strong> <span class="faint">withdrawal fee, small payments, flags, alerts, instant-forward limits, old switches</span></summary>
+        <div id="fees"></div>
+        <div id="flags"></div>
+        <div id="alerts"></div>
+        <div id="platformSettingsAdvanced"></div>
+      </details>
     </section>
     <section id="health" hidden></section>
     <section id="receipts" hidden></section>
@@ -153,7 +159,8 @@
 <script src="admin-receipt-reviews.js?v=1"></script>
 <script src="admin-home-live.js?v=29"></script>
 <script src="admin-security.js?v=1"></script>
-<script src="admin-platform-settings.js?v=1"></script>
+<script src="admin-platform-settings.js?v=2"></script>
+<script src="admin-forwards.js?v=1"></script>
 <script src="shell.js?v=1"></script>
 </body>
 </html>

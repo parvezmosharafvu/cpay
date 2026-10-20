@@ -557,6 +557,8 @@ jobs:
         run: |
           deno test supabase/functions/owner-guide/
           node scripts/build-admin-guide.mjs --check
+      - name: health (primary wallet last-synced time, Dhaka)
+        run: deno test supabase/functions/health/
       - name: wallet-registry (Wallets, owner only; seed never echoed)
         # Owner + passkey session only, fresh passkey for add/remove, BIP39
         # words + checksum, rate limit, and the seed never appears in a

@@ -1,4 +1,4 @@
-# CPAY system overview (current, 2026-10-21, main @ 0d634e5)
+# CPAY system overview (current, 2026-10-21, main @ c1dd66d)
 
 This is the single source of truth for how CPAY works **today**. Older design
 documents carry a "Historical document" banner; where they disagree with this
@@ -97,6 +97,13 @@ a payment (headers can be spoofed).
 fields in Admin → Settings by `public/legal-fields.js` and shown only when
 the `legal_published` setting is on. `python3 ci/check_legal.py --release`
 refuses a release while any field is empty.
+
+## Health check
+
+`health` reports the payment service plus the primary wallet's last sync time
+(from `wallet_registry_list()` / the wallet status table), shown
+in Dhaka time. Daily figures everywhere use the Bangladesh calendar day
+(midnight Asia/Dhaka, #156).
 
 ## Release and deploy
 

@@ -40,6 +40,11 @@ verify_jwt = true
 [functions.auth-settings]
 verify_jwt = true
 
+# Admin → Settings: secrets (write-only) and Cloudflare. Signed-in admin at
+# aal2 only; the admin role and a fresh sign-in are checked again in code.
+[functions.owner-config]
+verify_jwt = true
+
 [functions.daily-report]
 verify_jwt = false
 

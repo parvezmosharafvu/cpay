@@ -11,8 +11,10 @@
   const host = () => document.getElementById('platformSettings');
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const MAIN = [
-    ['Legal pages', ['legal_entity_name', 'legal_address', 'legal_effective_date', 'legal_jurisdiction', 'legal_courts', 'legal_privacy_email', 'legal_support_email', 'legal_published']],
-    ['Wallet link', ['wallet_url', 'wallet_link_enabled']],
+    // The on/off switches (legal_published, wallet_link_enabled) are in
+    // Features (admin-owner-settings.js).
+    ['Legal pages', ['legal_entity_name', 'legal_address', 'legal_effective_date', 'legal_jurisdiction', 'legal_courts', 'legal_privacy_email', 'legal_support_email']],
+    ['Wallet link', ['wallet_url']],
   ];
   const ADVANCED = [
     ['Instant forward', ['instant_forward_no_address', 'instant_forward_min_sat', 'instant_forward_max_usd', 'instant_forward_max_fee_pct', 'instant_forward_max_attempts']],

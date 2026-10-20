@@ -35,6 +35,8 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('request_withdrawal(numeric, text, text)',                                 'public',        'retired: always raises'),
   ('admin_platform_settings()',                                               'admin',         'admin: platform settings; refuses without an active admin'),
   ('admin_set_platform_setting(text, jsonb)',                                 'admin',         'admin: write a platform setting; refuses without an active admin at aal2; audited'),
+  ('admin_save_domain(text, text, boolean)',                                  'admin',         'admin: add or turn a site domain on/off; refuses without an active admin at aal2; hostname validated; audited'),
+  ('admin_remove_domain(text)',                                               'admin',         'admin: remove a site domain (never the main one); refuses without an active admin at aal2; audited'),
   ('admin_list_forwards(text, integer)',                                    'admin',         'admin: instant forwards and totals; refuses without an active admin'),
   ('admin_forward_action(uuid, text)',                                       'admin',         'admin: hold a waiting forward, retry or release a held one; refuses without an active admin at aal2; audited'),
   ('admin_forward_batch_action(uuid, text, text)',                           'admin',         'admin: close a USDT batch stuck over an hour (delivered with a reference, or held); refuses without an active admin at aal2; audited'),

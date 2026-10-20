@@ -404,6 +404,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/forward_safety_test.sql
+      - name: Domains only through audited admin functions (20261020070000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/owner_domains_test.sql
       - name: Money is exact (no float columns or float casts in public)
         env:
           PGPASSWORD: postgres
@@ -516,6 +520,11 @@ jobs:
         # row, and that neither the token nor the auth config's secrets
         # ever reach a response.
         run: deno test --allow-net=127.0.0.1 --allow-env supabase/functions/auth-settings/
+      - name: owner-config (Settings secrets, Cloudflare) against mock APIs
+        # Local mock servers only. Write-only: names out, values never;
+        # protected names (wallet words, the access tokens) refused; aal2
+        # always, a fresh sign-in for every change; audited.
+        run: deno test --allow-net=127.0.0.1 supabase/functions/owner-config/
       - name: admin-actions admin gate against a mock Supabase
         # Local mock server only. Active admin allowed; suspended, pending
         # and rejected admin refused; creator, no or bad JWT refused; every

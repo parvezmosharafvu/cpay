@@ -13,7 +13,7 @@ settlement on, the accurate statement is narrower: **"Payments on direct links g
 wallet; CPAY never holds them."**
 
 Related: [ARCHITECTURE.md](ARCHITECTURE.md), [BTCPAY-ARCHITECTURE.md](BTCPAY-ARCHITECTURE.md),
-[WALLET-APP.md](WALLET-APP.md), [LEGAL-REVIEW-BRIEF.md](LEGAL-REVIEW-BRIEF.md).
+[WALLET-APP.md](WALLET-APP.md), [LEGAL-NOTES.md](LEGAL-NOTES.md).
 
 ## 1. Current-state audit (main 2e6c9d8, 2026-10-17)
 
@@ -113,8 +113,8 @@ merchant's own wallet.
 ### D. Hybrid during the move
 
 Direct settlement is the default for new links once it is on; the existing CPAY balance stays as a
-separately named, per-link, opt-in choice ("My CPAY balance, held by CPAY") until the owner and counsel
-decide its future. The two never mix: direct payments are not in any balance, and a direct link can never
+separately named, per-link, opt-in choice ("My CPAY balance, held by CPAY") until the owner
+decides its future. The two never mix: direct payments are not in any balance, and a direct link can never
 create a custodial payment (database trigger).
 
 ### Comparison
@@ -193,7 +193,7 @@ These change custody, trust or costs, so they are yours. Everything else is deci
    §7. The switch is in Admin → Settings and needs two-step sign-in.
 2. **The custodial CPAY balance:** keep it as the opt-in "My CPAY balance" per link (recommended during the
    move), stop offering it for new links later, or retire it after balances are paid out. Retiring needs
-   counsel (it holds customer money today).
+   the owner's decision (it holds customer money today).
 3. **Fees on direct payments:** CPAY cannot deduct from a payment it never holds, so **the current
    platform fee model is not implemented for direct payments**: CPAY collects nothing from them.
    The link cost (`cost_percent`) is separate: the merchant's own markup, added to what the payer
@@ -217,7 +217,7 @@ These change custody, trust or costs, so they are yours. Everything else is deci
 
 | Gate | Who | How |
 |---|---|---|
-| Counsel has reviewed the direct model, payer and merchant terms, privacy notice and refund text ([LEGAL-REVIEW-BRIEF.md](LEGAL-REVIEW-BRIEF.md)) | Owner | — |
+| The owner has signed off the direct model, payer and merchant terms, privacy notice and refund text ([LEGAL-NOTES.md](LEGAL-NOTES.md)) | Owner | — |
 | One real payment on mainnet: a merchant's real Lightning address (LUD-21), a $1–$5 payment from Cash App, proof recorded, merchant's wallet shows it | Owner | §9 |
 | The deployed runtime reaches the merchant's provider and the price sources, and DNS checks work there (a `dns_unavailable` refusal in the logs means they do not, and no direct invoice is made) | Owner, with logs | Function logs after the pilot payment |
 | `DIRECT_PROVIDER_HOSTS` set to the pilot provider's hosts (recommended) | Owner | Edge secret |

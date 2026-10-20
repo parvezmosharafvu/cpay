@@ -100,9 +100,10 @@ Becomes unnecessary in normal use (kept under *Advanced* as overrides): `custodi
 
 ## 8. Legal
 
-The pages say CPAY briefly receives each payment, deducts a disclosed fee and immediately forwards the
-rest to the user's wallet, holds no balances, and that held (`owed`) amounts are paid out or returned.
-Counsel should confirm whether brief receipt-and-forward needs a licence where CPAY operates.
+The pages describe both Auto withdraw modes (docs/AUTO-WITHDRAW.md): on, CPAY receives each payment,
+deducts the disclosed fee and forwards the rest to the user's saved address, and held (`owed`) amounts
+are paid out later; off, the rest is added to the user's balance and the user withdraws by hand.
+Whether brief receipt-and-forward needs a licence where CPAY operates is an open owner decision (docs/LEGAL-NOTES.md).
 
 ## 9. Rollout and rollback
 

@@ -90,9 +90,11 @@ status,
 headers: { "Content-Type": "application/json", ...cors },
 });
 }
-// Manual payout methods (bKash / Nagad / Binance / bank / Lightning payout)
-// are closed. The only product path is USDT/USDC via routes/quote/confirm.
+// The old request/approve payout methods are closed. Withdrawals go through
+// routes/quote/confirm: USDT to a saved address, or Lightning (saved
+// Lightning address or a Lightning invoice) since 20261021010000.
 // request_withdrawal() in SQL also raises for any method.
+const LIGHTNING_ROUTE_ID = "lightning:btc";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Calls the payment service, which holds the platform wallet.
@@ -155,6 +157,7 @@ function publicQuote(q: Json) {
     amountUsd: str(q.amountUsd), feePercent: str(q.feePercent), platformFeeUsd: str(q.platformFeeUsd),
     sendUsd: str(q.sendUsd), networkFeeUsd: str(q.networkFeeUsd),
     receive: str(q.receive), receiveMin: str(q.receiveMin), maxSlippageBps: q.maxSlippageBps ?? null,
+    amountSat: typeof q.amountSat === "number" ? q.amountSat : null,
   };
 }
 
@@ -207,22 +210,27 @@ Deno.serve(async (req) => {
       }
       if (action === "quote") {
         const amount = String(body.amount ?? "").trim();
+        const routeId = String(body.routeId ?? "");
+        // Manual Lightning (20261021010000): $1 minimum; a Lightning invoice
+        // carries its own amount, so the amount may be empty.
+        const lightning = routeId === LIGHTNING_ROUTE_ID;
+        const minCents = lightning ? 100 : 500;
         // Integer cents throughout; at most two decimals as before.
         const amountCents = /^\d+(\.\d{1,2})?$/.test(amount) ? parseAmountToCents(amount) : null;
-        if (amountCents === null || amountCents < 500) {
-          return json({ error: "Minimum withdrawal is $5" }, 400, cors);
+        if (!(lightning && amount === "") && (amountCents === null || amountCents < minCents)) {
+          return json({ error: lightning ? "Minimum Lightning withdrawal is $1" : "Minimum withdrawal is $5" }, 400, cors);
         }
         // Early answer for the common mistake. The payment service checks
         // again, and reserve_stablecoin_withdrawal() decides at confirm.
         const { data: bal, error: balErr } = await callerClient.rpc("get_my_balance");
         if (balErr) { console.error("get_my_balance failed:", balErr.message); return json({ error: "Could not read your balance. Try again." }, 400, cors); }
         const availableCents = toCents((Array.isArray(bal) ? bal[0] : bal)?.available ?? 0, "floor") ?? 0;
-        if (amountCents > availableCents) {
+        if (amountCents !== null && amountCents > availableCents) {
           return json({ error: `Insufficient balance. Available: $${formatCents(Math.max(0, availableCents))}` }, 400, cors);
         }
         const { status, payload } = await paymentService("/withdraw/quote", {
           method: "POST",
-          body: { userId: user.id, routeId: String(body.routeId ?? ""), address: String(body.address ?? "").trim(), amountUsd: amount },
+          body: { userId: user.id, routeId, address: String(body.address ?? "").trim(), amountUsd: amount },
         }, 30000);
         if (status !== 200) return json({ error: publicError(payload, "Could not get a quote. Try again."), ...publicCode(payload) }, status, cors);
         return json(publicQuote(payload), 200, cors);
@@ -254,8 +262,8 @@ Deno.serve(async (req) => {
 
   // Anything other than routes / quote / confirm is the retired manual path.
   // SQL request_withdrawal() also raises; refuse here so the edge function
-  // never names closed payout methods or Lightning payout destinations.
+  // never names closed payout methods.
   return json({
-    error: "Only USDT to a saved wallet address is supported. Use quote and confirm.",
+    error: "Use quote and confirm: USDT to a saved address, or Lightning.",
   }, 410, cors);
 });

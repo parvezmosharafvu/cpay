@@ -51,7 +51,7 @@ date (Asia/Dhaka) and who performed it in the staging sign-off ledger.
 
 | Date (Dhaka) | Who | Source | Target | Result |
 |---|---|---|---|---|
-| 2026-10-13 11:50 | Grok Bot (audit agent) | Read-only JSON export from production of auth.users (id, email, created_at), profiles, payment_links, payments, withdrawals, daily_stats | Disposable local Postgres: CI bootstrap + every migration in the repo, rows loaded with triggers off | **Pass.** Rows: users 18, profiles 18, links 1, payments 4, withdrawals 0, daily_stats 24, all equal to production. Every payment field round-tripped with no differences. `get_balance_for()` matched production for **18/18** accounts. Settled: 3 payments, $21.63, fees $0.32, 25,940 sat. Total available $21.31 on both sides. The repo schema had no column drift against production. The DB and the export were destroyed afterwards. |
+| 2026-10-13 11:50 | Audit agent | Read-only JSON export from production of auth.users (id, email, created_at), profiles, payment_links, payments, withdrawals, daily_stats | Disposable local Postgres: CI bootstrap + every migration in the repo, rows loaded with triggers off | **Pass.** Rows: users 18, profiles 18, links 1, payments 4, withdrawals 0, daily_stats 24, all equal to production. Every payment field round-tripped with no differences. `get_balance_for()` matched production for **18/18** accounts. Settled: 3 payments, $21.63, fees $0.32, 25,940 sat. Total available $21.31 on both sides. The repo schema had no column drift against production. The DB and the export were destroyed afterwards. |
 
 **Gaps found by the drill:**
 - The private ledger-backup repo is not readable with the audit's GitHub

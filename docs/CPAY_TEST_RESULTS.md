@@ -16,7 +16,7 @@ No automated test sends real money. Mainnet payments and payouts were
 | Phone wallet: build rules, browser tests | Passed |
 | Secrets scan, dependency audit, workflow pinning, public copy, legal-draft guard, release gate | Passed |
 
-## Local run for this change (branch `claude/telegram-no-email`)
+## Local run for this change (Telegram without email)
 
 | Check | Result |
 |---|---|

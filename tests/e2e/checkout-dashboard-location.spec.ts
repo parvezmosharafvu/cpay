@@ -60,7 +60,7 @@ test('overview: actions on their own, one summary card without link cost, recent
   await login(page, u);
   await page.waitForURL(/dashboard\.html/);
   const actions = page.locator('#homeActions');
-  await expect(actions.getByRole('button', { name: /Withdraw USDT/ })).toBeVisible();
+  await expect(actions.getByRole('button', { name: /^Withdraw$/ })).toBeVisible();
   await expect(actions.getByRole('button', { name: /New payment link/ })).toBeVisible();
   const summary = page.locator('#homeSummary');
   await expect(summary).toContainText('Available');

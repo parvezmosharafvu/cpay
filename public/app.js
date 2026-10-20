@@ -150,7 +150,10 @@ function bindExperience(state){
 const WITHDRAW_METHODS = {
   stablecoin: { label: 'USDT', instant: true,
     note: 'USDT only. Sent to the address you saved or typed on the selected network.' },
+  lightning: { label: 'Bitcoin · Lightning', instant: true,
+    note: 'Sent to your saved Lightning address, or to the Lightning invoice you paste.' },
 };
+const LIGHTNING_ROUTE_ID = 'lightning:btc';
 const CHAIN_LABELS = {
   tron: 'Tron (TRC-20)', bsc: 'BNB Smart Chain (BEP-20)', ethereum: 'Ethereum (ERC-20)', arbitrum: 'Arbitrum One',
   solana: 'Solana', base: 'Base', polygon: 'Polygon', optimism: 'Optimism', avalanche: 'Avalanche C-Chain',
@@ -162,6 +165,7 @@ function chainLabel(chain){
 }
 function methodLabel(code, row){
   if (code === 'stablecoin' || code === 'usdt_bep20') return row?.chain ? `USDT · ${chainLabel(row.chain)}` : 'USDT';
+  if (code === 'lightning') return 'Bitcoin · Lightning';
   const m = WITHDRAW_METHODS[code];
   return m ? m.label : code;
 }
@@ -187,11 +191,12 @@ async function callFunction(name, body){
 function withdrawForm(whoHtml){
   return `<div class="withdraw">
     <div class="card">
-      <div class="card-title"><div><h3>Withdraw USDT</h3><p class="faint">Quote first, then confirm. The fee and the amount you receive are shown before you send.</p></div></div>
+      <div class="card-title"><div><h3>Withdraw</h3><p class="faint">Choose where to send, get a quote, then confirm. The fee and the amount you receive are shown before you send.</p></div></div>
       <div class="who">${whoHtml}</div>
       <input type="hidden" id="wMethod" value="stablecoin">
-      <div class="field" id="wNetField"><label for="wNet">USDT network</label><select id="wNet"></select></div>
-      <div class="field"><label for="wAmt">Amount (USD)</label><input id="wAmt" type="number" min="5" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field" id="wNetField"><label for="wNet">Send to</label><select id="wNet"></select></div>
+      <div class="field" id="wAmtField"><label for="wAmt">Amount (USD)</label><input id="wAmt" type="number" min="1" step="0.01" inputmode="decimal" placeholder="0.00">
+        <button type="button" class="btn ghost sm" id="wAll">Withdraw all</button></div>
       <div class="field"><label for="wDest" id="wDestLabel">USDT address</label><input id="wDest" autocomplete="off" spellcheck="false"></div>
       <p class="hint" id="wHint"></p>
     </div>
@@ -223,7 +228,7 @@ async function loadWithdrawRoutes({ fresh = false } = {}){
     if (d) await new Promise((r) => setTimeout(r, d));
     const r = await callFunction('user-withdraw', { action: 'routes' });
     if (!r.ok) { last = { routes: [], error: r.message || 'Could not load networks' }; continue; }
-    const routes = (r.data?.routes || []).filter((x) => String(x.asset || '').toUpperCase() === 'USDT');
+    const routes = (r.data?.routes || []).filter((x) => String(x.asset || '').toUpperCase() === 'USDT' || x.id === LIGHTNING_ROUTE_ID);
     if (!routes.length) { last = { routes: [], error: null }; continue; }
     withdrawRoutes = { routes, error: null, stale: r.data?.stale === true, cacheAgeSec: Number(r.data?.cacheAgeSec) || 0 };
     return withdrawRoutes;
@@ -231,18 +236,21 @@ async function loadWithdrawRoutes({ fresh = false } = {}){
   return last;
 }
 function shortAddress(a){ return a && a.length > 16 ? `${a.slice(0, 8)}...${a.slice(-6)}` : (a || ''); }
-function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => {}, blocked = null, saved = [], preferredNetwork = null } = {}){
+function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => {}, blocked = null, saved = [], preferredNetwork = null, savedLightning = null, available = () => null } = {}){
   let routes = { routes: [], error: null, loading: true };
   let quote = null;
   let busy = false;
   let timer = null;
-  const method = () => WITHDRAW_METHODS.stablecoin;
   const route = () => routes.routes.find((r) => r.id === $('wNet').value);
+  const isLn = () => $('wNet').value === LIGHTNING_ROUTE_ID;
+  const method = () => (isLn() ? WITHDRAW_METHODS.lightning : WITHDRAW_METHODS.stablecoin);
+  const isInvoice = (a) => /^(lightning:)?ln(bc|tb|bcrt)[0-9a-z]+$/i.test(String(a || '').trim());
+  const routeName = (r) => (r.id === LIGHTNING_ROUTE_ID ? 'Bitcoin · Lightning' : `USDT · ${chainLabel(r.chain)}`);
   const expiresIn = () => (quote ? Math.max(0, Math.floor((Date.parse(quote.expiresAt) - Date.now()) / 1000)) : 0);
   const fillNetworks = () => {
     const keep = $('wNet').value;
     $('wNet').innerHTML = routes.routes.length
-      ? routes.routes.map((r) => `<option value="${escapeHtml(r.id)}">USDT · ${escapeHtml(chainLabel(r.chain))}</option>`).join('')
+      ? routes.routes.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(routeName(r))}</option>`).join('')
       : `<option value="">${routes.loading ? 'Loading networks...' : (routes.error ? 'Networks did not load' : 'No USDT networks available right now')}</option>`;
     if (routes.routes.some((r) => r.id === keep)) $('wNet').value = keep;
     let staleNote = document.getElementById('wNetStale');
@@ -275,10 +283,19 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
     $('sumNetRow').hidden = false;
     $('sumToRow').hidden = false;
     const r = route();
-    $('wDestLabel').textContent = 'USDT address';
-    $('wDest').placeholder = r ? `${ADDRESS_PLACEHOLDER[r.family] || 'Address'} on ${chainLabel(r.chain)}` : 'USDT address';
-    $('wHint').textContent = 'Minimum $5. USDT only. Confirm the network matches the address.';
-    $('sumMethod').textContent = r ? `USDT · ${chainLabel(r.chain)}` : 'USDT';
+    const ln = isLn();
+    const invoice = ln && isInvoice($('wDest').value);
+    $('wAmtField').hidden = invoice;
+    if (ln) {
+      $('wDestLabel').textContent = 'Lightning address or invoice';
+      $('wDest').placeholder = 'you@wallet.example or lnbc...';
+      $('wHint').textContent = 'Minimum $1. Your saved Lightning address, or a Lightning invoice with an amount (the invoice amount is used).';
+    } else {
+      $('wDestLabel').textContent = 'USDT address';
+      $('wDest').placeholder = r ? `${ADDRESS_PLACEHOLDER[r.family] || 'Address'} on ${chainLabel(r.chain)}` : 'USDT address';
+      $('wHint').textContent = 'Minimum $5. USDT only. Confirm the network matches the address.';
+    }
+    $('sumMethod').textContent = r ? routeName(r) : 'USDT';
     const amount = Number($('wAmt').value);
     const pct = feePercent();
     $('sumAmount').textContent = money(amount > 0 ? amount : 0);
@@ -308,6 +325,7 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
       $('sumTo').textContent = shortAddress($('wDest').value.trim()) || '-';
       $('sumGet').textContent = '-';
       $('sumNote').textContent = routes.error ? routes.error : (routes.loading ? 'Loading networks...' : (routes.routes.length ? m.note : 'No USDT networks are available right now.'));
+      if (invoice) $('sumAmount').textContent = 'From the invoice';
       btn.textContent = busy ? 'Getting quote...' : 'Get quote';
       btn.disabled = busy || !r;
       return;
@@ -318,14 +336,17 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
     $('sumFeeRow').hidden = !(quotePct > 0);
     $('sumFeeLabel').textContent = `Platform fee (${quotePct}%)`;
     $('sumFee').textContent = `-${money(quote.platformFeeUsd)}`;
-    $('sumNet').textContent = `-${usdExact(quote.networkFeeUsd)}`;
+    const qLn = quote.route?.id === LIGHTNING_ROUTE_ID;
+    const unit = qLn ? 'sats' : 'USDT';
+    $('sumNet').textContent = qLn ? '$0.00' : `-${usdExact(quote.networkFeeUsd)}`;
     $('sumTo').textContent = shortAddress(quote.address);
     $('sumTo').title = quote.address;
-    $('sumGet').textContent = `${quote.receive} USDT`;
+    $('sumGet').textContent = qLn ? `${quote.receive} sats (${money(quote.sendUsd)})` : `${quote.receive} USDT`;
     $('sumNote').textContent = left > 0
-      ? `Quote valid for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}. You still receive at least ${quote.receiveMin} USDT.`
+      ? (qLn ? `Quote valid for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}. The Lightning network fee is paid by CPAY.`
+        : `Quote valid for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}. You still receive at least ${quote.receiveMin} USDT.`)
       : 'This quote expired. Get a new one.';
-    btn.textContent = busy ? 'Sending...' : (left > 0 ? `Confirm and send ${quote.receive} USDT` : 'Get new quote');
+    btn.textContent = busy ? 'Sending...' : (left > 0 ? `Confirm and send ${quote.receive} ${unit}` : 'Get new quote');
     btn.disabled = busy;
   };
   const clearQuote = () => { quote = null; clearInterval(timer); timer = null; };
@@ -336,10 +357,17 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
     render();
   };
   const getQuote = async () => {
-    const amount = $('wAmt').value.trim();
     const address = $('wDest').value.trim();
-    if (!(Number(amount) >= 5)) return toast('Minimum withdrawal is $5');
-    if (!address) return toast('Enter the USDT address');
+    const ln = isLn();
+    const amount = ln && isInvoice(address) ? '' : $('wAmt').value.trim();
+    if (ln) {
+      if (!address) return toast('Enter your Lightning address or paste a Lightning invoice');
+      if (amount !== '' && !(Number(amount) >= 1)) return toast('Minimum Lightning withdrawal is $1');
+      if (amount === '' && !isInvoice(address)) return toast('Enter an amount');
+    } else {
+      if (!(Number(amount) >= 5)) return toast('Minimum withdrawal is $5');
+      if (!address) return toast('Enter the USDT address');
+    }
     busy = true; render();
     const res = await callFunction('user-withdraw', { action: 'quote', routeId: $('wNet').value, address, amount });
     busy = false;
@@ -360,9 +388,10 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
     clearQuote();
     $('wAmt').value = '';
     render();
-    if (w.status === 'paid') toast(w.amountOut ? `Sent. ${w.amountOut} USDT delivered.` : 'Sent and delivered.', true);
+    const wLn = String(w.chain || '').toLowerCase() === 'lightning';
+    if (w.status === 'paid') toast(w.amountOut ? `Sent. ${w.amountOut} ${wLn ? 'sats' : 'USDT'} delivered.` : 'Sent and delivered.', true);
     else if (w.status === 'failed') toast('The withdrawal failed and the amount is back in your balance.');
-    else toast('Sent. USDT is on its way.', true);
+    else toast(wLn ? 'Sent. The Lightning payment is on its way.' : 'Sent. USDT is on its way.', true);
     onDone(w);
   };
   $('wBtn').onclick = async () => {
@@ -377,6 +406,12 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
   const savedFor = (r) => (r ? saved.find((w) => String(w.network).toLowerCase() === String(r.chain).toLowerCase()) : null);
   const isSavedAddress = (a) => !a || saved.some((w) => w.address === a);
   const syncSaved = () => {
+    if (isLn()) {
+      const cur = $('wDest').value.trim();
+      if (savedLightning && (!cur || isSavedAddress(cur))) $('wDest').value = savedLightning;
+      return;
+    }
+    if ($('wDest').value.trim() === savedLightning) $('wDest').value = '';
     const w = savedFor(route());
     if (w && isSavedAddress($('wDest').value.trim())) $('wDest').value = w.address;
     else if (!w && isSavedAddress($('wDest').value.trim())) $('wDest').value = '';
@@ -390,6 +425,12 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
     syncSaved();
   };
   $('wNet').addEventListener('change', syncSaved);
+  $('wAll').addEventListener('click', () => {
+    const a = Number(available());
+    if (!(a > 0)) return toast('Nothing to withdraw');
+    $('wAmt').value = (Math.floor(a * 100 + 1e-6) / 100).toFixed(2);
+    clearQuote(); render();
+  });
   ['wNet', 'wAmt', 'wDest'].forEach((id) => {
     const changed = () => { clearQuote(); render(); };
     $(id).addEventListener('input', changed);
@@ -398,7 +439,7 @@ function bindWithdraw(feePercent, { instantAllowed = () => true, onDone = () => 
   if (blocked) {
     const box = document.querySelector('.withdraw');
     if (box) box.classList.add('blocked');
-    ['wNet', 'wAmt', 'wDest'].forEach((id) => { $(id).disabled = true; });
+    ['wNet', 'wAmt', 'wDest', 'wAll'].forEach((id) => { $(id).disabled = true; });
     $('wNet').innerHTML = '<option value="">-</option>';
     render();
     return () => render();

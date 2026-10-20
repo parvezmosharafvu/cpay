@@ -1,4 +1,4 @@
--- 20261020080000: coarse locations. Owner-only payment details through RLS;
+-- 20261020090000: coarse locations. Owner-only payment details through RLS;
 -- account location set through the RPC only; last-seen country only from
 -- the request's cf-ipcountry header; admin view needs aal2; link location
 -- label is capped. BEGIN/ROLLBACK.

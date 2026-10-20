@@ -408,7 +408,11 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/owner_domains_test.sql
-      - name: Coarse locations, owner-only payment details, admin needs aal2 (20261020080000)
+      - name: Saving an address is enough to get paid (20261020080000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/auto_receive_test.sql
+      - name: Coarse locations, owner-only payment details, admin needs aal2 (20261020090000)
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/locations_test.sql

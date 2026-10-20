@@ -127,9 +127,13 @@ fresh sign-in.
 
 ## 11. USDT instant forward (20261020050000, worker in forward.mjs)
 
-- The user picks "Where to receive" on Profile: Lightning address or one of
-  their saved USDT addresses (`set_my_receive_method`, step-up, audited,
-  notice). Stored in `receive_settings` (profiles are guarded).
+- No choice to make (20261020080000): saving an address is enough.
+  `receive_target_for(user)` picks, in order: an explicit pick still in
+  `receive_settings` (older accounts; `set_my_receive_method` remains), the
+  saved Lightning address, then a usable USDT address (preferred network
+  first, then the newest). Address cooldowns still apply. The enqueue
+  trigger, the 'refuse' gate and `my_receive_settings()` all use it; Profile
+  only shows where the next payment goes.
 - On settlement the forward row gets `kind = 'usdt'` and the network. The
   Lightning minimum (`instant_forward_min_sat`) does not apply to USDT.
 - Accumulation: queued USDT rows per user+network are summed. Below the

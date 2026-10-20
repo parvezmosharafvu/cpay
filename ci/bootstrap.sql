@@ -87,6 +87,17 @@ create table if not exists vault.decrypted_secrets (
   name text primary key,
   decrypted_secret text
 );
+-- Vault API shape used by 20261021040000_multi_wallet.sql (CI stand-in;
+-- real Vault encrypts at rest). secrets is a simple view, so DELETE works.
+create or replace view vault.secrets as
+  select id, name, decrypted_secret as secret from vault.decrypted_secrets;
+create or replace function vault.create_secret(new_secret text, new_name text default null, new_description text default '')
+returns uuid language plpgsql as $fn$
+declare v uuid := gen_random_uuid();
+begin
+  insert into vault.decrypted_secrets (id, name, decrypted_secret) values (v, coalesce(new_name, v::text), new_secret);
+  return v;
+end $fn$;
 
 -- cron: the scheduling migrations guard on `pg_extension`, so with pg_cron
 -- absent they log a notice and skip. The table exists only so any

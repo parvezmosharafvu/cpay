@@ -21,7 +21,7 @@ The payer and the freelancer see one figure: **"You receive X"**.
 | Link previews | `worker/og-preview-worker.js` | OG metadata; forwards coarse geo headers |
 | Database | `supabase/migrations/` (Postgres, RLS, `SECURITY DEFINER` RPCs) | append-only history |
 | Edge Functions (Deno) | `supabase/functions/*` | `create-invoice`, `direct-invoice`, `user-withdraw`, `admin-actions`, `auth-settings`, the wallet function, `settlement-destination`, `owner-config`, `telegram-notify`, `daily-report`, `ledger-backup`, `health`, `og-image` |
-| Wallet function | the wallet directory under `supabase/functions/` | runs as a **single instance** via an advisory lease; deploy **only** with the wallet deploy script in `scripts/`; `RECEIPT_RECORDING` is hard-coded off |
+| Wallet function | the wallet directory under `supabase/functions/` | one or more wallets ([MULTI-WALLET.md](MULTI-WALLET.md)), each a **single instance** via its own advisory lease; deploy **only** with the wallet deploy script in `scripts/`; `RECEIPT_RECORDING` is hard-coded off |
 | Self-hosted fallback | `payment-service/` (Node 22) | not deployed; still tested in CI (core parity with the wallet function) |
 | CPay Wallet PWA | `wallet/` | separate optional phone wallet on its own hostname |
 
@@ -56,6 +56,18 @@ The payer and the freelancer see one figure: **"You receive X"**.
    (`20261013090000_payment_state_transitions.sql`).
 6. Direct payment links (merchant's own wallet, no fee) exist in
    `direct-invoice` / `settlement-destination` and are off unless enabled.
+
+## Wallets (`20261021040000_multi_wallet.sql`, [MULTI-WALLET.md](MULTI-WALLET.md))
+
+- Several platform wallets. Wallet #1 is the original one (seed in the Edge
+  secret); others are added by the owner in Admin → Wallet → Wallets by
+  pasting a 12-word seed, which is stored in Supabase Vault and never shown
+  again (only a fingerprint and the node key).
+- The **primary** wallet makes every new invoice and pays every forward and
+  withdrawal. Other active wallets are synced receive-only each minute.
+- `wallet_id` is recorded on payments, forwards and withdrawals (NULL =
+  wallet #1). Owner-only management through the `wallet-registry` function
+  (passkey session; add/remove need a fresh passkey).
 
 ## Locations (`20261020090000_locations.sql`)
 

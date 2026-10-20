@@ -5,11 +5,19 @@
 // is killed, its connection drops and Postgres frees the lock, so a dead
 // instance can never hold the wallet. Every other isolate waits for the
 // lock (up to LOCK_WAIT_MS) and then answers 503.
+//
+// Multi-wallet (20261021040000): one host per wallet. The lock key, the
+// "want" key and the lease rows include the wallet id, so the single-
+// instance rule holds PER WALLET. Wallet #1 (legacy) keeps the original
+// keys, so an old and a new deploy still exclude each other. A host runs as
+// role "primary" (the full app: invoices, sends, forwards, reconcile) or
+// "receiver" (receive-only catch-up for a non-primary wallet).
 import { Buffer } from "node:buffer";
 import { createApp as createAppJs } from "./core/app.mjs";
 const createApp = createAppJs as (o: Any) => Any;
 import { createAdminTokenVerifier, signRequest } from "./core/auth.mjs";
 import { captureResponse, toNodeRequest } from "./node-shim.ts";
+import { createReceiverApp } from "./receiver.ts";
 
 (globalThis as Record<string, unknown>).Buffer ??= Buffer;
 
@@ -18,11 +26,27 @@ export const LOCK_WAIT_MS = 20_000;
 // costs an SDK build + connect (seconds), so idle close only after 45 s.
 export const WALLET_IDLE_MS = 45_000;
 export const HANDOFF_POLL_MS = 200;
-const WANT_LOCK = "select pg_advisory_lock_shared(73501, 2)";
 const ABANDON_STALE_LEASES =
   "update breez_wallet.lease_log set released_at = now(), outcome = 'abandoned: holder ended without releasing; closed by the next lease' where released_at is null";
-const WANT_UNLOCK = "select pg_advisory_unlock_shared(73501, 2)";
-const WANTED = "select exists(select 1 from pg_locks where locktype = 'advisory' and classid = 73501 and objid = 2 and granted and pid <> pg_backend_pid()) as w";
+export const LEGACY_WALLET_ID = "00000000-0000-0000-0000-000000000001";
+
+// Lock SQL for one wallet. No wallet (registry not migrated yet) or the
+// legacy wallet: exactly the keys used before multi-wallet.
+export function lockSql(wallet?: { id: string; legacy: boolean }) {
+  if (wallet && !/^[0-9a-f-]{36}$/.test(wallet.id)) throw new Error("bad wallet id");
+  const legacy = !wallet || wallet.legacy;
+  const key = legacy ? "breez_wallet.lock_key()" : `hashtextextended('cpay:breez-wallet:spark:${wallet!.id}', 0)`;
+  const [c, o] = legacy ? [73501, 2] : [73502, parseInt(wallet!.id.replace(/-/g, "").slice(0, 7), 16)];
+  const scope = !wallet ? "" : legacy ? ` and (wallet_id is null or wallet_id = '${wallet.id}')` : ` and wallet_id = '${wallet.id}'`;
+  return {
+    tryLock: `select pg_try_advisory_lock(${key}) as ok`,
+    unlock: `select pg_advisory_unlock(${key})`,
+    want: `select pg_advisory_lock_shared(${c}, ${o})`,
+    wantUnlock: `select pg_advisory_unlock_shared(${c}, ${o})`,
+    wanted: `select exists(select 1 from pg_locks where locktype = 'advisory' and classid = ${c} and objid = ${o} and granted and pid <> pg_backend_pid()) as w`,
+    abandon: ABANDON_STALE_LEASES + scope,
+  };
+}
 // Read-only responses served from breez_wallet.response_cache when fresh,
 // so they need no wallet lease (ms instead of a lease handoff). Writes to the
 // wallet invalidate the balance entry.
@@ -63,6 +87,9 @@ export type HostDeps = {
   sleep?: (ms: number) => Promise<void>;
   holder?: string;
   verifyAdminToken?: (t: string) => Promise<string | null>;
+  // Multi-wallet. Absent = the pre-registry single wallet (unchanged SQL).
+  wallet?: { id: string; legacy: boolean };
+  role?: "primary" | "receiver";
 };
 
 export class WalletUnavailable extends Error {
@@ -73,6 +100,9 @@ export function createHost(deps: HostDeps) {
   const now = deps.now ?? (() => Date.now());
   const sleep = deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const holder = deps.holder ?? `edge-${crypto.randomUUID()}`;
+  const L = lockSql(deps.wallet);
+  const role = deps.role ?? "primary";
+  const WANT_LOCK = L.want, WANT_UNLOCK = L.wantUnlock, WANTED = L.wanted;
   type Session = { client: Any; sdk: Any; app: Any; leaseId: number; requests: number; full: boolean };
   let session: Session | null = null;
   let opening: Promise<Session> | null = null;
@@ -92,6 +122,18 @@ export function createHost(deps: HostDeps) {
     return Boolean(rows[0]?.enabled) && rows[0]?.owner === "supabase-edge";
   }
 
+  // Multi-wallet: node key + balance into breez_wallet.wallet_status. false
+  // = another wallet already has this node key (the DB disabled this one).
+  async function recordStatus(sdk: Any): Promise<boolean> {
+    if (!deps.wallet) return true;
+    let info: Any = null;
+    try { info = await sdk.getInfo({ ensureSynced: false }); } catch { return true; }
+    const pub = typeof info?.identityPubkey === "string" ? info.identityPubkey.toLowerCase() : null;
+    const bal = Number.isFinite(Number(info?.balanceSats)) ? String(info.balanceSats) : null;
+    const { rows } = await deps.db.query("select breez_wallet.wallet_record_status($1, $2, $3, null) as ok", [deps.wallet.id, pub, bal]);
+    return rows[0]?.ok !== false;
+  }
+
   // full=true (cron): ensureSynced + catchUp. Requests only need a connected
   // SDK; the cron does the heavy sync, so a cold admin request stays fast.
   async function open(lockWaitMs: number, full: boolean): Promise<Session> {
@@ -108,7 +150,7 @@ export function createHost(deps: HostDeps) {
       // instead of keeping it for the whole idle window.
       let wanting = false;
       while (!locked) {
-        const { rows } = await client.query("select pg_try_advisory_lock(breez_wallet.lock_key()) as ok");
+        const { rows } = await client.query(L.tryLock);
         locked = rows[0]?.ok === true;
         if (!locked) {
           if (now() >= deadline) {
@@ -126,15 +168,16 @@ export function createHost(deps: HostDeps) {
       // any lease row still open belongs to one that died without releasing
       // (killed mid-lease). Close those rows, or health reports a wedged
       // lease for a whole day although the wallet is fine.
-      await client.query(ABANDON_STALE_LEASES).catch(() => {});
-      const { rows } = await client.query(
-        "insert into breez_wallet.lease_log (holder) values ($1) returning id", [holder]);
+      await client.query(L.abandon).catch(() => {});
+      const { rows } = deps.wallet
+        ? await client.query("insert into breez_wallet.lease_log (holder, wallet_id, role) values ($1, $2, $3) returning id", [holder, deps.wallet.id, role])
+        : await client.query("insert into breez_wallet.lease_log (holder) values ($1) returning id", [holder]);
       leaseId = Number(rows[0].id);
       sdkStarted = true;
       sdk = await deps.connectSdk();
       const verifyAdminToken = deps.verifyAdminToken ??
         createAdminTokenVerifier({ supabaseUrl: deps.supabaseUrl, anonKey: deps.anonKey });
-      const app = createApp({
+      const app = role === "receiver" ? createReceiverApp({ sdk, db: deps.db, log: deps.log }) : createApp({
         sdk, db: deps.db, secret: deps.secret, log: deps.log, now,
         receiptRecording: "off", recordDb: null,
         requestAuthMode: "signed", adminJwtMode: deps.adminJwtMode, verifyAdminToken,
@@ -144,7 +187,8 @@ export function createHost(deps: HostDeps) {
       app.markSynced();
       if (full) await app.catchUp();
       app.markReady();
-      deps.log({ event: "wallet-lease-acquired", holder });
+      if (!(await recordStatus(sdk))) throw new WalletUnavailable(409, "duplicate wallet");
+      deps.log({ event: "wallet-lease-acquired", holder, wallet: deps.wallet?.id ?? null, role });
       return { client, sdk, app, leaseId: Number(rows[0].id), requests: 0, full };
     } catch (e) {
       // Edge function logs are not always queryable: keep a short, redacted
@@ -153,12 +197,15 @@ export function createHost(deps: HostDeps) {
         const why = (deps.redact ?? ((x: string) => x))(String((e as Error)?.message ?? e)).slice(0, 300);
         await client.query("update breez_wallet.lease_log set released_at = now(), outcome = $2 where id = $1",
           [leaseId, `open-failed: ${why}`]).catch(() => {});
+        if (deps.wallet) {
+          await deps.db.query("select breez_wallet.wallet_record_status($1, null, null, $2)", [deps.wallet.id, `open-failed: ${why}`]).catch(() => {});
+        }
       }
       // A half-open SDK must not keep running (or keep its pool) once the
       // lock is gone, or a second isolate could hold the wallet alongside it.
       if (sdk) { try { await sdk.disconnect(); } catch { /* already down */ } }
       if (sdkStarted) await releaseSdk();
-      if (locked) await client.query("select pg_advisory_unlock(breez_wallet.lock_key())").catch(() => {});
+      if (locked) await client.query(L.unlock).catch(() => {});
       client.release?.(true);
       throw e;
     }
@@ -221,7 +268,7 @@ export function createHost(deps: HostDeps) {
         "update breez_wallet.lease_log set released_at = now(), requests = $2, outcome = $3 where id = $1",
         [s.leaseId, s.requests, `${outcome}${drained ? "" : ",undrained"}${disconnected ? "" : ",disconnect-failed"}`],
       ).catch(() => {});
-      await s.client.query("select pg_advisory_unlock(breez_wallet.lock_key())").catch(() => {});
+      await s.client.query(L.unlock).catch(() => {});
       s.client.release?.(true);
       session = null;
       deps.log({ event: "wallet-lease-released", holder, outcome, drained, disconnected });
@@ -291,6 +338,7 @@ export function createHost(deps: HostDeps) {
       return json(on ? 200 : 503, { ok: on, enabled: on, holder: session ? "this-instance" : null });
     }
     if (!(await claimSignedNonce(method, path, headers, body))) return json(401, { error: "unauthorized" });
+    if (role === "receiver") return json(503, { error: "not the primary wallet" });
     // A warm lease obeys the off switch too (rollback safety).
     if (session && !(await enabled().catch(() => false))) {
       await close("disabled");
@@ -368,6 +416,7 @@ export function createHost(deps: HostDeps) {
       // A fresh full open already synced. A warm session, or a light one a
       // request was opening when this tick joined it, has not: catch up now.
       if (warm || !s.full) await s.app.catchUp();
+      if (deps.wallet) await recordStatus(s.sdk).catch(() => true);
       await refreshRoutes(s).catch((e) => deps.log({ event: "routes-refresh-failed", error: String((e as Error)?.message ?? e).slice(0, 300) }));
       return json(200, { ok: true });
     } catch (e) {

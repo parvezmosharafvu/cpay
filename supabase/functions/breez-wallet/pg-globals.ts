@@ -23,21 +23,39 @@ let installed = false;
 // 2026-10-13). Track the pools so the host can end them when it lets go.
 type EndablePool = { end(): Promise<void> };
 const pools = new Set<EndablePool>();
+// Multi-wallet: several wallets can be open in one isolate, so each SDK
+// build runs inside withPoolScope(tag) and its pools are ended by tag only.
+const tagged = new Map<string, Set<EndablePool>>();
+let scope: string | undefined;
+let chain: Promise<unknown> = Promise.resolve();
 
 export function trackPools<C>(create: (config: C) => EndablePool) {
   return (config: C) => {
     const pool = create(config);
-    pools.add(pool);
+    if (scope === undefined) pools.add(pool);
+    else { if (!tagged.has(scope)) tagged.set(scope, new Set()); tagged.get(scope)!.add(pool); }
     return pool;
   };
 }
 
-// Ends every SDK pool made since the last call. Idle connections close at
-// once; capMs bounds the wait for a client the SDK never released, so a
-// stuck pool can never keep the advisory lock held.
-export async function endPostgresPools(capMs = 1_000): Promise<number> {
-  const all = [...pools];
-  pools.clear();
+// One SDK build at a time, so every pool made during fn belongs to tag.
+export function withPoolScope<T>(tag: string, fn: () => Promise<T>): Promise<T> {
+  const run = chain.then(async () => {
+    scope = tag;
+    try { return await fn(); } finally { scope = undefined; }
+  });
+  chain = run.catch(() => {});
+  return run;
+}
+
+// Ends every SDK pool made since the last call (or, with a tag, every pool
+// of that wallet). Idle connections close at once; capMs bounds the wait
+// for a client the SDK never released, so a stuck pool can never keep the
+// advisory lock held.
+export async function endPostgresPools(capMs = 1_000, tag?: string): Promise<number> {
+  const src = tag === undefined ? pools : (tagged.get(tag) ?? new Set<EndablePool>());
+  const all = [...src];
+  src.clear();
   if (!all.length) return 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   await Promise.race([

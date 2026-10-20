@@ -70,6 +70,7 @@ python3 ci/check_workflows.py
 python3 ci/check_md_links.py
 node --test tests/frontend/*.test.mjs
 deno test supabase/functions/_shared/ supabase/functions/create-invoice/
+deno test supabase/functions/health/   # primary wallet last-synced (Dhaka time)
 (cd payment-service && npm ci && npm test)
 ```
 SQL suites in `ci/*.sql` run against a fresh Postgres after all migrations.

@@ -251,14 +251,15 @@ Merge commit `git log` থেকে মিলিয়ে লেখা।
 | ২০ অক্টোবর ২০২৬ | **Address সাথে সাথে বদলায়** (২৪ ঘণ্টার অপেক্ষা নেই) | #137 (`be72627`), #138 (`4be21d6`) |
 | ২০ অক্টোবর ২০২৬ | **নতুন এক-page checkout, নতুন dashboard আর location** (payer-এর দেশ/অঞ্চল/শহর, শুধু দেখার জন্য) | #143 (`fd92d6a`), bangla #144/#145 (`4037045`, `0fee063`), theme preview #149 (`e77d788`) |
 | ২০ অক্টোবর ২০২৬ | Legal page-এর লেখা code-এর সাথে মেলানো | #146 (`4250afd`) |
-| ২১ অক্টোবর ২০২৬ | **Auto withdraw** global switch + প্রতিটা profile-এ Default/On/Off, আর আলাদা **manual Withdraw** page; legal লেখা থেকে reviewer-এর কথা বাদ | #151 (`885dff9`) |
+| ২১ অক্টোবর ২০২৬ | **Auto withdraw** global switch + প্রতিটা profile-এ Default/On/Off, আর আলাদা **manual Withdraw** page | #151 (`885dff9`) |
 | ২১ অক্টোবর ২০২৬ | **Login শুধু passkey + email verification:** Google বন্ধ, নতুন authenticator (TOTP) যোগ বন্ধ, admin কাজে passkey লাগে | #152 (`0d634e5`) |
 | ২১ অক্টোবর ২০২৬ | Repo পরিষ্কার, `AGENTS.md` আর `docs/SYSTEM-OVERVIEW.md` | #153 (`ce32488`) |
-| ২১ অক্টোবর ২০২৬ | **দিনের হিসাব এখন বাংলাদেশের দিন:** রাত ১২টা থেকে রাত ১২টা (Asia/Dhaka), আগে ছিল বিকেল ৫টা থেকে ৫টা। Dashboard, admin daily stats, দৈনিক withdraw limit, Telegram report সব একসাথে | migration `20261021030000_dhaka_calendar_day` |
-| ২১ অক্টোবর ২০২৬ | **Authenticator code পুরোপুরি বন্ধ** (TOTP verify off); অজানা একটা পুরনো Edge secret মোছা | — |
+| ২১ অক্টোবর ২০২৬ | **দিনের হিসাব এখন বাংলাদেশের দিন:** রাত ১২টা থেকে রাত ১২টা (Asia/Dhaka), আগে ছিল বিকেল ৫টা থেকে ৫টা। Dashboard, admin daily stats, দৈনিক withdraw limit, Telegram report সব একসাথে। আগের দিনগুলোর হিসাব আগের নিয়মেই থাকে | #156 (`5c62118`), migration `20261021030000_dhaka_calendar_day` |
+| ২১ অক্টোবর ২০২৬ | **Authenticator code পুরোপুরি বন্ধ** (TOTP যোগ আর ব্যবহার দুটোই off, passkey login আগের মতো); repo-তে কোথাও ব্যবহার না হওয়া একটা অজানা পুরনো Edge secret মোছা | Supabase dashboard setting (code বদল নেই) |
 | ২১ অক্টোবর ২০২৬ | **এই System guide**, শুধু owner দেখতে পারেন (`owner-guide` function) | #154 |
-| ২১ অক্টোবর ২০২৬ | **একাধিক wallet:** Admin → Wallet-এ ১২ শব্দের seed paste করে নতুন wallet যোগ; seed Supabase Vault-এ encrypted; একটা primary wallet নতুন invoice, forward আর withdraw চালায়; বাকিগুলো প্রতি মিনিটে শুধু টাকা আসা দেখে (১০ দেখুন) | feature/multi-wallet |
+| ২১ অক্টোবর ২০২৬ | **একাধিক wallet:** Admin → Wallet-এ ১২ শব্দের seed paste করে নতুন wallet যোগ; seed Supabase Vault-এ encrypted; একটা primary wallet নতুন invoice, forward আর withdraw চালায়; বাকিগুলো প্রতি মিনিটে শুধু টাকা আসা দেখে। যোগ করতে: Admin → **Wallet** → **Add a wallet** → নাম + ১২ শব্দ → passkey দিয়ে confirm; ১-২ মিনিটে balance দেখাবে। বর্তমান wallet Wallet #1 হিসেবে primary (১০ দেখুন) | #157 (`c1dd66d`), migration `20261021040000_multi_wallet` |
 | ২১ অক্টোবর ২০২৬ | **Google পুরোপুরি সরানো:** repo থেকে Google login-এর বাকি code, test mock আর লেখা বাদ; Supabase-এ Google provider বন্ধ। Client id/secret মোছা আর admin account থেকে Google identity আলাদা করা dashboard-এ বাকি (৯.৫ দেখুন) | #155 |
+| ২১ অক্টোবর ২০২৬ | **Health পেজ ঠিক:** payment check-এ আগে "last synced undefined" দেখাত; এখন primary wallet শেষ কখন sync হয়েছে তা বাংলাদেশ সময়ে দেখায় (যেমন `Wallet 1 last synced 2026-10-21 05:47 (Dhaka), 1 min ago`) | fix/health-last-synced |
 
 <a id="todo"></a>
 ## ৯. এখন কী কী setting করতে হবে

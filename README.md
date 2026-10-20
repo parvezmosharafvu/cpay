@@ -8,6 +8,7 @@ credits a balance the user withdraws from the Withdraw page (**Auto withdraw
 OFF**). Sign-in is email + password (verified) or passkey.
 
 - Current system: [`docs/SYSTEM-OVERVIEW.md`](docs/SYSTEM-OVERVIEW.md)
+- বাংলা সিস্টেম গাইড (account, setup, settings, secret, API): [`docs/SYSTEM-GUIDE-BN.md`](docs/SYSTEM-GUIDE-BN.md) — Admin → System guide-এও দেখা যায়
 - Agent / contributor rules: [`AGENTS.md`](AGENTS.md)
 - Checkout UI notes: [`docs/UI.md`](docs/UI.md)
 
@@ -48,6 +49,7 @@ public/                          → static site root
 docs/
   UI.md                          → checkout fixes and what stays flat
   SYSTEM-OVERVIEW.md             → current system (start here)
+  SYSTEM-GUIDE-BN.md             → Bangla owner guide (accounts, setup, settings, secrets, APIs)
   ARCHITECTURE.md                → ledger, receive and withdraw
   DEPLOYMENT.md                  → setup checklist
 ```

@@ -117,6 +117,13 @@
     try { first = await fn(); } catch (e) { if (!check(e)) throw e; first = e; }
     if (!check(first)) return first;
     const msg = (first && (first.message || (first.data && first.data.error))) || undefined;
+    // Payout address changes need a passkey session; a password cannot do.
+    const reason = first && (first.reason || (first.data && first.data.reason));
+    const text = String((first && ((first.error && first.error.message) || first.message || (first.data && first.data.error))) || '');
+    if (reason === 'passkey_required' || /Confirm with your passkey to change address/.test(text)) {
+      if (!window.cpayMfa || !(await window.cpayMfa.promptPasskey('Confirm with your passkey to change address'))) return first instanceof Error ? Promise.reject(first) : first;
+      return fn();
+    }
     if (!(await ask(msg))) return first instanceof Error ? Promise.reject(first) : first;
     return fn();
   };

@@ -432,16 +432,22 @@ begin
 end;
 $function$;
 
--- A new or changed payout address: used at once when the change is made in a
--- passkey session of that same account, or (unchanged) when the account has
--- a verified old authenticator, whose step-up now needs a passkey session
--- anyway; otherwise 24 hours later.
+-- A new or changed payout address (owner decision 2026-10-21): a signed-in
+-- account may change it only in a passkey session of that same account, and
+-- it is used at once. Without a passkey session the change is refused: there
+-- is no 24-hour wait any more. Service-role callers (the settlement-destination
+-- Edge Function, which checks the passkey session itself) get now(). An
+-- active admin setting someone's address also needs a passkey session.
 create or replace function public.payout_ready_at(p_user uuid)
-returns timestamptz language sql stable security definer set search_path = public, auth
+returns timestamptz language plpgsql stable security definer set search_path = public, auth
 as $$
-  select case when (auth.uid() = p_user and public.strong_session())
-                 or exists (select 1 from auth.mfa_factors f where f.user_id = p_user and f.status = 'verified')
-              then now() else now() + interval '24 hours' end
+begin
+  if coalesce(auth.jwt() ->> 'role', '') = 'authenticated'
+     and not ((auth.uid() = p_user or public.is_admin()) and public.strong_session()) then
+    raise exception 'Confirm with your passkey to change address';
+  end if;
+  return now();
+end;
 $$;
 revoke all on function public.payout_ready_at(uuid) from public, anon, authenticated;
 
@@ -452,12 +458,37 @@ begin
   insert into support_messages (user_id, sender, message, read_by_admin, security_notice)
   values (p_user, 'admin',
     'Security notice: ' || left(p_what, 300) || ' at ' || to_char(now() at time zone 'UTC', 'YYYY-MM-DD HH24:MI') || ' UTC. ' ||
-    case when p_ready_at is not null and p_ready_at > now() + interval '1 minute'
-         then 'Payments are sent there from ' || to_char(p_ready_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI') ||
-              ' UTC (24 hours, because the change was not confirmed with a passkey). '
-         else 'Payments are sent there from now on. ' end ||
+    'Payments are sent there from now on. ' ||
     'If you did not make this change, change your password and write to us here right away.',
     true, true);
 end;
 $$;
 revoke all on function public.notify_payout_address_changed(uuid, text, timestamptz) from public, anon, authenticated;
+
+-- USDT address trigger: same rule, audit note without the old 24-hour text.
+create or replace function public.usdt_wallets_cooldown()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+begin
+  if tg_op = 'UPDATE' and new.address is not distinct from old.address and new.network is not distinct from old.network
+     and new.user_id is not distinct from old.user_id then
+    new.usable_after := old.usable_after;
+    return new;
+  end if;
+  if not payout_step_up_ok() then
+    raise exception 'reauth_required: For your security, sign in again with your passkey to change where payments are sent.';
+  end if;
+  -- Refuses a signed-in change without a passkey session (payout_ready_at).
+  new.usable_after := payout_ready_at(new.user_id);
+  new.updated_at := now();
+  perform public.record_audit(
+    'payout_wallet.saved', 'profile', new.user_id::text,
+    case when tg_op = 'UPDATE' then jsonb_build_object('network', old.network, 'address', old.address) end,
+    jsonb_build_object('network', new.network, 'address', new.address, 'usable_after', new.usable_after),
+    'Payout address saved after a passkey sign-in; usable at once');
+  perform notify_payout_address_changed(new.user_id,
+    'your USDT payout address for ' || new.network || ' was set to ' || new.address, new.usable_after);
+  return new;
+end;
+$$;
+revoke all on function public.usdt_wallets_cooldown() from public, anon, authenticated;

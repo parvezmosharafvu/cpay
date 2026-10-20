@@ -1,6 +1,6 @@
--- 20261020060000: forward and payout-address safety. A new payout address
--- (USDT or Lightning) is used at once only with an authenticator, otherwise
--- after 24 hours, and the address in use stays until then; the security
+-- 20261020060000 / 20261021020000: forward and payout-address safety. A
+-- payout address (USDT or Lightning) changes only in a passkey session and
+-- is used at once; without one it is refused; the security
 -- notice cannot be hidden by the account; admin hold of waiting forwards;
 -- admin close of a stuck USDT batch; quote expiry is service-only; batches
 -- only for active accounts; 'refuse' accepts a USDT receive choice.
@@ -39,70 +39,82 @@ begin
   update payments set status = 'settled', amount_settled = p_usd, amount_sat = p_sat, settled_at = now() where id = p_id::uuid;
 end $$;
 
--- 1. When an address may be used: authenticator at once, otherwise 24 hours.
+-- 1. Payout address changes (owner decision 2026-10-21, 20261021020000):
+--    a signed-in account needs a passkey session of its own and the address
+--    is used at once; without one the change is refused (no 24-hour wait).
+--    Service-role callers (Edge Functions that check the passkey) get now().
 do $$ begin
-  if payout_ready_at('f6000000-0000-0000-0000-0000000000a2') > now() then raise exception 'authenticator account waits'; end if;
-  if payout_ready_at('f6000000-0000-0000-0000-0000000000a1') not between now() + interval '23 hours' and now() + interval '25 hours' then
-    raise exception 'account without an authenticator does not wait 24 h'; end if;
+  perform set_config('request.jwt.claim.sub', 'f6000000-0000-0000-0000-0000000000a1', true);
+  perform set_config('request.jwt.claims', jsonb_build_object('role', 'authenticated', 'aal', 'aal1',
+    'amr', jsonb_build_array(jsonb_build_object('method', 'password', 'timestamp', extract(epoch from now())::bigint)))::text, true);
+  begin
+    perform payout_ready_at('f6000000-0000-0000-0000-0000000000a1');
+    raise exception 'password session allowed an address change';
+  exception when raise_exception then if sqlerrm <> 'Confirm with your passkey to change address' then raise; end if; end;
+  -- An old authenticator alone no longer counts.
+  perform set_config('request.jwt.claim.sub', 'f6000000-0000-0000-0000-0000000000a2', true);
+  begin
+    perform payout_ready_at('f6000000-0000-0000-0000-0000000000a2');
+    raise exception 'old authenticator allowed an address change without a passkey';
+  exception when raise_exception then if sqlerrm <> 'Confirm with your passkey to change address' then raise; end if; end;
+  perform set_config('request.jwt.claims', jsonb_build_object('role', 'authenticated', 'aal', 'aal1',
+    'amr', jsonb_build_array(jsonb_build_object('method', 'passkey', 'timestamp', extract(epoch from now())::bigint)))::text, true);
+  if payout_ready_at('f6000000-0000-0000-0000-0000000000a2') > now() then raise exception 'passkey change waits'; end if;
+  begin
+    perform payout_ready_at('f6000000-0000-0000-0000-0000000000a1');
+    raise exception 'a passkey session changed another account''s address';
+  exception when raise_exception then if sqlerrm <> 'Confirm with your passkey to change address' then raise; end if; end;
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  if payout_ready_at('f6000000-0000-0000-0000-0000000000a1') > now() then raise exception 'service path waits'; end if;
   if has_function_privilege('authenticated', 'public.payout_ready_at(uuid)', 'execute')
      or has_function_privilege('anon', 'public.payout_ready_at(uuid)', 'execute') then raise exception 'payout_ready_at exposed'; end if;
   if exists (select 1 from pg_proc where proname = 'notify_payout_address_changed' and pronargs = 2) then
     raise exception 'old two-argument notifier still there'; end if;
 end $$;
 
--- 2. USDT, saved by the account after a fresh sign-in: no authenticator
---    waits 24 h, and the notice says until when.
+-- 2. USDT, saved by the account after a fresh sign-in: refused without a
+--    passkey session; with one, used at once and the account is told.
 grant select, insert, update, delete on public.usdt_wallets to authenticated;
-create function pg_temp.save_as(p_user text, p_aal text) returns void language plpgsql as $$
+create function pg_temp.save_as(p_user text, p_method text) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claim.sub', p_user, true);
-  perform set_config('request.jwt.claims', jsonb_build_object('role', 'authenticated', 'sub', p_user, 'aal', p_aal,
-    'amr', jsonb_build_array(jsonb_build_object('method', 'password', 'timestamp', extract(epoch from now())::bigint - 30)))::text, true);
+  perform set_config('request.jwt.claims', jsonb_build_object('role', 'authenticated', 'sub', p_user, 'aal', 'aal1',
+    'amr', jsonb_build_array(jsonb_build_object('method', p_method, 'timestamp', extract(epoch from now())::bigint - 30)))::text, true);
   execute 'set local role authenticated';
   insert into usdt_wallets(user_id, network, address) values (p_user::uuid, 'tron', 'TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL');
   execute 'reset role';
 end $$;
-select pg_temp.save_as('f6000000-0000-0000-0000-0000000000a1', 'aal1');
-select pg_temp.save_as('f6000000-0000-0000-0000-0000000000a2', 'aal2');
+do $$ begin
+  perform pg_temp.save_as('f6000000-0000-0000-0000-0000000000a1', 'password');
+  raise exception 'USDT address saved without a passkey';
+exception when raise_exception then if sqlerrm <> 'Confirm with your passkey to change address' then raise; end if; end $$;
+reset role;
+select pg_temp.save_as('f6000000-0000-0000-0000-0000000000a1', 'passkey');
 select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
 do $$ begin
-  if (select usable_after from usdt_wallets where user_id = 'f6000000-0000-0000-0000-0000000000a1') < now() + interval '23 hours' then
-    raise exception 'USDT address without an authenticator usable early'; end if;
-  if (select usable_after from usdt_wallets where user_id = 'f6000000-0000-0000-0000-0000000000a2') > now() then
-    raise exception 'USDT address with an authenticator not usable at once'; end if;
+  if (select usable_after from usdt_wallets where user_id = 'f6000000-0000-0000-0000-0000000000a1') > now() then
+    raise exception 'USDT address saved with a passkey not usable at once'; end if;
   if not exists (select 1 from support_messages where user_id = 'f6000000-0000-0000-0000-0000000000a1' and security_notice
-                  and message like 'Security notice: your USDT payout address%24 hours, because the change was not confirmed with a passkey%') then
-    raise exception 'no 24 h USDT notice'; end if;
-  if not exists (select 1 from support_messages where user_id = 'f6000000-0000-0000-0000-0000000000a2' and security_notice
-                  and message like '%Payments are sent there from now on.%') then
-    raise exception 'no at-once USDT notice'; end if;
-  if (select note from audit_log where action = 'payout_wallet.saved' and subject_id = 'f6000000-0000-0000-0000-0000000000a1' order by id desc limit 1)
-     not like '%usable in 24 hours%' then raise exception 'audit does not record the wait'; end if;
+                  and message like 'Security notice: your USDT payout address%Payments are sent there from now on.%') then
+    raise exception 'no USDT notice'; end if;
+  if exists (select 1 from support_messages where message like '%24 hours%') then raise exception 'a notice still mentions 24 hours'; end if;
 end $$;
 
--- 3. Lightning: no authenticator waits 24 h; the address in use stays until
---    the new one is ready.
+-- 3. Lightning, saved through the Edge Function (service role, passkey checked
+--    there): used at once, and the change replaces the address in use.
 do $$
 declare r record;
 begin
   select * into r from system_set_settlement_destination('f6000000-0000-0000-0000-0000000000a1', 'first@pay.example.com', 'pay.example.com', 1000, 1000000000);
-  if r.ready_at < now() + interval '23 hours' then raise exception 'Lightning address without an authenticator usable early: %', r.ready_at; end if;
-  if exists (select 1 from forward_destination_for('f6000000-0000-0000-0000-0000000000a1')) then raise exception 'waiting address used'; end if;
-end $$;
-alter table settlement_destinations disable trigger trg_guard_settlement_destination_changes;
-update settlement_destinations set ready_at = now() - interval '1 minute' where user_id = 'f6000000-0000-0000-0000-0000000000a1';
-alter table settlement_destinations enable trigger trg_guard_settlement_destination_changes;
-do $$
-declare r record;
-begin
-  select * into r from system_set_settlement_destination('f6000000-0000-0000-0000-0000000000a1', 'mallory@evil.example.com', 'evil.example.com', 1000, 1000000000);
-  if r.ready_at < now() + interval '23 hours' then raise exception 'changed address usable early'; end if;
-  if (select address from forward_destination_for('f6000000-0000-0000-0000-0000000000a1')) <> 'first@pay.example.com' then
-    raise exception 'the address in use was dropped before the new one is ready'; end if;
+  if r.ready_at > now() then raise exception 'Lightning address not usable at once: %', r.ready_at; end if;
+  select * into r from system_set_settlement_destination('f6000000-0000-0000-0000-0000000000a1', 'second@pay.example.com', 'pay.example.com', 1000, 1000000000);
+  if r.ready_at > now() then raise exception 'changed address waits'; end if;
+  if (select address from forward_destination_for('f6000000-0000-0000-0000-0000000000a1')) <> 'second@pay.example.com' then
+    raise exception 'new address not in use'; end if;
   select * into r from system_set_settlement_destination('f6000000-0000-0000-0000-0000000000a2', 'mfa@pay.example.com', 'pay.example.com', 1000, 1000000000);
-  if r.ready_at > now() then raise exception 'Lightning address with an authenticator not usable at once'; end if;
   if (select address from forward_destination_for('f6000000-0000-0000-0000-0000000000a2')) <> 'mfa@pay.example.com' then
-    raise exception 'authenticator account address not in use'; end if;
+    raise exception 'address not in use'; end if;
 end $$;
 
 -- 4. The account cannot hide a security notice (one message or the thread);

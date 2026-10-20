@@ -13,6 +13,10 @@
   'use strict';
   const BN = {
     // Passkey-only sign-in (20261021020000)
+    "Use the Lightning address of a wallet you control. CPAY checks that the wallet provider can confirm payments before you can save it. Payers see this address on the payment page. Saving or changing it needs your passkey and is used right away. You get a notice in your inbox each time it changes.": "আপনার নিয়ন্ত্রণে থাকা ওয়ালেটের Lightning ঠিকানা দিন। সংরক্ষণের আগে CPAY যাচাই করে যে ওয়ালেট প্রোভাইডার পেমেন্ট নিশ্চিত করতে পারে। পেমেন্টকারীরা পেমেন্ট পাতায় এই ঠিকানা দেখেন। সংরক্ষণ বা বদলাতে পাসকি লাগে, আর সঙ্গে সঙ্গে কাজ করে। প্রতিবার বদলালে ইনবক্সে নোটিশ আসে।",
+    "Confirm with your passkey to change address. It is used right away. You get a notice in your inbox.": "ঠিকানা বদলাতে পাসকি দিয়ে নিশ্চিত করুন। সঙ্গে সঙ্গে কাজ করে। ইনবক্সে নোটিশ আসে।",
+    "Confirm with your passkey to change address": "ঠিকানা বদলাতে পাসকি দিয়ে নিশ্চিত করুন",
+    "Your saved address is not ready yet. Payments start once it is.": "আপনার সংরক্ষিত ঠিকানা এখনো প্রস্তুত নয়। প্রস্তুত হলে পেমেন্ট শুরু হবে।",
     "Add a passkey and continue": "পাসকি যোগ করে চালিয়ে যান",
     "This account needs a passkey. Add one now with your fingerprint, face or screen lock; you then sign in with it.": "এই অ্যাকাউন্টে পাসকি লাগবে। এখনই আঙুলের ছাপ, মুখ বা স্ক্রিন লক দিয়ে একটি যোগ করুন; এরপর সেটি দিয়ে সাইন-ইন করবেন।",
     "Passkeys are not available right now. Ask the owner to switch them on.": "পাসকি এখন চালু নেই। মালিককে চালু করতে বলুন।",
@@ -81,9 +85,7 @@
     "New payments go straight to your own address": "নতুন পেমেন্ট সরাসরি আপনার নিজের ঠিকানায় যায়",
     "How payments work": "পেমেন্ট যেভাবে কাজ করে",
     "CPAY receives each payment, keeps the platform fee below and sends the rest straight to the freelancer’s own Lightning or USDT address. CPAY keeps no balances: a freelancer without a payout address cannot take new payments until they add one.": "CPAY প্রতিটি পেমেন্ট নেয়, নিচের প্ল্যাটফর্ম ফি রাখে এবং বাকিটা সরাসরি ফ্রিল্যান্সারের নিজের Lightning বা USDT ঠিকানায় পাঠায়। CPAY কোনো ব্যালেন্স রাখে না: যার পেআউট ঠিকানা নেই, ঠিকানা না দেওয়া পর্যন্ত সে নতুন পেমেন্ট নিতে পারবে না।",
-    "Use the Lightning address of a wallet you control. CPAY checks that the wallet provider can confirm payments before you can save it. Payers see this address on the payment page. Saving or changing it asks you to sign in again. Confirmed with your passkey it is used right away; otherwise it is used 24 hours later, and until then payments go to the address you had before. You get a notice in your inbox each time it changes.": "আপনার নিয়ন্ত্রণে থাকা ওয়ালেটের Lightning ঠিকানা দিন। সংরক্ষণের আগে CPAY যাচাই করে যে ওয়ালেট প্রোভাইডার পেমেন্ট নিশ্চিত করতে পারে। পেমেন্টকারীরা পেমেন্ট পাতায় এই ঠিকানা দেখেন। সংরক্ষণ বা বদলাতে আবার সাইন-ইন লাগে। পাসকি দিয়ে নিশ্চিত করলে সঙ্গে সঙ্গে কাজ করে; না হলে ২৪ ঘণ্টা পরে, আর ততক্ষণ পেমেন্ট আগের ঠিকানায় যায়। প্রতিবার বদলালে ইনবক্সে নোটিশ আসে।",
     "Changing this asks you to sign in again. It is used right away if you confirm with your passkey, otherwise after 24 hours. You get a notice in your inbox.": "এটি বদলাতে আবার সাইন-ইন করতে হয়। অ্যাকাউন্টে authenticator থাকলে সঙ্গে সঙ্গে কাজ করে, না থাকলে ২৪ ঘণ্টা পরে। আপনার ইনবক্সে নোটিশ আসে।",
-    "One address per network. New payments go here automatically if you have no Lightning address. Saving or changing an address asks you to sign in again. It is used right away if your account has an authenticator, otherwise after 24 hours. You get a notice in your inbox.": "প্রতি নেটওয়ার্কে একটি ঠিকানা। Lightning ঠিকানা না থাকলে নতুন পেমেন্ট স্বয়ংক্রিয়ভাবে এখানে আসে। ঠিকানা সংরক্ষণ বা বদলাতে আবার সাইন-ইন লাগে। অ্যাকাউন্টে authenticator থাকলে সঙ্গে সঙ্গে কাজ করে, না থাকলে ২৪ ঘণ্টা পরে। আপনার ইনবক্সে নোটিশ আসে।",
     "\"You receive\" already has both fees taken off.": "\"আপনি পাবেন\"-এ দুটি ফি আগেই বাদ দেওয়া আছে।",
     "(no limit)": "(সীমা নেই)",
     "6-digit code": "৬ অঙ্কের কোড",
@@ -383,7 +385,6 @@
     "CPAY receives each payment, keeps its fee and sends the rest straight to your saved address.": "CPAY প্রতিটি পেমেন্ট নেয়, তার ফি রাখে এবং বাকি টাকা সরাসরি আপনার সংরক্ষিত ঠিকানায় পাঠায়।",
     "Save a USDT address below or a Lightning address. If you save both, Lightning is used.": "নিচে একটি USDT ঠিকানা বা একটি Lightning ঠিকানা সংরক্ষণ করুন। দুটোই থাকলে Lightning ব্যবহার হয়।",
     "Payments go to:": "পেমেন্ট যাবে:",
-    "Your saved address is not ready yet. Payments start once it is (at most 24 hours).": "আপনার সংরক্ষিত ঠিকানা এখনো প্রস্তুত হয়নি। প্রস্তুত হলেই পেমেন্ট শুরু হবে (সর্বোচ্চ ২৪ ঘণ্টা)।",
     "No address yet. Save a USDT or Lightning address to start receiving payments.": "এখনো কোনো ঠিকানা নেই। পেমেন্ট পেতে একটি USDT বা Lightning ঠিকানা সংরক্ষণ করুন।",
     "Who can pay": "কে পেমেন্ট করতে পারবে",
     "With direct payments, payers pay your own Lightning wallet. The money goes straight there: CPAY never holds it, cannot withdraw, refund or move it, and it is not part of your CPAY balance.": "সরাসরি পেমেন্টে পেমেন্টকারী আপনার নিজের Lightning ওয়ালেটে পেমেন্ট করেন। টাকা সোজা সেখানে যায়: CPAY কখনো টাকা ধরে না, তুলতে, ফেরত দিতে বা সরাতে পারে না, এবং এটি আপনার CPAY ব্যালেন্সের অংশ নয়।",

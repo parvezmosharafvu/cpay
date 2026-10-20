@@ -40,7 +40,7 @@ export async function makeLink(userId: string, { slug = uniq('pay'), name = 'Stu
   return slug;
 }
 
-/** A saved payout address already past the 24 h cooldown (test DB only). */
+/** A saved payout address, ready to use (test DB only). */
 export async function readyAddress(userId: string, network = 'tron', address = TRON) {
   await db.query(`insert into usdt_wallets(user_id, network, address) values ($1, $2, $3)
                   on conflict (user_id, network) do update set address = excluded.address`, [userId, network, address]);

@@ -15,7 +15,7 @@
 // Pure: everything outside is injected; handler_test.ts covers it.
 
 import { type DestinationCheck, merchantMessage, type SettlementProvider } from "../_shared/direct-settlement.ts";
-import { type StepUp, STEP_UP_MESSAGE } from "../_shared/step-up.ts";
+import { PASSKEY_ADDRESS_MESSAGE, type StepUp, STEP_UP_MESSAGE } from "../_shared/step-up.ts";
 
 export type User = { id: string; factors?: Array<{ status?: string }> | null };
 
@@ -28,6 +28,8 @@ export interface Db {
 export type Deps = {
   getUser(authHeader: string): Promise<User | null>;
   stepUp(token: string | null, user: User): StepUp;
+  /** Saving or changing the address: a fresh passkey session (20261021020000). */
+  passkeyStepUp?(token: string | null, user: User): StepUp;
   provider: SettlementProvider;
   db: Db;
   cors(req: Request): Promise<Record<string, string>>;
@@ -66,9 +68,10 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
 
     if (action === "check" || action === "save") {
       if (action === "save") {
-        const s = deps.stepUp(token, user);
+        // Saving or changing the address needs a passkey session (20261021020000).
+        const s = (deps.passkeyStepUp ?? deps.stepUp)(token, user);
         if (!s.ok) {
-          return json({ error: STEP_UP_MESSAGE.replace("confirm this payout", "change where your payments go"), code: "reauth_required", reason: s.reason }, 403);
+          return json({ error: PASSKEY_ADDRESS_MESSAGE, code: "reauth_required", reason: s.reason }, 403);
         }
       }
       const allowed = await deps.db.claimLimit(user.id);
@@ -100,7 +103,7 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
     if (action === "remove") {
       const s = deps.stepUp(token, user);
       if (!s.ok) {
-        return json({ error: STEP_UP_MESSAGE.replace("confirm this payout", "change where your payments go"), code: "reauth_required", reason: s.reason }, 403);
+        return json({ error: STEP_UP_MESSAGE.replace("confirm this payout", "remove your payout address"), code: "reauth_required", reason: s.reason }, 403);
       }
       const n = await deps.db.remove(user.id);
       if (typeof n !== "number") {

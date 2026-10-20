@@ -59,7 +59,7 @@ export function decodeJwtPayload(token: string): Record<string, unknown> | null 
   }
 }
 
-export type StepUp = { ok: true } | { ok: false; reason: "stale_sign_in" | "mfa_required" | "no_token" };
+export type StepUp = { ok: true } | { ok: false; reason: "stale_sign_in" | "mfa_required" | "no_token" | "passkey_required" };
 
 // user: what auth.getUser() returned (its "factors" list, when present).
 export function checkStepUp(
@@ -83,5 +83,20 @@ export function checkStepUp(
   if (latest === 0 || nowSeconds - latest > maxAgeSeconds || latest > nowSeconds + 120) return { ok: false, reason: "stale_sign_in" };
   return { ok: true };
 }
+
+// Payout address changes (owner decision 2026-10-21): a fresh sign-in AND a
+// passkey session, always. No passkey session: refused (no 24-hour wait).
+export function checkPasskeyStepUp(
+  token: string | null,
+  user: { factors?: Array<{ status?: string }> | null } | null,
+  maxAgeSeconds: number,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): StepUp {
+  if (!token) return { ok: false, reason: "no_token" };
+  if (!sessionIsStrong(token)) return { ok: false, reason: "passkey_required" };
+  return checkStepUp(token, user, maxAgeSeconds > 0 ? maxAgeSeconds : DEFAULT_STEP_UP_SECONDS, nowSeconds);
+}
+
+export const PASSKEY_ADDRESS_MESSAGE = "Confirm with your passkey to change address";
 
 export const STEP_UP_MESSAGE = "For your security, sign in again with your passkey or password to confirm this payout.";

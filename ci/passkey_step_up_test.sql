@@ -119,15 +119,21 @@ do $$ declare t bigint := extract(epoch from now())::bigint; begin
   if not payout_step_up_ok(600) then raise exception 'fresh password refused'; end if;
 end $$;
 
--- 6. A payout address saved in a passkey session is used at once; a password
---    session waits 24 hours.
+-- 6. A payout address change: refused without a passkey session (no 24-hour
+--    wait), at once with one; another account's passkey session does not count.
 reset role;
 do $$ declare t bigint := extract(epoch from now())::bigint; begin
-  perform pg_temp.as_claims('a1000000-0000-0000-0000-0000000000c1', format('{"aal":"aal1","amr":[{"method":"passkey","timestamp":%s}]}', t));
-  if payout_ready_at('a1000000-0000-0000-0000-0000000000c1') > now() + interval '1 minute' then raise exception 'passkey change waits'; end if;
-  if payout_ready_at('a1000000-0000-0000-0000-0000000000ad') < now() + interval '23 hours' then raise exception 'another account''s passkey session counted'; end if;
-  perform pg_temp.as_claims('a1000000-0000-0000-0000-0000000000c1', format('{"aal":"aal1","amr":[{"method":"password","timestamp":%s}]}', t));
-  if payout_ready_at('a1000000-0000-0000-0000-0000000000c1') < now() + interval '23 hours' then raise exception 'password change used at once'; end if;
+  perform pg_temp.as_claims('a1000000-0000-0000-0000-0000000000c1', format('{"role":"authenticated","aal":"aal1","amr":[{"method":"passkey","timestamp":%s}]}', t));
+  if payout_ready_at('a1000000-0000-0000-0000-0000000000c1') > now() then raise exception 'passkey change waits'; end if;
+  begin
+    perform payout_ready_at('a1000000-0000-0000-0000-0000000000ad');
+    raise exception 'another account''s passkey session counted';
+  exception when raise_exception then if sqlerrm <> 'Confirm with your passkey to change address' then raise; end if; end;
+  perform pg_temp.as_claims('a1000000-0000-0000-0000-0000000000c1', format('{"role":"authenticated","aal":"aal1","amr":[{"method":"password","timestamp":%s}]}', t));
+  begin
+    perform payout_ready_at('a1000000-0000-0000-0000-0000000000c1');
+    raise exception 'password change accepted';
+  exception when raise_exception then if sqlerrm <> 'Confirm with your passkey to change address' then raise; end if; end;
 end $$;
 
 -- 7. Grants.

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { makeUser, makeLink, login, db, ORIGIN, expectCleanCopy, type User } from './helpers';
+import { makeUser, makeLink, login, db, ORIGIN, expectCleanCopy, type User, withPasskeys } from './helpers';
 
 // Direct settlement (20261018010000): payers pay the Freelancer's own wallet
 // through the fake merchant provider in e2e/fake-lnurl.mjs. Nothing here
@@ -47,8 +47,9 @@ test.describe.serial('direct payments to the Freelancer\'s own wallet', () => {
     expect((await r.json()).error).toBe('Direct payments are not available.');
   });
 
-  test('a Lightning address is checked with its provider, saved after a fresh sign-in, and used 24 hours later without an authenticator', async ({ page }) => {
+  test('a Lightning address is checked with its provider, saved only with a passkey, and used at once', async ({ page }) => {
     await hook('direct-switch?on=1');
+    await withPasskeys(page);
     await desk(page, u, 'profile');
     await expect(page.locator('#directCard')).toBeVisible();
     await expect(page.locator('#directCard')).toContainText('CPAY never holds it');
@@ -61,21 +62,16 @@ test.describe.serial('direct payments to the Freelancer\'s own wallet', () => {
     await page.click('#directCheck');
     await expect(page.locator('#directResult')).toContainText('alice@pay.example.com works and confirms payments');
     await page.click('#directSave');
-    // 20261020060000: no authenticator on this account, so it waits 24 hours
-    // (a stolen password alone cannot redirect payments at once), and the
-    // user is told when it starts.
-    await expect(page.locator('#directStatus')).toContainText('waiting');
-    const { rows: [d] } = await db.query(`select address, ready_at > now() + interval '23 hours' as waits from settlement_destinations where user_id = $1 and status = 'active'`, [u.id]);
-    expect(d).toEqual({ address: 'alice@pay.example.com', waits: true });
-    expect((await db.query(`select count(*)::int as n from support_messages where user_id = $1 and security_notice and message like 'Security notice: your Lightning payout address%24 hours%'`, [u.id])).rows[0].n).toBe(1);
-    // Pass the wait (test DB only) for the tests below.
-    const c = await db.connect();
-    try {
-      await c.query('begin');
-      await c.query('set local session_replication_role = replica');
-      await c.query(`update settlement_destinations set ready_at = now() - interval '1 minute' where user_id = $1`, [u.id]);
-      await c.query('commit');
-    } finally { c.release(); }
+    // 20261021020000: a password session cannot change the address; the
+    // passkey is asked (this account adds its first one here), then it is
+    // used at once. No 24-hour wait.
+    await expect(page.locator('#pkTitle')).toBeVisible();
+    await page.locator('dialog [data-role="ok"]').click();
+    await expect(page.locator('#directStatus')).toContainText('in use');
+    const { rows: [d] } = await db.query(`select address, ready_at <= now() as now_ok from settlement_destinations where user_id = $1 and status = 'active'`, [u.id]);
+    expect(d).toEqual({ address: 'alice@pay.example.com', now_ok: true });
+    expect((await db.query(`select count(*)::int as n from support_messages where user_id = $1 and security_notice and message like 'Security notice: your Lightning payout address%from now on%'`, [u.id])).rows[0].n).toBe(1);
+    await fetch(`${ORIGIN}/__e2e/passkey?on=0`, { method: 'POST' });
     await page.reload();
     await page.click('.navi[data-tab="profile"]');
     await expect(page.locator('#directStatus')).toContainText('in use');

@@ -8,7 +8,7 @@
 // DIRECT_PROVIDER_HOSTS (optional; only these provider hosts).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { cachedHosts, corsFor } from "../_shared/cors.ts";
-import { checkStepUp, stepUpWindow } from "../_shared/step-up.ts";
+import { checkPasskeyStepUp, checkStepUp, stepUpWindow } from "../_shared/step-up.ts";
 import { lightningAddressProvider } from "../_shared/direct-settlement.ts";
 import { directNetwork, merchantFetch } from "../_shared/direct-env.ts";
 import { sha256Hex } from "../create-invoice/guards.ts";
@@ -38,6 +38,7 @@ Deno.serve(createHandler({
     return error || !user ? null : { id: user.id, factors: (user as { factors?: Array<{ status?: string }> }).factors ?? null };
   },
   stepUp: (token, user) => checkStepUp(token, user, STEP_UP_SECONDS),
+  passkeyStepUp: (token, user) => checkPasskeyStepUp(token, user, STEP_UP_SECONDS),
   provider: lightningAddressProvider(net, NETWORK),
   cors: (req) => corsFor(req, hosts),
   db: {

@@ -1,4 +1,4 @@
-import { checkStepUp, decodeJwtPayload, sessionIsStrong, stepUpWindow } from "./step-up.ts";
+import { checkPasskeyStepUp, checkStepUp, decodeJwtPayload, sessionIsStrong, stepUpWindow } from "./step-up.ts";
 
 function eq(a: unknown, b: unknown, msg: string) {
   if (a !== b) throw new Error(`${msg}: expected ${b}, got ${a}`);
@@ -113,4 +113,16 @@ Deno.test("the first factors CPAY offers pass when fresh: password, passkey; Goo
   // An old password sign-in followed by a fresh reset link stays stale.
   const mixed = tok({ sub: "u", aal: "aal1", amr: [{ method: "recovery", timestamp: NOW - 5 }, { method: "password", timestamp: NOW - 3600 }] });
   eq(checkStepUp(mixed, { factors: [] }, 600, NOW).ok, false, "stale password + fresh recovery");
+});
+
+Deno.test("payout address changes: a fresh passkey session only; a password is refused (no waiting)", () => {
+  const pw = tok({ sub: "u", aal: "aal1", amr: [{ method: "password", timestamp: NOW - 30 }] });
+  const r = checkPasskeyStepUp(pw, { factors: [] }, 600, NOW);
+  eq(!r.ok && r.reason, "passkey_required", "password");
+  const pk = tok({ sub: "u", aal: "aal1", amr: [{ method: "passkey", timestamp: NOW - 30 }] });
+  eq(checkPasskeyStepUp(pk, { factors: [] }, 600, NOW).ok, true, "fresh passkey");
+  const old = tok({ sub: "u", aal: "aal1", amr: [{ method: "passkey", timestamp: NOW - 3600 }] });
+  const o = checkPasskeyStepUp(old, null, 600, NOW);
+  eq(!o.ok && o.reason, "stale_sign_in", "stale passkey");
+  eq(checkPasskeyStepUp(null, null, 600, NOW).ok, false, "no token");
 });

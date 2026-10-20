@@ -374,7 +374,7 @@ async function renderCash() {
     : 'Auto withdraw is off: payments are added to your balance. Withdraw here whenever you like.'}</p>`;
   if (!(availNow > 0)) {
     el.innerHTML = `<div class="card" id="wNone"><h3>Withdraw</h3><p class="muted">Available balance <strong id="wAvail">${money(0)}</strong></p>${autoNote}
-      <p class="faint">Nothing to withdraw right now.</p></div><div id="wHist"></div>`;
+      <p class="faint">Nothing to withdraw right now.</p>${savedNote}</div><div id="wHist"></div>`;
     renderWithdrawHistory();
     return;
   }

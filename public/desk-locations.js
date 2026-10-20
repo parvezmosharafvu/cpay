@@ -44,21 +44,6 @@
     };
   }
 
-  // Links tab: an optional area for a link, for the owner's own records.
-  function bindLinkArea(root, onChange) {
-    root.querySelectorAll('[data-link-area]').forEach((btn) => {
-      btn.onclick = async () => {
-        const raw = window.prompt('Area for this link (for example "Dhanmondi, Dhaka"). Leave empty to clear.', btn.dataset.cur || '');
-        if (raw === null) return;
-        const v = raw.replace(/\s+/g, ' ').trim().slice(0, 80);
-        const { error } = await sb().from('payment_links').update({ location_label: v || null }).eq('id', btn.dataset.linkArea);
-        if (error) return toast(error.message);
-        toast(v ? 'Area saved' : 'Area cleared', true);
-        if (onChange) onChange();
-      };
-    });
-  }
-
   // Payment details: one dialog, the owner's own payment only (the RPC is
   // SECURITY INVOKER, so row-level security decides).
   let dlg = null;
@@ -99,7 +84,6 @@
         ${row('Created', escapeHtml(when(p.created_at)))}
         ${row('Settled', p.settled_at ? escapeHtml(when(p.settled_at)) : null)}
         ${row('Link', p.link_slug ? `/${escapeHtml(p.link_slug)}${p.link_name ? ' · ' + escapeHtml(p.link_name) : ''}` : null)}
-        ${row('Link area', p.link_location ? escapeHtml(p.link_location) : null)}
         ${row('Payer location', escapeHtml(place(p.payer_city, p.payer_region, countryName(p.payer_country))) || 'Unknown')}
         ${f ? row('Forward', escapeHtml((FORWARD[f.status] || f.status) + (f.kind === 'usdt' ? ` · USDT${f.network ? ' on ' + f.network : ''}` : ' · Lightning') + (f.reason ? ` (${f.reason})` : ''))) : ''}
         ${f && f.forwarded_at ? row('Sent', escapeHtml(when(f.forwarded_at))) : ''}
@@ -117,5 +101,5 @@
 
   function touch() { sb().rpc('touch_my_last_seen').then(() => {}, () => {}); }
 
-  window.cpayLoc = { countryName, place, profileCard, bindLinkArea, openPayment, bindPaymentRows, touch };
+  window.cpayLoc = { countryName, place, profileCard, openPayment, bindPaymentRows, touch };
 })();

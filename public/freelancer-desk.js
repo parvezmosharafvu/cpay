@@ -143,11 +143,9 @@ async function renderLinks() {
     <td data-label="Design">${escapeHtml(layoutLabel(l.theme))}</td>
     <td data-label="Wallets">${l.wallet_mode === 'cashapp' ? 'Cash App only' : 'All wallets'}</td>
     <td data-label="Status">${badge(l.is_active ? 'live' : 'off')}</td>
-    <td data-label="Area">${escapeHtml(l.location_label || '')}</td>
     ${showMode ? direct.linkCell(l, ds) || '<td data-label="Payments go to">CPAY balance</td>' : ''}
     <td class="table-actions">
       <button type="button" class="btn ghost sm" data-copy-link="${escapeHtml(l.slug)}" aria-label="Copy the link /${escapeHtml(l.slug)}">Copy link</button>
-      <button type="button" class="btn ghost sm" data-link-area="${escapeHtml(l.id)}" data-cur="${escapeHtml(l.location_label || '')}">Set area</button>
       <button type="button" class="btn ghost sm" data-toggle-link="${escapeHtml(l.id)}" data-active="${l.is_active ? '1' : '0'}">${l.is_active ? 'Turn off' : 'Turn on'}</button>
       ${showMode ? direct.linkButton(l, ds) : ''}
     </td>
@@ -155,8 +153,8 @@ async function renderLinks() {
   el.innerHTML = `
     <div class="card flush">
       <div class="card-head"><div><h3>Your links</h3><div class="faint">Share a link; payers choose an amount and pay a Lightning invoice.</div></div><span class="meta-count">${(links || []).length} total</span></div>
-      <div class="scroll"><table class="table rtable"><thead><tr><th>Link</th><th>Name</th><th>Design</th><th>Wallets</th><th>Status</th><th>Area</th>${showMode ? '<th>Payments go to</th>' : ''}<th><span class="sr-only">Actions</span></th></tr></thead>
-      <tbody>${list || `<tr><td colspan="${showMode ? 8 : 7}">${deskEmpty('No links yet', 'Create a payment link to start collecting.')}</td></tr>`}</tbody></table></div>
+      <div class="scroll"><table class="table rtable"><thead><tr><th>Link</th><th>Name</th><th>Design</th><th>Wallets</th><th>Status</th>${showMode ? '<th>Payments go to</th>' : ''}<th><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>${list || `<tr><td colspan="${showMode ? 7 : 6}">${deskEmpty('No links yet', 'Create a payment link to start collecting.')}</td></tr>`}</tbody></table></div>
     </div>
     <div class="card">
       <h3>New payment link</h3>
@@ -177,7 +175,6 @@ async function renderLinks() {
     };
   });
   if (showMode) direct.bindLinkButtons(el, renderLinks);
-  if (window.cpayLoc) window.cpayLoc.bindLinkArea(el, renderLinks);
   el.querySelectorAll('[data-toggle-link]').forEach((btn) => {
     btn.onclick = async () => {
       const next = btn.dataset.active !== '1';

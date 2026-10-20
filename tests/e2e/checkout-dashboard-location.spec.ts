@@ -52,7 +52,6 @@ test('overview: actions on their own, one summary card without link cost, recent
   const u = await makeUser({ name: 'Overview Owner' });
   await db.query('update profiles set platform_fee_percent = 2 where id = $1', [u.id]);
   const slug = await makeLink(u.id, { name: 'Area Link' });
-  await db.query(`update payment_links set location_label = 'Dhanmondi, Dhaka' where slug = $1`, [slug]);
   const { rows: [p] } = await db.query(
     `insert into payments(user_id, payment_link_id, amount_requested, status, expires_at, invoice_ref, customer_country, customer_region, customer_city)
      select $1, id, 25, 'new', now() + interval '15 min', 'loc-e2e', 'BD', 'Dhaka Division', 'Dhaka' from payment_links where slug = $2 returning id`, [u.id, slug]);
@@ -79,7 +78,7 @@ test('overview: actions on their own, one summary card without link cost, recent
   await expect(d.locator('#pdReceive')).toHaveText('$24.50');
   await expect(d).toContainText('Platform fee (2%)');
   await expect(d).toContainText('Dhaka, Dhaka Division, Bangladesh');
-  await expect(d).toContainText('Dhanmondi, Dhaka');
+  await expect(d).not.toContainText('Link area');
   await expect(d).toContainText(`/${slug}`);
   await expect(d).toContainText('settled');
   await d.locator('[data-close]').click();
@@ -121,17 +120,4 @@ test('a user sets an account location; last seen is country only', async ({ page
   const { rows: [l] } = await db.query('select * from profile_locations where user_id = $1', [u.id]);
   expect([l.country, l.division, l.district, l.area]).toEqual(['BD', 'Chattogram', "Cox's Bazar", 'Kolatoli']);
   expect(Object.keys(l).some((k) => /(^|_)ip($|_)/.test(k))).toBe(false);
-});
-
-test('a link owner sets an area on a link', async ({ page }) => {
-  const u = await makeUser({ name: 'Area Setter' });
-  const slug = await makeLink(u.id);
-  await login(page, u);
-  await page.waitForURL(/dashboard\.html/);
-  await page.click('.navi[data-tab="links"]');
-  page.once('dialog', (dlg) => dlg.accept('Gulshan, Dhaka'));
-  await page.click('[data-link-area]');
-  await expect(page.locator('#links table')).toContainText('Gulshan, Dhaka');
-  const { rows: [l] } = await db.query('select location_label from payment_links where slug = $1', [slug]);
-  expect(l.location_label).toBe('Gulshan, Dhaka');
 });

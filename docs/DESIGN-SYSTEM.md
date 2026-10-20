@@ -90,7 +90,7 @@ Safe areas: the desk top bar, the bottom tab bar, the drawer and the payment she
 | Route | File | Audience | Before (audit, `main` 5ac60f4) | Now |
 |---|---|---|---|---|
 | `/` | `index.html` | everyone | One hero, three cards, a custody card. No section navigation or "how it works". One-line footer | Sticky header with section links; two-column hero with an example desk picture and a trust row; how it works; features; account types; security; custody (two panels, same wording); call to action; footer |
-| `/login.html` | `login.html` | members | Centred card; no product context on desktop | Split layout with a product panel on wide screens; Google and passkey buttons, CAPTCHA and the two-step prompt unchanged |
+| `/login.html` | `login.html` | members | Centred card; no product context on desktop | Split layout with a product panel on wide screens; passkey button, CAPTCHA and the two-step prompt unchanged |
 | `/register.html` | `register.html` | new members | Centred card | Split layout; Individual / Business / Organization radio cards unchanged |
 | `/reset.html` | `reset.html` | members | Centred card | Split layout; every reset state unchanged |
 | Two-step sign-in prompts | `mfa.js`, `reauth.js` dialogs | members | Shared tokens | Unchanged markup; restyled through tokens |

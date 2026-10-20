@@ -5,7 +5,7 @@
 //   Postgres  : fresh database $E2E_DB (bootstrap + every migration + e2e/shim.sql)
 //   PostgREST : real RLS, JWTs signed with a local test secret
 //   Auth      : a small GoTrue stand-in (password sign-up/in, refresh, user, recover, verify,
-//               TOTP, Google, passkeys)
+//               TOTP, passkeys)
 //   Functions : the real create-invoice and user-withdraw Edge Functions under Deno,
 //               and direct-invoice + settlement-destination (one process, e2e/fn-multi.ts)
 //   Provider  : a fake merchant wallet provider (Lightning address, LUD-21) for
@@ -173,9 +173,6 @@ let captchaRequired = false;
 // mails a link, password sign-in is refused until the link is opened.
 let confirmRequired = false;
 const confirmTokens = new Map(); // token -> { id, redirect }
-// Google provider via /__e2e/google: when on, /settings lists it and
-// /authorize signs in (or creates) the configured Google account.
-let google = { on: false, email: '', name: '' };
 const usedCaptcha = new Set();
 function captchaRefused(res, body) {
   if (!captchaRequired) return false;
@@ -416,26 +413,13 @@ async function handleAuth(req, res, url, body) {
     if (u && !u.email_confirmed_at && body.type === 'signup') mailConfirm(u, url.searchParams.get('redirect_to') || `${SITE}/`);
     return send(res, 200, {});
   }
-  if (p === '/authorize' && req.method === 'GET') {
-    if (!google.on || url.searchParams.get('provider') !== 'google') return authError(res, 400, 'Unsupported provider: provider is not enabled', 'validation_failed');
-    let { rows: [u] } = await pool.query('select * from auth.users where email = lower($1)', [google.email]);
-    if (!u) {
-      ({ rows: [u] } = await pool.query(
-        `insert into auth.users(email, raw_user_meta_data, email_confirmed_at) values (lower($1), $2, now()) returning *`,
-        [google.email, { full_name: google.name, name: google.name.split(' ')[0], provider_id: 'g-e2e' }]));
-    }
-    const sess = await session(u, 'oauth');
-    const back = url.searchParams.get('redirect_to') || `${SITE}/`;
-    res.writeHead(302, { location: `${back}#access_token=${sess.access_token}&refresh_token=${sess.refresh_token}&expires_in=3600&expires_at=${sess.expires_at}&provider_token=e2e-google&token_type=bearer` });
-    return res.end();
-  }
   if (p === '/verify' && req.method === 'POST') {
     const id = body.type === 'recovery' && recoveryHashes.get(String(body.token_hash || ''));
     if (!id) return authError(res, 403, 'Email link is invalid or has expired', 'otp_expired');
     recoveryHashes.delete(String(body.token_hash));
     return send(res, 200, await session(await userById(id), 'recovery'));
   }
-  if (p === '/settings') return send(res, 200, { external: { email: true, google: google.on }, disable_signup: false, mailer_autoconfirm: !confirmRequired, passkeys_enabled: passkeysOn });
+  if (p === '/settings') return send(res, 200, { external: { email: true }, disable_signup: false, mailer_autoconfirm: !confirmRequired, passkeys_enabled: passkeysOn });
   return send(res, 404, { msg: `e2e auth: ${req.method} ${p} not implemented` });
 }
 
@@ -530,10 +514,6 @@ async function main() {
       if (url.pathname.startsWith('/functions/v1/')) return send(res, 503, { error: 'not available in e2e' });
       if (url.pathname === '/__e2e/health') return send(res, 200, { ok: true });
       if (url.pathname === '/__e2e/confirm' && req.method === 'POST') { confirmRequired = url.searchParams.get('on') === '1'; return send(res, 200, { confirmRequired }); }
-      if (url.pathname === '/__e2e/google' && req.method === 'POST') {
-        google = { on: url.searchParams.get('on') === '1', email: url.searchParams.get('email') || '', name: url.searchParams.get('name') || '' };
-        return send(res, 200, { google: google.on });
-      }
       if (url.pathname === '/__e2e/verify') {
         // Like GoTrue's GET /verify for a sign-up link: confirm, then redirect
         // with a session in the fragment (or an error when used or unknown).

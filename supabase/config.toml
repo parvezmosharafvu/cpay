@@ -107,9 +107,6 @@ enabled = false
 # enable_signup = true
 # enable_confirmations = true      # sign-up needs the email link (live: already on)
 #
-# [auth.external.google]
-# enabled = false                  # live today: ON
-#
 # [auth.mfa.totp]
 # enroll_enabled = false           # no new authenticator apps
 # verify_enabled = false           # old codes no longer accepted

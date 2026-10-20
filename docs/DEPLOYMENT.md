@@ -1,5 +1,8 @@
 # CPAY — Deployment Checklist
 
+
+Without the Supabase CLI (SQL Editor + Termux), see `docs/MANUAL-DEPLOY.md`.
+
 ## 1. Supabase
 
 - [ ] Create a new Supabase project

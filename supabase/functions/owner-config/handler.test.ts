@@ -14,7 +14,8 @@ const cfSecrets = new Map<string, string>();
 let https = "off";
 const seen: string[] = [];
 
-const api = Deno.serve({ hostname: "127.0.0.1", port: 0, onListen() {} }, async (req) => {
+// Started inside the test (Deno's leak check).
+const startApi = () => Deno.serve({ hostname: "127.0.0.1", port: 0, onListen() {} }, async (req) => {
     const url = new URL(req.url);
     const auth = req.headers.get("Authorization");
     const body = req.method === "GET" || req.method === "OPTIONS" ? null : await req.json().catch(() => null);
@@ -38,7 +39,7 @@ const api = Deno.serve({ hostname: "127.0.0.1", port: 0, onListen() {} }, async 
     }
     return Response.json({ message: "not found" }, { status: 404 });
 });
-const base = `http://127.0.0.1:${api.addr.port}`;
+let base = "";
 
 const b64u = (o: unknown) => btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const now = () => Math.floor(Date.now() / 1000);
@@ -73,6 +74,8 @@ async function call(h: (r: Request) => Promise<Response>, token: string | null, 
 }
 
 Deno.test("owner-config: write-only secrets, protected names, step-up, audit", async (t) => {
+    const api = startApi();
+    base = `http://127.0.0.1:${api.addr.port}`;
     const h = createHandler(cfg());
     await t.step("non-admins and aal1 sessions are refused before any provider call", async () => {
         const before = seen.length;

@@ -41,36 +41,37 @@ begin
   where id = ('e1000000-0000-0000-0000-' || lpad(p_id::text, 12, '0'))::uuid;
 end $$;
 
--- Yesterday's business day Y closes at T = today's 17:00 boundary.
+-- Yesterday's business day Y closes at T = today's midnight Dhaka boundary.
 create temp table t_clock as
 select current_business_day() - 1 as y, business_day_start(current_business_day()) as t;
 
 do $$
 declare v_t timestamptz := (select t from t_clock);
 begin
-  perform pg_temp.pay(1, 'd1000000-0000-0000-0000-000000000001', 100, v_t - interval '1 minute'); -- 16:59 Dhaka
+  perform pg_temp.pay(1, 'd1000000-0000-0000-0000-000000000001', 100, v_t - interval '1 minute'); -- 23:59 Dhaka
   update payment_links set cost_percent = 8 where id = 'd1000000-0000-0000-0000-000000000001';
-  perform pg_temp.pay(2, 'd1000000-0000-0000-0000-000000000001', 50,  v_t + interval '1 minute'); -- 17:01 Dhaka
+  perform pg_temp.pay(2, 'd1000000-0000-0000-0000-000000000001', 50,  v_t + interval '1 minute'); -- 00:01 Dhaka
   perform pg_temp.pay(3, 'd1000000-0000-0000-0000-000000000002', 20,  v_t - interval '3 hours');
   perform pg_temp.pay(4, 'd1000000-0000-0000-0000-000000000004', 30,  v_t + interval '2 minutes');
   perform pg_temp.pay(5, 'd1000000-0000-0000-0000-000000000003', 70,  v_t + interval '3 minutes');
 end $$;
 
 -- ---------------------------------------------------------------
--- 1. The 17:00 Dhaka boundary
+-- 1. The midnight Dhaka boundary (20261021030000; was 17:00)
 -- ---------------------------------------------------------------
 do $$
 declare
   v_y date := (select y from t_clock);
   v_t timestamptz := (select t from t_clock);
 begin
-  if to_char(v_t at time zone 'Asia/Dhaka', 'HH24:MI') <> '17:00' then
-    raise exception 'boundary is not 17:00 Dhaka: %', v_t at time zone 'Asia/Dhaka';
+  if to_char(v_t at time zone 'Asia/Dhaka', 'HH24:MI') <> '00:00' then
+    raise exception 'boundary is not midnight Dhaka: %', v_t at time zone 'Asia/Dhaka';
   end if;
-  if business_day(v_t - interval '1 minute') <> v_y then raise exception '16:59 not in day %', v_y; end if;
-  if business_day(v_t + interval '1 minute') <> v_y + 1 then raise exception '17:01 not in day %', v_y + 1; end if;
-  if business_day('2026-09-25 16:59+06') <> '2026-09-24' or business_day('2026-09-25 17:01+06') <> '2026-09-25'
-     or business_day('2026-09-25 10:59:59Z') <> '2026-09-24' or business_day('2026-09-25 11:00:00Z') <> '2026-09-25' then
+  if business_day(v_t - interval '1 minute') <> v_y then raise exception '23:59 not in day %', v_y; end if;
+  if business_day(v_t + interval '1 minute') <> v_y + 1 then raise exception '00:01 not in day %', v_y + 1; end if;
+  if business_day('2026-09-25 23:59+06') <> '2026-09-25' or business_day('2026-09-26 00:01+06') <> '2026-09-26'
+     or business_day('2026-09-25 17:59:59Z') <> '2026-09-25' or business_day('2026-09-25 18:00:00Z') <> '2026-09-26'
+     or business_day('2026-09-25 17:00+06') <> '2026-09-25' then
     raise exception 'fixed-date boundary check failed';
   end if;
   if business_day_end('2026-09-24') - business_day_start('2026-09-24') <> interval '24 hours' then
@@ -243,7 +244,7 @@ exception when others then if sqlerrm <> 'Limit reached: you can have at most 2 
 end $$;
 
 -- ---------------------------------------------------------------
--- 7. Daily withdrawal limit counts from 17:00 Dhaka (0097)
+-- 7. Daily withdrawal limit counts from midnight Dhaka (0097, 20261021030000)
 -- ---------------------------------------------------------------
 -- Holds whatever the time of day: under a midnight reset one of the two
 -- checks below fails (before 17:00 the 17:01 row is "yesterday"; after

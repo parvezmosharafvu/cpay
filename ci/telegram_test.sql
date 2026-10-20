@@ -55,7 +55,7 @@ begin
   return v_id;
 end $$;
 
--- Business day Y closes at T, today's 17:00 Dhaka.
+-- Business day Y closes at T, today's midnight Dhaka.
 create temp table t_clock as
 select current_business_day() - 1 as y, business_day_start(current_business_day()) as t;
 

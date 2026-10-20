@@ -59,6 +59,7 @@ async function boot() {
   document.getElementById('cash').innerHTML = deskSkeleton(3);
   document.getElementById('chat').innerHTML = deskSkeleton(2);
   document.getElementById('profile').innerHTML = deskSkeleton(2);
+  if (window.cpayLoc) window.cpayLoc.touch();
   await Promise.all([renderHome(), renderLinks(), renderPays(), renderCash(), renderChat(), renderProfile()]);
 }
 
@@ -81,37 +82,36 @@ async function renderHome() {
   const leftover = Number(s.net ?? b.available ?? 0) > 0;
   const recentRows = (recent.data || []).map((p) => {
     const st = String(p.status || '').toLowerCase();
-    return `<li><span class="act-ico ${escapeHtml(st)}" aria-hidden="true">${icon('i-in')}</span>
+    return `<li class="act-open" role="button" tabindex="0" data-pay-id="${escapeHtml(p.id)}" aria-label="Payment details: ${escapeHtml(money(p.amount_settled || p.amount_requested))} on /${escapeHtml(p.link_slug || '')}"><span class="act-ico ${escapeHtml(st)}" aria-hidden="true">${icon('i-in')}</span>
       <span class="act-main"><b>Payment on /${escapeHtml(p.link_slug || '')}</b><small>${escapeHtml(when(p.settled_at || p.created_at))}</small></span>
       <span class="act-amt${st === 'settled' ? ' plus' : ''}">${money(p.amount_settled || p.amount_requested)}<small>${escapeHtml(st || 'unknown')}</small></span></li>`;
   }).join('');
   const recentHtml = recent.error ? deskError(recent.error.message)
-    : (recentRows ? `<ul class="activity">${recentRows}</ul>` : deskEmpty('No payments yet', 'Share a payment link; payments show up here as they arrive.'));
-  const lead = `<div class="grid two">
-    <div class="overview-left">
-      <div class="card balance-card">
-        <div class="kicker">Available</div>
-        <div class="kpi" data-kpi>${money(s.net ?? b.available)}</div>
-        <div class="faint">${leftover ? 'Held by CPAY, ready to withdraw' : 'New payments go straight to your own address'}</div>
-        <div class="quick">
-          ${leftover ? `<button type="button" class="btn primary" data-jump="cash">${icon('i-out')}Withdraw USDT</button>` : ''}
-          <button type="button" class="btn ghost" data-jump="links" data-focus="linkName">${icon('i-plus')}New payment link</button>
-        </div>
-      </div>
-      <div class="stat-grid">
-        <div class="card stat"><span class="stat-ico" aria-hidden="true">${icon('i-in')}</span><div class="kicker">Settled on your links</div><div class="kpi">${money(s.settled)}</div><div class="faint">All time, paid by customers</div></div>
-        <div class="card stat"><span class="stat-ico" aria-hidden="true">${icon('i-file-check')}</span><div class="kicker">Platform fee</div><div class="kpi">${money(s.platform_fee)}</div><div class="faint">All time, CPAY's fee on settled payments</div></div>
-        <div class="card stat"><span class="stat-ico" aria-hidden="true">${icon('i-link')}</span><div class="kicker">Link cost</div><div class="kpi">${Daily.pct(s.cost_percent || 0)}</div><div class="faint">Added to what the payer pays</div></div>
+    : (recentRows ? `<ul class="activity" id="recentPays">${recentRows}</ul>` : deskEmpty('No payments yet', 'Share a payment link; payments show up here as they arrive.'));
+  // Overview (20261020): the two actions on their own, then one summary
+  // card, then recent payments. No link cost here: each link has its own.
+  const lead = `<div class="stack home-stack">
+    <div class="home-actions" id="homeActions">
+      ${leftover ? `<button type="button" class="btn primary lg" data-jump="cash">${icon('i-out')}Withdraw USDT</button>` : ''}
+      <button type="button" class="btn ghost lg" data-jump="links" data-focus="linkName">${icon('i-plus')}New payment link</button>
+    </div>
+    <div class="card summary-card" id="homeSummary">
+      <div class="summary-grid">
+        <div><div class="kicker">Available</div><div class="kpi" data-kpi>${money(s.net ?? b.available)}</div><div class="faint">${leftover ? 'Held by CPAY, ready to withdraw' : 'New payments go straight to your own address'}</div></div>
+        <div><div class="kicker">Settled on your links</div><div class="kpi">${money(s.settled)}</div><div class="faint">All time, paid by customers</div></div>
+        <div><div class="kicker">Platform fee</div><div class="kpi">${money(s.platform_fee)}</div><div class="faint">All time, CPAY's fee on settled payments</div></div>
       </div>
     </div>
-    <div class="card">
+    <div class="card" id="homeRecent">
       <div class="card-title"><h3>Recent payments</h3><button type="button" class="link-btn" data-jump="pay">View all</button></div>
+      <p class="faint">Tap a payment to see its details.</p>
       ${recentHtml}
     </div>
   </div>`;
   home.innerHTML = '<div class="stack" id="dailySelf"><p class="muted">Loading…</p></div>';
   await Daily.mountSelf(document.getElementById('dailySelf'), { lead });
   bindJumps(home);
+  if (window.cpayLoc) window.cpayLoc.bindPaymentRows(home);
 }
 
 // Overview shortcuts open another section through its sidebar button.
@@ -235,7 +235,7 @@ async function renderPays() {
   });
   if (error) { el.innerHTML = deskError(error.message); return; }
   const total = data?.[0]?.total_count != null ? Number(data[0].total_count) : (data || []).length;
-  const rows = (data || []).map((p) => `<tr>
+  const rows = (data || []).map((p) => `<tr class="row-open" data-pay-id="${escapeHtml(p.id)}" tabindex="0" title="Show details">
     <td class="num" data-label="Amount"><span class="cell-main">${money(p.amount_settled || p.amount_requested)}</span></td>
     <td data-label="Status">${badge(p.status)}</td>
     <td data-label="Link">/${escapeHtml(p.link_slug || '')}</td>
@@ -264,6 +264,7 @@ async function renderPays() {
   </div>
   <div id="directPays" hidden></div>`;
   if (window.cpayDirect) window.cpayDirect.paymentsCard(document.getElementById('directPays'));
+  if (window.cpayLoc) window.cpayLoc.bindPaymentRows(el);
   const statusEl = document.getElementById('payStatus');
   if (statusEl) statusEl.value = payFilter.status || '';
   document.getElementById('payApply').onclick = () => {
@@ -408,6 +409,7 @@ async function renderProfile() {
   const target = rs?.target_address || '';
   const where = rs?.method === 'usdt' ? `USDT on ${netLabel(rs.usdt_network)}` : rs?.method === 'lightning' ? 'Lightning address' : '';
   el.innerHTML = `<div id="directCard" hidden></div>
+  <div id="locationHost"></div>
   <div class="grid split">
     <div class="card">
       <h3>Public profile</h3>
@@ -455,6 +457,7 @@ async function renderProfile() {
   }
   recvCard.append(head, recvNow, node('p', 'hint', 'Save a USDT address below or a Lightning address. If you save both, Lightning is used.'));
   el.prepend(recvCard);
+  if (window.cpayLoc) window.cpayLoc.profileCard(document.getElementById('locationHost'));
   if (window.cpayDirect) window.cpayDirect.card(document.getElementById('directCard'), () => { renderProfile(); renderLinks(); });
   document.getElementById('saveProf').onclick = async () => {
     const { error: e } = await sb.rpc('update_my_public_profile', {

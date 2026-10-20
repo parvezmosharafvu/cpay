@@ -46,7 +46,7 @@ test('a payment made on my link raises my available balance after reload', async
   await expect(payer.locator('#payBtn')).toBeEnabled();
   await payer.keyboard.type('20');
   await payer.click('#payBtn');
-  await payer.waitForURL(/invoice-cpay-v2/);
+  await payer.waitForURL(/[?&]id=/);
   expect(await simulatePayment(new URL(payer.url()).searchParams.get('id')!)).toBe('settled');
   await login(page, u);
   await page.waitForURL(/dashboard\.html/);

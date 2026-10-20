@@ -22,7 +22,7 @@ async function payerOpens(page: Page, slug: string, amount: string) {
   await expect(payer.locator('#payBtn')).toBeEnabled();
   await payer.keyboard.type(amount);
   await payer.click('#payBtn');
-  await payer.waitForURL(/invoice-cpay-v2\.html\?id=.*settlement=direct/);
+  await payer.waitForURL(/[?&]id=.*settlement=direct/);
   await expect(payer.locator('#step2')).toBeVisible();
   return { payer, id: new URL(payer.url()).searchParams.get('id')! };
 }

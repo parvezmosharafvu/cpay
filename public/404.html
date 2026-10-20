@@ -7,7 +7,7 @@
     <meta name="color-scheme" content="light">
     <title>CPAY — Pay</title>
     <link rel="icon" type="image/svg+xml" href="/favicon-payment.svg">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=DM+Sans:opsz,wght@9..40,400..800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/cpay.css">
     <link rel="stylesheet" href="/a11y.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
@@ -15,6 +15,10 @@
     <script src="/theme.js"></script>
     <script src="/turnstile.js"></script>
     <script src="/direct-pay.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin="anonymous"></script>
+    <script src="/wallets-config.js"></script>
+    <script>window.CPAY_INVOICE_EMBEDDED = true;</script>
+    <script src="/invoice-view.js"></script>
   </head>
   <body class="checkout">
     <a class="skip-link" href="#paymentCard">Skip to payment</a>
@@ -125,6 +129,149 @@
         </button>
       </div>
     </main>
+    <!-- The invoice view (same markup as invoice-cpay-v2.html, kept identical
+         by tests/frontend/one-page-checkout.test.mjs). Inert until the payer
+         continues, then it replaces the amount view on this same page. -->
+    <template id="invoiceView">
+<!-- LOADING / ERROR / EXPIRED / FAILED: one panel, never an endless spinner -->
+<div class="checkout-card state-panel" id="statePanel" role="status" aria-live="polite">
+  <div class="spinner" id="stateSpinner" aria-hidden="true"></div>
+  <div class="state-icon" id="stateIcon" hidden aria-hidden="true"></div>
+  <div class="state-title" id="stateTitle" hidden></div>
+  <div class="state-sub" id="stateSub">Loading payment…</div>
+  <div class="state-actions">
+    <button class="pill-btn btn-pay" id="stateBtn" type="button" hidden>Start over</button>
+    <button class="pill-btn btn-copy" id="stateBtn2" type="button" hidden>Back</button>
+  </div>
+</div>
+
+<!-- WAITING FOR PAYMENT -->
+<main class="checkout-card" id="step2" hidden aria-hidden="true">
+  <div class="invoice-top">
+    <div class="merchant">
+      <div class="merchant-avatar" id="merchantAvatar">$</div>
+      <div><div class="merchant-label">You are paying</div><div class="merchant-name" id="merchantName">CPAY</div><div class="merchant-sub" id="merchantTagline">Freelancer</div></div>
+    </div>
+    <button class="icon-btn" id="closeBtn" type="button" aria-label="Close and go back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M6 6l12 12"/></svg></button>
+  </div>
+  <div class="divider"></div>
+
+  <div class="amount-due">
+    <div class="kicker">Amount due</div>
+    <div class="amount-value"><span id="amountDue">-</span> <span class="amount-ccy" id="amountCcy">USD</span></div>
+    <button class="ref-chip" id="refChip" type="button" aria-label="Copy payment reference">Ref <span class="mono" id="refShort">-</span></button>
+    <div class="direct-note" id="directNote" hidden></div>
+    <div class="row status-row">
+      <span class="status-chip" id="statusChip" data-state="waiting" role="status" aria-live="polite">Waiting for payment</span>
+      <span class="timer-pill" id="timerPill" role="timer" aria-live="off">--:--</span>
+    </div>
+    <ol class="status-timeline" id="statusTimeline" aria-label="Payment progress">
+      <li class="done" data-step="created">Created</li>
+      <li class="current" data-step="waiting">Waiting</li>
+      <li data-step="detected">Detected</li>
+      <li data-step="settled">Paid</li>
+    </ol>
+  </div>
+
+  <div class="pay-actions" id="payActions">
+    <button id="payBtn" class="pill-btn btn-pay" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg><span id="payBtnLabel">Pay with Lightning</span></button>
+    <button id="cashAppBtn" class="pill-btn btn-alt" type="button"><span class="btn-ico ico-cash" aria-hidden="true">$</span>Pay with Cash App</button>
+    <button id="otherWalletsBtn" class="pill-btn btn-copy" type="button" aria-haspopup="dialog" aria-controls="walletSheet">Other wallets</button>
+  </div>
+
+  <div class="or-rule" aria-hidden="true"><span>or scan the code with your wallet</span></div>
+
+  <button id="qrLink" class="qr-link-button" type="button" aria-label="Payment QR code. Tap to open it in a Lightning wallet on this device">
+    <div class="qr-frame" id="chargeRing">
+      <div id="qrcode"></div>
+      <div class="qr-logo"><span class="mark"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span></div>
+    </div>
+  </button>
+
+  <div class="qr-actions">
+    <button class="link-btn" id="downloadQrBtn" type="button">Download QR</button>
+  </div>
+  <div class="action-footer single">
+    <button id="copyBtn" class="pill-btn btn-copy" type="button">Copy payment request</button>
+  </div>
+  <details class="raw-request" id="rawRequest">
+    <summary>Show payment request</summary>
+    <code class="invoice-text" id="invoiceText"></code>
+  </details>
+  <p class="pay-hint" id="payHint">The amount is already in the request. Pay before the timer runs out.</p>
+  <div class="quick-actions">
+    <button class="link-btn" id="helpBtn" type="button">How to pay</button>
+    <button class="link-btn" id="shareInvoiceBtn" type="button">Share</button>
+    <button class="link-btn" id="copyLinkBtn" type="button">Copy page link</button>
+  </div>
+</main>
+
+<!-- PAID -->
+<main class="checkout-card" id="step3" hidden aria-hidden="true">
+  <div style="text-align:center">
+    <div class="success-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg></div>
+    <div class="state-title" id="successTitle" tabindex="-1">Payment received</div>
+    <div class="success-amount" id="successAmount">$0.00</div>
+  </div>
+
+  <!-- A receipt the payer can keep: the reference is what identifies this
+       payment if it ever needs chasing. -->
+  <div class="receipt" id="receiptCard">
+    <div class="receipt-row"><span>Paid to</span><b id="rcpMerchant">-</b></div>
+    <div class="receipt-row"><span>Amount</span><b id="rcpAmount">-</b></div>
+    <div class="receipt-row"><span>Date</span><b id="rcpDate">-</b></div>
+    <div class="receipt-row"><span>Reference</span><b class="mono" id="rcpRef">-</b></div>
+    <div class="receipt-row" id="rcpProofRow" hidden><span>Proof of payment</span><b class="mono" id="rcpProof">-</b></div>
+  </div>
+  <p class="direct-note" id="rcpDirectNote" hidden></p>
+
+  <div class="receipt-actions">
+    <button class="pill-btn btn-copy" id="rcpCopyBtn" type="button">Copy reference</button>
+    <button class="pill-btn btn-copy" id="rcpSaveBtn" type="button">Save receipt</button>
+  </div>
+  <button class="pill-btn btn-pay" id="doneBtn" type="button">Done</button>
+</main>
+
+<p class="checkout-foot">Payments are sent over the Bitcoin Lightning Network.</p>
+
+<!-- OTHER WALLETS (bottom sheet, rendered from wallets-config.js) -->
+<div id="walletSheet" class="sheet" hidden aria-hidden="true">
+  <div class="sheet-inner" role="dialog" aria-modal="true" aria-labelledby="walletSheetTitle">
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <div class="modal-head">
+      <h2 id="walletSheetTitle">Pay with another wallet</h2>
+      <button id="walletSheetClose" type="button" aria-label="Close wallet list" class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M6 6l12 12"/></svg></button>
+    </div>
+    <p class="muted sheet-sub" id="walletSheetSub">Pick your wallet. If it doesn't open, the payment request is copied so you can paste it.</p>
+    <div class="wallet-list" id="walletListFeatured" role="list"></div>
+    <div class="wallet-group-label" id="walletOtherLabel">Other compatible wallets</div>
+    <div class="wallet-list" id="walletListOther" role="list"></div>
+  </div>
+</div>
+
+<!-- HOW TO PAY -->
+<div id="howToPayModal" hidden aria-hidden="true">
+  <div class="modal-inner" role="dialog" aria-modal="true" aria-labelledby="howToPayTitle">
+    <div class="modal-head">
+      <h2 id="howToPayTitle">How to pay</h2>
+      <button id="modalCloseBtn" type="button" aria-label="Close payment help" class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M6 6l12 12"/></svg></button>
+    </div>
+    <p class="muted"><b>On this phone:</b> tap <b>Pay with Lightning</b> or <b>Pay with Cash App</b>. Your wallet opens with the payment loaded and you confirm it.</p>
+    <p class="muted"><b>On a computer:</b> scan the QR code with your phone's wallet app.</p>
+    <p style="margin:0;font-weight:600">If nothing opens:</p>
+    <ol>
+      <li>Tap <b>Copy payment request</b>.</li>
+      <li>Open your wallet and choose <b>Send</b> or <b>Scan</b>.</li>
+      <li>Paste the request, or scan the QR code.</li>
+      <li>Check the amount and confirm.</li>
+    </ol>
+    <p class="faint">You don't need to type the amount. The request expires when the timer runs out; you can generate a new one after that.</p>
+    <button class="pill-btn btn-pay" id="modalGotItBtn" type="button">Got it</button>
+  </div>
+</div>
+
+<div id="toast" class="float-toast" role="status" aria-live="polite"></div>
+    </template>
     <p class="checkout-foot">Payments are sent over the Bitcoin Lightning Network.</p>
     <script>
 const RESERVED = ['index','login','register','dashboard','admin','404','config','theme',
@@ -266,6 +413,11 @@ function prefillAmount(){
 }
 window.addEventListener('DOMContentLoaded', async () => {
   el('loadRetryBtn').addEventListener('click', () => window.location.reload());
+  // /slug?id=… is this link's invoice (a refresh, a shared invoice link).
+  if (new URLSearchParams(window.location.search).get('id') && slug && !RESERVED.includes(slug.toLowerCase()) && !slug.includes('.') && !slug.includes('/')){
+    openInvoiceView(null);
+    return;
+  }
   try { await withTimeout(applyDomainTheme(), 5000); } catch {}
   if (!slug || RESERVED.includes(slug.toLowerCase()) || slug.includes('.') || slug.includes('/')){
     showNotFound();
@@ -343,7 +495,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     el('classicToggle').textContent = open ? 'Show more amounts' : 'Show fewer amounts';
   });
   document.addEventListener('keydown', (e) => {
-    if (el('paymentCard').hidden) return;
+    if (invoiceOpen || !el('paymentCard') || el('paymentCard').hidden) return;
     if (document.activeElement === el('classicInput')) return;
     if (e.key >= '0' && e.key <= '9') pressKey(e.key);
     else if (e.key === '.') pressKey('.');
@@ -368,10 +520,25 @@ function pickChip(e){
 // second tap after returning) is offered again instead of silently making a
 // second one. The server is asked whether it is still payable.
 let openInvoice = null;
+// One page: the invoice opens here, on the link's own address (/slug?id=…).
 function invoiceUrl(id, settlement){
-  return '/invoice-cpay-v2.html?id=' + encodeURIComponent(id) + '&wallet=' + encodeURIComponent(window.CPAY_WALLET_MODE || 'all_wallets') + '&theme=' + encodeURIComponent(window.CPAY_INVOICE_DESIGN || window.CPAY_LAYOUT)
+  return '/' + encodeURIComponent(slug) + '?id=' + encodeURIComponent(id) + '&wallet=' + encodeURIComponent(window.CPAY_WALLET_MODE || 'all_wallets') + '&theme=' + encodeURIComponent(window.CPAY_INVOICE_DESIGN || window.CPAY_LAYOUT)
     + ((settlement || window.CPAY_SETTLEMENT) === 'direct' ? '&settlement=direct' : '');
 }
+let invoiceOpen = false;
+function openInvoiceView(url){
+  if (invoiceOpen) return;
+  invoiceOpen = true;
+  if (url) { try { history.pushState({ invoice: true }, '', url); } catch { window.location.href = url; return; } }
+  ['loadingState', 'loadErrorCard', 'notFoundCard', 'notTakingCard', 'paymentCard'].forEach((id) => { const n = el(id); if (n) n.remove(); });
+  const skip = document.querySelector('.skip-link');
+  if (skip) { skip.setAttribute('href', '#step2'); skip.textContent = 'Skip to invoice'; }
+  document.body.classList.add('invoice');
+  document.querySelector('.checkout-foot').before(el('invoiceView').content.cloneNode(true));
+  window.cpayInvoice.start({ embedded: true });
+}
+// Back from the invoice returns to the amount view.
+window.addEventListener('popstate', () => { if (invoiceOpen) window.location.reload(); });
 async function findOpenInvoice(){
   let saved = null;
   try { saved = JSON.parse(sessionStorage.getItem('invoiceSession') || 'null'); } catch {}
@@ -397,7 +564,7 @@ async function findOpenInvoice(){
     }
     openInvoice = { id: saved.paymentId, baseAmount: Number(saved.baseAmount), amount: Number(row.amount_requested), settlement: saved.settlement };
     el('resumeText').textContent = 'You have an open payment of $' + openInvoice.amount.toFixed(2) + ' on this link.';
-    el('resumeBtn').onclick = () => { window.location.href = invoiceUrl(openInvoice.id, saved.settlement); };
+    el('resumeBtn').onclick = () => { openInvoiceView(invoiceUrl(openInvoice.id, saved.settlement)); };
     el('resumeBox').hidden = false;
   } catch {}
 }
@@ -406,7 +573,7 @@ async function startPayment(){
   const amount = currentAmount();
   if (openInvoice && openInvoice.baseAmount === amount){
     setPaying(true, 'Opening your payment…');
-    window.location.href = invoiceUrl(openInvoice.id, openInvoice.settlement);
+    openInvoiceView(invoiceUrl(openInvoice.id, openInvoice.settlement));
     return;
   }
   clearStatus();
@@ -468,7 +635,7 @@ async function startPayment(){
       settlement: direct ? 'direct' : 'custodial',
       destination: direct ? String(result.destination || '') : '',
     }));
-    window.location.href = invoiceUrl(result.paymentId, direct ? 'direct' : 'custodial');
+    openInvoiceView(invoiceUrl(result.paymentId, direct ? 'direct' : 'custodial'));
   } catch (e){
     console.error('create-invoice failed:', e);
     setStatus(e && e.message === 'timeout'

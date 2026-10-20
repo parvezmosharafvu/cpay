@@ -32,7 +32,7 @@ test('public journey pages link design system and a11y', () => {
 });
 
 test('invoice page has timeline, QR download, share and copy controls', () => {
-  const html = read('invoice-cpay-v2.html');
+  const html = read('invoice-cpay-v2.html') + read('invoice-view.js');
   assert.match(html, /id="statusTimeline"/);
   assert.match(html, /id="downloadQrBtn"/);
   assert.match(html, /id="shareInvoiceBtn"/);

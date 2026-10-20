@@ -8,7 +8,7 @@ async function startInvoice(page: Page, amount = '10') {
   await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type(amount);
   await page.click('#payBtn');
-  await page.waitForURL(/invoice-cpay-v2\.html\?id=/);
+  await page.waitForURL(/[?&]id=/);
   await expect(page.locator('#step2')).toBeVisible();
   const id = new URL(page.url()).searchParams.get('id')!;
   return { u, slug, id };
@@ -57,8 +57,8 @@ test('expiry: the page says expired, and "Generate new payment" makes a fresh in
   await page.reload();
   await expect(page.locator('#stateTitle')).toHaveText('This payment request expired');
   await page.click('#stateBtn');
-  await page.waitForURL((url) => url.searchParams.get('id') !== id && /invoice-cpay-v2|\/pay-/.test(url.href));
-  if (!/invoice-cpay-v2/.test(page.url())) { await page.click('#payBtn'); await page.waitForURL(/invoice-cpay-v2/); }
+  await page.waitForURL((url) => url.searchParams.get('id') !== id && /[?&]id=|\/pay-/.test(url.href));
+  if (!/[?&]id=/.test(page.url())) { await page.click('#payBtn'); await page.waitForURL(/[?&]id=/); }
   await expect(page.locator('#step2')).toBeVisible();
   const rows = await paymentsFor(u.id);
   expect(rows).toHaveLength(2);
@@ -80,7 +80,7 @@ test('going back to the link offers the open payment, and the same amount reopen
   await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('11');
   await page.click('#payBtn');
-  await page.waitForURL(/invoice-cpay-v2/);
+  await page.waitForURL(/[?&]id=/);
   expect(new URL(page.url()).searchParams.get('id')).toBe(id);
   expect(await paymentsFor(u.id)).toHaveLength(1);
   // A different amount is a new, deliberate payment.
@@ -90,7 +90,7 @@ test('going back to the link offers the open payment, and the same amount reopen
   await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('12');
   await page.click('#payBtn');
-  await page.waitForURL((url) => url.searchParams.get('id') !== id && /invoice-cpay-v2/.test(url.href));
+  await page.waitForURL((url) => url.searchParams.get('id') !== id && /[?&]id=/.test(url.href));
   expect(await paymentsFor(u.id)).toHaveLength(2);
 });
 
@@ -121,7 +121,7 @@ test('pay stays disabled until the resume check finishes, then same-amount reope
   await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('9');
   await page.click('#payBtn');
-  await page.waitForURL(/invoice-cpay-v2/);
+  await page.waitForURL(/[?&]id=/);
   expect(new URL(page.url()).searchParams.get('id')).toBe(id);
   expect(await paymentsFor(u.id)).toHaveLength(1);
 });
@@ -142,7 +142,7 @@ test('a reused slug does not resume another link open invoice', async ({ page })
   await expect(page.locator('#payBtn')).toBeEnabled();
   await page.keyboard.type('8');
   await page.click('#payBtn');
-  await page.waitForURL(/invoice-cpay-v2/);
+  await page.waitForURL(/[?&]id=/);
   const newId = new URL(page.url()).searchParams.get('id');
   expect(newId).not.toBe(id);
   expect(await paymentsFor(other.id)).toHaveLength(1);

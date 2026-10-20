@@ -44,7 +44,7 @@ test('a link of a suspended Freelancer does not take payments', async ({ page })
     await page.keyboard.type('5');
     await page.click('#payBtn');
     await expect(page.locator('#statusMsg')).toBeVisible();
-    await expect(page).not.toHaveURL(/invoice-cpay-v2/);
+    await expect(page).not.toHaveURL(/[?&]id=/);
   } else {
     await expect(page.locator('#notFoundCard')).toBeVisible();
   }

@@ -306,6 +306,7 @@ Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
 // same keys whichever path the request took.
 "cf-ipcity": cf.city || "",
 "cf-ipcountry": cf.country || "",
+"cf-region": cf.region || "",
 // The payer's address for create-invoice's per-address limit: Supabase
 // sees this Worker's egress address, shared by every proxied payer.
 ...(clientIp ? { "x-cpay-client-ip": clientIp } : {}),

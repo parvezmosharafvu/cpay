@@ -149,7 +149,7 @@ test('payments stay challenge-free when only Auth CAPTCHA is on', async ({ page 
   const loads = await fakeTurnstile(page);
   await page.goto(`/${slug}?amount=5`);
   await page.click('#payBtn');
-  await page.waitForURL(/invoice-cpay-v2\.html\?id=/);
+  await page.waitForURL(/[?&]id=/);
   expect(loads).toHaveLength(0);
   expect(await paymentsFor(u.id)).toHaveLength(1);
 });

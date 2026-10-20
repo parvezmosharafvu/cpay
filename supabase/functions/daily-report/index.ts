@@ -11,13 +11,12 @@ const BD_OFFSET_MS = 6 * 60 * 60 * 1000;
 /**
 * The cycle date `daysAgo` cycles before the current one.
 *
-* A "cycle" runs 5pm Dhaka to 5pm Dhaka, and is named after the date it
-* STARTED on. Shifting back 17 hours before taking the date turns
-* "5pm today through 4:59pm tomorrow" into a single calendar date —
-* the same arithmetic admin_daily_settled() does in SQL.
+* A "cycle" is the Bangladesh calendar day, midnight to midnight Dhaka
+* (20261021030000; it was 5pm to 5pm before), named after its date —
+* the same arithmetic business_day() does in SQL.
 */
 function bdCycleDate(daysAgo: number): string {
-  const t = new Date(Date.now() + BD_OFFSET_MS - 17 * 3600000 - daysAgo * 86400000);
+  const t = new Date(Date.now() + BD_OFFSET_MS - daysAgo * 86400000);
   return t.toISOString().slice(0, 10);
 }
 

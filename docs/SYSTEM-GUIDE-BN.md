@@ -76,7 +76,7 @@ Supabase → Authentication-এ:
 - **Email confirm চালু** (Confirm email)। Admin → Settings থেকেও বদলানো যায় (`auth-settings`)।
 - **Passkeys চালু।** কখনো বন্ধ করবেন না, admin-এর কাজ passkey ছাড়া হয় না।
 - **Google provider বন্ধ।**
-- **TOTP (authenticator app):** নতুন করে যোগ বন্ধ। পুরনো code আপাতত চলে, যাতে কেউ আটকে না যায়।
+- **TOTP (authenticator app):** পুরোপুরি বন্ধ — নতুন যোগ বন্ধ (`enroll_enabled = false`), পুরনো code-ও আর চলে না (`verify_enabled = false`, ২১ অক্টোবর ২০২৬)। পুরনো factor মোছা হয়নি; `strong_session()` এখনো aal2 মানে, কিন্তু code দিয়ে আর aal2 পাওয়া যায় না।
 - SMTP: Resend-এর তথ্য, sender `no-reply@pay-cashapp.buzz`।
 - Site URL আর Redirect URLs-এ নিজের domain আর `/reset.html`।
 
@@ -254,6 +254,8 @@ Merge commit `git log` থেকে মিলিয়ে লেখা।
 | ২১ অক্টোবর ২০২৬ | **Auto withdraw** global switch + প্রতিটা profile-এ Default/On/Off, আর আলাদা **manual Withdraw** page; legal লেখা থেকে reviewer-এর কথা বাদ | #151 (`885dff9`) |
 | ২১ অক্টোবর ২০২৬ | **Login শুধু passkey + email verification:** Google বন্ধ, নতুন authenticator (TOTP) যোগ বন্ধ, admin কাজে passkey লাগে | #152 (`0d634e5`) |
 | ২১ অক্টোবর ২০২৬ | Repo পরিষ্কার, `AGENTS.md` আর `docs/SYSTEM-OVERVIEW.md` | #153 (`ce32488`) |
+| ২১ অক্টোবর ২০২৬ | **দিনের হিসাব এখন বাংলাদেশের দিন:** রাত ১২টা থেকে রাত ১২টা (Asia/Dhaka), আগে ছিল বিকেল ৫টা থেকে ৫টা। Dashboard, admin daily stats, দৈনিক withdraw limit, Telegram report সব একসাথে | migration `20261021030000_dhaka_calendar_day` |
+| ২১ অক্টোবর ২০২৬ | **Authenticator code পুরোপুরি বন্ধ** (TOTP verify off); অজানা একটা পুরনো Edge secret মোছা | — |
 | ২১ অক্টোবর ২০২৬ | **এই System guide**, শুধু owner দেখতে পারেন (`owner-guide` function) | #154 |
 | ২১ অক্টোবর ২০২৬ | **একাধিক wallet:** Admin → Wallet-এ ১২ শব্দের seed paste করে নতুন wallet যোগ; seed Supabase Vault-এ encrypted; একটা primary wallet নতুন invoice, forward আর withdraw চালায়; বাকিগুলো প্রতি মিনিটে শুধু টাকা আসা দেখে (১০ দেখুন) | feature/multi-wallet |
 | ২১ অক্টোবর ২০২৬ | **Google পুরোপুরি সরানো:** repo থেকে Google login-এর বাকি code, test mock আর লেখা বাদ; Supabase-এ Google provider বন্ধ। Client id/secret মোছা আর admin account থেকে Google identity আলাদা করা dashboard-এ বাকি (৯.৫ দেখুন) | #155 |
@@ -277,7 +279,7 @@ Merge commit `git log` থেকে মিলিয়ে লেখা।
 
 ### ৯.৩ Legal
 
-- ⬜ **Legal field:** সব খালি। Settings → Legal pages → entity name, address, effective date (YYYY-MM-DD), jurisdiction, courts, privacy email, support email → প্রতিটা **Save**।
+- ⬜ **Legal field (আপনি নিজে পরে পূরণ করবেন):** সব খালি। Settings → Legal pages → entity name, address, effective date (YYYY-MM-DD), jurisdiction, courts, privacy email, support email → প্রতিটা **Save**।
 - ⬜ **Publish:** তারপর Settings → Features → **Publish the legal pages** চালু (`legal_published`)।
 
 ### ৯.৪ Secret
@@ -291,7 +293,7 @@ Merge commit `git log` থেকে মিলিয়ে লেখা।
 ### ৯.৫ Backup আর login
 
 - ❔ **Supabase PITR (Point-in-time recovery):** Supabase → Project Settings → Add-ons → Point in time recovery চালু আছে কিনা দেখুন (paid add-on)।
-- ⬜ **পুরনো authenticator code বন্ধ:** আপনি passkey দিয়ে admin-এ ঢুকে একটা setting বদলে দেখুন। ঠিক থাকলে Supabase → Authentication → Multi-Factor → TOTP **Verify** বন্ধ।
+- ✅ **পুরনো authenticator code বন্ধ:** আপনি passkey দিয়ে admin login নিশ্চিত করার পর ২১ অক্টোবর ২০২৬ ভোর ৫টায় (ঢাকা) Supabase Auth-এ TOTP verify বন্ধ করা হয়েছে। Factor মোছা হয়নি।
 - ✅ Google login বন্ধ (provider off), repo থেকে সব Google code সরানো।
 - ⬜ **Google client id/secret মোছা:** Supabase → Authentication → Sign In / Providers → Google → **Client IDs** আর **Client Secret** খালি করুন → Save (provider off-ই থাকবে)। CLI এই দুটো field push করে না, তাই হাতে করতে হবে। তারপর Google Cloud Console → APIs & Services → Credentials → CPAY-এর OAuth client → **Delete**।
 - ⬜ **Admin account থেকে Google identity আলাদা করা:** account-এ এখনো `email` আর `google` দুটো identity আছে (password আর passkey আছে, তাই আটকে যাওয়ার ভয় নেই)। Supabase-এ অন্য user-এর identity মোছার কোনো admin API বা dashboard বাটন নেই। আপনি অনুমতি দিলে SQL editor-এ একটাই লাইন: `delete from auth.identities where provider = 'google' and user_id = '<আপনার user id>';` (Authentication → Users → আপনার account থেকে user id দেখে নিন)।
@@ -347,7 +349,7 @@ Admin → **Wallet** খুললে সবার উপরে **Wallets** ক�
 
 ### Deploy-এর ক্রম (এই feature)
 
-1. Migration `20261021030000_multi_wallet.sql` চালান।
+1. Migration `20261021040000_multi_wallet.sql` চালান।
 2. `supabase functions deploy wallet-registry` (এর জন্য `CPAY_OWNER_USER_ID` আর `BREEZ_NETWORK` secret লাগে, দুটোই আগে থেকে আছে)।
 3. Wallet function শুধু wallet deploy script দিয়ে deploy করুন।
 4. সাইট (main-এ merge হলে নিজে থেকেই হয়)।

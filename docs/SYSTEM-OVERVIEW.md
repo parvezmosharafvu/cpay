@@ -57,7 +57,7 @@ The payer and the freelancer see one figure: **"You receive X"**.
 6. Direct payment links (merchant's own wallet, no fee) exist in
    `direct-invoice` / `settlement-destination` and are off unless enabled.
 
-## Wallets (`20261021030000_multi_wallet.sql`, [MULTI-WALLET.md](MULTI-WALLET.md))
+## Wallets (`20261021040000_multi_wallet.sql`, [MULTI-WALLET.md](MULTI-WALLET.md))
 
 - Several platform wallets. Wallet #1 is the original one (seed in the Edge
   secret); others are added by the owner in Admin → Wallet → Wallets by
@@ -82,9 +82,10 @@ a payment (headers can be spoofed).
 ## Auth (`20261021020000_passkey_step_up.sql`)
 
 - Sign-up/sign-in: email + password with **email verification**, or a
-  **passkey**. Google sign-in is removed. New authenticator (TOTP) enrolment
+  **passkey**. Google sign-in is removed. Authenticator codes (TOTP) are fully off since 2026-10-21 (enrol and verify; factors kept). New authenticator (TOTP) enrolment
   is off; previously enrolled codes still verify during the switch-over.
-- `public.strong_session()` = passkey session (or legacy aal2). Required for
+- Daily figures use the Bangladesh calendar day, midnight to midnight Asia/Dhaka (`business_day()`, 20261021030000).
+- `public.strong_session()` = passkey session (or legacy aal2, kept as a fallback; unreachable now that TOTP verify is off). Required for
   admin actions, settings, withdrawals and payout-address changes.
 - A payout address can be saved/changed **only** from a passkey session and is
   usable **at once** (the old 24 h cooldown is gone). Admins cannot delete

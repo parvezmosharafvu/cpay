@@ -1,6 +1,6 @@
 # Multiple platform wallets
 
-Status: in PR (feature/multi-wallet). Migration `20261021030000_multi_wallet.sql`.
+Status: in PR (feature/multi-wallet). Migration `20261021040000_multi_wallet.sql`.
 
 ## Model
 
@@ -84,7 +84,7 @@ row kept as `removed`.
 
 ## Deploy order
 
-1. Migration `20261021030000_multi_wallet.sql`.
+1. Migration `20261021040000_multi_wallet.sql`.
 2. `supabase functions deploy wallet-registry`.
 3. Wallet function, only with the wallet deploy script in `scripts/`.
 4. Site (Cloudflare Workers Builds from `main`).

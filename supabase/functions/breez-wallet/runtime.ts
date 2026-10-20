@@ -6,7 +6,7 @@
 // instance can never hold the wallet. Every other isolate waits for the
 // lock (up to LOCK_WAIT_MS) and then answers 503.
 //
-// Multi-wallet (20261021030000): one host per wallet. The lock key, the
+// Multi-wallet (20261021040000): one host per wallet. The lock key, the
 // "want" key and the lease rows include the wallet id, so the single-
 // instance rule holds PER WALLET. Wallet #1 (legacy) keeps the original
 // keys, so an old and a new deploy still exclude each other. A host runs as

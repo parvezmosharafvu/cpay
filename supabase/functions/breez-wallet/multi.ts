@@ -1,4 +1,4 @@
-// Multi-wallet manager (20261021030000). One host (runtime.ts) per wallet.
+// Multi-wallet manager (20261021040000). One host (runtime.ts) per wallet.
 //
 // Routing rule (docs/MULTI-WALLET.md):
 //   * every signed request (/invoices, /withdraw/*, /admin/wallet/*) goes to

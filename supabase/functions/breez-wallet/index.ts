@@ -10,7 +10,7 @@
 // BREEZ_DB_URL (session-mode / direct connection, port 5432),
 // PAYMENT_SERVICE_SECRET, CRON_SECRET, ADMIN_JWT_MODE (default required).
 //
-// Multi-wallet (20261021030000, docs/MULTI-WALLET.md): BREEZ_MNEMONIC is
+// Multi-wallet (20261021040000, docs/MULTI-WALLET.md): BREEZ_MNEMONIC is
 // wallet #1 (legacy). Other wallets' seeds live in Supabase Vault and are
 // read per wallet with breez_wallet.wallet_seed(id) on this function's own
 // DB connection; they are added to the log redactor before use and never

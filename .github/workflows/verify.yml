@@ -263,7 +263,7 @@ jobs:
         run: |
           # Every migration from 20261005010000 on must survive a second
           # apply, then the RPCs are checked with seeded payments either side
-          # of the 17:00 Dhaka cutoff, the 10-link ceiling, who-sees-whom,
+          # of the midnight Dhaka cutoff, the 10-link ceiling, who-sees-whom,
           # the daily withdrawal limit and the profile card. BEGIN/ROLLBACK.
           #
           # This used to re-apply 0096 onward. 20261005010000 removed the
@@ -468,7 +468,7 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/wallet_ops_health_test.sql
 
-      - name: Multi-wallet registry, Vault seeds, owner-only RPCs (20261021030000)
+      - name: Multi-wallet registry, Vault seeds, owner-only RPCs (20261021040000)
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/multi_wallet_test.sql

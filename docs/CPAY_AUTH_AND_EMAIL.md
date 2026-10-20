@@ -110,6 +110,11 @@ Owner setup, once:
 
 ## Two-step sign-in (TOTP) — retired
 
+> 2026-10-21: TOTP enroll and verify are both off in Supabase Auth
+> (`[auth.mfa.totp]` in `supabase/config.toml`). Factors were not deleted.
+> `strong_session()` keeps its aal2 fallback; with verify off no new aal2
+> session can be made with a code, so admin work needs a passkey.
+
 > **Retired 2026-10-21 (20261021020000).** New authenticator enrolment is off and
 > Google sign-in is removed. Sign-in is email + password (verified email) or a
 > passkey; step-up uses a passkey (`strong_session()`). Codes from authenticators

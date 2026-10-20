@@ -1,4 +1,4 @@
--- 20261021030000_multi_wallet.sql: registry, Vault storage, owner-only RPCs,
+-- 20261021040000_multi_wallet.sql: registry, Vault storage, owner-only RPCs,
 -- removal rules and wallet attribution. BEGIN/ROLLBACK.
 -- The mnemonic below is the public BIP39 test vector, not a real wallet.
 \set ON_ERROR_STOP on

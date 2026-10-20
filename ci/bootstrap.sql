@@ -87,7 +87,7 @@ create table if not exists vault.decrypted_secrets (
   name text primary key,
   decrypted_secret text
 );
--- Vault API shape used by 20261021030000_multi_wallet.sql (CI stand-in;
+-- Vault API shape used by 20261021040000_multi_wallet.sql (CI stand-in;
 -- real Vault encrypts at rest). secrets is a simple view, so DELETE works.
 create or replace view vault.secrets as
   select id, name, decrypted_secret as secret from vault.decrypted_secrets;

@@ -1,4 +1,4 @@
-// Receive-only app for a NON-primary wallet (multi-wallet, 20261021030000).
+// Receive-only app for a NON-primary wallet (multi-wallet, 20261021040000).
 // It never creates invoices, never sends, never reconciles withdrawals and
 // never runs forwards: only the primary wallet does that. It settles
 // payments that arrive for invoices this wallet made while it was primary

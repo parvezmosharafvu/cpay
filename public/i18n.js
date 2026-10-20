@@ -176,7 +176,7 @@
     "Earned": "আয়",
     "Earned on settled volume": "সম্পন্ন লেনদেনে আয়",
     "Earnings": "আয়",
-    "Each day's figures lock at 5:00 PM Dhaka time (UTC+6).": "প্রতিদিনের হিসাব ঢাকা সময় বিকেল ৫টায় চূড়ান্ত হয় (UTC+6)।",
+    "Each day's figures lock at midnight Dhaka time (UTC+6).": "প্রতিদিনের হিসাব ঢাকা সময় রাত ১২টায় (UTC+6) বন্ধ হয়।",
     "Enter 0 to 100, or leave empty": "০ থেকে ১০০ লিখুন, অথবা খালি রাখুন",
     "Enter a name": "একটি নাম লিখুন",
     "Enter the 6 digits shown in the app.": "অ্যাপে দেখানো ৬ অঙ্ক লিখুন।",
@@ -351,7 +351,7 @@
     "This account role is not supported. Contact support.": "এই ধরনের অ্যাকাউন্ট সমর্থিত নয়। সাপোর্টে যোগাযোগ করুন।",
     "Title": "শিরোনাম",
     "Today": "আজ",
-    "Today closes at 5:00 PM Bangladesh time": "আজকের হিসাব বাংলাদেশ সময় বিকেল ৫টায় বন্ধ হয়",
+    "Today closes at midnight Bangladesh time": "আজকের হিসাব বাংলাদেশ সময় রাত ১২টায় বন্ধ হবে",
     "Today's business day": "আজকের ব্যবসায়িক দিন",
     "Toggle saved": "সংরক্ষিত",
     "Total": "মোট",
@@ -429,6 +429,8 @@
     "withdrawal fee, small payments, flags, alerts, instant-forward limits, old switches": "উত্তোলন ফি, ছোট পেমেন্ট, ফ্ল্যাগ, সতর্কবার্তা, তাৎক্ষণিক ফরোয়ার্ড সীমা, পুরোনো সুইচ",
     'Support email': 'সাপোর্ট ইমেইল', 'CPAY Wallet address (https)': 'CPAY Wallet-এর ঠিকানা (https)', 'Settings sections': 'সেটিংসের অংশ',
     // Admin → System guide
+    "12:00 AM to 12:00 AM": "রাত ১২টা থেকে রাত ১২টা",
+    "Each bar is one Bangladesh calendar day, midnight to midnight.": "প্রতিটা বার বাংলাদেশের এক দিন, রাত ১২টা থেকে রাত ১২টা।",
     "System guide (সিস্টেম গাইড)": "সিস্টেম গাইড",
     // Locations, payment details and the overview (20261020090000)
     "Your location": "আপনার অবস্থান",

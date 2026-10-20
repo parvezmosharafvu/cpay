@@ -161,3 +161,49 @@ test('a password-reset link session cannot confirm a payout; signing in with the
   await expect(page.locator('#toast')).toHaveText(/Sent/);
   expect((await db.query('select count(*)::int n from withdrawals where user_id = $1', [u.id])).rows[0].n).toBe(1);
 });
+
+// Manual withdraw (20261021010000): Lightning invoice, one "You receive",
+// confirm once; zero balance hides the form; desk shows Auto withdraw state.
+test('manual Lightning withdrawal to an invoice: quote in sats, confirm sends once, balance debited', async ({ page }) => {
+  const u = await makeUser({ name: 'LN Payout', earned: 20, fee: 0 });
+  await login(page, u);
+  await page.waitForURL(/dashboard\.html/);
+  await expect(page.locator('#homeAuto')).toHaveText('Auto withdraw: Off');
+  await expect(page.locator('#homeWithdraw')).toBeVisible();
+  await page.click('.navi[data-tab="cash"]');
+  await expect(page.locator('#wAuto')).toContainText('Auto withdraw is off');
+  await expect(page.locator('#wNet option', { hasText: 'Lightning' })).toHaveCount(1);
+  await page.selectOption('#wNet', 'lightning:btc');
+  await page.fill('#wDest', 'lnbcrt50000n1e2einvoice');
+  await expect(page.locator('#wAmtField')).toBeHidden();
+  await page.click('#wBtn');
+  await expect(page.locator('#sumGet')).toHaveText(/^5000 sats/);
+  await expect(page.locator('#wBtn')).toHaveText(/Confirm and send 5000 sats/);
+  await page.locator('#wBtn').dblclick();
+  await expect(page.locator('#toast')).toHaveText(/Sent/);
+  const { rows } = await db.query('select method, status from withdrawals where user_id = $1', [u.id]);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].method).toBe('lightning');
+  expect(await available(u.id)).toBe('15.00000000');
+});
+
+test('Withdraw all fills the whole balance', async ({ page }) => {
+  const u = await makeUser({ name: 'All Out', earned: 12.34 });
+  await readyAddress(u.id);
+  await login(page, u);
+  await page.waitForURL(/dashboard\.html/);
+  await page.click('.navi[data-tab="cash"]');
+  await page.click('#wAll');
+  await expect(page.locator('#wAmt')).toHaveValue('12.34');
+});
+
+test('a zero balance shows no withdraw form and no Withdraw button', async ({ page }) => {
+  const z = await makeUser({ name: 'Zero Bal', earned: 0 });
+  await login(page, z);
+  await page.waitForURL(/dashboard\.html/);
+  await expect(page.locator('#homeAuto')).toBeVisible();
+  await expect(page.locator('#homeWithdraw')).toHaveCount(0);
+  await page.click('.navi[data-tab="cash"]');
+  await expect(page.locator('#wNone')).toContainText('Nothing to withdraw');
+  await expect(page.locator('#wBtn')).toHaveCount(0);
+});

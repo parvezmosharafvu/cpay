@@ -40,6 +40,10 @@ export function fakeBreez({ mode = 'ok', feeBase = 520_000n, leafFailures = 0, q
     async parse(input) {
       if (/^0x[0-9a-fA-F]{40}$/.test(input)) return { type: 'crossChainAddress', address: input, addressFamily: 'evm' };
       if (/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(input)) return { type: 'crossChainAddress', address: input, addressFamily: 'tron' };
+      // Test Lightning invoice "lnbcrt<N>n1...": N * 100 msat. Lightning address: user@host.
+      const inv = /^lnbcrt(\d+)n1[0-9a-z]*$/.exec(input);
+      if (inv) return { type: 'bolt11Invoice', amountMsat: Number(inv[1]) * 100, invoice: { bolt11: input } };
+      if (/^[a-z0-9._-]+@[a-z0-9.-]+\.[a-z]+$/i.test(input)) return { type: 'lightningAddress', payRequest: { address: input } };
       throw new Error('unrecognized input');
     },
     async getInfo() { return { balanceSats: 50_000_000 }; },
@@ -50,6 +54,7 @@ export function fakeBreez({ mode = 'ok', feeBase = 520_000n, leafFailures = 0, q
     async syncWallet() { calls.sync++; return {}; },
     async prepareSendPayment({ paymentRequest, amount, feePolicy }) {
       calls.prepare++;
+      if (paymentRequest.type === 'input') return { amount, paymentRequest, paymentMethod: { type: 'bolt11Invoice', lightningFeeSats: 3 } };
       // At RATE, 1 sat = $0.001 = 1000 base units of a 6-decimal stablecoin.
       const scale = 10n ** BigInt(paymentRequest.route.decimals - 6);
       const assetIn = amount * 1000n * scale;
@@ -86,6 +91,8 @@ export function fakeBreez({ mode = 'ok', feeBase = 520_000n, leafFailures = 0, q
       }
       throw new Error(`unknown mode ${fake.mode}`);
     },
+    async prepareLnurlPay({ amount, payRequest }) { calls.prepare++; return { amount, payRequest, feeSats: 2 }; },
+    async lnurlPay({ prepareResponse, idempotencyKey }) { return fake.sendPayment({ prepareResponse, idempotencyKey }); },
     async getPayment({ paymentId }) {
       if (!payments.has(paymentId)) throw new Error('Invalid input: Not found');
       return { payment: payments.get(paymentId) };

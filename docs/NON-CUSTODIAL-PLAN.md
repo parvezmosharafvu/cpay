@@ -76,8 +76,8 @@ Steps (owner-run, nothing by the agent):
 2. Freeze custodial receive (flag F-A off, §5) so no balance can grow.
 3. Ask each account with a balance > 0 to withdraw it (existing USDT withdraw, kept on only for this
    window) or, if they agree in writing, pay it to their own Lightning address. Deadline 30 days.
-4. After the window, unclaimed amounts stay recorded as owed and are paid on request (counsel decides
-   escheat rules). The withdraw path stays available for such accounts only.
+4. After the window, unclaimed amounts stay recorded as owed and are paid on request (the owner decides
+   the unclaimed-funds rules). The withdraw path stays available for such accounts only.
 5. The remainder is CPAY's revenue and stays in CPAY's wallet (§4), or the owner sweeps it to their own
    cold wallet.
 
@@ -139,6 +139,6 @@ owner sign-off and a full ledger export. Direct payments need no money rollback:
 4. D4 Allowed providers: `DIRECT_PROVIDER_HOSTS` list for the pilot vs any LUD-21 provider.
 5. D5 Admin wallet: daily cap, destination allow-list, or retire it for an owner-held revenue address.
 6. D6 Publish CPAY Wallet (release gates) and add Lightning-address registration.
-7. D7 Legal: entity name, registered address, governing law, contact addresses (see the legal PR);
-   counsel sign-off that a non-custodial model needs no licence where CPAY and its users are.
+7. D7 Legal: entity name, registered address, governing law, contact addresses (docs/LEGAL-NOTES.md);
+   the owner confirms the licensing position where CPAY and its users are.
 8. D8 Turnstile enforce, reconcile secret, redeploy of the wallet Edge Function (secrets/deploys are owner actions).

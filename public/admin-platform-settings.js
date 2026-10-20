@@ -23,8 +23,8 @@
     ['Admin wallet limits', ['admin_send_daily_cap_usd', 'admin_send_allowed_destinations']],
   ];
   const MODES = [
-    ['balance', 'Balance', 'Payments go to the CPAY wallet. CPAY keeps the fee and the rest is added to the user’s CPAY balance. Users withdraw. This is how CPAY works today.'],
-    ['instant_forward', 'Instant forward', 'Payments go to the CPAY wallet. CPAY keeps the fee and sends the rest straight to the user’s own Lightning address. No balances are kept.'],
+    ['balance', 'Auto withdraw off (balance)', 'Payments go to the CPAY wallet. CPAY keeps the fee and the rest is added to the user’s balance. Users withdraw by hand.'],
+    ['instant_forward', 'Auto withdraw on (instant forward)', 'Payments go to the CPAY wallet. CPAY keeps the fee and sends the rest straight to the user’s own Lightning or USDT address.'],
     ['direct', 'Direct (no fee)', 'Payers pay the user’s own wallet directly. CPAY never receives the money and takes no fee.'],
   ];
   const CHOICES = {
@@ -98,13 +98,41 @@
   function groupsHtml(groups, byKey) {
     return groups.map(([title, keys]) => `<h3>${esc(title)}</h3><div class="card flush"><table class="table"><tbody>${keys.filter((k) => byKey[k]).map((k) => rowHtml(byKey[k])).join('')}</tbody></table></div>`).join('');
   }
-  // CPAY runs in instant forward only: the fee is kept and the rest goes to
-  // the freelancer's own address; nothing is kept in CPAY. No mode chooser.
+  // Auto withdraw (20261021010000): the plain switch for payment_mode.
+  // On = instant forward to the user's saved address; Off = the amount is
+  // added to the user's balance and they withdraw by hand. Each profile can
+  // override it in Manage users. Writes admin_set_auto_withdraw_global().
   function modeHtml(row) {
     if (!row) return '';
-    return `<h3>How payments work</h3>
-      <div class="card"><p><strong>Instant forward</strong>${row.value === 'instant_forward' ? '' : ' <span class="err">(not active: ask your developer)</span>'}</p>
-        <p class="muted">CPAY receives each payment, keeps the platform fee below and sends the rest straight to the freelancer’s own Lightning or USDT address. CPAY keeps no balances: a freelancer without a payout address cannot take new payments until they add one.</p></div>`;
+    const on = row.value === 'instant_forward';
+    const direct = row.value === 'direct';
+    return `<h3>Auto withdraw</h3>
+      <div class="card" id="autoWithdrawCard">
+        <p>Auto withdraw is <strong id="awState">${direct ? 'Direct payments' : (on ? 'On' : 'Off')}</strong> for everyone who has no setting of their own.</p>
+        <p class="muted">On: after the platform fee, each payment is sent by itself to the user’s saved Lightning or USDT address.</p>
+        <p class="muted">Off: the amount is added to the user’s balance. The user withdraws by hand from Withdraw.</p>
+        <div class="row" role="group" aria-label="Auto withdraw">
+          <button type="button" class="btn ${on ? 'primary' : 'ghost'}" id="awOn" ${on ? 'disabled' : ''}>Turn on</button>
+          <button type="button" class="btn ${!on && !direct ? 'primary' : 'ghost'}" id="awOff" ${!on && !direct ? 'disabled' : ''}>Turn off</button>
+        </div>
+        <p class="faint">To set one user differently, open Manage users and use Auto withdraw on that row.</p>
+        <div class="faint" id="awStatus" role="status"></div></div>`;
+  }
+  function wireMode(el) {
+    const go = async (on) => {
+      const st = el.querySelector('#awStatus');
+      const msg = on
+        ? 'Turn auto withdraw on for everyone without their own setting? New payments will be sent to their saved address.'
+        : 'Turn auto withdraw off for everyone without their own setting? New payments will be added to their balance, and waiting sends go back to their balance.';
+      if (!window.confirm(msg)) return;
+      st.textContent = 'Saving…'; st.className = 'faint';
+      const { error: e } = await client.rpc('admin_set_auto_withdraw_global', { p_on: on });
+      if (e) { st.textContent = e.message; st.className = 'err'; return; }
+      render();
+    };
+    const on = el.querySelector('#awOn'); const off = el.querySelector('#awOff');
+    if (on) on.onclick = () => go(true);
+    if (off) off.onclick = () => go(false);
   }
   async function feeHtml() {
     const { data } = await client.from('app_settings').select('value').eq('key', 'default_platform_fee_percent').maybeSingle();
@@ -148,6 +176,7 @@
       ${groupsHtml(MAIN, byKey)}
       <div id="platformSettingsAudit"></div>`;
     wire(el, byKey);
+    wireMode(el);
     document.getElementById('psFeeSave').onclick = async () => {
       const st = document.getElementById('psFeeStatus');
       const raw = String(document.getElementById('psFee').value ?? '').trim();

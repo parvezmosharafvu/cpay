@@ -3,7 +3,7 @@
 // Pool, `btcUsdRate` an async function returning USD per BTC.
 
 import { randomUUID } from 'node:crypto';
-import { decimalToCents, formatCents, parseUsdCents, splitFeeCents, usdCentsToSats } from './money.mjs';
+import { decimalToCents, formatCents, parseUsdCents, satsToUsdCents, splitFeeCents, usdCentsToSats } from './money.mjs';
 
 export const ROUTE_CACHE_MS = 10 * 60 * 1000;
 // A 'sending' row with no Breez payment is refunded only once its quote has
@@ -26,6 +26,18 @@ const SHAPE = {
   solana: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
   tron: /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
 };
+
+// Manual Lightning withdrawal (20261021010000): from the balance to the
+// user's saved Lightning address or to a Lightning invoice they paste.
+// Listed next to the stablecoin routes; the platform wallet pays the
+// routing fee, capped at LN_MAX_FEE_PCT of the send (at least 10 sats).
+export const LIGHTNING_ROUTE_ID = 'lightning:btc';
+export const LIGHTNING_ROUTE = Object.freeze({
+  id: LIGHTNING_ROUTE_ID, provider: 'wallet', asset: 'BTC', chain: 'lightning', chainId: null, family: 'lightning',
+  decimals: 8, contractAddress: null, minUsdCents: 100, maxUsdCents: null, minUsd: 1, maxUsd: null,
+});
+const LN_QUOTE_TTL_MS = 2 * 60 * 1000;
+const LN_MAX_FEE_PCT = 1;
 
 export class UserError extends Error {
   constructor(status, message, extra = {}) {
@@ -260,7 +272,95 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     return view;
   }
 
-  async function buildQuote({ userId, routeId: id, address, amountUsd }) {
+  async function buildQuote(request) {
+    if (request.routeId === LIGHTNING_ROUTE_ID) return buildLightningQuote(request);
+    return buildStableQuote(request);
+  }
+
+  // Amount for a fixed invoice: the smallest balance amount whose share
+  // after the platform fee covers the invoice.
+  function grossForSend(sendCents, feePercent) {
+    let a = sendCents;
+    while (splitFee(a, feePercent).sendCents < sendCents) a += 1;
+    return a;
+  }
+
+  async function buildLightningQuote({ userId, address, amountUsd }) {
+    const profile = await profileFor(userId);
+    if (!profile || profile.account_status !== 'active') throw new UserError(403, 'Account approval is required before requesting withdrawals');
+    const input = String(address ?? '').trim().replace(/^lightning:/i, '');
+    if (!input) throw new UserError(400, 'Paste a Lightning invoice, or use your saved Lightning address');
+    let parsed;
+    try { parsed = await breez.parse(input); } catch { parsed = null; }
+    const rate = await btcUsdRate();
+    let amountCents, sendCents, feeCents, sat, prepared, routingFeeSat, lnurl = false, dest;
+    try {
+      if (parsed?.type === 'bolt11Invoice') {
+        if (parsed.amountMsat == null) throw new UserError(422, 'Use an invoice that has an amount in it');
+        sat = Math.ceil(Number(parsed.amountMsat) / 1000);
+        const invoiceCents = satsToUsdCents(sat, rate);
+        amountCents = grossForSend(Math.max(1, invoiceCents), profile.fee_percent);
+        ({ sendCents, feeCents } = splitFee(amountCents, profile.fee_percent));
+        dest = input.toLowerCase();
+        prepared = await breez.prepareSendPayment({ paymentRequest: { type: 'input', input: dest } });
+        routingFeeSat = Number(prepared.paymentMethod?.lightningFeeSats ?? 0);
+      } else if (parsed?.type === 'lightningAddress' || parsed?.type === 'lnurlPay') {
+        dest = input.toLowerCase();
+        const { rows } = await db.query('select lightning_withdraw_destination_ok($1, $2) as ok', [userId, dest]);
+        if (rows[0]?.ok !== true) throw new UserError(403, 'Save this Lightning address in Profile first, or paste a Lightning invoice.', { code: 'address_not_saved' });
+        amountCents = parseAmountCents(amountUsd);
+        if (amountCents === null) throw new UserError(400, 'Enter an amount in dollars and cents');
+        ({ sendCents, feeCents } = splitFee(amountCents, profile.fee_percent));
+        sat = usdCentsToSats(sendCents, rate, 'floor');
+        const payRequest = parsed.type === 'lightningAddress' ? parsed.payRequest : parsed;
+        prepared = await breez.prepareLnurlPay({ amount: BigInt(sat), payRequest });
+        routingFeeSat = Number(prepared.feeSats ?? 0);
+        lnurl = true;
+      } else {
+        throw new UserError(422, 'Paste a Lightning invoice, or use your saved Lightning address');
+      }
+    } catch (e) {
+      if (e instanceof UserError) throw e;
+      log({ event: 'quote', error: 'lightning prepare failed', detail: String(e?.message ?? e) });
+      throw new UserError(422, 'This withdrawal could not be quoted right now. Try again.');
+    }
+    if (amountCents < LIGHTNING_ROUTE.minUsdCents) throw new UserError(422, 'Minimum Lightning withdrawal is $1');
+    if (!(sat > 0)) throw new UserError(422, 'The amount is too small to send');
+    const availableCents = decimalToCents(profile.available, 'floor');
+    if (amountCents > availableCents) {
+      throw new UserError(422, `Insufficient balance. Available: $${formatCents(Math.max(0, availableCents))}`);
+    }
+    if (routingFeeSat > Math.max(10, Math.ceil(sat * LN_MAX_FEE_PCT / 100))) {
+      throw new UserError(422, 'The network fee for this send is too high right now. Try again later.');
+    }
+    const { balanceSats } = await breez.getInfo({ ensureSynced: false });
+    if (Number(balanceSats) < sat + routingFeeSat) {
+      log({ event: 'quote', error: 'platform wallet balance too low', balanceSats: Number(balanceSats), amountSat: sat });
+      throw new UserError(503, 'Instant withdrawals are temporarily unavailable. Try again later.');
+    }
+    const expiresAtMs = now() + LN_QUOTE_TTL_MS;
+    const view = {
+      expiresAt: new Date(expiresAtMs).toISOString(),
+      route: { id: LIGHTNING_ROUTE_ID, asset: 'BTC', chain: 'lightning', family: 'lightning', provider: 'wallet' },
+      address: dest,
+      amountUsd: cents(amountCents),
+      feePercent: profile.fee_percent,
+      platformFeeUsd: cents(feeCents),
+      sendUsd: cents(sendCents),
+      amountSat: sat,
+      btcUsdRate: rate,
+      networkFeeUsd: '0',
+      routingFeeSat,
+      receive: String(sat),
+      receiveMin: String(sat),
+      asset: 'SAT',
+      lnurl,
+      maxSlippageBps: 0,
+    };
+    return { request: { userId, routeId: LIGHTNING_ROUTE_ID, address: dest, amountUsd: cents(amountCents) }, prepared, expiresAtMs, view };
+  }
+
+  async function buildStableQuote({ userId, routeId: id, address, amountUsd }) {
     const amountCents = parseAmountCents(amountUsd);
     if (amountCents === null) throw new UserError(400, 'Enter an amount in dollars and cents');
     if (amountCents < 500) throw new UserError(422, 'Minimum withdrawal is $5');
@@ -335,6 +435,13 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
   async function reserve(q) {
     const v = q.view;
     try {
+      if (v.route.id === LIGHTNING_ROUTE_ID) {
+        const { rows } = await db.query(
+          `select * from reserve_lightning_withdrawal($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [q.userId, v.quoteId, v.amountUsd, v.feePercent, v.sendUsd, v.address, v.amountSat, v.routingFeeSat, v.expiresAt],
+        );
+        return rows[0];
+      }
       const { rows } = await db.query(
         `select * from reserve_stablecoin_withdrawal($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [q.userId, v.quoteId, v.amountUsd, v.feePercent, v.sendUsd, v.asset, v.route.chain, v.address,
@@ -363,6 +470,11 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
   }
 
   async function apply(row, payment) {
+    if (row.method === 'lightning') {
+      if (payment.status === 'completed') return finalize(row.id, 'paid', { paymentId: payment.id, amountOut: String(row.amount_sat) });
+      if (payment.status === 'failed') return finalize(row.id, 'failed', { paymentId: payment.id, note: 'Send failed; balance returned' });
+      return 'sending';
+    }
     const o = outcomeOf(payment);
     if (o.status === 'paid') return finalize(row.id, 'paid', { paymentId: payment.id, amountOut: o.delivered });
     if (o.status === 'failed') return finalize(row.id, 'failed', { paymentId: payment.id, note: o.note });
@@ -370,7 +482,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
     return 'sending';
   }
 
-  async function send(row, prepared) {
+  async function send(row, prepared, lnurl = false) {
     let payment = null;
     let error = null;
     try {
@@ -378,7 +490,9 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
       ({ payment } = await retryLeafErrors({
         breez, key: row.id, now, sleep, log,
         deadlineMs: Math.min(now() + LEAF_RETRY_MS, new Date(row.quote_expires_at).getTime() - QUOTE_MARGIN_MS),
-        attempt: () => breez.sendPayment({ prepareResponse: prepared, idempotencyKey: row.id }),
+        attempt: () => (lnurl
+          ? breez.lnurlPay({ prepareResponse: prepared, idempotencyKey: row.id })
+          : breez.sendPayment({ prepareResponse: prepared, idempotencyKey: row.id })),
         existing: () => findPayment(row.id),
       }));
     } catch (e) {
@@ -456,7 +570,8 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
         let row;
         try {
           const q0 = mem?.userId === userId ? mem : await rebuild(quoteId, stored);
-          await requireReadyDestination(userId, q0.view.address);
+          // Lightning: reserve_lightning_withdrawal() checks the saved address.
+          if (q0.view.route.id !== LIGHTNING_ROUTE_ID) await requireReadyDestination(userId, q0.view.address);
           row = await reserve(q0);
           row.__q = q0;
         } catch (e) {
@@ -469,7 +584,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
         delete row.__q;
         if (row.status !== 'sending') return row;
         sendingIds.add(row.id);
-        const sending = track(send(row, q.prepared).catch((e) => {
+        const sending = track(send(row, q.prepared, q.view.lnurl === true).catch((e) => {
           log({ event: 'send-crash', withdrawalId: row.id, error: String(e?.message ?? e) });
           return 'sending';
         }).finally(() => sendingIds.delete(row.id)));
@@ -487,7 +602,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
   // Settle every 'sending' row against Breez. Called at startup, on payment
   // events and on the catch-up timer.
   async function reconcile({ synced = false } = {}) {
-    const { rows } = await db.query(`select * from withdrawals where status = 'sending' and method = 'stablecoin' order by requested_at`);
+    const { rows } = await db.query(`select * from withdrawals where status = 'sending' and method in ('stablecoin', 'lightning') and quote_id is not null order by requested_at`);
     const outcomes = {};
     for (const row of rows) {
       let result;
@@ -507,7 +622,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
   async function onPayment(payment) {
     if (payment?.paymentType !== 'send') return null;
     const { rows } = await db.query(
-      `select * from withdrawals where status = 'sending' and method = 'stablecoin' and (id::text = $1 or payout_ref = $1)`,
+      `select * from withdrawals where status = 'sending' and method in ('stablecoin', 'lightning') and quote_id is not null and (id::text = $1 or payout_ref = $1)`,
       [payment.id],
     );
     if (!rows[0]) return null;
@@ -525,7 +640,7 @@ export function createWithdrawals({ breez, db, btcUsdRate, now = () => Date.now(
   }
 
   return {
-    listRoutes, quote, confirm, reconcile, onPayment, validateAddress, prepareCrossChain, findPayment,
+    listRoutes, quote, confirm, lightningRoute: LIGHTNING_ROUTE, reconcile, onPayment, validateAddress, prepareCrossChain, findPayment,
     routeCacheInfo: () => ({ at: routeCache.at ? new Date(routeCache.at).toISOString() : null, count: routeCache.routes.length, error: routeCache.error }),
   };
 }

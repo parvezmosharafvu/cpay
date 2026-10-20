@@ -98,6 +98,9 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('set_my_location(text, text, text, text)',                                 'self',          'caller sets own account location (auth.uid()); validated (20261020090000)'),
   ('touch_my_last_seen()',                                                    'self',          'caller''s own last-seen country from cf-ipcountry (auth.uid()) (20261020090000)'),
   ('admin_locations(text, text, integer, integer)',                           'admin',         'user and payment locations by area; admin with aal2 only (20261020090000)'),
+  ('admin_set_auto_withdraw(uuid, text)',                                    'admin',         'Auto withdraw per profile: default/on/off; admin with aal2 only; audited (20261021010000)'),
+  ('admin_set_auto_withdraw_global(boolean)',                                 'admin',         'Auto withdraw global switch (payment_mode); admin with aal2 only; audited (20261021010000)'),
+  ('admin_auto_withdraw_overview()',                                          'admin',         'Auto withdraw state of every profile; admin with aal2 only (20261021010000)'),
   ('my_receive_settings()',                                                   'self',          'own receive choice and addresses (20261020050000)'),
   ('set_payment_link_experience(uuid, text, text, text)',                     'self_or_admin', 'own link, or any link for an active admin'),
   ('set_payment_link_theme(uuid, text)',                                      'self_or_admin', 'own link, or any link for an active admin'),
@@ -163,6 +166,9 @@ insert into internal_only values
   ('system_claim_direct_checks(integer, integer)', 'direct-invoice Edge Function reconcile sweep (20261018010000)'),
   ('system_record_direct_payment_proof(uuid, text)', 'direct-invoice Edge Function, with a verified preimage (20261018010000)'),
   ('system_expire_direct_payment(uuid, integer)', 'direct-invoice Edge Function (20261018010000)'),
+  ('payment_mode_for(uuid)',                    'forward trigger, payment gate, forward workers, desk RPCs (20261021010000)'),
+  ('auto_withdraw_release_waiting(uuid)',       'admin_set_auto_withdraw(), admin_set_auto_withdraw_global() (20261021010000)'),
+  ('reserve_lightning_withdrawal(uuid, text, numeric, numeric, numeric, text, bigint, bigint, timestamp with time zone)', 'wallet function, manual Lightning withdrawal (service role; 20261021010000)'),
   ('system_direct_payment_public(uuid)',        'direct-invoice Edge Function: the payer page''s fields (20261018010000)');
 
 -- The SECURITY DEFINER functions authenticated can execute right now, with

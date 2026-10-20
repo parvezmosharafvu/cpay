@@ -88,9 +88,18 @@ let peopleFilter = { status: '', search: '' };
 async function renderPeople() {
   const el = document.getElementById('people');
   if (el) el.innerHTML = typeof deskSkeleton === 'function' ? deskSkeleton(4) : '<p class="muted">Loading…</p>';
-  const [{ data, error }, { data: usage }, { data: wfees }, { data: wallets }] = await Promise.all([
+  const [{ data, error }, { data: usage }, { data: wfees }, { data: wallets }, { data: awData }] = await Promise.all([
     sb.rpc('admin_list_business_profiles'), sb.rpc('admin_link_usage'), sb.rpc('admin_withdraw_fee_overview'), sb.rpc('admin_list_user_wallets'),
+    sb.rpc('admin_auto_withdraw_overview'),
   ]);
+  // Auto withdraw per profile (20261021010000): Default follows Settings.
+  const aw = Object.fromEntries(((awData && awData.users) || []).map((u) => [u.user_id, u]));
+  const AW_LABEL = { default: 'Default', on: 'On', off: 'Off' };
+  const awCell = (id) => {
+    const u = aw[id];
+    if (!u) return '-';
+    return `${u.auto_withdraw ? 'On' : 'Off'}<div class="faint">${u.override === 'default' ? 'Default' : 'Set: ' + AW_LABEL[u.override]}</div>`;
+  };
   const EXPLORER = { tron:'https://tronscan.org/#/address/', bsc:'https://bscscan.com/address/', ethereum:'https://etherscan.io/address/', polygon:'https://polygonscan.com/address/', arbitrum:'https://arbiscan.io/address/', base:'https://basescan.org/address/', optimism:'https://optimistic.etherscan.io/address/', avalanche:'https://snowtrace.io/address/', solana:'https://solscan.io/account/' };
   const byWallet = {};
   for (const w of wallets || []) (byWallet[w.user_id] ||= []).push(w);
@@ -120,7 +129,9 @@ async function renderPeople() {
     <td>${escapeHtml(p.hide_small_payments_mode)}</td>
     <td>${walletLinks(p.id)}</td>
     <td class="num">${money(p.available)}</td>
+    <td class="nowrap" data-aw-cell="${p.id}">${awCell(p.id)}</td>
     <td><div class="table-actions">
+      <button type="button" class="btn ghost sm" data-aw="${p.id}" data-aw-cur="${escapeHtml(aw[p.id]?.override || 'default')}" data-aw-name="${escapeHtml(p.display_name || p.email || '')}">Auto withdraw</button>
       ${links[p.id] ? `<button type="button" class="btn ghost sm" data-limit="${p.id}" data-cur="${links[p.id].link_limit}">Link limit</button>` : ''}
       <button type="button" class="btn ghost sm" data-fee="${p.id}">Platform fee</button>
       <button type="button" class="btn ghost sm" data-wfee="${p.id}" data-cur="${wfee[p.id]?.own_fee_percent ?? ''}">Withdraw fee</button>
@@ -146,8 +157,8 @@ async function renderPeople() {
     ${toolbar}
     <div class="card-head"><h3>Accounts</h3><span class="meta-count">${filtered.length} shown · ${people.length} total</span></div>
     <p class="role-note" style="padding:0 20px">Status changes call <code>admin_update_account_control</code> on the server. Hiding UI never grants access — suspended accounts are signed out by <code>loadProfile</code>.</p>
-    <div class="scroll"><table class="table"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th class="num">Links</th><th class="num">Platform fee</th><th class="num">Withdraw fee</th><th>Small payments</th><th>Wallet</th><th class="num">Available</th><th></th></tr></thead>
-    <tbody>${rows || `<tr><td colspan="10">${typeof deskEmpty === 'function' ? deskEmpty('No accounts match', 'Clear filters or wait for applications.') : '<span class="empty">No accounts</span>'}</td></tr>`}</tbody></table></div>
+    <div class="scroll"><table class="table"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th class="num">Links</th><th class="num">Platform fee</th><th class="num">Withdraw fee</th><th>Small payments</th><th>Wallet</th><th class="num">Available</th><th>Auto withdraw</th><th></th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="11">${typeof deskEmpty === 'function' ? deskEmpty('No accounts match', 'Clear filters or wait for applications.') : '<span class="empty">No accounts</span>'}</td></tr>`}</tbody></table></div>
   </div>`;
   if (document.getElementById('peopleStatus')) document.getElementById('peopleStatus').value = statusFilter;
   document.getElementById('peopleApply')?.addEventListener('click', () => {
@@ -218,6 +229,9 @@ async function renderPeople() {
       if (e) return toast(e.message);
       toast('Account updated', true); renderPeople();
     };
+  });
+  document.querySelectorAll('[data-aw]').forEach((btn) => {
+    btn.onclick = () => openAutoWithdraw(btn.dataset.aw, btn.dataset.awName, btn.dataset.awCur);
   });
   document.querySelectorAll('[data-hide]').forEach((btn) => {
     btn.onclick = async () => {
@@ -355,6 +369,47 @@ function renderAlerts() {
     <h3>Telegram</h3>
     <p class="muted">Every settled payment is posted to the admin Telegram group. Set the group with ALERT_TELEGRAM_CHAT_ID on the telegram-notify function, and stop the messages with ALERT_ON_SETTLED=false.</p>
   </div>`;
+}
+
+// One account's Auto withdraw: Default (follow Settings) / On / Off.
+// admin_set_auto_withdraw() needs an active admin at aal2 and is audited.
+function openAutoWithdraw(userId, name, current) {
+  let dlg = document.getElementById('awDialog');
+  if (!dlg) {
+    dlg = document.createElement('dialog');
+    dlg.id = 'awDialog';
+    dlg.className = 'card';
+    dlg.setAttribute('aria-labelledby', 'awDialogTitle');
+    dlg.innerHTML = `<form method="dialog">
+      <h3 id="awDialogTitle">Auto withdraw</h3>
+      <p class="muted" id="awDialogWho"></p>
+      <fieldset class="stack"><legend class="sr-only">Auto withdraw</legend>
+        <label class="check"><input type="radio" name="awMode" value="default"> Default (follow Settings)</label>
+        <label class="check"><input type="radio" name="awMode" value="on"> On: send each payment to their saved address</label>
+        <label class="check"><input type="radio" name="awMode" value="off"> Off: add payments to their balance</label>
+      </fieldset>
+      <p class="faint">Turning it off moves sends that are still waiting back into their balance.</p>
+      <p class="faint" id="awDialogStatus" role="status"></p>
+      <div class="row"><button type="button" class="btn primary" id="awDialogSave">Save</button><button type="submit" class="btn ghost" value="cancel">Cancel</button></div>
+    </form>`;
+    document.body.appendChild(dlg);
+  }
+  const back = document.activeElement;
+  dlg.querySelector('#awDialogWho').textContent = name || '';
+  dlg.querySelector('#awDialogStatus').textContent = '';
+  dlg.querySelectorAll('input[name="awMode"]').forEach((r) => { r.checked = r.value === (current || 'default'); });
+  dlg.querySelector('#awDialogSave').onclick = async () => {
+    const mode = dlg.querySelector('input[name="awMode"]:checked')?.value || 'default';
+    const st = dlg.querySelector('#awDialogStatus');
+    st.textContent = 'Saving…';
+    const { error: e } = await sb.rpc('admin_set_auto_withdraw', { p_user: userId, p_mode: mode });
+    if (e) { st.textContent = e.message; st.className = 'err'; return; }
+    dlg.close();
+    toast('Auto withdraw saved', true);
+    renderPeople();
+  };
+  dlg.addEventListener('close', () => { if (back && back.focus) back.focus(); }, { once: true });
+  if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
 }
 
 async function renderPayouts() {

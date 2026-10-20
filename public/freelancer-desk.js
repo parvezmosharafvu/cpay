@@ -66,10 +66,11 @@ async function boot() {
 async function renderHome() {
   const home = document.getElementById('home');
   home.innerHTML = deskSkeleton(3);
-  const [{ data: bal, error: balErr }, { data: split, error: splitErr }, recent] = await Promise.all([
+  const [{ data: bal, error: balErr }, { data: split, error: splitErr }, recent, { data: rs }] = await Promise.all([
     sb.rpc('get_my_balance'),
     sb.rpc('my_earnings_split'),
     sb.rpc('get_my_payments', { p_limit: 5, p_offset: 0, p_search: null, p_status: null }),
+    sb.rpc('my_receive_settings'),
   ]);
   if (balErr || splitErr) {
     home.innerHTML = deskError((balErr || splitErr).message);
@@ -78,8 +79,14 @@ async function renderHome() {
   const b = Array.isArray(bal) ? bal[0] : bal || {};
   const s = Array.isArray(split) ? split[0] : split || {};
   const icon = (id) => `<svg class="ico" aria-hidden="true"><use href="#${id}"/></svg>`;
-  // Instant forward: CPAY keeps nothing new; only money from before can be withdrawn.
+  // Auto withdraw on: new payments go to the saved address; only money from
+  // before can be withdrawn. Off: payments are added to the balance and the
+  // user withdraws by hand. The Withdraw button shows only with a balance.
   const leftover = Number(s.net ?? b.available ?? 0) > 0;
+  const autoOn = rs?.auto_withdraw === true;
+  const availNote = autoOn
+    ? (leftover ? 'Earlier balance, ready to withdraw' : 'New payments go straight to your own address')
+    : (leftover ? 'Held by CPAY, ready to withdraw' : 'New payments are added here');
   const recentRows = (recent.data || []).map((p) => {
     const st = String(p.status || '').toLowerCase();
     return `<li class="act-open" role="button" tabindex="0" data-pay-id="${escapeHtml(p.id)}" aria-label="Payment details: ${escapeHtml(money(p.amount_settled || p.amount_requested))} on /${escapeHtml(p.link_slug || '')}"><span class="act-ico ${escapeHtml(st)}" aria-hidden="true">${icon('i-in')}</span>
@@ -92,12 +99,12 @@ async function renderHome() {
   // card, then recent payments. No link cost here: each link has its own.
   const lead = `<div class="stack home-stack">
     <div class="home-actions" id="homeActions">
-      ${leftover ? `<button type="button" class="btn primary lg" data-jump="cash">${icon('i-out')}Withdraw USDT</button>` : ''}
+      ${leftover ? `<button type="button" class="btn primary lg" data-jump="cash" id="homeWithdraw">${icon('i-out')}Withdraw</button>` : ''}
       <button type="button" class="btn ghost lg" data-jump="links" data-focus="linkName">${icon('i-plus')}New payment link</button>
     </div>
     <div class="card summary-card" id="homeSummary">
       <div class="summary-grid">
-        <div><div class="kicker">Available</div><div class="kpi" data-kpi>${money(s.net ?? b.available)}</div><div class="faint">${leftover ? 'Held by CPAY, ready to withdraw' : 'New payments go straight to your own address'}</div></div>
+        <div><div class="kicker">Available</div><div class="kpi" data-kpi>${money(s.net ?? b.available)}</div><div class="faint">${availNote}</div><div class="faint" id="homeAuto">${autoOn ? 'Auto withdraw: On' : 'Auto withdraw: Off'}</div></div>
         <div><div class="kicker">Settled on your links</div><div class="kpi">${money(s.settled)}</div><div class="faint">All time, paid by customers</div></div>
         <div><div class="kicker">Platform fee</div><div class="kpi">${money(s.platform_fee)}</div><div class="faint">All time, CPAY's fee on settled payments</div></div>
       </div>
@@ -288,7 +295,7 @@ async function renderWithdrawHistory() {
   if (!host) return;
   host.innerHTML = deskSkeleton(3);
   let q = sb.from('withdrawals')
-    .select('requested_at,status,chain,coin,amount_requested,amount_after_fee,quoted_fee,destination,processed_at')
+    .select('requested_at,status,method,chain,coin,amount_requested,amount_after_fee,quoted_fee,amount_out,destination,processed_at,admin_note')
     .order('requested_at', { ascending: false })
     .limit(40);
   if (wdFilter.status) q = q.eq('status', wdFilter.status);
@@ -297,10 +304,15 @@ async function renderWithdrawHistory() {
   const rows = (data || []).map((w) => `<tr>
     <td data-label="When">${escapeHtml(when(w.requested_at))}</td>
     <td data-label="Status">${badge(w.status)}</td>
-    <td data-label="Network">${escapeHtml(w.chain || w.coin || 'USDT')}</td>
+    <td data-label="Network">${escapeHtml(w.method === 'lightning' ? 'Lightning' : (w.chain || w.coin || 'USDT'))}</td>
     <td class="num" data-label="Requested">${money(w.amount_requested)}</td>
     <td class="num" data-label="After fee"><span class="cell-main">${money(w.amount_after_fee)}</span></td>
     <td class="mono" data-label="Address" title="${escapeHtml(w.destination || '')}">${escapeHtml(String(w.destination || '').slice(0, 18))}</td>
+    <td data-label="Details"><details><summary>Details</summary><dl class="faint">
+      <div><dt>Sent</dt><dd>${escapeHtml(w.amount_out != null ? `${w.amount_out} ${w.method === 'lightning' ? 'sats' : (w.coin || 'USDT')}` : '-')}</dd></div>
+      <div><dt>Finished</dt><dd>${escapeHtml(w.processed_at ? when(w.processed_at) : '-')}</dd></div>
+      ${w.status === 'failed' && w.admin_note ? `<div><dt>Note</dt><dd>${escapeHtml(String(w.admin_note).slice(0, 160))}</dd></div>` : ''}
+      <div><dt>To</dt><dd class="mono">${escapeHtml(w.destination || '')}</dd></div></dl></details></td>
   </tr>`).join('');
   const toolbar = deskFilterBar(`
     <div class="field short"><label for="wdStatus">Status</label>
@@ -319,8 +331,8 @@ async function renderWithdrawHistory() {
   host.innerHTML = `<div class="card flush">
     ${toolbar}
     <div class="card-head"><h3>Withdrawal history</h3><span class="meta-count">${(data || []).length} shown</span></div>
-    <div class="scroll"><table class="table rtable"><thead><tr><th>When</th><th>Status</th><th>Network</th><th class="num">Requested</th><th class="num">After fee</th><th>Address</th></tr></thead>
-    <tbody>${rows || `<tr><td colspan="6">${deskEmpty('No withdrawals yet', 'Confirm a USDT quote above to see history here.')}</td></tr>`}</tbody></table></div>
+    <div class="scroll"><table class="table rtable"><thead><tr><th>When</th><th>Status</th><th>Network</th><th class="num">Requested</th><th class="num">After fee</th><th>Address</th><th>Details</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="7">${deskEmpty('No withdrawals yet', 'Confirmed withdrawals show up here.')}</td></tr>`}</tbody></table></div>
   </div>`;
   const st = document.getElementById('wdStatus');
   if (st) st.value = wdFilter.status || '';
@@ -337,10 +349,11 @@ async function renderWithdrawHistory() {
 async function renderCash() {
   const el = document.getElementById('cash');
   el.innerHTML = deskSkeleton(3);
-  const [{ data: bal, error: balErr }, { data: ws, error: wsErr }, { data: book, error: bookErr }] = await Promise.all([
+  const [{ data: bal, error: balErr }, { data: ws, error: wsErr }, { data: book, error: bookErr }, { data: rs }] = await Promise.all([
     sb.rpc('get_my_balance'),
     sb.rpc('my_withdraw_settings'),
     sb.rpc('my_payout_book'),
+    sb.rpc('my_receive_settings'),
   ]);
   if (balErr || wsErr || bookErr) {
     el.innerHTML = deskError((balErr || wsErr || bookErr).message);
@@ -349,20 +362,36 @@ async function renderCash() {
   const b = Array.isArray(bal) ? bal[0] : bal || {};
   const fee = Number(ws?.fee_percent ?? 0);
   const wallets = book?.wallets || [];
-  const savedNote = wallets.length
+  const autoOn = rs?.auto_withdraw === true;
+  const lnSaved = rs?.lightning_address || null;
+  let availNow = Number(b.available || 0);
+  const savedNote = (wallets.length
     ? `<p class="hint">Saved USDT wallets: ${wallets.map((w) => `${escapeHtml(netLabel(w.network))} (${readyText(w)})`).join(', ')}. Open Profile to add more networks.</p>`
-    : `<p class="hint">Save a USDT address in Profile first. Withdrawals only go to a saved address.</p>`;
+    : `<p class="hint">USDT goes only to an address saved in Profile.</p>`)
+    + (lnSaved ? `<p class="hint">Saved Lightning address: <code>${escapeHtml(lnSaved)}</code></p>` : `<p class="hint">For Lightning, paste a Lightning invoice, or save a Lightning address in Profile.</p>`);
+  const autoNote = `<p class="hint" id="wAuto">${autoOn
+    ? 'Auto withdraw is on: new payments go to your saved address by themselves. Use this page for money that is still in your balance.'
+    : 'Auto withdraw is off: payments are added to your balance. Withdraw here whenever you like.'}</p>`;
+  if (!(availNow > 0)) {
+    el.innerHTML = `<div class="card" id="wNone"><h3>Withdraw</h3><p class="muted">Available balance <strong id="wAvail">${money(0)}</strong></p>${autoNote}
+      <p class="faint">Nothing to withdraw right now.</p>${savedNote}</div><div id="wHist"></div>`;
+    renderWithdrawHistory();
+    return;
+  }
   el.innerHTML = withdrawForm(`<p class="muted">Available balance <strong id="wAvail">${money(b.available)}</strong>, held by CPAY</p>`
-    + savedNote)
+    + autoNote + savedNote)
     + '<div id="wHist"></div>';
   bindWithdraw(() => fee, {
     saved: wallets,
+    savedLightning: lnSaved,
+    available: () => availNow,
     preferredNetwork: book?.preferred_usdt_network || null,
     onDone: async () => {
       renderHome();
       renderWithdrawHistory();
       const { data: now } = await sb.rpc('get_my_balance');
       const nb = Array.isArray(now) ? now[0] : now || {};
+      availNow = Number(nb.available || 0);
       const avail = document.getElementById('wAvail');
       if (avail) avail.textContent = money(nb.available);
     },
@@ -430,9 +459,9 @@ async function renderProfile() {
         <tbody>${rows || `<tr><td colspan="4">${deskEmpty('No USDT address saved', 'Add a network address before withdrawing.')}</td></tr>`}</tbody></table>
       </div>
       <div class="field"><label for="prefNet">Preferred network</label><select id="prefNet">${prefOpts}</select></div>
-      <div class="field"><label for="thresh">Auto-withdraw threshold (USD)</label>
+      <div class="field"><label for="thresh">USDT payout threshold (USD)</label>
         <input id="thresh" type="number" min="5" step="1" placeholder="Leave empty to only withdraw by hand" value="${escapeHtml(book?.withdraw_threshold ?? '')}"></div>
-      <label class="check"><input type="checkbox" id="autoOn" ${book?.auto_withdraw_enabled ? 'checked' : ''}> Queue a payout when the balance reaches the threshold</label>
+      <label class="check"><input type="checkbox" id="autoOn" ${book?.auto_withdraw_enabled ? 'checked' : ''}> Queue a USDT payout when the balance reaches the threshold</label>
       <button class="btn ghost" id="savePrefs" type="button">Save payout settings</button>
     </div>
   </div>`;
@@ -443,11 +472,19 @@ async function renderProfile() {
   const head = node('div', 'card-title');
   const headIn = node('div');
   headIn.append(node('h3', '', 'Where to receive'),
-    node('p', 'faint', 'CPAY receives each payment, keeps its fee and sends the rest straight to your saved address.'));
+    node('p', 'faint', rs?.auto_withdraw
+      ? 'CPAY receives each payment, keeps its fee and sends the rest straight to your saved address.'
+      : 'CPAY receives each payment, keeps its fee and adds the rest to your balance. You withdraw when you like.'));
   head.append(headIn);
+  const autoLine = node('p');
+  autoLine.id = 'recvAuto';
+  autoLine.append('Auto withdraw: ', node('strong', '', rs?.auto_withdraw ? 'On' : 'Off'),
+    rs?.auto_withdraw_source === 'account' ? ' (set for your account by the admin)' : '');
   const recvNow = node('p');
   recvNow.id = 'recvNow';
-  if (target) {
+  if (!rs?.auto_withdraw) {
+    recvNow.textContent = 'Payments are added to your CPAY balance. Open Withdraw to send money to your Lightning or USDT address.';
+  } else if (target) {
     recvNow.append('Payments go to: ', node('strong', '', where), ' ', node('code', '', target));
   } else if (wallets.length) {
     recvNow.textContent = 'Your saved address is not ready yet. Payments start once it is (at most 24 hours).';
@@ -455,7 +492,7 @@ async function renderProfile() {
     recvNow.className = 'err';
     recvNow.textContent = 'No address yet. Save a USDT or Lightning address to start receiving payments.';
   }
-  recvCard.append(head, recvNow, node('p', 'hint', 'Save a USDT address below or a Lightning address. If you save both, Lightning is used.'));
+  recvCard.append(head, autoLine, recvNow, node('p', 'hint', 'Save a USDT address below or a Lightning address. If you save both, Lightning is used.'));
   el.prepend(recvCard);
   if (window.cpayLoc) window.cpayLoc.profileCard(document.getElementById('locationHost'));
   if (window.cpayDirect) window.cpayDirect.card(document.getElementById('directCard'), () => { renderProfile(); renderLinks(); });

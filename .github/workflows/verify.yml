@@ -416,6 +416,15 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/locations_test.sql
+      - name: Auto withdraw switch, per-profile override, manual Lightning withdrawal (20261021010000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/auto_withdraw_test.sql
+      - name: Manual withdrawal cannot spend one balance twice (concurrent confirms)
+        env:
+          PGPASSWORD: postgres
+          PGDATABASE: postgres
+        run: bash ci/auto_withdraw_concurrency_test.sh
       - name: Money is exact (no float columns or float casts in public)
         env:
           PGPASSWORD: postgres

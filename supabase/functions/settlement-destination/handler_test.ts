@@ -10,7 +10,7 @@ const CHECKED: DestinationCheck = {
   minSendableMsat: 1500n, maxSendableMsat: 1_000_000_000n, description: "Pay alice",
 };
 
-function setup(o: { fresh?: boolean; limit?: boolean | undefined; saveError?: string; providerError?: LnurlError } = {}) {
+function setup(o: { fresh?: boolean; passkey?: boolean; limit?: boolean | undefined; saveError?: string; providerError?: LnurlError } = {}) {
   const saved: string[] = [];
   let removed = 0;
   const provider: SettlementProvider = {
@@ -31,6 +31,7 @@ function setup(o: { fresh?: boolean; limit?: boolean | undefined; saveError?: st
   const handler = createHandler({
     getUser: (h) => Promise.resolve(h === "Bearer good" ? USER : null),
     stepUp: (): StepUp => (o.fresh === false ? { ok: false, reason: "stale_sign_in" } : { ok: true }),
+    passkeyStepUp: (): StepUp => (o.fresh === false ? { ok: false, reason: "stale_sign_in" } : o.passkey === false ? { ok: false, reason: "passkey_required" } : { ok: true }),
     provider, db, cors: () => Promise.resolve({ "Access-Control-Allow-Origin": "https://site.example" }), log: () => {},
   });
   const call = async (body: unknown, auth = "Bearer good") => {
@@ -66,8 +67,9 @@ Deno.test("save and remove need a fresh sign-in", async () => {
   const stale = setup({ fresh: false });
   const r = await stale.call({ action: "save", address: "alice@pay.example.com" });
   assertEquals([r.status, r.body.code], [403, "reauth_required"]);
-  assertEquals(r.body.error, "For your security, enter your password again to change where your payments go.");
-  assertEquals((await stale.call({ action: "remove" })).status, 403);
+  assertEquals(r.body.error, "Confirm with your passkey to change address");
+  const rm = await stale.call({ action: "remove" });
+  assertEquals([rm.status, rm.body.error], [403, "For your security, sign in again with your passkey or password to remove your payout address."]);
   assertEquals([stale.saved.length, stale.removed()], [0, 0]);
 });
 
@@ -81,4 +83,12 @@ Deno.test("save: checked again on the server, then saved with its wait", async (
   assertEquals((await odd.call({ action: "save", address: "a@b.com" })).body.error, "Could not save that. Try again in a moment.");
   const rm = await s.call({ action: "remove" });
   assertEquals([rm.status, rm.body.removed, s.removed()], [200, 1, 1]);
+});
+
+Deno.test("save needs a passkey session; a fresh password session is refused, remove still works with it", async () => {
+  const pw = setup({ passkey: false });
+  const r = await pw.call({ action: "save", address: "alice@pay.example.com" });
+  assertEquals([r.status, r.body.code, r.body.reason, r.body.error], [403, "reauth_required", "passkey_required", "Confirm with your passkey to change address"]);
+  assertEquals(pw.saved.length, 0);
+  assertEquals((await pw.call({ action: "remove" })).status, 200);
 });

@@ -1,10 +1,10 @@
 // Step-up sign-in for payouts. When a confirm answers code "reauth_required"
 // (the last real sign-in is older than a few minutes, or the account has an
 // authenticator and the session is not aal2), ask the person to sign in
-// again in a small dialog: with the password, a passkey (passkey.js) when
-// the account has one, or Google when the account signs in with Google.
-// Then ask for the authenticator code when one is enrolled (mfa.js), and let
-// the caller retry once. The password and the code go only to Supabase Auth.
+// again in a small dialog: with a passkey (passkey.js) when the account has
+// one, or the password. An account that needs the strong factor (an old
+// authenticator on it) must use the passkey (mfa.js). Then the caller
+// retries once. The password goes only to Supabase Auth.
 (function () {
   const sb = () => window.supabaseClient;
 
@@ -26,7 +26,6 @@
         <p class="hint" id="reauthMsg"></p>
         <div class="alt-confirm" id="reauthAlt" hidden>
           <button class="btn oauth-btn block" type="button" id="reauthPasskey" hidden>Use a passkey</button>
-          <button class="btn oauth-btn block" type="button" id="reauthGoogle" hidden>Sign in with Google again</button>
         </div>
         <div class="field"><label for="reauthPw">Password</label>
           <input id="reauthPw" type="password" autocomplete="current-password" required></div>
@@ -37,19 +36,19 @@
           <button class="btn primary" value="ok" type="submit" id="reauthOk">Continue</button>
         </div></form>`;
       document.body.appendChild(dlg);
-      dlg.querySelector('#reauthMsg').textContent = message || 'For your security, enter your password again to confirm this payout.';
+      dlg.querySelector('#reauthMsg').textContent = message || 'For your security, sign in again with your passkey or password to confirm this payout.';
       const pw = dlg.querySelector('#reauthPw');
       const err = dlg.querySelector('#reauthErr');
       const captchaBox = dlg.querySelector('#reauthCaptcha');
       const showErr = (t) => { err.textContent = t; err.hidden = false; };
       const done = (ok) => { dlg.close(); dlg.remove(); resolve(ok); };
-      // A password or passkey sign-in is aal1. With an authenticator enrolled
-      // the payout needs aal2, so ask for the code now instead of sending the
-      // user round the dialog again (mfa.js).
+      // A password sign-in is not strong. When the account needs the strong
+      // factor (an old authenticator on it), ask for the passkey now instead
+      // of sending the user round the dialog again (mfa.js).
       const finish = async () => {
         if (window.cpayMfa && await window.cpayMfa.needsChallenge()) {
           dlg.close(); dlg.remove();
-          resolve(await window.cpayMfa.promptCode('Enter the code from your authenticator app to confirm this payout.'));
+          resolve(await window.cpayMfa.promptPasskey('Use your passkey to confirm this payout.'));
           return;
         }
         done(true);
@@ -64,13 +63,11 @@
           const user = data?.user;
           if (!user) return;
           const pkBtn = dlg.querySelector('#reauthPasskey');
-          const gBtn = dlg.querySelector('#reauthGoogle');
           if (window.cpayPasskey && await window.cpayPasskey.available()) {
             const keys = await window.cpayPasskey.list().catch(() => []);
             pkBtn.hidden = keys.length === 0;
           }
-          gBtn.hidden = !(user.identities || []).some((i) => i && i.provider === 'google');
-          dlg.querySelector('#reauthAlt').hidden = pkBtn.hidden && gBtn.hidden;
+          dlg.querySelector('#reauthAlt').hidden = pkBtn.hidden;
           pkBtn.onclick = async () => {
             if (pkBtn.disabled) return;
             pkBtn.disabled = true; err.hidden = true;
@@ -81,16 +78,6 @@
               if (!(await samePerson(user.id, r.user))) return;
               await finish();
             } finally { pkBtn.disabled = false; }
-          };
-          // Google returns to log in, then the desk; the payout starts again
-          // from there, with a fresh sign-in.
-          gBtn.onclick = async () => {
-            gBtn.disabled = true;
-            const { error } = await sb().auth.signInWithOAuth({
-              provider: 'google',
-              options: { redirectTo: `${location.origin}/login.html?via=google`, queryParams: { prompt: 'select_account' } },
-            });
-            if (error) { gBtn.disabled = false; showErr('Google sign-in is not available right now. Use your password.'); }
           };
         } catch (e) { /* the password stays available */ }
       })();
@@ -130,6 +117,13 @@
     try { first = await fn(); } catch (e) { if (!check(e)) throw e; first = e; }
     if (!check(first)) return first;
     const msg = (first && (first.message || (first.data && first.data.error))) || undefined;
+    // Payout address changes need a passkey session; a password cannot do.
+    const reason = first && (first.reason || (first.data && first.data.reason));
+    const text = String((first && ((first.error && first.error.message) || first.message || (first.data && first.data.error))) || '');
+    if (reason === 'passkey_required' || /Confirm with your passkey to change address/.test(text)) {
+      if (!window.cpayMfa || !(await window.cpayMfa.promptPasskey('Confirm with your passkey to change address'))) return first instanceof Error ? Promise.reject(first) : first;
+      return fn();
+    }
     if (!(await ask(msg))) return first instanceof Error ? Promise.reject(first) : first;
     return fn();
   };

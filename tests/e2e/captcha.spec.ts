@@ -1,8 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
 import { makeUser, makeLink, login, db, uniq, ORIGIN, SITE, PASSWORD, TRON, paymentsFor, readyAddress } from './helpers';
-// @ts-ignore -- plain ESM helper shared with the fake Supabase Auth
-import { totp, b32encode } from '../../e2e/totp.mjs';
-import { randomBytes } from 'node:crypto';
 
 // Supabase Auth CAPTCHA protection (production since 2026-10-15): sign-in,
 // sign-up and reset-email requests without a Turnstile token are refused
@@ -76,25 +73,6 @@ test('a widget error re-enables the button and a retry logs in', async ({ page }
   await expect(page.locator('#submitBtn')).toBeEnabled();
   await expect(page.locator('#submitBtn')).toHaveText('Log in');
   await page.click('#submitBtn');
-  await page.waitForURL(/dashboard\.html/);
-});
-
-test('an account with an authenticator: captcha, then the code, then the desk', async ({ page }) => {
-  const u = await makeUser({ name: 'Captcha MFA' });
-  const secret = b32encode(randomBytes(20)); // fresh per run
-  const c = await db.connect();
-  try {
-    await c.query('begin');
-    await c.query('set local session authorization supabase_auth_admin');
-    await c.query(`insert into auth.mfa_factors(user_id, friendly_name, factor_type, status, secret) values ($1, 'Phone', 'totp', 'verified', $2)`, [u.id, secret]);
-    await c.query('commit');
-  } finally { c.release(); }
-  await captcha(true);
-  await fakeTurnstile(page);
-  await login(page, u);
-  await expect(page.locator('#mfaCode')).toBeVisible();
-  await page.fill('#mfaCode', totp(secret));
-  await page.locator('dialog [data-role="ok"]').click();
   await page.waitForURL(/dashboard\.html/);
 });
 

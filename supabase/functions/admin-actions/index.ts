@@ -116,7 +116,7 @@ const verifyAdminCaller = createAdminVerifier({
 // required and this session has not entered its code (aal1).
 function refuse(auth: { reason?: string }, cors: Record<string, string>) {
     if (auth.reason === "mfa_required") {
-        return json({ error: "Two-step sign-in is required: sign in again and enter your authenticator code.", code: "mfa_required" }, 403, cors);
+        return json({ error: "Sign in again with your passkey, then repeat this.", code: "mfa_required" }, 403, cors);
     }
     return json({ error: "Unauthorized" }, 401, cors);
 }

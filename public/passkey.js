@@ -3,9 +3,8 @@
 //
 // Shown only when the browser supports WebAuthn and the owner has switched
 // passkeys on in Supabase (Authentication → Passkeys; auth-features.js).
-// A passkey replaces the password, not the authenticator code: a passkey
-// sign-in is aal1, so an account with two-step sign-in still enters its code
-// afterwards (mfa.js). The private key stays on the device or in the
+// A passkey sign-in is the strong factor (public.strong_session(), mfa.js):
+// admin work, payouts and address changes accept it. The private key stays on the device or in the
 // password manager; this page only relays the signed challenge to Supabase
 // Auth, and logs or stores nothing.
 (function () {
@@ -37,7 +36,7 @@
     if (code === 'webauthn_challenge_expired' || code === 'webauthn_challenge_not_found') return 'That took too long. Try again.';
     if (code === 'ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED' || code === 'webauthn_credential_exists') return 'This device or password manager already has a passkey for your account.';
     if (code === 'too_many_passkeys') return 'You have the most passkeys allowed. Remove one first.';
-    if (code === 'insufficient_aal') return 'Enter the code from your authenticator app first, then try again.';
+    if (code === 'insufficient_aal') return 'Sign in with your passkey first, then try again.';
     if (code === 'ERROR_INVALID_DOMAIN' || code === 'ERROR_INVALID_RP_ID') return 'Passkeys do not work on this address. Open CPAY at its usual address and try again.';
     return during === 'add' ? 'Could not add the passkey. Try again.' : 'Passkey sign-in did not work. Try again, or use your email and password.';
   }

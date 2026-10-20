@@ -16,10 +16,9 @@ test('the browser client opts in to passkeys, in production and in the E2E stack
 
 test('pages load the Auth settings reader before the scripts that use it', () => {
   const login = pub('login.html');
-  assert.ok(before(login, 'src="auth-features.js"', 'src="oauth.js"'));
+  assert.ok(!login.includes('oauth.js') && !pub('register.html').includes('oauth.js'), 'no Google sign-in script');
   assert.ok(before(login, 'src="auth-features.js"', 'src="passkey.js"'));
   assert.ok(before(login, 'src="turnstile.js"', 'src="passkey.js"'), 'passkey sign-in carries a CAPTCHA token');
-  assert.ok(before(pub('register.html'), 'src="auth-features.js"', 'src="oauth.js"'));
   for (const f of ['dashboard.html', 'admin.html']) {
     const s = pub(f);
     assert.ok(before(s, 'src="passkey.js"', 'src="reauth.js"'), `${f}: passkey.js before reauth.js`);
@@ -36,9 +35,9 @@ function features(settings) {
   return { win, calls: () => calls };
 }
 
-test('auth-features.js reads Google and passkeys from Supabase Auth /settings once', async () => {
+test('auth-features.js reads passkeys from Supabase Auth /settings once; Google is always off', async () => {
   const on = features({ external: { google: true }, passkeys_enabled: true });
-  assert.equal(JSON.stringify(await on.win.cpayAuthFeatures()), JSON.stringify({ google: true, passkeys: true }));
+  assert.equal(JSON.stringify(await on.win.cpayAuthFeatures()), JSON.stringify({ google: false, passkeys: true }));
   await on.win.cpayAuthFeatures();
   assert.equal(on.calls(), 1, 'cached per page');
   const off = features({ external: {} });
@@ -84,14 +83,16 @@ test('the passkey scripts never log, store or send credentials elsewhere', () =>
   assert.doesNotMatch(code(pub('passkey.js')), /fetch\(/, 'only supabase-js talks to Auth');
 });
 
-test('a re-confirm passkey must be the same account, and adding or removing one asks for the code', () => {
+test('a re-confirm passkey must be the same account, and adding a second or removing one needs a passkey', () => {
   const r = pub('reauth.js');
   assert.match(r, /async function samePerson\(beforeId, user\) \{\s*if \(user && user\.id === beforeId\) return true;\s*await sb\(\)\.auth\.signOut\(\);/);
   assert.match(r, /samePerson\(user\.id, r\.user\)\)\) return;\s*await finish\(\);/);
   const s = pub('admin-security.js');
-  // Decided when clicked: ensureAal2 is a no-op without an authenticator.
-  assert.match(s, /if \(!\(await window\.cpayMfa\.ensureAal2\('Enter your authenticator code to add a passkey\.'\)\)\) return;\s*const r = await window\.cpayPasskey\.register\(\)/);
-  assert.match(s, /if \(!\(await window\.cpayMfa\.ensureAal2\('Enter your authenticator code to remove a passkey\.'\)\)\) return;[\s\S]*?cpayPasskey\.remove\(/);
+  assert.match(s, /if \(keys\.length && !\(await confirmStrong\([^)]*\)\)\) return;\s*const r = await window\.cpayPasskey\.register\(\)/);
+  assert.match(s, /if \(adminDesk && count <= 1\) return;\s*if \(!\(await confirmStrong\([\s\S]*?cpayPasskey\.remove\(/);
+  assert.match(s, /if \(adminDesk && keys\.length <= 1\) \{\s*rm\.disabled = true;/, 'an admin keeps the last passkey');
+  // mfa.js: the same account, or sign out.
+  assert.match(pub('mfa.js'), /if \(!r\.user \|\| r\.user\.id !== before\) \{ await sb\(\)\.auth\.signOut\(\);/);
   // A passkey sign-in finishes like a password one: code, then status.
   assert.match(pub('login.html'), /cpayPasskey\.signIn\([\s\S]*?await go\(r\.user\.id\)/);
 });

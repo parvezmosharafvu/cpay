@@ -176,7 +176,7 @@
     const reload = () => renderSecrets();
     if (!r.ok) {
       const msg = r.code === 'aal2_required'
-        ? L('Sign in again with your authenticator code to see this section.', 'এই অংশ দেখতে authenticator কোড দিয়ে আবার সাইন-ইন করুন।') : r.message;
+        ? L('Sign in again with your passkey to see this section.', 'এই অংশ দেখতে পাসকি দিয়ে আবার সাইন-ইন করুন।') : r.message;
       host.replaceChildren(card('ownerSecretsCard', L('Secrets & keys', 'গোপন কী ও টোকেন'), null, node('p', { class: 'err', text: msg })));
       if (cf) cf.replaceChildren();
       return;

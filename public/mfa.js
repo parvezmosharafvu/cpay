@@ -1,14 +1,16 @@
-// Two-step sign-in (TOTP) for the browser. Used by login.html (finish a
-// sign-in at aal2), reauth.js (payout step-up: password, then the code) and
-// the admin Security section (enrol / remove authenticators).
+// Strong sign-in with a passkey (WebAuthn, Supabase Auth). Authenticator
+// apps (TOTP) were retired on 2026-10-21: the second step everywhere is a
+// passkey. Used by app.js and login.html (an account that still has an old
+// authenticator must confirm with its passkey before any desk loads),
+// reauth.js (payout step-up) and the admin Security section.
 //
-// The authenticator secret, the QR code and every code go only between the
-// browser and Supabase Auth. Nothing here logs them, stores them or sends
-// them anywhere else; error messages are deliberately generic.
+// The server applies the same rule (public.strong_session(), step-up.ts):
+// a session counts as strong when its sign-in included a passkey (amr
+// "passkey"), or aal2 while Supabase Auth still issues it. Nothing here logs
+// or stores a credential; the signed challenge goes only to Supabase Auth.
 (function () {
   const sb = () => window.supabaseClient;
-  const GENERIC = 'That code did not work. Check the time on your phone and try the newest code.';
-  const MAX_TRIES = 5;
+  const GENERIC = 'Passkey sign-in did not work. Try again.';
 
   async function level() {
     const { data, error } = await sb().auth.mfa.getAuthenticatorAssuranceLevel();
@@ -16,98 +18,115 @@
     return data; // { currentLevel, nextLevel, currentAuthenticationMethods }
   }
 
-  // True when this session has a verified factor but is still aal1, i.e. a
-  // code is needed before anything that requires aal2.
-  async function needsChallenge() {
-    const l = await level();
-    return l.currentLevel === 'aal1' && l.nextLevel === 'aal2';
+  // The access token's amr list, read from the current session.
+  async function methods() {
+    const { data } = await sb().auth.getSession();
+    const t = data?.session?.access_token || '';
+    try {
+      const p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return { aal: p.aal || '', amr: Array.isArray(p.amr) ? p.amr.map((e) => e && e.method) : [] };
+    } catch (e) { return { aal: '', amr: [] }; }
   }
 
+  async function strong() {
+    const m = await methods();
+    return m.aal === 'aal2' || m.amr.includes('passkey');
+  }
+
+  // True when this account must confirm with a passkey before anything that
+  // needs the strong factor: it has an old verified authenticator (so the
+  // server asks for a strong session) and this session is not strong yet.
+  async function needsChallenge() {
+    const l = await level();
+    if (l.nextLevel !== 'aal2') return false;
+    return !(await strong());
+  }
+
+  // Old authenticators still on the account (shown read-only in Security).
   async function factors() {
     const { data, error } = await sb().auth.mfa.listFactors();
     if (error) throw error;
     return { verified: data.totp || [], all: data.all || [] };
   }
 
-  // Best effort, for the audit log only; never blocks or reveals anything.
-  function noteFailure() {
-    try { Promise.resolve(sb().rpc('record_mfa_challenge_failure')).catch(() => {}); } catch (e) { /* ignore */ }
-  }
-
-  // Ask for a 6-digit code and verify it against the first verified TOTP
-  // factor. Resolves true once the session is aal2, false on cancel or
-  // after MAX_TRIES wrong codes. Shown once per call: callers never retry
-  // automatically, so there is no prompt loop.
-  function promptCode(message) {
+  // Ask for the passkey of the signed-in account. Resolves true once the
+  // session is strong, false on cancel. A passkey for another account signs
+  // this one out (the session would belong to someone else). An account with
+  // no passkey yet (a new admin) can add its first one here, from the
+  // password sign-in it just made, and then signs in with it: otherwise a new
+  // admin could never reach Security to add one. Supabase Auth refuses that
+  // while an old authenticator is on the account and the session is aal1.
+  function promptPasskey(message) {
     return new Promise((resolve) => {
       const dlg = document.createElement('dialog');
       dlg.className = 'card reauth-dialog';
-      dlg.setAttribute('aria-labelledby', 'mfaTitle');
+      dlg.setAttribute('aria-labelledby', 'pkTitle');
       dlg.innerHTML = `<form method="dialog">
-        <h3 id="mfaTitle">Enter your authentication code</h3>
+        <h3 id="pkTitle">Confirm with your passkey</h3>
         <p class="hint" data-role="msg"></p>
-        <div class="field" data-role="pick" hidden><label for="mfaFactor">Authenticator</label>
-          <select id="mfaFactor" data-role="factor"></select></div>
-        <div class="field"><label for="mfaCode">6-digit code</label>
-          <input id="mfaCode" data-role="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></div>
         <p class="hint" data-role="err" role="alert" hidden></p>
+        <div data-role="captcha" class="captcha-box"></div>
         <div class="row">
           <button class="btn ghost" type="button" data-role="cancel">Cancel</button>
-          <button class="btn primary" type="submit" data-role="ok">Continue</button>
+          <button class="btn primary" type="submit" data-role="ok">Use my passkey</button>
         </div></form>`;
       document.body.appendChild(dlg);
       const q = (r) => dlg.querySelector(`[data-role="${r}"]`);
-      q('msg').textContent = message || 'Open your authenticator app and enter the current code for CPAY.';
-      const input = q('code');
+      q('msg').textContent = message || 'Use your fingerprint, face or screen lock to continue.';
       const err = q('err');
-      const pick = q('factor');
-      let tries = 0;
-      // With two authenticators (the recommended setup) the user picks which
-      // one the code comes from; a backup device's code must work too.
-      factors().then(({ verified }) => {
-        if (verified.length < 2) return;
-        for (const f of verified) { const o = document.createElement('option'); o.value = f.id; o.textContent = f.friendly_name || 'Authenticator'; pick.append(o); }
-        q('pick').hidden = false;
-      }).catch(() => {});
-      const done = (ok) => { input.value = ''; dlg.close(); dlg.remove(); resolve(ok); };
+      const done = (ok) => { dlg.close(); dlg.remove(); resolve(ok); };
+      let enrol = false;
+      (async () => {
+        try {
+          if (!window.cpayPasskey || !(await window.cpayPasskey.available())) {
+            err.textContent = 'Passkeys are not available right now. Ask the owner to switch them on.'; err.hidden = false; return;
+          }
+          const keys = await window.cpayPasskey.list();
+          if (!keys.length) {
+            enrol = true;
+            q('msg').textContent = 'This account needs a passkey. Add one now with your fingerprint, face or screen lock; you then sign in with it.';
+            q('ok').textContent = 'Add a passkey and continue';
+            q('ok').dataset.role = 'ok';
+            q('ok').dataset.enrol = '1';
+          }
+        } catch (e) { /* sign-in with an existing passkey stays available */ }
+      })();
       q('cancel').onclick = () => done(false);
       dlg.addEventListener('cancel', (e) => { e.preventDefault(); done(false); });
       dlg.querySelector('form').onsubmit = async (e) => {
         e.preventDefault();
-        const code = input.value.replace(/\s+/g, '');
-        input.value = '';
-        if (!/^\d{6}$/.test(code)) { err.textContent = 'Enter the 6 digits shown in your authenticator app.'; err.hidden = false; return; }
         const ok = q('ok');
-        ok.disabled = true;
-        err.hidden = true;
+        if (!window.cpayPasskey) { err.textContent = 'Passkeys are not available on this page. Reload and try again.'; err.hidden = false; return; }
+        ok.disabled = true; err.hidden = true;
         try {
-          const { verified } = await factors();
-          if (!verified.length) throw new Error('none');
-          const chosen = verified.find((f) => f.id === pick.value) || verified[0];
-          const { error } = await sb().auth.mfa.challengeAndVerify({ factorId: chosen.id, code });
-          if (error) throw error;
+          const { data } = await sb().auth.getUser();
+          const before = data?.user?.id;
+          if (enrol) {
+            const add = await window.cpayPasskey.register();
+            if (add.cancelled) { ok.disabled = false; return; }
+            if (add.error) { err.textContent = add.error; err.hidden = false; ok.disabled = false; return; }
+            enrol = false;
+          }
+          const r = await window.cpayPasskey.signIn({ container: q('captcha') });
+          if (r.cancelled) { ok.disabled = false; return; }
+          if (r.error) { err.textContent = r.error; err.hidden = false; ok.disabled = false; return; }
+          if (!r.user || r.user.id !== before) { await sb().auth.signOut(); location.href = '/login.html'; return; }
           done(true);
         } catch (x) {
-          tries += 1;
-          noteFailure();
-          if (tries >= MAX_TRIES) { done(false); return; }
-          err.textContent = GENERIC;
-          err.hidden = false;
-          ok.disabled = false;
-          input.focus();
+          err.textContent = GENERIC; err.hidden = false; ok.disabled = false;
         }
       };
       dlg.showModal();
-      input.focus();
+      q('ok').focus();
     });
   }
 
-  // Resolve true when the session is (or becomes) good enough: no factor
-  // enrolled, already aal2, or the user enters a valid code now.
-  async function ensureAal2(message) {
+  // Resolve true when the session is (or becomes) strong enough.
+  async function ensureStrong(message) {
     if (!(await needsChallenge())) return true;
-    return promptCode(message);
+    return promptPasskey(message);
   }
 
-  window.cpayMfa = { level, needsChallenge, factors, promptCode, ensureAal2, GENERIC };
+  // Old names kept for callers: the "code" is now the passkey.
+  window.cpayMfa = { level, strong, needsChallenge, factors, promptPasskey, promptCode: promptPasskey, ensureStrong, ensureAal2: ensureStrong, GENERIC };
 })();

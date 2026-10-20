@@ -5,9 +5,9 @@ let payFilter = { status: '', search: '' };
 let wdFilter = { status: '' };
 
 // Saved payout addresses are usable at once after a fresh sign-in when the
-// account has an authenticator, otherwise 24 hours later (20261020060000).
+// change is confirmed with a passkey; without one it is refused (20261021020000).
 // my_payout_book returns usable_after.
-const PAYOUT_WAIT = 'It is used right away if your account has an authenticator, otherwise after 24 hours. You get a notice in your inbox.';
+const PAYOUT_WAIT = 'Confirm with your passkey to change address. It is used right away. You get a notice in your inbox.';
 const USDT_HINT = `One address per network. New payments go here automatically if you have no Lightning address. Saving or changing an address asks you to sign in again. ${PAYOUT_WAIT}`;
 function netLabel(id) {
   return (USDT_NETWORKS.find(([n]) => n === id) || [id, id])[1];
@@ -487,7 +487,7 @@ async function renderProfile() {
   } else if (target) {
     recvNow.append('Payments go to: ', node('strong', '', where), ' ', node('code', '', target));
   } else if (wallets.length) {
-    recvNow.textContent = 'Your saved address is not ready yet. Payments start once it is (at most 24 hours).';
+    recvNow.textContent = 'Your saved address is not ready yet. Payments start once it is.';
   } else {
     recvNow.className = 'err';
     recvNow.textContent = 'No address yet. Save a USDT or Lightning address to start receiving payments.';
@@ -512,7 +512,7 @@ async function renderProfile() {
       p_network: document.getElementById('usdtNet').value,
       p_address: document.getElementById('usdtAddr').value.trim(),
     });
-    const needsReauth = (r) => /^reauth_required/.test(String(r?.error?.message || ''));
+    const needsReauth = (r) => /^reauth_required|Confirm with your passkey to change address/.test(String(r?.error?.message || ''));
     const { error: e } = window.cpayWithStepUp ? await window.cpayWithStepUp(call, needsReauth) : await call();
     if (e) return toast(String(e.message).replace(/^reauth_required:\s*/, ''));
     toast('USDT address saved', true);

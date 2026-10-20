@@ -1,8 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { makeUser, login, db, uniq, ORIGIN, SITE, PASSWORD, expectCleanCopy } from './helpers';
-// @ts-ignore -- plain ESM helper shared with the fake Supabase Auth
-import { totp, b32encode } from '../../e2e/totp.mjs';
-import { randomBytes } from 'node:crypto';
 
 const SENT = /^If an account uses that email, a reset link is on its way/;
 const mailFor = async (email: string) => (await fetch(`${ORIGIN}/__e2e/mailbox?to=${encodeURIComponent(email)}`)).json();
@@ -153,40 +150,6 @@ test('reset rejects short and mismatched passwords before calling the server', a
   await page.click('#saveBtn');
   await expect(page.locator('#errorMsg')).toHaveText(/do not match/);
   await expect(page.locator('#formState')).toBeVisible();
-});
-
-test('an account with an authenticator must enter its code to reset the password', async ({ page, browser }) => {
-  const u = await makeUser({ name: 'Reset With MFA' });
-  const secret = b32encode(randomBytes(20)); // fresh per run
-  // Written as Supabase Auth's own role, as the stand-in does on enrolment.
-  const c = await db.connect();
-  try {
-    await c.query('begin');
-    await c.query('set local session authorization supabase_auth_admin');
-    await c.query(`insert into auth.mfa_factors(user_id, friendly_name, factor_type, status, secret) values ($1, 'Phone', 'totp', 'verified', $2)`, [u.id, secret]);
-    await c.query('commit');
-  } finally { c.release(); }
-  await page.goto('/login.html');
-  await page.fill('#email', u.email);
-  await page.click('#forgotBtn');
-  await expect(page.locator('#okMsg')).toHaveText(SENT);
-  const [mail] = await mailFor(u.email);
-  await page.goto(mail.link);
-  await page.fill('#password', 'mfa-reset-pass-1');
-  await page.fill('#password2', 'mfa-reset-pass-1');
-  await page.click('#saveBtn');
-  // Cancelling the code leaves the password unchanged.
-  await expect(page.locator('#mfaCode')).toBeVisible();
-  await page.click('[data-role="cancel"]');
-  await expect(page.locator('#errorMsg')).toHaveText(/Password not changed/);
-  await page.click('#saveBtn');
-  await expect(page.locator('#mfaCode')).toBeVisible();
-  await page.fill('#mfaCode', totp(secret));
-  await page.click('[data-role="ok"]');
-  await expect(page.locator('#doneState')).toBeVisible();
-  const fresh = await (await browser.newContext()).newPage();
-  await login(fresh, { ...u, password: 'mfa-reset-pass-1' });
-  await expect(fresh.locator('#mfaCode')).toBeVisible();
 });
 
 test('branded-template link: nothing is used until Continue; a second use is refused', async ({ page }) => {

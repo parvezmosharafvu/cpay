@@ -1,7 +1,7 @@
 // What Supabase Auth has switched on for this project, read from its public
-// /settings endpoint: Google sign-in and passkeys. Pages show those buttons
-// only when the owner has enabled them in the Supabase dashboard, so turning
-// one on or off needs no code change. One request per page load.
+// /settings endpoint: passkeys. Pages show the passkey button only when the
+// owner has enabled passkeys in the Supabase dashboard. Google sign-in was
+// removed on 2026-10-21 and is always reported off. One request per page load.
 (function () {
   let cached = null;
   window.cpayAuthFeatures = function () {
@@ -11,7 +11,7 @@
         const r = await fetch(`${window.SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: window.SUPABASE_ANON_KEY } });
         if (!r.ok) return { google: false, passkeys: false };
         const s = await r.json();
-        return { google: s?.external?.google === true, passkeys: s?.passkeys_enabled === true };
+        return { google: false, passkeys: s?.passkeys_enabled === true };
       } catch (e) {
         return { google: false, passkeys: false };
       }

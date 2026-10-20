@@ -21,9 +21,9 @@ insert into auth.users(id, email) values
   ('7c000000-0000-0000-0000-0000000000a1', 'cool-admin@test.invalid');
 update profiles set account_status = 'active' where id in ('7c000000-0000-0000-0000-0000000000f1', '7c000000-0000-0000-0000-0000000000a1');
 update profiles set role = 'admin' where id = '7c000000-0000-0000-0000-0000000000a1';
-create function pg_temp.claims(p_age_secs int, p_aal text default 'aal1') returns void language sql as $$
+create function pg_temp.claims(p_age_secs int, p_aal text default 'aal1', p_method text default 'password') returns void language sql as $$
   select set_config('request.jwt.claims', jsonb_build_object('role', 'authenticated', 'aal', p_aal,
-    'amr', jsonb_build_array(jsonb_build_object('method', 'password', 'timestamp', extract(epoch from now())::bigint - p_age_secs)))::text, true) $$;
+    'amr', jsonb_build_array(jsonb_build_object('method', p_method, 'timestamp', extract(epoch from now())::bigint - p_age_secs)))::text, true) $$;
 
 grant select, insert, update, delete on public.usdt_wallets to authenticated;
 set local role authenticated;
@@ -47,32 +47,31 @@ do $$ begin
   raise exception 'recovery-link session saved an address';
 exception when raise_exception then if sqlerrm not like 'reauth_required:%' then raise; end if; end $$;
 
--- 2. Fresh sign-in, no authenticator: usable in 24 hours (20261020060000);
---    a client-supplied usable_after is ignored.
+-- 2. Fresh password sign-in: refused (owner decision 2026-10-21, no 24-hour
+--    wait any more). Fresh passkey sign-in: used at once; a client-supplied
+--    usable_after is ignored.
 select pg_temp.claims(30);
+do $$ begin
+  perform set_my_usdt_wallet('tron', 'TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL');
+  raise exception 'password session saved an address';
+exception when raise_exception then if sqlerrm not like 'Confirm with your passkey to change address%' then raise; end if; end $$;
+select pg_temp.claims(30, 'aal1', 'passkey');
 insert into usdt_wallets(user_id, network, address, usable_after)
 values ('7c000000-0000-0000-0000-0000000000f1', 'tron', 'TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL', now() + interval '30 days');
 do $$ begin
-  if (select usable_after from usdt_wallets where network = 'tron') not between now() + interval '23 hours' and now() + interval '25 hours' then
-    raise exception 'client-supplied usable_after accepted, or no 24 h wait without an authenticator'; end if;
+  if (select usable_after from usdt_wallets where network = 'tron') > now() then
+    raise exception 'client-supplied usable_after accepted, or a passkey change waits'; end if;
 end $$;
 select set_my_usdt_wallet('ethereum', '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063');
 do $$ begin
-  if (select count(*) from my_usdt_wallet_status() where ready) <> 0 then raise exception 'addresses ready at once without an authenticator'; end if;
+  if (select count(*) from my_usdt_wallet_status() where ready) <> 2 then raise exception 'addresses not ready at once with a passkey'; end if;
 end $$;
--- Pass the wait (test only: rewrite the rows with the trigger off).
 reset role;
 do $$ begin
-  if (select count(*) from support_messages where user_id = '7c000000-0000-0000-0000-0000000000f1' and message like '%24 hours, because this account has no authenticator%') <> 2 then
-    raise exception 'notice does not say when the address is used'; end if;
+  if (select count(*) from support_messages where user_id = '7c000000-0000-0000-0000-0000000000f1' and message like '%Payments are sent there from now on.%') <> 2 then
+    raise exception 'notice does not say the address is used now'; end if;
 end $$;
-alter table usdt_wallets disable trigger usdt_wallets_cooldown;
-update usdt_wallets set usable_after = now() - interval '1 minute' where user_id = '7c000000-0000-0000-0000-0000000000f1';
-alter table usdt_wallets enable trigger usdt_wallets_cooldown;
 set local role authenticated;
-do $$ begin
-  if (select count(*) from my_usdt_wallet_status() where ready) <> 2 then raise exception 'addresses not ready after the wait'; end if;
-end $$;
 do $$ begin
   perform withdraw_destination_status('7c000000-0000-0000-0000-0000000000f1', 'x');
   raise exception 'authenticated could execute withdraw_destination_status';
@@ -83,6 +82,7 @@ end $$;
 reset role;
 insert into auth.mfa_factors(user_id, status) values ('7c000000-0000-0000-0000-0000000000f1', 'verified');
 set local role authenticated;
+select pg_temp.claims(30);
 do $$ begin
   update usdt_wallets set address = 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8' where network = 'tron';
   raise exception 'aal1 changed an address on an MFA account';

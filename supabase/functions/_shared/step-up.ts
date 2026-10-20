@@ -1,10 +1,12 @@
 // Step-up for money-moving confirms: the caller must have signed in with a
-// first factor CPAY offers (password, passkey, Google) within the last few
+// first factor CPAY offers (password or passkey) within the last few
 // minutes, not merely hold a session that keeps refreshing. Supabase puts
 // each sign-in method and its time in the access token's "amr" claim, which
 // survives refreshes unchanged, so a stolen refresh token or a laptop left
 // signed in for a day cannot confirm a payout without signing in again.
-// When the account has a verified MFA factor, the token must also be aal2.
+// When the account has a verified MFA factor (an old authenticator), the
+// session must also be strong: signed in with a passkey (or aal2 while
+// Supabase Auth still issues it during the switch-over, 20261021020000).
 //
 // Email-link sessions never count: a password-reset link ("recovery"), a
 // sign-up confirmation, a magic link, a one-time email code or an invite
@@ -20,10 +22,23 @@
 // (rollback switch).
 
 export const DEFAULT_STEP_UP_SECONDS = 600;
-// "passkey" is a passkey sign-in (aal1: an account with an authenticator
-// still needs its code, checked below). "oauth" is Google. "sso/saml" is
-// kept for enterprise SSO, which CPAY does not offer today.
-export const FRESH_SIGN_IN_METHODS: ReadonlySet<string> = new Set(["password", "passkey", "oauth", "sso/saml"]);
+// "passkey" is a passkey sign-in. Google sign-in ("oauth") was switched off
+// on 2026-10-21 and no longer counts. "sso/saml" is kept for enterprise SSO,
+// which CPAY does not offer today.
+export const FRESH_SIGN_IN_METHODS: ReadonlySet<string> = new Set(["password", "passkey", "sso/saml"]);
+
+// A strong session: aal2, or a sign-in that included a passkey (amr
+// "passkey"). Same rule as the database's public.strong_session().
+export function claimsAreStrong(claims: Record<string, unknown> | null): boolean {
+  if (!claims) return false;
+  if (claims.aal === "aal2") return true;
+  const amr = Array.isArray(claims.amr) ? claims.amr as Array<{ method?: unknown }> : [];
+  return amr.some((e) => e?.method === "passkey");
+}
+
+export function sessionIsStrong(token: string | null): boolean {
+  return claimsAreStrong(decodeJwtPayload(String(token ?? "").replace(/^Bearer\s+/i, "")));
+}
 
 export function stepUpWindow(raw: string | undefined | null): number {
   const s = String(raw ?? "").trim();
@@ -44,7 +59,7 @@ export function decodeJwtPayload(token: string): Record<string, unknown> | null 
   }
 }
 
-export type StepUp = { ok: true } | { ok: false; reason: "stale_sign_in" | "mfa_required" | "no_token" };
+export type StepUp = { ok: true } | { ok: false; reason: "stale_sign_in" | "mfa_required" | "no_token" | "passkey_required" };
 
 // user: what auth.getUser() returned (its "factors" list, when present).
 export function checkStepUp(
@@ -58,7 +73,7 @@ export function checkStepUp(
   const claims = decodeJwtPayload(token);
   if (!claims) return { ok: false, reason: "no_token" };
   const hasMfa = Array.isArray(user?.factors) && user!.factors!.some((f) => f?.status === "verified");
-  if (hasMfa && claims.aal !== "aal2") return { ok: false, reason: "mfa_required" };
+  if (hasMfa && !claimsAreStrong(claims)) return { ok: false, reason: "mfa_required" };
   const amr = Array.isArray(claims.amr) ? claims.amr as Array<{ method?: unknown; timestamp?: unknown }> : [];
   let latest = 0;
   for (const e of amr) {
@@ -69,4 +84,19 @@ export function checkStepUp(
   return { ok: true };
 }
 
-export const STEP_UP_MESSAGE = "For your security, enter your password again to confirm this payout.";
+// Payout address changes (owner decision 2026-10-21): a fresh sign-in AND a
+// passkey session, always. No passkey session: refused (no 24-hour wait).
+export function checkPasskeyStepUp(
+  token: string | null,
+  user: { factors?: Array<{ status?: string }> | null } | null,
+  maxAgeSeconds: number,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): StepUp {
+  if (!token) return { ok: false, reason: "no_token" };
+  if (!sessionIsStrong(token)) return { ok: false, reason: "passkey_required" };
+  return checkStepUp(token, user, maxAgeSeconds > 0 ? maxAgeSeconds : DEFAULT_STEP_UP_SECONDS, nowSeconds);
+}
+
+export const PASSKEY_ADDRESS_MESSAGE = "Confirm with your passkey to change address";
+
+export const STEP_UP_MESSAGE = "For your security, sign in again with your passkey or password to confirm this payout.";

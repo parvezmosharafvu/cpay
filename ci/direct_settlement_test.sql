@@ -74,7 +74,7 @@ do $$ begin
   perform admin_set_feature_toggle('direct_settlement_enabled', true);
   raise exception 'switch turned on without aal2';
 exception when raise_exception then
-  if sqlerrm not like 'Enter your authenticator code first%' then raise; end if;
+  if sqlerrm not like 'Sign in again with your passkey first%' then raise; end if;
 end $$;
 select admin_set_feature_toggle('direct_settlement_enabled', false); -- OFF never needs it
 select set_config('request.jwt.claims', '{"aal":"aal2"}', true);

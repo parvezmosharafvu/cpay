@@ -40,7 +40,7 @@ export async function makeLink(userId: string, { slug = uniq('pay'), name = 'Stu
   return slug;
 }
 
-/** A saved payout address already past the 24 h cooldown (test DB only). */
+/** A saved payout address, ready to use (test DB only). */
 export async function readyAddress(userId: string, network = 'tron', address = TRON) {
   await db.query(`insert into usdt_wallets(user_id, network, address) values ($1, $2, $3)
                   on conflict (user_id, network) do update set address = excluded.address`, [userId, network, address]);
@@ -74,4 +74,23 @@ export async function paymentsFor(userId: string) {
 export async function expectCleanCopy(page: Page) {
   const text = (await page.locator('body').innerText()).toLowerCase();
   expect(text).not.toMatch(/breez|bkash|nagad|binance|bank transfer/);
+}
+
+/** Passkeys on in the stand-in Auth, plus Chromium's virtual authenticator. */
+export async function withPasskeys(page: Page) {
+  await fetch(`${ORIGIN}/__e2e/passkey?on=1`, { method: 'POST' });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('WebAuthn.enable');
+  const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
+    options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
+  });
+  return { cdp, id: authenticatorId };
+}
+
+/** Admin sign-in since 20261021020000: password, then the passkey (added on first sign-in). */
+export async function loginAdmin(page: Page, u: User) {
+  await withPasskeys(page);
+  await login(page, u);
+  await page.locator('dialog [data-role="ok"]').click();
+  await page.waitForURL(/admin\.html/);
 }

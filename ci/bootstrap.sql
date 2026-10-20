@@ -64,6 +64,15 @@ create table if not exists auth.mfa_factors (
 );
 grant usage on schema auth to supabase_auth_admin;
 grant select, insert, update, delete on auth.mfa_factors to supabase_auth_admin;
+-- Supabase Auth's passkey table (only the columns CPAY touches; 20261021020000).
+create table if not exists auth.webauthn_credentials (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  friendly_name text,
+  created_at timestamptz default now(),
+  last_used_at timestamptz
+);
+grant select, insert, update, delete on auth.webauthn_credentials to supabase_auth_admin;
 create or replace function auth.role() returns text
   language sql stable as $fn$ select 'authenticated'::text $fn$;
 create or replace function auth.jwt() returns jsonb

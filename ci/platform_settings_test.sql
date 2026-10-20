@@ -53,7 +53,7 @@ select set_config('request.jwt.claims', '{"aal":"aal1"}', true);
 do $$ begin
   perform admin_set_platform_setting('fee_grace_days', '3');
   raise exception 'aal1 admin wrote a setting';
-exception when raise_exception then if sqlerrm not like 'Enter your authenticator code first%' then raise; end if; end $$;
+exception when raise_exception then if sqlerrm not like 'Sign in again with your passkey first%' then raise; end if; end $$;
 select set_config('request.jwt.claims', '{"aal":"aal2"}', true);
 do $$ begin
   insert into platform_settings(key, value) values ('fee_grace_days', '3');

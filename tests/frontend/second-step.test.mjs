@@ -23,7 +23,7 @@ function load({ mfa, profile = { id: 'u1', role: 'admin', account_status: 'activ
 }
 
 test('a session that owes its code and does not enter it gets no profile and is signed out', async () => {
-  const { ctx, calls, location } = load({ mfa: { async ensureAal2() { return false; } } });
+  const { ctx, calls, location } = load({ mfa: { async ensureStrong() { return false; } } });
   const p = await vm.runInContext('loadProfile()', ctx);
   assert.equal(p, null);
   assert.equal(calls.profileReads, 0, 'no desk data is read before the code');
@@ -32,13 +32,13 @@ test('a session that owes its code and does not enter it gets no profile and is 
 });
 
 test('an MFA check that errors fails closed', async () => {
-  const { ctx, calls } = load({ mfa: { async ensureAal2() { throw new Error('network'); } } });
+  const { ctx, calls } = load({ mfa: { async ensureStrong() { throw new Error('network'); } } });
   assert.equal(await vm.runInContext('loadProfile()', ctx), null);
   assert.equal(calls.signOut, 1);
 });
 
-test('a session at aal2 (or with no factor) loads the profile as before', async () => {
-  const { ctx, calls } = load({ mfa: { async ensureAal2() { return true; } } });
+test('an admin with a passkey session (or a user with no old factor) loads the profile as before', async () => {
+  const { ctx, calls } = load({ mfa: { async ensureStrong() { return true; }, async strong() { return true; } } });
   const p = await vm.runInContext('loadProfile()', ctx);
   assert.equal(p.role, 'admin');
   assert.equal(calls.signOut, 0);
@@ -47,5 +47,22 @@ test('a session at aal2 (or with no factor) loads the profile as before', async 
 test('pages without mfa.js are unchanged', async () => {
   const { ctx, calls } = load({});
   assert.equal((await vm.runInContext('loadProfile()', ctx)).id, 'u1');
+  assert.equal(calls.signOut, 0);
+});
+
+test('an admin signed in with only a password must confirm a passkey, or is signed out', async () => {
+  let prompted = 0;
+  const { ctx, calls, location } = load({ mfa: { async ensureStrong() { return true; }, async strong() { return false; }, async promptPasskey() { prompted++; return false; } } });
+  assert.equal(await vm.runInContext('loadProfile()', ctx), null);
+  assert.equal(prompted, 1);
+  assert.equal(calls.signOut, 1);
+  assert.equal(location.href, 'login.html');
+});
+
+test('a Freelancer with no old factor is not asked for a passkey to open the desk', async () => {
+  let prompted = 0;
+  const { ctx, calls } = load({ profile: { id: 'u1', role: 'creator', account_status: 'active' }, mfa: { async ensureStrong() { return true; }, async strong() { return false; }, async promptPasskey() { prompted++; return false; } } });
+  assert.equal((await vm.runInContext('loadProfile()', ctx)).role, 'creator');
+  assert.equal(prompted, 0);
   assert.equal(calls.signOut, 0);
 });

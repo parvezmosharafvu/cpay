@@ -17,7 +17,7 @@
 <link rel="stylesheet" href="a11y.css">
 <script src="auth-link.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
-<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="turnstile.js"></script><script src="mfa.js"></script>
+<script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="turnstile.js"></script><script src="auth-features.js"></script><script src="passkey.js"></script><script src="mfa.js"></script>
 </head>
 <body class="auth split">
   <a class="skip-link" href="#resetCard">Skip to form</a>
@@ -133,7 +133,7 @@ function saveError(error){
   const code = error?.code || error?.error_code || '';
   if (code === 'weak_password') return 'That password is too weak. Use a longer one, ideally a phrase of several words.';
   if (code === 'same_password') return 'Choose a password different from your old one.';
-  if (code === 'insufficient_aal') return 'Enter the code from your authenticator app first, then save again.';
+  if (code === 'insufficient_aal') return 'Confirm with your passkey first, then save again.';
   if (code === 'session_not_found' || code === 'session_expired' || error?.status === 401 || error?.status === 403) return 'session';
   if (error?.name === 'AuthRetryableFetchError') return 'Could not reach the server. Check your connection and try again.';
   return 'Could not save the new password. Try again, or request a new link.';
@@ -204,15 +204,15 @@ byId('saveBtn').onclick = async () => {
   if (btn.disabled) return;
   btn.disabled = true; btn.textContent = 'Saving…';
   const restore = () => { btn.disabled = false; btn.textContent = 'Save password'; };
-  // An account with an authenticator must reach aal2 before Supabase Auth
-  // accepts a new password; the reset link alone is not enough.
+  // An account that still has an old authenticator confirms with its
+  // passkey first; the reset link alone is not enough.
   try {
-    if (window.cpayMfa && !(await window.cpayMfa.ensureAal2('Enter the 6-digit code from your authenticator app to set a new password.'))) {
-      showErr('Password not changed: the authentication code was not confirmed.');
+    if (window.cpayMfa && !(await window.cpayMfa.ensureStrong('Use your passkey to set a new password.'))) {
+      showErr('Password not changed: your passkey was not confirmed.');
       restore(); return;
     }
   } catch (e) {
-    showErr('Could not check two-step sign-in. Reload the page and try again.');
+    showErr('Could not check your passkey. Reload the page and try again.');
     restore(); return;
   }
   let error = null;

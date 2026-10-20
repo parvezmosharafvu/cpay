@@ -95,6 +95,7 @@ headers: { "Content-Type": "application/json", ...cors },
 // Lightning address or a Lightning invoice) since 20261021010000.
 // request_withdrawal() in SQL also raises for any method.
 const LIGHTNING_ROUTE_ID = "lightning:btc";
+const LIGHTNING_ROUTE = { id: LIGHTNING_ROUTE_ID, asset: "BTC", chain: "lightning", family: "lightning", minUsd: 1, maxUsd: null };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Calls the payment service, which holds the platform wallet.
@@ -205,6 +206,9 @@ Deno.serve(async (req) => {
       if (action === "routes") {
         const { status, payload } = await paymentService("/withdraw/routes", { method: "GET" }, 15000);
         const routes = Array.isArray(payload.routes) ? payload.routes.map(publicRoute) : [];
+        // Manual Lightning withdrawal (20261021010000): always offered next
+        // to the swap routes; the wallet function quotes it.
+        if (status === 200) routes.push(LIGHTNING_ROUTE);
         const meta = payload.stale === true ? { stale: true, cacheAgeSec: Number(payload.cacheAgeSec) || 0 } : {};
         return json(status === 200 ? { routes, ...meta } : { error: "Could not load networks" }, status === 200 ? 200 : 502, cors);
       }

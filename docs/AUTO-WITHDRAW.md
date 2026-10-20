@@ -43,7 +43,8 @@ Same path as the USDT withdrawal: `user-withdraw` (`routes` / `quote` / `confirm
 → the wallet function's `/withdraw/*` → `reserve_*` in SQL → send → `finalize_stablecoin_withdrawal()`.
 
 - **USDT:** unchanged: saved address only, $5 minimum, network limits from the swap route.
-- **Lightning (new):** route `lightning:btc`. Destination is the saved, ready Lightning address
+- **Lightning (new):** route `lightning:btc`, listed by `user-withdraw` next to the swap routes
+  (the wallet's cached route list is unchanged). Destination is the saved, ready Lightning address
   (`lightning_withdraw_destination_ok`) or a Lightning invoice with an amount. $1 minimum. The
   platform wallet pays the routing fee, refused above 1% of the send (at least 10 sats). The
   wallet's own balance is checked before quoting.
@@ -59,8 +60,9 @@ Same path as the USDT withdrawal: `user-withdraw` (`routes` / `quote` / `confirm
    Safe with the current site and functions: every existing function keeps its signature, and
    `my_receive_settings()` only gains fields.
 2. Deploy the `user-withdraw` Edge Function.
-3. Deploy the wallet Edge Function with the new `core/` (Lightning withdrawals). Until then the
-   Lightning option is simply not listed; USDT withdrawals work as before.
+3. Deploy the wallet Edge Function with the new `core/` (Lightning withdrawals). Until then a
+   Lightning quote is refused ("That coin and network is not available right now"); USDT
+   withdrawals work as before.
 4. Deploy the site (`public/`).
 
 If the site goes out before the migration, the admin Auto withdraw buttons fail with "function not

@@ -345,8 +345,7 @@ export function createApp({
 
   async function withdrawRoute(method, path, readBody) {
     if (method === 'GET' && path === '/withdraw/routes') {
-      // Stablecoin routes from the swap provider, plus manual Lightning.
-      return [200, { routes: [...await withdrawals.listRoutes(), withdrawals.lightningRoute], cache: withdrawals.routeCacheInfo() }];
+      return [200, { routes: await withdrawals.listRoutes(), cache: withdrawals.routeCacheInfo() }];
     }
     if (method !== 'POST' || (path !== '/withdraw/quote' && path !== '/withdraw/confirm')) return [404, { error: 'not found' }];
     const body = await readBody();

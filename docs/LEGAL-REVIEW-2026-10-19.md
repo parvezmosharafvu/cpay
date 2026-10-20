@@ -43,5 +43,15 @@ with bracketed labels by design.
 The pages no longer claim CPAY never receives funds. They now say: depending on the account set-up,
 payments either go directly to the user's wallet, or CPAY briefly receives them, deducts the disclosed
 fee and immediately forwards the rest (docs/INSTANT-FORWARD.md); CPAY keeps no balances; unforwarded
-amounts are owed to the user. **Counsel should confirm** whether brief receipt-and-forward needs a
+amounts are owed to the user.
+
+## Update 2026-10-20 (second pass): wording corrections
+
+See the Draft PR from `grok/legal-review`. Not legal advice. Avoid "non-custodial", "never holds" and
+"keeps no balances" in public text: in instant-forward mode CPAY's pooled wallet receives every payment,
+forwards can be held as `owed` (`no_address`, `below_minimum`, `over_limit`; migration
+20261020080000), and old balances remain. `payment_mode` and `instant_forward_no_address` default to
+`balance` in code; the live values are platform settings and must be checked before publishing.
+`docs/LEGAL-REVIEW-BRIEF.md` still describes the CPAY balance as live and is outdated on that point.
+Retention periods are not enforced by automatic deletion (only 90-day webhook pruning exists). **Counsel should confirm** whether brief receipt-and-forward needs a
 licence or registration where CPAY operates.

@@ -27,7 +27,7 @@
 <h1>Refund and Dispute Policy</h1>
 <p><em>Last updated: <span data-legal="legal_effective_date">[Effective date]</span>. CPAY is operated by <span data-legal="legal_entity_name">[Legal entity name]</span>, <span data-legal="legal_address">[Registered address]</span>.</em></p>
 <h2>How payments reach the merchant</h2>
-<p>When you pay through a CPAY link, your payment goes to the merchant: either directly to the merchant's own wallet, or briefly through CPAY, which deducts its disclosed fee and forwards the rest to the merchant's wallet or adds it to the merchant's CPAY balance. Lightning payments cannot be reversed, so refunds are made by the merchant.</p>
+<p>When you pay through a CPAY link, your payment goes to the merchant: either directly to the merchant's own wallet, or briefly through CPAY, which deducts its disclosed fee and forwards the rest to the payout address the merchant saved (on some older accounts, it may instead be recorded to a CPAY balance). Lightning payments cannot be reversed, so refunds are made by the merchant.</p>
 <h2>Bitcoin and Lightning payments are final</h2>
 <p>Once a Lightning payment completes it cannot be reversed or charged back by CPAY, by the payer's wallet or by any network. Check the amount and the merchant name on the payment page before you pay.</p>
 <h2>Asking for a refund</h2>
@@ -39,11 +39,11 @@
 <h2>Invoice problems</h2>
 <ul>
 <li><strong>Expired invoice:</strong> if an invoice expires before it is paid, no money moves. Ask for a new link.</li>
-<li><strong>Paid but the page still waits:</strong> CPAY keeps checking with the merchant's wallet for several days and updates the receipt when proof arrives. Your own wallet's history shows whether you paid. Report it if it is not resolved.</li>
+<li><strong>Paid but the page still waits:</strong> CPAY keeps checking with the wallet that issued the invoice (the merchant's wallet, or CPAY's platform wallet for forwarded payments) for several days and updates the receipt when proof arrives. Your own wallet's history shows whether you paid. Report it if it is not resolved.</li>
 <li><strong>Paid twice or overpaid:</strong> each invoice is for an exact amount. If you paid two invoices by mistake, ask the merchant to refund one; CPAY cannot.</li>
 </ul>
 <h2>Merchants</h2>
-<p>Merchants should publish their own refund terms to customers and handle refund requests promptly from their own wallets. CPAY fees, where they apply, are not refundable once the billing period has started, unless the problem was caused by CPAY.</p>
+<p>Merchants should publish their own refund terms to customers and handle refund requests promptly from their own wallets. The CPAY fee is deducted from each forwarded payment. If a merchant refunds a payer, the CPAY fee on the original payment is not returned, unless the problem was caused by CPAY. A forward that is delayed or held is not a refund: the amount stays owed to the merchant.</p>
 <h2>Recorded CPAY balances</h2>
 <p>For accounts that have a balance recorded by CPAY, withdrawals sent to the address saved on the account cannot be recalled. A withdrawal that fails before it is sent returns to that balance.</p>
 <p><a href="/">Back to CPAY</a></p>

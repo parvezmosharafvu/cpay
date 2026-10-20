@@ -1,5 +1,8 @@
 # CPAY implementation plan (post Chat 1)
 
+> **Historical document.** It describes a superseded design. The current system is in
+> [SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md) and [../AGENTS.md](../AGENTS.md); where they disagree, they win.
+
 **Baseline:** `53bee25` · **Chat 1 branch:** `fix/security/audit-chat1` · **Chat 2 branch:** `feature/ui/design-system-chat2`  
 Follow-on chats should start from merged main after prior PRs land (or from the prior tip if merge is blocked).
 

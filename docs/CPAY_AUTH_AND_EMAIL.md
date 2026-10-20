@@ -129,7 +129,14 @@ Owner setup, once:
 4. Relying Party Origins: `https://pay-cashapp.buzz`.
 5. Save. The buttons appear on the site at the next page load; no deploy.
 
-## Two-step sign-in (TOTP)
+## Two-step sign-in (TOTP) — retired
+
+> **Retired 2026-10-21 (20261021020000).** New authenticator enrolment is off and
+> Google sign-in is removed. Sign-in is email + password (verified email) or a
+> passkey; step-up uses a passkey (`strong_session()`). Codes from authenticators
+> enrolled earlier are still accepted only during the switch-over. The text below
+> is kept for history.
+
 
 - **Who**: admins (Admin → Security) and Freelancers (desk → Security). Enrol
   with any authenticator app; the QR code and key are shown once and removed

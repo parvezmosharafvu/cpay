@@ -1,5 +1,8 @@
 # Ops drift, October 2026: Telegram 503s, admin-wallet 404s, orphan Edge Functions
 
+> **Historical document.** It describes a superseded design. The current system is in
+> [SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md) and [../AGENTS.md](../AGENTS.md); where they disagree, they win.
+
 Status: findings and plans only. **This PR changes no production state.** No secret
 was set, no function deleted or deployed, no SQL write. All evidence below comes from
 read-only queries (catalog, `cron.job`, aggregate `SELECT`s with no message content,

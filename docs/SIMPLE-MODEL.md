@@ -1,5 +1,8 @@
 # Simple CPAY model
 
+> **Historical document.** It describes a superseded design. The current system is in
+> [SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md) and [../AGENTS.md](../AGENTS.md); where they disagree, they win.
+
 Receive stays Lightning: the payer scans a standard Lightning invoice (BOLT11)
 from a wallet that supports it. Cash App is tested; not every wallet can pay
 every invoice.

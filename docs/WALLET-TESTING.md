@@ -108,7 +108,7 @@ vendor and the `ln.pay-cashapp.buzz` DNS record exists
    name**. Pay it at most $1 from an outside wallet; the balance rises.
 2. **Use for CPAY direct payments**: the desk opens with the address filled
    in. **Check address** (CPAY confirms the provider supports payment
-   proofs), **Save address** (fresh sign-in). It is used 24 hours later.
+   proofs), **Save address** (passkey session). It is usable at once.
 3. After the wait, switch one payment link to "Pay to my wallet" and pay it
    ($1–$5, NON-CUSTODIAL-ARCHITECTURE.md §9). The payment arrives in the
    wallet; the CPAY balance does not change.

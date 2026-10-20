@@ -1,5 +1,8 @@
 # CPAY: test results (2026-10-14)
 
+> **Historical document.** It describes a superseded design. The current system is in
+> [SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md) and [../AGENTS.md](../AGENTS.md); where they disagree, they win.
+
 No automated test sends real money. Mainnet payments and payouts were
 **not** run; see [CPAY_LIVE_TEST_RUNBOOK.md](CPAY_LIVE_TEST_RUNBOOK.md).
 

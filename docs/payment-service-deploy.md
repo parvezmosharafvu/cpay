@@ -1,5 +1,8 @@
 # Deploying the payment service
 
+> **Historical document.** It describes a superseded design. The current system is in
+> [SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md) and [../AGENTS.md](../AGENTS.md); where they disagree, they win.
+
 `payment-service/` is one long-running Node 22 process. It holds the cpay
 platform wallet, so it needs four things from any host:
 

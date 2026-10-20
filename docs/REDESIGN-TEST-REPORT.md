@@ -1,5 +1,8 @@
 # Redesign test report (2026-10-17)
 
+> **Historical document.** It describes a superseded design. The current system is in
+> [SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md) and [../AGENTS.md](../AGENTS.md); where they disagree, they win.
+
 What was run for the design system v2 change ([DESIGN-SYSTEM.md](DESIGN-SYSTEM.md)), what passed, and what
 still needs a person. Everything automated ran against a **disposable local stack** ([E2E.md](E2E.md)): a
 local Postgres with every migration, PostgREST with row-level security, the real `create-invoice` and

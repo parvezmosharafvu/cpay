@@ -15,6 +15,8 @@ Admin panel-এ **সিস্টেম গাইড** বাটনে এই �
 5. [API আর Edge Function](#apis)
 6. [Deploy-এর ক্রম আর প্রতিদিনের check](#deploy)
 7. [সাধারণ সমস্যা আর সমাধান](#problems)
+8. [সাম্প্রতিক আপডেট](#updates)
+9. [এখন কী কী setting করতে হবে](#todo)
 
 <a id="accounts"></a>
 ## ১. কোন কোন account লাগে
@@ -234,3 +236,65 @@ Cron job (`pg_cron`): wallet sync, `cpay-daily-close`, `cpay-telegram-send`, `pr
 | Legal page খালি | `legal_published` বন্ধ | Legal field পূরণ করে চালু করুন |
 | "Supabase Preview" check লাল | DB-এর migration history আর repo-র file মেলে না | Read-only ভাবে `supabase_migrations.schema_migrations` আর `supabase/migrations/` মিলিয়ে দেখুন; history হাতে বদলাবেন না |
 | Admin-এ ঢুকতে পারছেন না | Passkey হারিয়েছে | দ্বিতীয় passkey ব্যবহার করুন; তাই সবসময় দুটো রাখুন |
+
+<a id="updates"></a>
+## ৮. সাম্প্রতিক আপডেট
+
+Merge commit `git log` থেকে মিলিয়ে লেখা।
+
+| তারিখ | কী এসেছে | PR / merge commit |
+|---|---|---|
+| ২০ অক্টোবর ২০২৬ | **Instant forward:** fee কাটার পর টাকা সরাসরি user-এর নিজের Lightning বা USDT address-এ যায়; না গেলে held/owed হয়ে আবার চেষ্টা হয় | #132–#136 (`473043a`, `f564af9`, `59b51aa`, `8193733`), USDT forward #139/#140 (`e0b12f1`, `47460e2`), safety fix #142 (`078fa7d`), শুধু instant mode #147 (`be4661e`) |
+| ২০ অক্টোবর ২০২৬ | **একটাই "You receive" amount:** user শুধু একটা সংখ্যা দেখে, কত পাবে | #141 (`6017ad5`) |
+| ২০ অক্টোবর ২০২৬ | **Address সাথে সাথে বদলায়** (২৪ ঘণ্টার অপেক্ষা নেই) | #137 (`be72627`), #138 (`4be21d6`) |
+| ২০ অক্টোবর ২০২৬ | **নতুন এক-page checkout, নতুন dashboard আর location** (payer-এর দেশ/অঞ্চল/শহর, শুধু দেখার জন্য) | #143 (`fd92d6a`), bangla #144/#145 (`4037045`, `0fee063`), theme preview #149 (`e77d788`) |
+| ২০ অক্টোবর ২০২৬ | Legal page-এর লেখা code-এর সাথে মেলানো | #146 (`4250afd`) |
+| ২১ অক্টোবর ২০২৬ | **Auto withdraw** global switch + প্রতিটা profile-এ Default/On/Off, আর আলাদা **manual Withdraw** page; legal লেখা থেকে reviewer-এর কথা বাদ | #151 (`885dff9`) |
+| ২১ অক্টোবর ২০২৬ | **Login শুধু passkey + email verification:** Google বন্ধ, নতুন authenticator (TOTP) যোগ বন্ধ, admin কাজে passkey লাগে | #152 (`0d634e5`) |
+| ২১ অক্টোবর ২০২৬ | Repo পরিষ্কার, `AGENTS.md` আর `docs/SYSTEM-OVERVIEW.md` | #153 (`ce32488`) |
+| ২১ অক্টোবর ২০২৬ | **এই System guide**, শুধু owner দেখতে পারেন (`owner-guide` function) | #154 |
+| ২১ অক্টোবর ২০২৬ | **Google পুরোপুরি সরানো:** Supabase-এ Google-এর client id/secret মুছে ফেলা, admin account থেকে Google identity আলাদা করা, repo থেকে Google login-এর সব code আর লেখা বাদ | follow-up PR |
+
+<a id="todo"></a>
+## ৯. এখন কী কী setting করতে হবে
+
+২১ অক্টোবর ২০২৬, ভোর ৪টা (ঢাকা) পর্যন্ত live অবস্থা শুধু পড়ে দেখা হয়েছে (কিছু বদলানো হয়নি)। ✅ = হয়ে গেছে, ⬜ = বাকি, ❔ = repo থেকে দেখা যায় না, আপনি dashboard-এ দেখে নিন।
+
+### ৯.১ Auto withdraw
+
+- ✅ **সবার জন্য On** (এখন `payment_mode = instant_forward`)। বদলাতে: Admin → Settings → Auto withdraw → **Turn on** / **Turn off** → confirm।
+- ⬜ **কোনো একজনের জন্য আলাদা** (ঐচ্ছিক): Admin → Manage users → ওই user-এর row → Auto withdraw → **Default / On / Off**। Off করলে তার টাকা balance-এ জমবে, সে Withdraw page থেকে তুলবে।
+- ✅ **Address না থাকলে:** এখন `refuse` — যার address নেই সে payment নিতে পারে না। বদলাতে: Settings → Advanced → Instant forward → `instant_forward_no_address`।
+
+### ৯.২ Fee আর limit
+
+- ✅ **Platform fee 5%।** বদলাতে: Settings → Platform fee → নতুন % → **Save fee**। কারো আলাদা fee: Manage users → ওই row।
+- ✅ Forward limit (`instant_forward_min_sat`, `instant_forward_max_usd`, `instant_forward_max_fee_pct`, `instant_forward_max_attempts`) — default মান চলছে। দরকার হলে Settings → Advanced → Instant forward।
+- ⬜ **Hot-wallet cap:** `admin_send_daily_cap_usd` এখনো দেওয়া নেই। Settings → Advanced → Admin wallet limits → একটা দৈনিক সীমা (USD) দিন, আর `admin_send_allowed_destinations`-এ নিজের address দিন।
+
+### ৯.৩ Legal
+
+- ⬜ **Legal field:** সব খালি। Settings → Legal pages → entity name, address, effective date (YYYY-MM-DD), jurisdiction, courts, privacy email, support email → প্রতিটা **Save**।
+- ⬜ **Publish:** তারপর Settings → Features → **Publish the legal pages** চালু (`legal_published`)।
+
+### ৯.৪ Secret
+
+- ❔ **`TURNSTILE_MODE=enforce`:** secret আছে (শেষ বদল ১৫ অক্টোবর), কিন্তু মান পড়া যায় না। Supabase → Edge Functions → Secrets বা Admin → Settings → Secrets & keys → `TURNSTILE_MODE` → Replace → `enforce`। আগে দেখুন checkout-এ Turnstile ঠিক চলছে।
+- ⬜ **`DIRECT_RECONCILE_SECRET`:** দেওয়া নেই। Direct payment চালু করলে লাগবে: `openssl rand -hex 32` দিয়ে বানিয়ে Secrets-এ দিন।
+- ⬜ **Wallet provider key rotate (`BREEZ_API_KEY`):** শেষ বদল ১২ অক্টোবর। Provider-এর dashboard থেকে নতুন key নিন → Supabase dashboard → Edge Functions → Secrets → `BREEZ_API_KEY` বদলান (Admin panel থেকে বদলানো যায় না, এটা সুরক্ষিত) → wallet function আবার deploy (wallet deploy script) → Admin → Health সবুজ কিনা দেখুন → পুরনো key revoke।
+- ⬜ **পুরনো Telegram bot revoke:** @BotFather → `/mybots` → পুরনো bot → API Token → **Revoke**। নতুন token `ALERT_TELEGRAM_BOT_TOKEN`-এ আছে (শেষ বদল ৭ অক্টোবর); revoke-এর পর একটা test বার্তা আসে কিনা দেখুন।
+- ✅ **`CPAY_OWNER_USER_ID`:** owner-এর account-এর id দেওয়া হয়েছে (System guide-এর জন্য)।
+
+### ৯.৫ Backup আর login
+
+- ❔ **Supabase PITR (Point-in-time recovery):** Supabase → Project Settings → Add-ons → Point in time recovery চালু আছে কিনা দেখুন (paid add-on)।
+- ⬜ **পুরনো authenticator code বন্ধ:** আপনি passkey দিয়ে admin-এ ঢুকে একটা setting বদলে দেখুন। ঠিক থাকলে Supabase → Authentication → Multi-Factor → TOTP **Verify** বন্ধ।
+- ✅ Google login বন্ধ আর পুরোপুরি সরানো।
+
+### ৯.৬ Real টাকা দিয়ে test (আপনি করবেন)
+
+- ⬜ Auto withdraw On profile-এ ছোট payment ($1–2): fee কেটে বাকিটা save করা address-এ যায় কিনা।
+- ⬜ একটা profile Off করে payment: টাকা balance-এ জমে কিনা।
+- ⬜ Off profile থেকে Withdraw: Lightning আর USDT, passkey দিয়ে confirm; History আর Admin → Payouts-এ দেখা যায় কিনা।
+- ⬜ ইচ্ছে করে ভুল invoice দিয়ে withdraw: fail হলে টাকা balance-এ ফেরত আসে কিনা।
+- ⬜ Address বদলানো (passkey দিয়ে): সাথে সাথে নতুন address-এ forward যায় কিনা।

@@ -406,6 +406,8 @@
     "— Choose a freelancer —": "— একজন ফ্রিল্যান্সার বাছুন —",
     "withdrawal fee, small payments, flags, alerts, instant-forward limits, old switches": "উত্তোলন ফি, ছোট পেমেন্ট, ফ্ল্যাগ, সতর্কবার্তা, তাৎক্ষণিক ফরোয়ার্ড সীমা, পুরোনো সুইচ",
     'Support email': 'সাপোর্ট ইমেইল', 'CPAY Wallet address (https)': 'CPAY Wallet-এর ঠিকানা (https)', 'Settings sections': 'সেটিংসের অংশ',
+    // Admin → System guide
+    "System guide (সিস্টেম গাইড)": "সিস্টেম গাইড",
     // Locations, payment details and the overview (20261020090000)
     "Your location": "আপনার অবস্থান",
     "Optional. Helps CPAY support you in your area. Only you and CPAY admins see it. Not shown to payers.": "ঐচ্ছিক। আপনার এলাকায় CPAY-কে সহায়তা দিতে সাহায্য করে। শুধু আপনি আর CPAY অ্যাডমিন এটি দেখেন। পেমেন্টকারীরা দেখেন না।",

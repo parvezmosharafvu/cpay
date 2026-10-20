@@ -45,6 +45,11 @@ verify_jwt = true
 [functions.owner-config]
 verify_jwt = true
 
+# Admin → System guide: the owner only (CPAY_OWNER_USER_ID), passkey session;
+# checked again in code.
+[functions.owner-guide]
+verify_jwt = true
+
 [functions.daily-report]
 verify_jwt = false
 

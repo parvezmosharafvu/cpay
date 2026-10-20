@@ -4,7 +4,7 @@
 
 এখানে কোনো secret-এর মান (value) নেই, শুধু নাম আছে। মান কখনো repo, chat বা ticket-এ রাখবেন না।
 
-Admin panel-এ **সিস্টেম গাইড** বাটনে এই একই লেখা দেখা যায়। এটা এই file থেকে বানানো হয়: `node scripts/build-admin-guide.mjs`।
+Admin panel-এ **সিস্টেম গাইড** বাটনে এই একই লেখা দেখা যায়, কিন্তু **শুধু owner** (Edge secret `CPAY_OWNER_USER_ID`-এর account), passkey দিয়ে sign in করা থাকলে। অন্য admin বাটনই দেখে না। লেখাটা `owner-guide` Edge Function-এর ভেতরে থাকে, সাইটের কোনো public file-এ নয়। এই file বদলালে চালান: `node scripts/build-admin-guide.mjs`, তারপর `owner-guide` আবার deploy করুন।
 
 ## সূচিপত্র
 
@@ -153,6 +153,7 @@ Supabase আর Cloudflare Worker-এর secret-এর **শুধু নাম*
 | `ALLOWED_ORIGINS` | Edge secret (ঐচ্ছিক) | CORS | Domains list-ই যথেষ্ট |
 | `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID`, `ALERT_ON_SETTLED` | Edge secret | `telegram-notify`, alert | বার্তা queue-তে জমে |
 | `ALERT_WEBHOOK_URL` | Edge secret (ঐচ্ছিক) | Alert | Alert বাদ যায় |
+| `CPAY_OWNER_USER_ID` | Edge secret | `owner-guide` (owner-এর Supabase Auth user id) | System guide কেউ দেখতে পায় না |
 | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` | Edge secret | `ledger-backup` | Backup হয় না |
 | `CPAY_SUPABASE_ACCESS_TOKEN`, `CPAY_PROJECT_REF` | Edge secret | `auth-settings`, `owner-config` | Settings-এ "Not set up" |
 | `CPAY_CLOUDFLARE_API_TOKEN`, `CPAY_CLOUDFLARE_ACCOUNT_ID`, `CPAY_CLOUDFLARE_ZONE_ID`, `CPAY_CLOUDFLARE_WORKER` | Edge secret | `owner-config` (Worker secret, HTTPS) | Cloudflare অংশ "Not set up" |
@@ -190,6 +191,7 @@ Supabase আর Cloudflare Worker-এর secret-এর **শুধু নাম*
 | `ledger-backup` | রাতের backup GitHub-এ | cron |
 | `telegram-notify` | Queue থেকে Telegram বার্তা পাঠায় | cron |
 | `og-image` | Link preview-এর ছবি | `cpay-og-preview` Worker |
+| `owner-guide` | এই গাইড শুধু owner-কে দেয় (passkey session লাগে) | Admin → System guide |
 
 এছাড়া database-এর RPC (যেমন `admin_platform_settings`, `admin_set_platform_setting`, `admin_set_auto_withdraw_global`, `admin_locations`) admin panel সরাসরি call করে। সব admin RPC active admin আর passkey session চায়।
 
@@ -201,7 +203,7 @@ Cron job (`pg_cron`): wallet sync, `cpay-daily-close`, `cpay-telegram-send`, `pr
 ### Deploy-এর ক্রম
 
 1. Migration (নতুন file, main-এর সব migration-এর পরে sort হয়)।
-2. Edge Function: `supabase functions deploy <name>`; wallet শুধু wallet deploy script দিয়ে।
+2. Edge Function: `supabase functions deploy <name>`; wallet শুধু wallet deploy script দিয়ে। গাইড বদলালে `supabase functions deploy owner-guide` (প্রথমবার আগে `CPAY_OWNER_USER_ID` secret দিন)।
 3. সাইট: main-এ merge হলে Cloudflare Workers Builds নিজে deploy করে।
 
 উল্টো ক্রমে করলে নতুন code পুরনো database খুঁজে না পেয়ে fail করতে পারে।

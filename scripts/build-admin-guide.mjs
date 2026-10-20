@@ -1,5 +1,5 @@
-// Builds public/admin-guide-bn.html (the Admin → System guide tab) from
-// docs/SYSTEM-GUIDE-BN.md. Tiny Markdown subset: headings, paragraphs,
+// Builds supabase/functions/owner-guide/guide.ts (served to the owner only by
+// the owner-guide Edge Function, Admin → System guide) from docs/SYSTEM-GUIDE-BN.md. Tiny Markdown subset: headings, paragraphs,
 // lists, tables, inline code, bold, links, <a id> anchors. No dependencies.
 // Usage: node scripts/build-admin-guide.mjs [--check]
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const SRC = root + 'docs/SYSTEM-GUIDE-BN.md';
-const OUT = root + 'public/admin-guide-bn.html';
+const OUT = root + 'supabase/functions/owner-guide/guide.ts';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 function inline(s) {
@@ -22,15 +22,7 @@ function inline(s) {
     return t;
   }).join('');
 }
-// tests/frontend/design-system.test.mjs keeps these names out of public/.
-// The admin page shows a plain label instead; the markdown keeps the names.
-const MASK = [
-  [/SUPABASE_SERVICE_ROLE_KEY/g, 'Supabase-এর server key (নাম: docs/SYSTEM-GUIDE-BN.md)'],
-  [/BREEZ_MNEMONIC/g, 'Wallet-এর ১২/২৪ শব্দ (নাম: docs/SYSTEM-GUIDE-BN.md)'],
-  [/PAYMENT_SERVICE_SECRET/g, 'Function ↔ wallet shared secret (নাম: docs/SYSTEM-GUIDE-BN.md)'],
-];
-export function render(md) {
-  for (const [re, label] of MASK) md = md.replace(new RegExp('`' + re.source + '`', 'g'), label).replace(re, label);
+export function renderHtml(md) {
   const lines = md.replace(/\r/g, '').split('\n');
   const out = [];
   let i = 0;
@@ -65,11 +57,15 @@ export function render(md) {
   return '<!-- Generated from docs/SYSTEM-GUIDE-BN.md by scripts/build-admin-guide.mjs. Do not edit by hand. No secrets. -->\n'
     + '<div class="guide-body" lang="bn">\n' + out.join('\n') + '\n</div>\n';
 }
+export function render(md) {
+  return '// Generated from docs/SYSTEM-GUIDE-BN.md by scripts/build-admin-guide.mjs. Do not edit by hand.\n'
+    + 'export const GUIDE_HTML: string = ' + JSON.stringify(renderHtml(md)) + ';\n';
+}
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) {
   const html = render(readFileSync(SRC, 'utf8'));
   if (process.argv.includes('--check')) {
-    if (readFileSync(OUT, 'utf8') !== html) { console.error('public/admin-guide-bn.html is out of date: run node scripts/build-admin-guide.mjs'); process.exit(1); }
+    if (readFileSync(OUT, 'utf8') !== html) { console.error('supabase/functions/owner-guide/guide.ts is out of date: run node scripts/build-admin-guide.mjs'); process.exit(1); }
     console.log('ok   admin guide up to date');
-  } else { writeFileSync(OUT, html); console.log('wrote public/admin-guide-bn.html'); }
+  } else { writeFileSync(OUT, html); console.log('wrote supabase/functions/owner-guide/guide.ts'); }
 }

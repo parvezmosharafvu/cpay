@@ -3,9 +3,10 @@
 Read [docs/SYSTEM-OVERVIEW.md](docs/SYSTEM-OVERVIEW.md) first. It is the
 current truth; documents marked "Historical document" are not.
 Owner's Bangla guide (accounts, setup, settings, secrets, APIs):
-[docs/SYSTEM-GUIDE-BN.md](docs/SYSTEM-GUIDE-BN.md), shown in Admin → System guide.
-After editing it run `node scripts/build-admin-guide.mjs` (a test checks the
-generated `public/admin-guide-bn.html` is in sync).
+[docs/SYSTEM-GUIDE-BN.md](docs/SYSTEM-GUIDE-BN.md), shown in Admin → System guide to the
+owner only (`owner-guide` function, `CPAY_OWNER_USER_ID`, passkey session). After editing
+it run `node scripts/build-admin-guide.mjs` (CI checks the generated
+`supabase/functions/owner-guide/guide.ts` is in sync) and redeploy `owner-guide`.
 
 ## Map
 

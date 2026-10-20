@@ -77,7 +77,6 @@ const Daily = (() => {
         <div><dt>Role</dt><dd>${roleName(p.role)}</dd></div>
         ${p.role === 'creator' && window.CPAY_PROFILE ? `<div><dt>Account type</dt><dd>${escapeHtml(accountTypeText(window.CPAY_PROFILE))}</dd></div>` : ''}
         <div><dt>Payment links</dt><dd>${usageBar(p.links_used, p.link_limit)}</dd></div>
-        <div><dt>Default cost rate</dt><dd>${pct(p.cost_percent || 0)}</dd></div>
       </dl>
     </div>`;
   }

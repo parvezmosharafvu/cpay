@@ -29,7 +29,7 @@
       <datalist id="locDivisions">${BD_DIVISIONS.map((d) => `<option value="${d}">`).join('')}</datalist>
       <div class="field"><label for="locDistrict">District / city</label><input id="locDistrict" maxlength="80" value="${escapeHtml(l.district || '')}" autocomplete="address-level2"></div>
       <div class="field"><label for="locArea">Area</label><input id="locArea" maxlength="80" value="${escapeHtml(l.area || '')}" autocomplete="off"></div>
-      <p class="faint" id="locSeen">${l.last_seen_country ? `Last signed in from: ${escapeHtml(countryName(l.last_seen_country))} (country only, from your connection)` : ''}</p>
+      <p class="faint" id="locSeen">${l.last_seen_country ? `Last opened your desk from: ${escapeHtml(countryName(l.last_seen_country))} (country only, from your connection)` : ''}</p>
       <button class="btn ghost" id="saveLoc" type="button">Save location</button>
     </div>`;
     el.querySelector('#saveLoc').onclick = async () => {
@@ -47,9 +47,11 @@
   // Payment details: one dialog, the owner's own payment only (the RPC is
   // SECURITY INVOKER, so row-level security decides).
   let dlg = null;
+  let opener = null; // the row that opened the dialog gets focus back on close
   function dialog() {
     if (dlg) return dlg;
     dlg = document.createElement('dialog');
+    dlg.addEventListener('close', () => { if (opener && opener.isConnected) opener.focus(); opener = null; });
     dlg.id = 'payDetails';
     dlg.className = 'pay-details';
     dlg.setAttribute('aria-labelledby', 'payDetailsTitle');
@@ -61,6 +63,7 @@
   const FORWARD = { queued: 'Waiting to send', sending: 'Sending', forwarded: 'Sent to you', retry: 'Retrying', owed: 'Held, owed to you', skipped: 'Not forwarded' };
   async function openPayment(id) {
     const d = dialog();
+    if (!d.open) opener = document.activeElement;
     d.innerHTML = `<div class="pd-head"><h3 id="payDetailsTitle">Payment details</h3><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div><p class="muted">Loading…</p>`;
     d.querySelector('[data-close]').onclick = () => d.close();
     if (!d.open) { try { d.showModal(); } catch (e) { d.setAttribute('open', ''); } }
@@ -78,7 +81,6 @@
       <div class="pd-amount"><div class="kicker">You receive</div><div class="kpi" id="pdReceive">${p.you_receive != null ? money(p.you_receive) : '—'}</div>${badge(p.status)}</div>
       <dl class="pd-list">
         ${row('Amount paid', money(p.amount_settled ?? p.amount_requested))}
-        ${p.buyer_amount != null && Number(p.buyer_amount) !== Number(p.amount_requested) ? row('Before link cost', money(p.buyer_amount)) : ''}
         ${fees}
         ${row('Status', escapeHtml(p.status))}
         ${row('Created', escapeHtml(when(p.created_at)))}

@@ -4,22 +4,17 @@
 --   Cloudflare geo headers when the invoice is created (create-invoice and
 --   direct-invoice; country and city were already recorded, region is new).
 --   Never GPS, never an IP address: nothing here stores one.
--- * Payment links: an optional location / area label the link owner sets.
 -- * Accounts: a location the user sets (country, division, district, area)
---   and a last-seen country taken from the request's own cf-ipcountry header
---   (set by Cloudflare, so a browser cannot choose it), refreshed at most
---   every 10 minutes.
+--   and a last-seen country from the request's cf-ipcountry header when the
+--   desk opens, refreshed at most every 10 minutes.
+-- * All of it is approximate and only displayed: header values can be
+--   spoofed, so nothing (fees, limits, routing, fraud checks) decides on it.
 -- * Owners see their own payment details (security invoker: RLS decides).
 --   Admins see locations through admin_locations(), which needs aal2.
 -- Re-appliable.
 
 alter table public.payments add column if not exists customer_region text;
 alter table public.direct_payments add column if not exists customer_region text;
-
-alter table public.payment_links add column if not exists location_label text;
-alter table public.payment_links drop constraint if exists payment_links_location_label_len;
-alter table public.payment_links add constraint payment_links_location_label_len
-  check (location_label is null or char_length(location_label) between 1 and 80);
 
 -- Text from a header or a form: no control characters, single spaces, capped.
 create or replace function public.geo_clean(p text, p_max integer default 80)
@@ -132,7 +127,7 @@ begin
           when f.routing_fee_sat is not null and p.btc_usd_rate is not null
             then round(f.routing_fee_sat::numeric * p.btc_usd_rate / 100000000, 2) end,
       'created_at', p.created_at, 'settled_at', p.settled_at, 'expires_at', p.expires_at,
-      'link_slug', l.slug, 'link_name', l.display_name, 'link_location', l.location_label,
+      'link_slug', l.slug, 'link_name', l.display_name,
       'payer_country', p.customer_country, 'payer_region', p.customer_region, 'payer_city', p.customer_city,
       'forward', case when f.id is null then null else jsonb_build_object(
           'kind', f.kind, 'status', f.status, 'reason', f.reason, 'network', f.network,
@@ -162,7 +157,9 @@ create or replace function public.admin_locations(p_country text default null, p
   p_days integer default 30, p_limit integer default 100)
 returns jsonb language plpgsql stable security definer set search_path = public
 as $$
-declare v_country text := geo_country(p_country); v_area text := geo_clean(p_area);
+declare v_country text := geo_country(p_country);
+        -- Typed text, matched literally: % and _ are not wildcards here.
+        v_area text := replace(replace(replace(geo_clean(p_area), '\', '\\'), '%', '\%'), '_', '\_');
         v_since timestamptz := now() - make_interval(days => least(greatest(coalesce(p_days, 30), 1), 366));
         v_lim int := least(greatest(coalesce(p_limit, 100), 1), 500);
 begin
@@ -190,13 +187,12 @@ begin
          group by 1, 2, 3 order by 4 desc limit 200) x), '[]'::jsonb),
     'payments', coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at desc) from (
         select p.id, p.created_at, p.status, p.amount_requested, p.amount_settled, pr.email as user_email,
-               l.slug as link_slug, l.location_label as link_location,
+               l.slug as link_slug,
                p.customer_country as country, p.customer_region as region, p.customer_city as city
           from payments p left join profiles pr on pr.id = p.user_id left join payment_links l on l.id = p.payment_link_id
          where p.created_at >= v_since
            and (v_country is null or p.customer_country = v_country)
-           and (v_area is null or p.customer_region ilike '%' || v_area || '%' or p.customer_city ilike '%' || v_area || '%'
-                or l.location_label ilike '%' || v_area || '%')
+           and (v_area is null or p.customer_region ilike '%' || v_area || '%' or p.customer_city ilike '%' || v_area || '%')
          order by p.created_at desc limit v_lim) x), '[]'::jsonb),
     'users', coalesce((select jsonb_agg(to_jsonb(x) order by x.updated_at desc) from (
         select pl.user_id, pr.email, pr.display_name, pl.country, pl.division, pl.district, pl.area,

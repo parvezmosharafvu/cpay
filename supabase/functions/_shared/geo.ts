@@ -1,4 +1,4 @@
-// Coarse payer location from Cloudflare's request headers (20261020070000).
+// Coarse payer location from Cloudflare's request headers (20261020080000).
 // Country, region and city only: never GPS, never the IP address. The
 // worker proxy (worker/og-preview-worker.js) sets these from request.cf;
 // a request straight to Supabase carries Cloudflare's own cf-ipcountry.

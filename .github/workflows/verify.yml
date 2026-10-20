@@ -404,7 +404,11 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/forward_safety_test.sql
-      - name: Coarse locations, owner-only payment details, admin needs aal2 (20261020070000)
+      - name: Domains only through audited admin functions (20261020070000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/owner_domains_test.sql
+      - name: Coarse locations, owner-only payment details, admin needs aal2 (20261020080000)
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/locations_test.sql
@@ -520,6 +524,11 @@ jobs:
         # row, and that neither the token nor the auth config's secrets
         # ever reach a response.
         run: deno test --allow-net=127.0.0.1 --allow-env supabase/functions/auth-settings/
+      - name: owner-config (Settings secrets, Cloudflare) against mock APIs
+        # Local mock servers only. Write-only: names out, values never;
+        # protected names (wallet words, the access tokens) refused; aal2
+        # always, a fresh sign-in for every change; audited.
+        run: deno test --allow-net=127.0.0.1 supabase/functions/owner-config/
       - name: admin-actions admin gate against a mock Supabase
         # Local mock server only. Active admin allowed; suspended, pending
         # and rejected admin refused; creator, no or bad JWT refused; every
@@ -545,7 +554,7 @@ jobs:
         # and pass once they are allowed. This also lists the repo set.
         run: |
           set +e
-          out=$(python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination)
+          out=$(python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination --undeployed owner-config)
           code=$?
           set -e
           echo "$out"
@@ -553,7 +562,7 @@ jobs:
           [ "$(echo "$out" | grep -c '^  ORPHAN')" -eq 3 ] || { echo "expected exactly 3 orphans"; exit 1; }
           for f in reconcile reseller-digest telegram-report; do echo "$out" | grep -q "ORPHAN    $f " || { echo "missing orphan $f"; exit 1; }; done
           ! echo "$out" | grep -q '^  MISSING' || { echo "a repo function is missing from the fixture"; exit 1; }
-          python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination \
+          python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination --undeployed owner-config \
             --allow reconcile --allow reseller-digest --allow telegram-report
       - name: deployed-vs-repo drift check (2026-10-07 list, after orphan deletes)
         # Production list saved after reconcile, reseller-digest and
@@ -562,7 +571,7 @@ jobs:
         # (supabase/functions/breez-wallet/README.md). direct-invoice and
         # settlement-destination are new (20261018010000) and not in either
         # saved production list.
-        run: python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-07.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination
+        run: python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-07.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination --undeployed owner-config
 
   frontend:
     name: Pages parse and reference real things

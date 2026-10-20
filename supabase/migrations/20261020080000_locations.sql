@@ -1,4 +1,4 @@
--- Coarse locations (20261020070000)
+-- Coarse locations (20261020080000)
 --
 -- * Payments: the payer's country / region / city, read server-side from the
 --   Cloudflare geo headers when the invoice is created (create-invoice and

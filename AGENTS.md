@@ -15,6 +15,7 @@ it run `node scripts/build-admin-guide.mjs` (CI checks the generated
   Admin: `admin.html` + `admin-*.js`. Strings: `i18n.js` (English + Bangla).
 - `supabase/migrations/` schema, RLS, RPCs (append-only).
 - `supabase/functions/` Deno Edge Functions; `_shared/` common code.
+  Wallets: `wallet-registry` (owner) + `admin-wallets.js` (Admin → Wallet).
 - `worker/` Cloudflare link-preview Worker. `wallet/` CPay Wallet PWA.
 - `payment-service/` self-hosted Node fallback (not deployed, tested in CI).
 - `ci/` SQL suites and Python checks; `tests/` node/Playwright tests;
@@ -36,9 +37,15 @@ Withdraw page (passkey confirm). One "You receive X" figure.
 - Auth = email+password (verified) + passkeys. No Google, no new TOTP.
 - Locations: headers only, display-only, no GPS/IP; visible to link owner
   (own payments) and admins only.
-- Wallet function: single instance (advisory lease); deploy only via
-  the wallet deploy script in `scripts/`; never edit its lease logic casually.
-  `RECEIPT_RECORDING` stays off.
+- Wallet function: single instance PER WALLET (advisory lease keyed by
+  wallet id; wallet #1 keeps the original key); deploy only via the wallet
+  deploy script in `scripts/`; never edit its lease logic casually.
+  `RECEIPT_RECORDING` stays off. Only the primary wallet sends; other
+  wallets are receive-only ([docs/MULTI-WALLET.md](docs/MULTI-WALLET.md)).
+- Wallet seeds: wallet #1 in the Edge secret, all others in Supabase Vault
+  (registry keeps only the secret id). Never return, log, echo or audit a
+  seed; wallet registry RPCs are service_role only, called by the
+  owner-only `wallet-registry` function.
 - Every new `SECURITY DEFINER` function: `set search_path`, explicit
   revoke/grant, and an entry in `ci/authenticated_rpc_allowlist.sql` /
   `ci/anon_rpc_allowlist.sql` if callable.

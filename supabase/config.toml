@@ -50,6 +50,9 @@ verify_jwt = true
 [functions.owner-guide]
 verify_jwt = true
 
+[functions.wallet-registry]
+verify_jwt = true
+
 [functions.daily-report]
 verify_jwt = false
 

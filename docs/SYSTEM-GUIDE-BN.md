@@ -17,6 +17,7 @@ Admin panel-এ **সিস্টেম গাইড** বাটনে এই �
 7. [সাধারণ সমস্যা আর সমাধান](#problems)
 8. [সাম্প্রতিক আপডেট](#updates)
 9. [এখন কী কী setting করতে হবে](#todo)
+10. [একাধিক wallet](#wallets)
 
 <a id="accounts"></a>
 ## ১. কোন কোন account লাগে
@@ -194,6 +195,7 @@ Supabase আর Cloudflare Worker-এর secret-এর **শুধু নাম*
 | `telegram-notify` | Queue থেকে Telegram বার্তা পাঠায় | cron |
 | `og-image` | Link preview-এর ছবি | `cpay-og-preview` Worker |
 | `owner-guide` | এই গাইড শুধু owner-কে দেয় (passkey session লাগে) | Admin → System guide |
+| `wallet-registry` | একাধিক wallet: তালিকা, seed দিয়ে নতুন wallet যোগ, primary করা, নাম বদলানো, বন্ধ, সরানো (শুধু owner, passkey) | Admin → Wallet → Wallets |
 
 এছাড়া database-এর RPC (যেমন `admin_platform_settings`, `admin_set_platform_setting`, `admin_set_auto_withdraw_global`, `admin_locations`) admin panel সরাসরি call করে। সব admin RPC active admin আর passkey session চায়।
 
@@ -253,6 +255,7 @@ Merge commit `git log` থেকে মিলিয়ে লেখা।
 | ২১ অক্টোবর ২০২৬ | **Login শুধু passkey + email verification:** Google বন্ধ, নতুন authenticator (TOTP) যোগ বন্ধ, admin কাজে passkey লাগে | #152 (`0d634e5`) |
 | ২১ অক্টোবর ২০২৬ | Repo পরিষ্কার, `AGENTS.md` আর `docs/SYSTEM-OVERVIEW.md` | #153 (`ce32488`) |
 | ২১ অক্টোবর ২০২৬ | **এই System guide**, শুধু owner দেখতে পারেন (`owner-guide` function) | #154 |
+| ২১ অক্টোবর ২০২৬ | **একাধিক wallet:** Admin → Wallet-এ ১২ শব্দের seed paste করে নতুন wallet যোগ; seed Supabase Vault-এ encrypted; একটা primary wallet নতুন invoice, forward আর withdraw চালায়; বাকিগুলো প্রতি মিনিটে শুধু টাকা আসা দেখে (১০ দেখুন) | feature/multi-wallet |
 | ২১ অক্টোবর ২০২৬ | **Google পুরোপুরি সরানো:** repo থেকে Google login-এর বাকি code, test mock আর লেখা বাদ; Supabase-এ Google provider বন্ধ। Client id/secret মোছা আর admin account থেকে Google identity আলাদা করা dashboard-এ বাকি (৯.৫ দেখুন) | #155 |
 
 <a id="todo"></a>
@@ -300,3 +303,52 @@ Merge commit `git log` থেকে মিলিয়ে লেখা।
 - ⬜ Off profile থেকে Withdraw: Lightning আর USDT, passkey দিয়ে confirm; History আর Admin → Payouts-এ দেখা যায় কিনা।
 - ⬜ ইচ্ছে করে ভুল invoice দিয়ে withdraw: fail হলে টাকা balance-এ ফেরত আসে কিনা।
 - ⬜ Address বদলানো (passkey দিয়ে): সাথে সাথে নতুন address-এ forward যায় কিনা।
+
+<a id="wallets"></a>
+## ১০. একাধিক wallet
+
+Admin → **Wallet** খুললে সবার উপরে **Wallets** কার্ড দেখাবে, শুধু আপনার (owner) account-এ, passkey দিয়ে sign in করা থাকলে। অন্য admin এটা দেখে না।
+
+### কীভাবে কাজ করে
+
+- **Wallet 1** হলো আগের wallet। এর seed আগের মতোই Edge secret `BREEZ_MNEMONIC`-এ থাকে। Migration-এর পরে এটাই primary থাকে, তাই কিছুই বদলায় না।
+- **নতুন wallet:** ১২ শব্দের seed paste করলে সেটা Supabase **Vault**-এ encrypted হয়ে থাকে। Database-এর কোনো সাধারণ column-এ থাকে না, আর কোনো page, log বা audit-এ কখনো দেখায় না। তালিকায় শুধু **fingerprint** (৮ অক্ষর) আর প্রথম sync-এর পরে **node key** দেখায়।
+- **Primary wallet:** নতুন সব invoice এই wallet বানায়। Forward আর withdraw-ও এই wallet থেকেই যায়। একসাথে একটাই primary থাকে।
+- **অন্য active wallet:** প্রতি মিনিটে শুধু দেখা হয় টাকা এসেছে কিনা। এতে আগের primary-র পুরনো invoice-এর payment-ও settle হয়, আর balance দেখায়। এগুলো থেকে কোনো টাকা পাঠানো হয় না।
+- **Standby:** sync হয় না, ব্যবহারও হয় না। **Disabled:** একেবারে খোলা হয় না।
+- প্রতিটা wallet-এর আলাদা lease থাকে, তাই একই wallet কখনো একসাথে দুই জায়গায় চলে না।
+- প্রতিটা payment, forward আর withdraw-এ `wallet_id` লেখা থাকে। পুরনো row-এ এটা খালি থাকে, যার মানে Wallet 1।
+- সব wallet একই `BREEZ_API_KEY` ব্যবহার করে।
+
+### দ্বিতীয় wallet যোগ করার ধাপ
+
+1. Admin-এ passkey দিয়ে sign in করুন, তারপর বাঁ দিকে **Wallet**-এ যান।
+2. **Wallets** কার্ডের নিচে **Add a wallet**-এ যান। **Name**-এ একটা নাম দিন, যেমন `Wallet 2`।
+3. **12-word seed** ঘরে ১২টা শব্দ paste করুন, মাঝে space রেখে। ঘরে লেখা লুকানো থাকে। নিচে **Valid 12-word seed** দেখালে বুঝবেন seed ঠিক আছে।
+4. **Add wallet** চাপুন, তারপর passkey দিয়ে নিশ্চিত করুন। ঘরটা সাথে সাথে খালি হয়ে যায়। সফল হলে fingerprint দেখাবে।
+5. এক-দুই মিনিট অপেক্ষা করুন। cron প্রথম sync করলে balance, **Synced** সময় আর node key দেখাবে।
+6. এই wallet দিয়ে নতুন invoice চালাতে চাইলে **Make primary** চাপুন। আগের primary নিজে থেকেই active থাকে, আর তার পুরনো invoice-এর টাকাও আসবে।
+
+**মনে রাখবেন:**
+- ঘণ্টায় সর্বোচ্চ ৫ বার যোগ করার চেষ্টা করা যায়। ভুল চেষ্টাও এর মধ্যে গোনা হয়।
+- একই seed দুবার যোগ করা যায় না।
+- Seed-এর নিজের backup কাগজে রাখুন। Server থেকে seed আর কখনো দেখা যাবে না।
+
+### সরানো (Remove)
+
+**Remove** চাপলে wallet-এর নাম হুবহু টাইপ করতে হবে, তারপর passkey লাগবে। নিচের যেকোনো একটা থাকলে server সরাতে দেবে না:
+- wallet-টা primary;
+- এটা Wallet 1 (এর seed Edge secret-এ থাকে);
+- balance ০-এর বেশি, বা গত ১৫ মিনিটে sync হয়নি;
+- খোলা invoice আছে;
+- forward বা withdraw চলছে।
+
+সরালে Vault থেকে seed মুছে যায়। Row-টা "removed" হিসেবে থেকে যায়, যাতে পুরনো payment-এ wallet-এর নাম দেখা যায়।
+
+### Deploy-এর ক্রম (এই feature)
+
+1. Migration `20261021030000_multi_wallet.sql` চালান।
+2. `supabase functions deploy wallet-registry` (এর জন্য `CPAY_OWNER_USER_ID` আর `BREEZ_NETWORK` secret লাগে, দুটোই আগে থেকে আছে)।
+3. Wallet function শুধু wallet deploy script দিয়ে deploy করুন।
+4. সাইট (main-এ merge হলে নিজে থেকেই হয়)।
+

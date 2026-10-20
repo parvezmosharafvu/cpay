@@ -407,13 +407,7 @@ async function renderProfile() {
   const { data: rs } = await sb.rpc('my_receive_settings');
   const target = rs?.target_address || '';
   const where = rs?.method === 'usdt' ? `USDT on ${netLabel(rs.usdt_network)}` : rs?.method === 'lightning' ? 'Lightning address' : '';
-  el.innerHTML = `<div class="card" id="receiveCard">
-    <div class="card-title"><div><h3>Where to receive</h3>
-      <p class="faint">CPAY receives each payment, keeps its fee and sends the rest straight to your saved address.</p></div></div>
-    <p id="recvNow"></p>
-    <p class="hint">Save a USDT address below or a Lightning address. If you save both, Lightning is used.</p>
-  </div>
-  <div id="directCard" hidden></div>
+  el.innerHTML = `<div id="directCard" hidden></div>
   <div class="grid split">
     <div class="card">
       <h3>Public profile</h3>
@@ -435,22 +429,32 @@ async function renderProfile() {
       </div>
       <div class="field"><label for="prefNet">Preferred network</label><select id="prefNet">${prefOpts}</select></div>
       <div class="field"><label for="thresh">Auto-withdraw threshold (USD)</label>
-        <input id="thresh" type="number" min="5" step="1" placeholder="Leave empty to only withdraw by hand" value="${book?.withdraw_threshold ?? ''}"></div>
+        <input id="thresh" type="number" min="5" step="1" placeholder="Leave empty to only withdraw by hand" value="${escapeHtml(book?.withdraw_threshold ?? '')}"></div>
       <label class="check"><input type="checkbox" id="autoOn" ${book?.auto_withdraw_enabled ? 'checked' : ''}> Queue a payout when the balance reaches the threshold</label>
       <button class="btn ghost" id="savePrefs" type="button">Save payout settings</button>
     </div>
   </div>`;
-  const recvNow = document.getElementById('recvNow');
+  // Built from DOM nodes: the address is account data.
+  const node = (tag, cls, text) => Object.assign(document.createElement(tag), cls ? { className: cls } : {}, text ? { textContent: text } : {});
+  const recvCard = node('div', 'card');
+  recvCard.id = 'receiveCard';
+  const head = node('div', 'card-title');
+  const headIn = node('div');
+  headIn.append(node('h3', '', 'Where to receive'),
+    node('p', 'faint', 'CPAY receives each payment, keeps its fee and sends the rest straight to your saved address.'));
+  head.append(headIn);
+  const recvNow = node('p');
+  recvNow.id = 'recvNow';
   if (target) {
-    recvNow.append('Payments go to: ', Object.assign(document.createElement('strong'), { textContent: where }), ' ');
-    recvNow.append(Object.assign(document.createElement('code'), { textContent: target }));
+    recvNow.append('Payments go to: ', node('strong', '', where), ' ', node('code', '', target));
   } else if (wallets.length) {
     recvNow.textContent = 'Your saved address is not ready yet. Payments start once it is (at most 24 hours).';
   } else {
     recvNow.className = 'err';
     recvNow.textContent = 'No address yet. Save a USDT or Lightning address to start receiving payments.';
   }
-  el.querySelector('#usdtNet').closest('.card').querySelector('.hint').textContent = USDT_HINT;
+  recvCard.append(head, recvNow, node('p', 'hint', 'Save a USDT address below or a Lightning address. If you save both, Lightning is used.'));
+  el.prepend(recvCard);
   if (window.cpayDirect) window.cpayDirect.card(document.getElementById('directCard'), () => { renderProfile(); renderLinks(); });
   document.getElementById('saveProf').onclick = async () => {
     const { error: e } = await sb.rpc('update_my_public_profile', {

@@ -1,5 +1,8 @@
 # Non-custodial CPAY: audit, options, decision and plan (2026-10-18)
 
+> **Historical document.** It describes a superseded design. The current system is in
+> [SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md) and [../AGENTS.md](../AGENTS.md); where they disagree, they win.
+
 Status:
 
 | Part | State |
@@ -12,7 +15,7 @@ CPAY must not be described as non-custodial while the custodial path takes payme
 settlement on, the accurate statement is narrower: **"Payments on direct links go straight to your own
 wallet; CPAY never holds them."**
 
-Related: [ARCHITECTURE.md](ARCHITECTURE.md), [BTCPAY-ARCHITECTURE.md](BTCPAY-ARCHITECTURE.md),
+Related: [ARCHITECTURE.md](ARCHITECTURE.md),
 [WALLET-APP.md](WALLET-APP.md), [LEGAL-NOTES.md](LEGAL-NOTES.md).
 
 ## 1. Current-state audit (main 2e6c9d8, 2026-10-17)
@@ -107,7 +110,7 @@ merchant's own wallet.
 
 - **Trust:** the merchant runs a server. CPAY holds an invoice-only key (not a spending key).
 - **Effort:** high for a freelancer; suits businesses.
-- **Repo support:** design only ([BTCPAY-ARCHITECTURE.md](BTCPAY-ARCHITECTURE.md)). The provider
+- **Repo support:** design only (the old design note was removed 2026-10-21). The provider
   interface in `_shared/direct-settlement.ts` is where it would plug in.
 
 ### D. Hybrid during the move

@@ -35,11 +35,11 @@ a time; the control row's `owner` says which host may hold it.
    minus platform fees, minus withdrawals that are not rejected or failed.
 4. **Withdrawal (USDT; USDC only where a route exists).**
    - The desk asks user-withdraw for a quote; the wallet engine prices it.
-   - On confirm (recent sign-in, aal2 if MFA is set up) the payout is
+   - On confirm (passkey session, `strong_session()`) the payout is
      reserved under a profile lock with `reserve_stablecoin_withdrawal()`,
      idempotent on the quote id, and sent once.
-   - A failure refunds once. Only a saved address past its 24-hour wait is
-     used, on every path (20261014050000).
+   - A failure refunds once. Only a saved address is used; saving one needs a
+     passkey session and it is usable at once (20261021020000).
 5. **Admin.** admin-actions checks an active admin (aal2 when
    `admin_mfa_required` is on) for wallet sends, mark-paid and reject; each
    is audited with the admin's id.

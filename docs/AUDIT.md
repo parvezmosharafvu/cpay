@@ -1,5 +1,8 @@
 # CPAY Chat 1 audit — release blockers
 
+> **Historical document.** It describes a superseded design. The current system is in
+> [SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md) and [../AGENTS.md](../AGENTS.md); where they disagree, they win.
+
 **Date:** 2026-10-07 (Asia/Dhaka)  
 **Baseline (main):** `53bee2505de2caf14dc473b3dfe06534ba2aed08` (PR #27 Dockerfile fix merged)  
 **Branch:** `fix/security/audit-chat1`  

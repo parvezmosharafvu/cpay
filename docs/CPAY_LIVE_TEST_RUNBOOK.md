@@ -16,7 +16,7 @@ steps passed. Use the smallest amounts the screens allow.
    public page, and a separate payer wallet with a few dollars of Lightning
    funds that you own.
 5. For the payout step: a USDT address you own, saved on the test account
-   **more than 24 hours earlier** (newer addresses are refused on purpose).
+   from a passkey session (usable at once; there is no waiting period).
 
 ## Stop immediately if any of this happens
 
@@ -55,8 +55,8 @@ In the test dashboard, open Withdraw, choose the saved address and the
 smallest amount, and stop at the quote screen.
 - Expected: a quote with the fee and the amount to be received. Nothing is
   deducted until you confirm.
-- Failure: the saved address is missing or refused although it is older
-  than 24 hours. Stop.
+- Failure: the saved address is missing or refused although it was saved
+  from a passkey session. Stop.
 
 ### 4. Small payout — **REAL MONEY** (owner decides now)
 Confirm the quote. You may be asked to sign in again.

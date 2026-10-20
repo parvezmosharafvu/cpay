@@ -141,12 +141,14 @@ what to do when a payer says they paid: [NON-CUSTODIAL-ARCHITECTURE.md](NON-CUST
 §8. CPAY never holds these payments, so there is nothing to refund or move
 from CPAY's side; the merchant's own wallet has the money.
 
-## Two-step sign-in (admin MFA)
+## Strong sign-in (passkey step-up)
 
-Admin → **Security** turns on two-step sign-in (TOTP authenticator apps).
-After that, signing in and every payout confirm ask for the 6-digit code;
-the payout step-up asks for the password, then the code (aal2).
-Freelancers have the same screen on their desk (**Security** tab).
+Since 20261021020000 the strong factor is a **passkey**. Admin actions,
+settings, withdrawals and payout-address changes require
+`public.strong_session()`: a session that signed in with a passkey (or, only
+during the switch-over, an existing aal2 session from an authenticator code
+enrolled earlier). New authenticator (TOTP) enrolment is off; Google sign-in
+is off. An aal1 password session is refused wherever aal2 used to be needed.
 
 **Once enrolled, aal2 is required (migration 20261014080000).** An admin
 with a verified authenticator is an admin only in an aal2 session, even
@@ -208,13 +210,11 @@ is Supabase Auth; the wrong-code audit note is best effort).
 - **Step-up** (`_shared/step-up.ts`): confirming a payout needs a sign-in in
   the last `STEP_UP_MAX_AGE_SECONDS` (default 10 minutes); the dashboard asks
   for the password and retries once. Rollback: set the Edge secret to `0`.
-- **24 h address cooldown** (migration 20261009010000): payouts go only to a
-  saved address whose `usdt_wallets.usable_after` has passed. Any save or
-  change (user, direct table write, `admin_set_user_usdt_wallet()`) restarts
-  the 24 h and writes `payout_wallet.saved` to `audit_log`. The payment
-  service checks `withdraw_destination_status()` at quote and again at
-  confirm. A user who needs an urgent exception waits; there is no bypass
-  switch on purpose.
+- **Address change needs a passkey, usable at once** (20261021020000; the
+  old 24 h cooldown from 20261009010000 is gone). Saving or changing a payout
+  address is refused unless the session signed in with a passkey; every save
+  writes to `audit_log`. `withdraw_destination_status()` is still checked at
+  quote and at confirm.
 ## Service auth rollout
 
 The payment service accepts a static bearer (legacy) and HMAC-signed

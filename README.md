@@ -1,15 +1,15 @@
 # CPAY
 
-Lightning Network payment links for freelancers and online shop owners.
-Generate a payment link, share it, get paid in Lightning. Balance is kept in
-US dollars. Withdraw only as USDT (or USDC where a route exists) to a saved
-address on a supported network.
+Payment links for freelancers and online shop owners on
+`pay-cashapp.buzz`. A payer pays a Lightning (BOLT11) invoice for a USD
+amount; CPAY deducts the platform fee and then, per user, either forwards the
+rest at once to the saved Lightning/USDT address (**Auto withdraw ON**) or
+credits a balance the user withdraws from the Withdraw page (**Auto withdraw
+OFF**). Sign-in is email + password (verified) or passkey.
 
-Payouts are USDT/USDC only. There is no Lightning payout. See
-`docs/SIMPLE-MODEL.md`.
-
-Checkout loading, amount chips, focus, and what is intentionally not
-restructured are in `docs/UI.md`.
+- Current system: [`docs/SYSTEM-OVERVIEW.md`](docs/SYSTEM-OVERVIEW.md)
+- Agent / contributor rules: [`AGENTS.md`](AGENTS.md)
+- Checkout UI notes: [`docs/UI.md`](docs/UI.md)
 
 ## Stack
 
@@ -20,9 +20,8 @@ restructured are in `docs/UI.md`.
   `payment-service/`, the self-hosted Node 22 fallback; not a warm
   standby, it needs a seed restore on a new host), holding the cpay wallet. Customers pay a
   standard Lightning invoice (BOLT11) from a wallet that supports it; Cash
-  App is tested. Not every wallet can pay every invoice. Payouts are cross-chain
-  USDT/USDC sends from that wallet (mainnet only). Stable Balance is not
-  used: sats stay in the wallet until a USDT quote is confirmed.
+  App is tested. Not every wallet can pay every invoice. Payouts go to a Lightning address/invoice or as USDT
+  on a supported network (mainnet only).
 - **Edge routing:** Cloudflare Worker — renders correct link-preview
   metadata for WhatsApp/Telegram/Facebook when a payment link is shared
 
@@ -39,7 +38,7 @@ public/                          → static site root
   404.html                       → not-found page AND the payment page:
                                    any unmatched path is treated as a slug
   dashboard.html                 → creator dashboard
-  invoice-cpay-v2.html     → customer invoice / QR page
+  invoice-cpay-v2.html           → shell for the one-page checkout (invoice-view.js)
   admin.html                     → admin panel
   a11y.css                       → focus, 44px targets, reduced motion
   theme.js                       → checkout designs for the payment page and
@@ -48,7 +47,7 @@ public/                          → static site root
 
 docs/
   UI.md                          → checkout fixes and what stays flat
-  SIMPLE-MODEL.md                → USDT address + threshold
+  SYSTEM-OVERVIEW.md             → current system (start here)
   ARCHITECTURE.md                → ledger, receive and withdraw
   DEPLOYMENT.md                  → setup checklist
 ```
@@ -90,3 +89,8 @@ See `docs/UI.md`.
 | `docs/RUNBOOKS.md` / `INCIDENT.md` / `BACKUP-RECOVERY.md` | Ops |
 | `SECURITY.md` | Reporting + trust notes |
 
+
+## Deploy order
+
+Migration → Edge Functions (wallet only via the wallet deploy script in `scripts/`)
+→ site (Cloudflare Workers Builds from `main`). Checks: see `AGENTS.md`.

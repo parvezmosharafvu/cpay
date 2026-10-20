@@ -1,5 +1,8 @@
 # CPAY: the website wallet and the standalone CPAY Wallet
 
+> **Historical document.** It describes a superseded design. The current system is in
+> [SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md) and [../AGENTS.md](../AGENTS.md); where they disagree, they win.
+
 Two different things that share an SDK and nothing else.
 
 | | Website wallet (in production) | Standalone CPAY Wallet (`wallet/`) |

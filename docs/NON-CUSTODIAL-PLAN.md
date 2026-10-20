@@ -1,5 +1,8 @@
 # CPAY non-custodial plan (Phase 1, design only)
 
+> **Historical document.** It describes a superseded design. The current system is in
+> [SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md) and [../AGENTS.md](../AGENTS.md); where they disagree, they win.
+
 Status: **approved 2026-10-19; target replaced 2026-10-20 by [INSTANT-FORWARD.md](INSTANT-FORWARD.md)** (fee deducted, remainder forwarded at once). Direct settlement stays as the no-fee mode. Written 2026-10-19 against `main` a24a0db.
 Builds on [NON-CUSTODIAL-ARCHITECTURE.md](NON-CUSTODIAL-ARCHITECTURE.md), which designed and shipped
 direct settlement (off). That document explains *how* a direct payment works; this one says *how the

@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=Noto+Sans+Bengali:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
 <link rel="stylesheet" href="a11y.css">
 <style>
@@ -109,7 +109,12 @@
     <section id="links" hidden></section>
     <section id="wallet" hidden></section>
     <section id="settings" hidden>
+      <nav class="row owner-nav" id="ownerSettingsNav" aria-label="Settings sections"></nav>
+      <div id="ownerFeatures"></div>
       <div id="platformSettings"></div>
+      <div id="ownerDomains"></div>
+      <div id="ownerSecrets"></div>
+      <div id="ownerCloudflare"></div>
       <details id="settingsAdvanced" class="card">
         <summary><strong>Advanced</strong> <span class="faint">withdrawal fee, small payments, flags, alerts, instant-forward limits, old switches</span></summary>
         <div id="fees"></div>
@@ -159,8 +164,10 @@
 <script src="admin-receipt-reviews.js?v=1"></script>
 <script src="admin-home-live.js?v=29"></script>
 <script src="admin-security.js?v=1"></script>
-<script src="admin-platform-settings.js?v=2"></script>
-<script src="admin-forwards.js?v=1"></script>
+<script src="admin-platform-settings.js?v=3"></script>
+<script src="admin-forwards.js?v=3"></script>
+<script src="admin-owner-settings.js?v=1"></script>
+<script src="i18n.js?v=1"></script>
 <script src="shell.js?v=1"></script>
 </body>
 </html>

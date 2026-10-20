@@ -37,7 +37,7 @@
         <button type="button" class="pill active" role="tab" aria-selected="true" data-view="invoice">Invoice page</button>
         <button type="button" class="pill" role="tab" aria-selected="false" data-view="pay">Payment page</button>
       </div>
-      <div class="theme-stage" id="stage">
+      <div class="theme-stage" id="stage" data-stage="invoice">
         <div class="checkout-head">
           <span class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</span>
           <span class="secure"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Secure checkout</span>
@@ -57,7 +57,7 @@
             <div class="kicker">Amount due</div>
             <div class="amount-value">$61.50</div>
             <div class="row" style="justify-content:center">
-              <span class="status-chip">Waiting for payment</span>
+              <span class="status-chip" data-state="waiting">Waiting for payment</span>
               <span class="timer-pill">14:32</span>
             </div>
           </div>
@@ -146,6 +146,9 @@ document.querySelectorAll('.preview-tabs [data-view]').forEach(tab => {
       t.setAttribute('aria-selected', String(on));
     });
     stage.querySelectorAll('.checkout-card[data-view]').forEach(c => { c.hidden = c.dataset.view !== tab.dataset.view; });
+    // Which page the stage stands for: the Standard design styles the payment
+    // page and the invoice differently (cpay.css, data-stage).
+    stage.dataset.stage = tab.dataset.view;
   });
 });
 if (window.QRCode) new QRCode(document.getElementById('qrcode'), { text: 'lightning:lnbc615u1pj9x7zrpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpusp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygs9qrsgq', width: 440, height: 440, correctLevel: QRCode.CorrectLevel.M });

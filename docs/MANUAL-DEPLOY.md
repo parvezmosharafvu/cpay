@@ -87,24 +87,18 @@ Each reply must show `"status":"ACTIVE"` and a version one higher than
 before. Then compare the deployed files with the commit (Supabase MCP
 `get_edge_function`, or Dashboard → Edge Functions → the function → Code).
 
-### breez-wallet
+### The wallet function
 
-`breez-wallet` is too large for the Git integration (`enabled = false` in
-`config.toml`) and is deployed with its own folder as the root and entrypoint
-`index.ts`. With the CLI use `scripts/deploy-breez-wallet.sh`. From Termux:
+The wallet Edge Function is too large for the Git integration (`enabled =
+false` in `config.toml`) and is deployed with its own folder as the root and
+entrypoint `index.ts`, so it has its own script:
 
 ```bash
-cd ~/cpay && git pull -q && cd supabase/functions/breez-wallet
-read -r -p "Token: " T; clear
-args=()
-while IFS= read -r f; do args+=(-F "file=@$f;filename=$f"); done < <(find . -type f \( -name '*.ts' -o -name '*.mjs' \) ! -name '*_test.ts' ! -name '*.test.*' | sed 's|^\./||')
-echo "${#args[@]} parts"
-curl -sS -X POST "https://api.supabase.com/v1/projects/riumaeihemgznvgattoc/functions/deploy?slug=breez-wallet" \
-  -H "Authorization: Bearer $T" \
-  -F 'metadata={"name":"breez-wallet","entrypoint_path":"index.ts","verify_jwt":false};type=application/json' \
-  "${args[@]}"
-unset T
+bash scripts/termux-deploy-wallet.sh <commit>
 ```
+
+With the Supabase CLI, use the CLI deploy script for the wallet function in
+`scripts/` instead. `termux-deploy-function.sh` refuses the wallet function.
 
 ## Token safety
 
@@ -118,7 +112,7 @@ unset T
 
 | Date (UTC) | What | How | Result |
 |---|---|---|---|
-| 2026-10-20 | breez-wallet | Termux, curl to the Management API (folder root, entrypoint `index.ts`) | v29 ACTIVE, files verified against main |
+| 2026-10-20 | wallet function | Termux, the request `scripts/termux-deploy-wallet.sh` now makes (folder root, entrypoint `index.ts`) | v29 ACTIVE, files verified against main |
 | 2026-10-20 | migration 20261020080000_auto_receive (PR #147) | Supabase MCP `apply_migration` | recorded in schema_migrations |
 | 2026-10-20 | migration 20261020090000_locations (PR #143, commit 99903b5) | SQL Editor, `scripts/sql-editor-migration.sh` output (one transaction + history row) | recorded; columns, RLS, grants and functions verified |
 | 2026-10-20 | create-invoice | Termux, same request as `scripts/termux-deploy-function.sh` (6 files, verify_jwt false) | v58 ACTIVE |

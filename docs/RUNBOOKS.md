@@ -24,6 +24,9 @@ exposes process counters only — never balances. The wallet balance comes from 
 wallet `info` action (`POST /admin/wallet/info`) and the withdraw route cache
 from `GET /withdraw/routes`, both behind the bearer secret.
 
+Deploying by hand (Supabase SQL Editor for migrations, Termux for Edge
+Functions) and the log of such deploys: `docs/MANUAL-DEPLOY.md`.
+
 Owner cutover steps for orphan Edge Functions and Telegram secrets:
 `docs/OPS_OWNER_CUTOVER.md` (do not delete or set secrets without approval).
 

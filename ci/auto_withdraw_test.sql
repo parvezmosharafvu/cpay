@@ -66,7 +66,7 @@ end $$;
 select set_config('request.jwt.claim.sub', 'ea100000-0000-0000-0000-0000000000ad', true);
 select set_config('request.jwt.claims', '{}', true);
 do $$ begin perform admin_set_auto_withdraw('ea100000-0000-0000-0000-0000000000a1', 'on'); raise exception 'aal1 accepted';
-exception when raise_exception then if sqlerrm not like 'Enter your authenticator code%' then raise; end if; end $$;
+exception when raise_exception then if sqlerrm not like 'Sign in again with your passkey%' then raise; end if; end $$;
 select set_config('request.jwt.claims', '{"aal":"aal2"}', true);
 do $$ begin perform admin_set_auto_withdraw('ea100000-0000-0000-0000-0000000000a1', 'maybe'); raise exception 'bad mode accepted';
 exception when raise_exception then if sqlerrm <> 'Choose default, on or off' then raise; end if; end $$;

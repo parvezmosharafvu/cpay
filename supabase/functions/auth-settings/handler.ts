@@ -143,7 +143,7 @@ export function createHandler(cfg: AuthSettingsConfig): (req: Request) => Promis
         // Two-step sign-in: aal2 when required (20261014030000) or when this
         // admin has a verified authenticator (20261014080000).
         if (!sessionIsAal2(authHeader) && (hasVerifiedFactor(user) || await adminMfaEnforced(supabaseAdmin))) {
-            return { ok: false, status: 403, error: "Two-step sign-in is required: sign in again and enter your authenticator code." };
+            return { ok: false, status: 403, error: "Sign in again with your passkey, then repeat this." };
         }
         return { ok: true, userId: user.id, email: profile?.email ?? user.email ?? null };
     }

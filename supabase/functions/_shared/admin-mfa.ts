@@ -3,7 +3,7 @@
 // database's is_admin(): an admin session must be aal2 when
 // app_settings.admin_mfa_required is on, or when that admin has a verified
 // authenticator (20261014080000).
-import { decodeJwtPayload } from "./step-up.ts";
+import { sessionIsStrong } from "./step-up.ts";
 
 // A JSON boolean true, or the string "true", turns enforcement on (fail
 // closed for a security flag).
@@ -30,8 +30,10 @@ export function hasVerifiedFactor(user: { factors?: Array<{ status?: string }> |
 }
 
 // Only after auth.getUser() accepted the same token (claims unverified here).
+// Since 20261021020000 the strong factor is a passkey: a passkey sign-in (or
+// aal2 during the switch-over) passes. The name is kept for the callers.
 export function sessionIsAal2(authHeader: string | null): boolean {
-    return decodeJwtPayload(String(authHeader ?? "").replace(/^Bearer\s+/i, ""))?.aal === "aal2";
+    return sessionIsStrong(authHeader);
 }
 
 // The health check's verdict on admin two-step sign-in. Unsafe: required

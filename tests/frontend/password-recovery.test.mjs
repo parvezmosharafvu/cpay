@@ -41,11 +41,11 @@ test('an expired, used or malformed link is forwarded and reported as expired', 
   assert.equal(run('https://pay.example/?error=server_error').link.kind, 'expired');
 });
 
-test('a sign-up confirmation or Google sign-in that fell back to the home page finishes on log in', () => {
+test('a sign-up confirmation that fell back to the home page finishes on log in', () => {
   const conf = run('https://pay.example/#access_token=a.b.c&refresh_token=r&type=signup');
   assert.deepEqual(conf.replaced, ['/login.html?confirmed=1#access_token=a.b.c&refresh_token=r&type=signup']);
   const g = run('https://pay.example/#access_token=a.b.c&refresh_token=r&provider_token=p');
-  assert.deepEqual(g.replaced, ['/login.html?via=google#access_token=a.b.c&refresh_token=r&provider_token=p']);
+  assert.deepEqual(g.replaced, ['/login.html#access_token=a.b.c&refresh_token=r&provider_token=p'], 'no Google path');
   // On the log-in page itself nothing is forwarded.
   assert.deepEqual(run('https://pay.example/login.html#access_token=a.b.c&type=signup').replaced, []);
 });
@@ -105,11 +105,12 @@ test('auth-link.js loads before supabase-js on the pages that receive links', ()
   assert.match(pub('index.html'), /cpayAuthLink\?\.forwarding\) return;/, 'home page does not redirect a forwarded link to the desk');
 });
 
-test('reset.html: states, authenticator step before saving, global sign-out, recovery sessions only', () => {
+test('reset.html: states, passkey step before saving, global sign-out, recovery sessions only', () => {
   const s = pub('reset.html');
   for (const st of ['checking', 'form', 'link', 'done']) assert.ok(s.includes(`data-state="${st}"`), st);
   assert.ok(s.includes('src="mfa.js"'));
-  assert.match(s, /ensureAal2\([\s\S]*?updateUser\(\{ password: a \}\)/, 'code before updateUser');
+  assert.match(s, /ensureStrong\([\s\S]*?updateUser\(\{ password: a \}\)/, 'passkey before updateUser');
+  assert.ok(s.indexOf('src="passkey.js"') >= 0 && s.indexOf('src="passkey.js"') < s.indexOf('src="mfa.js"'));
   assert.match(s, /updateUser[\s\S]*signOut\(\{ scope: 'global' \}\)/);
   assert.match(s, /link\.kind === 'recovery' \|\| fromResetLink\(session\)/);
   assert.match(s, /m\.method === 'recovery'/);
@@ -131,13 +132,12 @@ test('the recovery scripts never log, store or send the link elsewhere', () => {
   assert.doesNotMatch(code(inline), /console\.|localStorage|sessionStorage|fetch\(/);
 });
 
-test('the Freelancer desk has a Security tab for two-step sign-in', () => {
+test('the Freelancer desk has a Security tab for passkeys', () => {
   const s = pub('dashboard.html');
   assert.ok(s.includes('data-tab="security"'));
   assert.ok(s.includes('<section id="security" hidden></section>'));
   const m = s.indexOf('src="mfa.js"');
   assert.ok(m >= 0 && m < s.indexOf('src="admin-security.js"'), 'mfa.js before the Security UI');
-  // The admin-only rule (last authenticator kept while admin MFA is required)
-  // does not apply on the Freelancer desk.
-  assert.match(pub('admin-security.js'), /async function required\(\) \{\s*if \(!adminDesk\) return false;/);
+  // The admin-only rule (last passkey kept) does not apply on the Freelancer desk.
+  assert.match(pub('admin-security.js'), /if \(adminDesk && keys\.length <= 1\)/);
 });

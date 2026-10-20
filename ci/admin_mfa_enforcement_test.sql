@@ -150,9 +150,13 @@ declare r text;
 begin
   -- An enrolled admin at aal1 is not an admin at all since 20261014080000.
   r := pg_temp.toggle_as('77777777-7777-7777-7777-777777777771', 'aal1', true);
-  if r <> 'Not authorized' and r not like 'Enter your authenticator code first%' then raise exception 'enable at aal1: %', r; end if;
+  if r <> 'Not authorized' and r not like 'Sign in again with your passkey first%' then raise exception 'enable at aal1: %', r; end if;
   r := pg_temp.toggle_as('77777777-7777-7777-7777-777777777771', 'aal2', true);
-  if r not like 'Every active admin needs a verified authenticator%' then raise exception 'enable with an unenrolled admin: %', r; end if;
+  if r not like 'Every active admin needs a passkey%' then raise exception 'enable with an admin without a passkey: %', r; end if;
+  -- 20261021020000: every active admin needs a passkey (an authenticator no longer counts).
+  insert into auth.webauthn_credentials(user_id, friendly_name)
+    select p.id, 'Phone' from profiles p where p.role = 'admin' and p.account_status = 'active'
+      and not exists (select 1 from auth.webauthn_credentials w where w.user_id = p.id);
   insert into auth.mfa_factors(id, user_id, friendly_name, status) values
     ('88888888-8888-8888-8888-888888888882', '77777777-7777-7777-7777-777777777772', 'Phone', 'verified');
   r := pg_temp.toggle_as('77777777-7777-7777-7777-777777777771', 'aal2', true);

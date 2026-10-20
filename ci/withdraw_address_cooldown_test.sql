@@ -63,7 +63,7 @@ end $$;
 -- Pass the wait (test only: rewrite the rows with the trigger off).
 reset role;
 do $$ begin
-  if (select count(*) from support_messages where user_id = '7c000000-0000-0000-0000-0000000000f1' and message like '%24 hours, because this account has no authenticator%') <> 2 then
+  if (select count(*) from support_messages where user_id = '7c000000-0000-0000-0000-0000000000f1' and message like '%24 hours, because the change was not confirmed with a passkey%') <> 2 then
     raise exception 'notice does not say when the address is used'; end if;
 end $$;
 alter table usdt_wallets disable trigger usdt_wallets_cooldown;

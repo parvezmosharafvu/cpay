@@ -66,7 +66,7 @@ Deno.test("save and remove need a fresh sign-in", async () => {
   const stale = setup({ fresh: false });
   const r = await stale.call({ action: "save", address: "alice@pay.example.com" });
   assertEquals([r.status, r.body.code], [403, "reauth_required"]);
-  assertEquals(r.body.error, "For your security, enter your password again to change where your payments go.");
+  assertEquals(r.body.error, "For your security, sign in again with your passkey or password to change where your payments go.");
   assertEquals((await stale.call({ action: "remove" })).status, 403);
   assertEquals([stale.saved.length, stale.removed()], [0, 0]);
 });

@@ -71,7 +71,7 @@ do $$ begin
   if (select usable_after from usdt_wallets where user_id = 'f6000000-0000-0000-0000-0000000000a2') > now() then
     raise exception 'USDT address with an authenticator not usable at once'; end if;
   if not exists (select 1 from support_messages where user_id = 'f6000000-0000-0000-0000-0000000000a1' and security_notice
-                  and message like 'Security notice: your USDT payout address%24 hours, because this account has no authenticator%') then
+                  and message like 'Security notice: your USDT payout address%24 hours, because the change was not confirmed with a passkey%') then
     raise exception 'no 24 h USDT notice'; end if;
   if not exists (select 1 from support_messages where user_id = 'f6000000-0000-0000-0000-0000000000a2' and security_notice
                   and message like '%Payments are sent there from now on.%') then
@@ -139,7 +139,7 @@ select set_config('request.jwt.claims', '{"aal":"aal1"}', true);
 do $$ begin
   perform admin_forward_action((select id from payment_forwards where payment_id = 'f6000000-0000-0000-0000-0000000002a1'), 'hold');
   raise exception 'hold without aal2';
-exception when raise_exception then if sqlerrm not like 'Enter your authenticator code%' then raise; end if; end $$;
+exception when raise_exception then if sqlerrm not like 'Sign in again with your passkey%' then raise; end if; end $$;
 select set_config('request.jwt.claims', '{"aal":"aal2"}', true);
 select admin_forward_action((select id from payment_forwards where payment_id = 'f6000000-0000-0000-0000-0000000002a1'), 'hold');
 do $$ begin
@@ -218,7 +218,7 @@ select set_config('request.jwt.claims', '{"aal":"aal1"}', true);
 do $$ begin
   perform admin_forward_batch_action('f6000000-0000-0000-0000-0000000003a2', 'delivered', '0xabc');
   raise exception 'batch closed without aal2';
-exception when raise_exception then if sqlerrm not like 'Enter your authenticator code%' then raise; end if; end $$;
+exception when raise_exception then if sqlerrm not like 'Sign in again with your passkey%' then raise; end if; end $$;
 select set_config('request.jwt.claims', '{"aal":"aal2"}', true);
 select admin_forward_batch_action('f6000000-0000-0000-0000-0000000003a2', 'delivered', '0xabc');
 select admin_forward_batch_action(:'b1_id', 'hold');

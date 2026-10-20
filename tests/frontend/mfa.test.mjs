@@ -18,16 +18,24 @@ test('every page that loads reauth.js loads mfa.js before it', () => {
   }
 });
 
-test('login finishes a sign-in with the code and signs out on cancel', () => {
+test('login finishes a sign-in with the passkey (admins always) and signs out on cancel', () => {
   const s = pub('login.html');
   assert.ok(s.includes('src="mfa.js"'));
-  assert.match(s, /async function go\(id\)\{\s*if \(!\(await finishSecondStep\(\)\)\) return;/);
-  assert.match(s, /ensureAal2\([\s\S]*?signOut\(\)/);
+  assert.match(s, /async function go\(id\)\{[\s\S]*?if \(!\(await finishSecondStep\(data\?\.role === 'admin' && data\?\.account_status === 'active'\)\)\) return;/);
+  assert.match(s, /promptPasskey\(msg\)[\s\S]*?ensureStrong\(msg\)[\s\S]*?signOut\(\)/);
 });
 
-test('reauth.js asks for the code after the password (or passkey) when a factor is enrolled', () => {
+test('no authenticator-app (TOTP) enrolment or code entry is left in the pages', () => {
+  for (const f of ['mfa.js', 'admin-security.js', 'reauth.js', 'login.html', 'reset.html', 'app.js']) {
+    const s = pub(f);
+    assert.doesNotMatch(s, /mfa\.enroll|challengeAndVerify|factorType: 'totp'|one-time-code/, f);
+  }
+});
+
+test('reauth.js asks for the passkey after a password sign-in when the account needs the strong factor', () => {
   const s = pub('reauth.js');
-  assert.match(s, /const finish = async \(\) => \{\s*if \(window\.cpayMfa && await window\.cpayMfa\.needsChallenge\(\)\) \{[\s\S]*?cpayMfa\.promptCode\(/);
+  assert.match(s, /const finish = async \(\) => \{\s*if \(window\.cpayMfa && await window\.cpayMfa\.needsChallenge\(\)\) \{[\s\S]*?cpayMfa\.promptPasskey\(/);
+  assert.doesNotMatch(s, /google|signInWithOAuth/i);
   assert.match(s, /signInWithPassword\([^)]*\);[\s\S]*?if \(error\) throw new Error\('That password is not right\.'\);\s*await finish\(\);/);
 });
 

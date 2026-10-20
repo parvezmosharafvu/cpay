@@ -41,7 +41,7 @@ select set_config('request.jwt.claims', '{"aal":"aal1"}', true);
 do $$ begin
   perform admin_save_domain('pay.example.test');
   raise exception 'saved without aal2';
-exception when raise_exception then if sqlerrm not like 'Enter your authenticator code%' then raise; end if; end $$;
+exception when raise_exception then if sqlerrm not like 'Sign in again with your passkey%' then raise; end if; end $$;
 select set_config('request.jwt.claims', '{"aal":"aal2"}', true);
 do $$
 declare r jsonb;

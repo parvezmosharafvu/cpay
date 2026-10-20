@@ -39,7 +39,7 @@
 
   // Only the home page (the Site URL) forwards; other pages just report.
   const onHome = /^\/(index\.html)?$/.test(location.pathname);
-  // A sign-up confirmation or Google sign-in that fell back to the Site URL
+  // A sign-up confirmation that fell back to the Site URL
   // (its redirect not on the allow-list) finishes on the log-in page.
   const signedInLink = !!h.access_token && !recovery;
   if (kind && onHome) {
@@ -47,7 +47,7 @@
     location.replace('/reset.html' + search + hash);
   } else if (signedInLink && onHome) {
     window.cpayAuthLink.forwarding = true;
-    const via = h.provider_token ? '?via=google' : (['signup', 'email', 'invite', 'magiclink'].includes(h.type) ? '?confirmed=1' : '');
+    const via = ['signup', 'email', 'invite', 'magiclink'].includes(h.type) ? '?confirmed=1' : '';
     location.replace('/login.html' + via + hash);
   } else if (tokenHash && window.history && history.replaceState) {
     // Keep the one-time hash out of the address bar and history.

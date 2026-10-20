@@ -173,7 +173,7 @@ do $$ begin
   if jsonb_array_length(admin_list_forwards()->'rows') < 4 then raise exception 'admin list short'; end if;
   perform admin_forward_action((select id from payment_forwards where payment_id = 'e8000000-0000-0000-0000-0000000002a4'), 'release');
   raise exception 'no aal2 accepted';
-exception when raise_exception then if sqlerrm not like 'Enter your authenticator code%' then raise; end if; end $$;
+exception when raise_exception then if sqlerrm not like 'Sign in again with your passkey%' then raise; end if; end $$;
 select set_config('request.jwt.claims', '{"aal":"aal2"}', true);
 select admin_forward_action((select id from payment_forwards where payment_id = 'e8000000-0000-0000-0000-0000000002a4'), 'release');
 select admin_forward_action((select id from payment_forwards where payment_id = 'e8000000-0000-0000-0000-0000000002a3'), 'retry');

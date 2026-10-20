@@ -36,15 +36,18 @@ async function requireSession(){
   if (!session) { location.href = 'login.html'; return null; }
   return session;
 }
-// A session that still owes its two-step code (a verified authenticator,
-// signed in at aal1) must finish it before any desk loads: otherwise a
-// second tab or a reload would skip the code prompt on login.html. Pages
-// that do not load mfa.js have nothing to finish here.
-async function requireSecondStep(){
+// A session that still owes its passkey (an admin, or an account with an old
+// authenticator, signed in with only a password) must confirm it before any
+// desk loads: otherwise a second tab or a reload would skip the prompt on
+// login.html. Pages that do not load mfa.js have nothing to finish here.
+async function requireSecondStep(isAdmin){
   if (!window.cpayMfa) return true;
   let ok = false;
+  const msg = 'Use your passkey to finish signing in.';
   try {
-    ok = await window.cpayMfa.ensureAal2('Enter the 6-digit code from your authenticator app to finish signing in.');
+    ok = isAdmin
+      ? (await window.cpayMfa.strong()) || (await window.cpayMfa.promptPasskey(msg))
+      : await window.cpayMfa.ensureStrong(msg);
   } catch (e) { ok = false; }
   if (ok) return true;
   await window.supabaseClient.auth.signOut();
@@ -54,7 +57,8 @@ async function requireSecondStep(){
 async function loadProfile(){
   const session = await requireSession();
   if (!session) return null;
-  if (!(await requireSecondStep())) return null;
+  // An old authenticator on the account: the passkey comes before any read.
+  if (!(await requireSecondStep(false))) return null;
   const { data, error } = await window.supabaseClient.from('profiles')
     .select('*').eq('id', session.user.id).single();
   if (error || !data) { location.href = 'login.html'; return null; }
@@ -63,6 +67,9 @@ async function loadProfile(){
     location.href = 'login.html';
     return null;
   }
+  // Admin work needs a passkey session (public.strong_session()); ask now
+  // rather than let every admin call fail.
+  if (data.role === 'admin' && !(await requireSecondStep(true))) return null;
   window.CPAY_PROFILE = data;
   return data;
 }

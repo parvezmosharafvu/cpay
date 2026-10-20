@@ -5,9 +5,9 @@ let payFilter = { status: '', search: '' };
 let wdFilter = { status: '' };
 
 // Saved payout addresses are usable at once after a fresh sign-in when the
-// account has an authenticator, otherwise 24 hours later (20261020060000).
+// change is confirmed with a passkey, otherwise 24 hours later (20261021020000).
 // my_payout_book returns usable_after.
-const PAYOUT_WAIT = 'It is used right away if your account has an authenticator, otherwise after 24 hours. You get a notice in your inbox.';
+const PAYOUT_WAIT = 'It is used right away if you confirm with your passkey, otherwise after 24 hours. You get a notice in your inbox.';
 const USDT_HINT = `One address per network. New payments go here automatically if you have no Lightning address. Saving or changing an address asks you to sign in again. ${PAYOUT_WAIT}`;
 function netLabel(id) {
   return (USDT_NETWORKS.find(([n]) => n === id) || [id, id])[1];

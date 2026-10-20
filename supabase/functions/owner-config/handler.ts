@@ -23,7 +23,7 @@
 //
 // Kept apart from index.ts so the test runs it against local mock servers.
 
-import { checkStepUp, decodeJwtPayload } from "../_shared/step-up.ts";
+import { checkStepUp, decodeJwtPayload, sessionIsStrong } from "../_shared/step-up.ts";
 
 export const PROTECTED: ReadonlySet<string> = new Set([
     "BREEZ_MNEMONIC", "BREEZ_DB_URL", "BREEZ_API_KEY", "BREEZ_NETWORK",
@@ -175,13 +175,13 @@ export function createHandler(cfg: OwnerConfig): (req: Request) => Promise<Respo
         if (!auth.ok) return json({ error: auth.error }, auth.status, cors);
         const caller = auth.caller;
         // Two-step sign-in is required here for every admin, always.
-        if (decodeJwtPayload(caller.authHeader.replace(/^Bearer\s+/i, ""))?.aal !== "aal2") {
-            return json({ error: "Two-step sign-in is required: sign in again and enter your authenticator code.", code: "aal2_required" }, 403, cors);
+        if (!sessionIsStrong(caller.authHeader)) {
+            return json({ error: "Sign in again with your passkey, then repeat this.", code: "aal2_required" }, 403, cors);
         }
         try {
             if (req.method === "GET") return json(await status(), 200, cors);
             const step = checkStepUp(caller.authHeader.replace(/^Bearer\s+/i, ""), caller.user, cfg.stepUpSeconds > 0 ? cfg.stepUpSeconds : 600);
-            if (!step.ok) return json({ error: "For your security, sign in again (password and authenticator code), then repeat the change.", code: "reauth_required" }, 403, cors);
+            if (!step.ok) return json({ error: "For your security, sign in again with your passkey, then repeat the change.", code: "reauth_required" }, 403, cors);
             let body: Record<string, unknown>;
             try { body = await req.json(); } catch { return json({ error: "Invalid JSON body" }, 400, cors); }
             return json(await change(caller, body ?? {}), 200, cors);

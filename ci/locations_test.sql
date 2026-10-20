@@ -113,7 +113,7 @@ select set_config('request.jwt.claim.sub', 'e9100000-0000-0000-0000-0000000000c1
 select set_config('request.jwt.claims', jsonb_build_object('role', 'authenticated', 'aal', 'aal1')::text, true);
 do $$ begin
   perform admin_locations(); raise exception 'admin without aal2 ran admin_locations';
-exception when raise_exception then if sqlerrm not like 'Enter your authenticator code%' then raise; end if; end $$;
+exception when raise_exception then if sqlerrm not like 'Sign in again with your passkey%' then raise; end if; end $$;
 select set_config('request.jwt.claims', jsonb_build_object('role', 'authenticated', 'aal', 'aal2')::text, true);
 do $$ declare r jsonb := admin_locations('BD', 'dhaka'); begin
   if jsonb_array_length(r->'payments') <> 1 or r->'payments'->0->>'link_slug' <> 'loc-link-a' then raise exception 'payments %', r->'payments'; end if;

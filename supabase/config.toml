@@ -89,3 +89,24 @@ verify_jwt = false
 # too large': the Breez WASM). Deployed by hand with the CLI instead:
 #   scripts/deploy-breez-wallet.sh <project-ref>
 enabled = false
+
+# ── Auth: passkey + email only (owner decision 2026-10-21) ─────────────────
+# Kept COMMENTED on purpose. An [auth] section here is pushed by
+# `supabase config push` (and used for preview branches), and every key
+# left out falls back to the CLI default (site_url = localhost, etc.), which
+# would break production sign-in. Apply these four changes in the dashboard
+# (or uncomment together with the full current [auth] block) at deploy time,
+# AFTER every active admin has signed in with a passkey:
+#
+# [auth.email]
+# enable_signup = true
+# enable_confirmations = true      # sign-up needs the email link (live: already on)
+#
+# [auth.external.google]
+# enabled = false                  # live today: ON
+#
+# [auth.mfa.totp]
+# enroll_enabled = false           # no new authenticator apps
+# verify_enabled = false           # old codes no longer accepted
+#
+# Passkeys stay on (Authentication → Passkeys; live: ON).

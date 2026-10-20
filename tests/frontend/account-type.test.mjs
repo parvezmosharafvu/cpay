@@ -29,7 +29,7 @@ test('register offers the two types, Individual first and checked, and sends the
   assert.match(r, /<div class="field" id="businessField" hidden>/);
   assert.match(r, /account_type: accountType, business_name: accountType === 'business' \? businessName : undefined \};\s*\(\{ data, error \} = await window\.supabaseClient\.auth\.signUp\(\{\s*email, password,\s*options: \{\s*data: meta,/);
   assert.match(r, /if \(accountType === 'business' && \(businessName\.length < 2 \|\| businessName\.length > 120\)\)/);
-  assert.match(r, /Continue with Google opens an Individual account/);
+  assert.doesNotMatch(r, /Google|googleBtn|oauth\.js/, 'no Google sign-up (2026-10-21)');
 });
 
 test('every place that shows the type escapes it', () => {

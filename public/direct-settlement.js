@@ -9,12 +9,12 @@
 
   // CPAY Wallet opens dashboard.html#direct=<lightning address> so the
   // address is typed for the Freelancer. It is only filled in: they still
-  // tap Check and Save (fresh sign-in; used at once with an authenticator, otherwise after 24 hours). Read once and
+  // tap Check and Save (fresh sign-in; used at once when confirmed with a passkey, otherwise after 24 hours). Read once and
   // removed from the address bar; kept in this tab for 10 minutes so it
   // survives a trip through the login page.
   const PREFILL_SLOT = 'cpay-direct-prefill';
-  // 20261020060000: without an authenticator a new address waits 24 hours.
-  const DIRECT_HINT = 'Use the Lightning address of a wallet you control. CPAY checks that the wallet provider can confirm payments before you can save it. Payers see this address on the payment page. Saving or changing it asks you to sign in again. With an authenticator on your account it is used right away; without one it is used 24 hours later, and until then payments go to the address you had before. You get a notice in your inbox each time it changes.';
+  // 20261021020000: without a passkey confirmation a new address waits 24 hours.
+  const DIRECT_HINT = 'Use the Lightning address of a wallet you control. CPAY checks that the wallet provider can confirm payments before you can save it. Payers see this address on the payment page. Saving or changing it asks you to sign in again. Confirmed with your passkey it is used right away; otherwise it is used 24 hours later, and until then payments go to the address you had before. You get a notice in your inbox each time it changes.';
   const ADDRESS = /^[a-z0-9._+-]{1,64}@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
   let prefill = null;
   {

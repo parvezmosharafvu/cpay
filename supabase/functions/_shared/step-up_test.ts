@@ -1,4 +1,4 @@
-import { checkStepUp, decodeJwtPayload, stepUpWindow } from "./step-up.ts";
+import { checkStepUp, decodeJwtPayload, sessionIsStrong, stepUpWindow } from "./step-up.ts";
 
 function eq(a: unknown, b: unknown, msg: string) {
   if (a !== b) throw new Error(`${msg}: expected ${b}, got ${a}`);
@@ -54,15 +54,34 @@ Deno.test("password then TOTP (what reauth.js now produces) passes; aal2 with a 
   eq(!r.ok && r.reason, "stale_sign_in", "an hour-old aal2 session still re-authenticates");
 });
 
-Deno.test("a fresh passkey sign-in passes; with an authenticator it still needs the code (aal2)", () => {
+Deno.test("a fresh passkey sign-in passes, also on an account with an old authenticator (20261021020000)", () => {
   const pk = tok({ sub: "u", aal: "aal1", amr: [{ method: "passkey", timestamp: NOW - 30 }] });
   eq(checkStepUp(pk, { factors: [] }, 600, NOW).ok, true, "passkey, no authenticator");
-  const r = checkStepUp(pk, { factors: [{ status: "verified" }] }, 600, NOW);
-  eq(!r.ok && r.reason, "mfa_required", "passkey alone is aal1");
+  eq(checkStepUp(pk, { factors: [{ status: "verified" }] }, 600, NOW).ok, true, "passkey is the strong factor");
   const both = tok({ sub: "u", aal: "aal2", amr: [{ method: "totp", timestamp: NOW - 5 }, { method: "passkey", timestamp: NOW - 30 }] });
   eq(checkStepUp(both, { factors: [{ status: "verified" }] }, 600, NOW).ok, true, "passkey + code");
   const old = tok({ sub: "u", aal: "aal1", amr: [{ method: "passkey", timestamp: NOW - 3600 }] });
   eq(checkStepUp(old, null, 600, NOW).ok, false, "an hour-old passkey sign-in re-authenticates");
+});
+
+Deno.test("an account with an old authenticator: a password alone (aal1) is still refused", () => {
+  const pw = tok({ sub: "u", aal: "aal1", amr: [{ method: "password", timestamp: NOW - 30 }] });
+  const r = checkStepUp(pw, { factors: [{ status: "verified" }] }, 600, NOW);
+  eq(!r.ok && r.reason, "mfa_required", "no weakening: needs the passkey");
+  // An earlier passkey sign-in in the same session plus a fresh password passes,
+  // like an aal2 session with a fresh password did before.
+  const mix = tok({ sub: "u", aal: "aal1", amr: [{ method: "password", timestamp: NOW - 30 }, { method: "passkey", timestamp: NOW - 5000 }] });
+  eq(checkStepUp(mix, { factors: [{ status: "verified" }] }, 600, NOW).ok, true, "strong session + fresh password");
+});
+
+Deno.test("sessionIsStrong: aal2 or a passkey sign-in; password, Google and email links are not", () => {
+  eq(sessionIsStrong("Bearer " + tok({ sub: "u", aal: "aal2", amr: [] })), true, "aal2");
+  eq(sessionIsStrong(tok({ sub: "u", aal: "aal1", amr: [{ method: "passkey", timestamp: NOW }] })), true, "passkey");
+  for (const method of ["password", "oauth", "recovery", "magiclink", "otp"]) {
+    eq(sessionIsStrong(tok({ sub: "u", aal: "aal1", amr: [{ method, timestamp: NOW }] })), false, method);
+  }
+  eq(sessionIsStrong(null), false, "no token");
+  eq(sessionIsStrong("garbage"), false, "bad token");
 });
 
 Deno.test("email-link sessions never satisfy step-up: reset, confirmation, magic link, email code, invite", () => {
@@ -84,8 +103,10 @@ Deno.test("a reset link plus the authenticator code is still not a fresh sign-in
   eq(checkStepUp(totpOnly, factors, 600, NOW).ok, false, "a code alone is not a sign-in");
 });
 
-Deno.test("the first factors CPAY offers pass when fresh: password, passkey, Google", () => {
-  for (const method of ["password", "passkey", "oauth"]) {
+Deno.test("the first factors CPAY offers pass when fresh: password, passkey; Google no longer counts", () => {
+  const g = tok({ sub: "u", aal: "aal1", amr: [{ method: "oauth", timestamp: NOW - 60 }] });
+  eq(checkStepUp(g, { factors: [] }, 600, NOW).ok, false, "oauth (Google) is off since 2026-10-21");
+  for (const method of ["password", "passkey"]) {
     const t = tok({ sub: "u", aal: "aal1", amr: [{ method, timestamp: NOW - 60 }] });
     eq(checkStepUp(t, { factors: [] }, 600, NOW).ok, true, method);
   }

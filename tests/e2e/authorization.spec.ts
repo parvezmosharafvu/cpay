@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { makeUser, makeLink, login, db, ORIGIN, type User } from './helpers';
+import { makeUser, makeLink, login, loginAdmin, db, ORIGIN, type User } from './helpers';
 
 let ANON_KEY = '';
 test.beforeAll(async () => { ANON_KEY = (await (await fetch(`${ORIGIN}/__e2e/anon-key`)).json()).anonKey; });
@@ -71,8 +71,7 @@ test('a Freelancer opening admin.html gets no admin data', async ({ page }) => {
 test('an admin reaches the admin desk and admin RPCs', async ({ page }) => {
   const admin = await makeUser({ role: 'admin', name: 'Op' });
   expect((await rpc('admin_list_creators', await token(admin))).ok).toBe(true);
-  await login(page, admin);
-  await page.waitForURL(/admin\.html/);
+  await loginAdmin(page, admin);
 });
 
 test('retired and removed roles cannot be assigned', async () => {

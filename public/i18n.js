@@ -13,6 +13,9 @@
   'use strict';
   const BN = {
     // Passkey-only sign-in (20261021020000)
+    "Add a passkey and continue": "পাসকি যোগ করে চালিয়ে যান",
+    "This account needs a passkey. Add one now with your fingerprint, face or screen lock; you then sign in with it.": "এই অ্যাকাউন্টে পাসকি লাগবে। এখনই আঙুলের ছাপ, মুখ বা স্ক্রিন লক দিয়ে একটি যোগ করুন; এরপর সেটি দিয়ে সাইন-ইন করবেন।",
+    "Passkeys are not available right now. Ask the owner to switch them on.": "পাসকি এখন চালু নেই। মালিককে চালু করতে বলুন।",
     "Passkeys are not available right now.": "পাসকি এখন চালু নেই।",
     "Authenticator app (no longer used)": "Authenticator অ্যাপ (আর ব্যবহার হয় না)",
     "CPAY now uses passkeys instead of authenticator codes. Add a passkey above; after that your old authenticator is not needed.": "CPAY এখন authenticator কোডের বদলে পাসকি ব্যবহার করে। উপরে একটি পাসকি যোগ করুন; এরপর পুরনো authenticator আর লাগবে না।",

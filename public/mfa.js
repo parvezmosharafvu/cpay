@@ -51,7 +51,11 @@
 
   // Ask for the passkey of the signed-in account. Resolves true once the
   // session is strong, false on cancel. A passkey for another account signs
-  // this one out (the session would belong to someone else).
+  // this one out (the session would belong to someone else). An account with
+  // no passkey yet (a new admin) can add its first one here, from the
+  // password sign-in it just made, and then signs in with it: otherwise a new
+  // admin could never reach Security to add one. Supabase Auth refuses that
+  // while an old authenticator is on the account and the session is aal1.
   function promptPasskey(message) {
     return new Promise((resolve) => {
       const dlg = document.createElement('dialog');
@@ -71,6 +75,22 @@
       q('msg').textContent = message || 'Use your fingerprint, face or screen lock to continue.';
       const err = q('err');
       const done = (ok) => { dlg.close(); dlg.remove(); resolve(ok); };
+      let enrol = false;
+      (async () => {
+        try {
+          if (!window.cpayPasskey || !(await window.cpayPasskey.available())) {
+            err.textContent = 'Passkeys are not available right now. Ask the owner to switch them on.'; err.hidden = false; return;
+          }
+          const keys = await window.cpayPasskey.list();
+          if (!keys.length) {
+            enrol = true;
+            q('msg').textContent = 'This account needs a passkey. Add one now with your fingerprint, face or screen lock; you then sign in with it.';
+            q('ok').textContent = 'Add a passkey and continue';
+            q('ok').dataset.role = 'ok';
+            q('ok').dataset.enrol = '1';
+          }
+        } catch (e) { /* sign-in with an existing passkey stays available */ }
+      })();
       q('cancel').onclick = () => done(false);
       dlg.addEventListener('cancel', (e) => { e.preventDefault(); done(false); });
       dlg.querySelector('form').onsubmit = async (e) => {
@@ -81,6 +101,12 @@
         try {
           const { data } = await sb().auth.getUser();
           const before = data?.user?.id;
+          if (enrol) {
+            const add = await window.cpayPasskey.register();
+            if (add.cancelled) { ok.disabled = false; return; }
+            if (add.error) { err.textContent = add.error; err.hidden = false; ok.disabled = false; return; }
+            enrol = false;
+          }
           const r = await window.cpayPasskey.signIn({ container: q('captcha') });
           if (r.cancelled) { ok.disabled = false; return; }
           if (r.error) { err.textContent = r.error; err.hidden = false; ok.disabled = false; return; }

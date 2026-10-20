@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { makeUser, login, db, uniq, PASSWORD, expectCleanCopy } from './helpers';
+import { makeUser, login, db, uniq, PASSWORD, expectCleanCopy, loginAdmin } from './helpers';
 
 // Account type (CPAY design artifacts): Individual or Business / Organization,
 // chosen at sign-up, shown on the desk and to the admin reviewing the
@@ -69,8 +69,7 @@ test('the desk shows the account type; the admin sees it on the application', as
   await page.waitForURL(/login\.html|\/$/);
 
   const admin = await makeUser({ name: 'Type Admin', role: 'admin' });
-  await login(page, admin);
-  await page.waitForURL(/admin\.html/);
+  await loginAdmin(page, admin);
   // The application tables (Overview and Applications) carry the column.
   const apps = page.locator('table', { has: page.locator('th', { hasText: 'Account type' }) });
   const row = apps.locator('tr', { hasText: 'Shop Owner' }).first();

@@ -75,3 +75,22 @@ export async function expectCleanCopy(page: Page) {
   const text = (await page.locator('body').innerText()).toLowerCase();
   expect(text).not.toMatch(/breez|bkash|nagad|binance|bank transfer/);
 }
+
+/** Passkeys on in the stand-in Auth, plus Chromium's virtual authenticator. */
+export async function withPasskeys(page: Page) {
+  await fetch(`${ORIGIN}/__e2e/passkey?on=1`, { method: 'POST' });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('WebAuthn.enable');
+  const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
+    options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
+  });
+  return { cdp, id: authenticatorId };
+}
+
+/** Admin sign-in since 20261021020000: password, then the passkey (added on first sign-in). */
+export async function loginAdmin(page: Page, u: User) {
+  await withPasskeys(page);
+  await login(page, u);
+  await page.locator('dialog [data-role="ok"]').click();
+  await page.waitForURL(/admin\.html/);
+}

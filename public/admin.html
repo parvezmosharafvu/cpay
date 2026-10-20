@@ -115,13 +115,14 @@
       <div id="ownerDomains"></div>
       <div id="ownerSecrets"></div>
       <div id="ownerCloudflare"></div>
-      <details id="settingsAdvanced" class="card">
-        <summary><strong>Advanced</strong> <span class="faint">withdrawal fee, small payments, flags, alerts, instant-forward limits, old switches</span></summary>
+      <!-- Instant forward only: the old advanced switches are not shown. The
+           containers stay (hidden) because admin-desk.js renders into them. -->
+      <div id="settingsAdvanced" hidden>
         <div id="fees"></div>
         <div id="flags"></div>
         <div id="alerts"></div>
         <div id="platformSettingsAdvanced"></div>
-      </details>
+      </div>
     </section>
     <section id="health" hidden></section>
     <section id="receipts" hidden></section>

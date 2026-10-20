@@ -408,6 +408,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/owner_domains_test.sql
+      - name: Saving an address is enough to get paid (20261020080000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/auto_receive_test.sql
       - name: Money is exact (no float columns or float casts in public)
         env:
           PGPASSWORD: postgres

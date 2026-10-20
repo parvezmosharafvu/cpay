@@ -101,13 +101,13 @@ for (const [name, r] of Object.entries({
   });
 }
 
-test('freelancer desk lists Download wallet without changing its tabs', async ({ browser }) => {
+// The CPAY Wallet is not published yet: the desk has no Download wallet link.
+test('freelancer desk has no Download wallet link and keeps its tabs', async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   await page.goto('/dashboard.html', { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('.side a.navi[href="/assets/wallet.html"]')).toHaveText('Download wallet');
+  await expect(page.locator('.side a.navi[href="/assets/wallet.html"]')).toHaveCount(0);
   const tabs = await page.locator('.side .navi[data-tab]').evaluateAll((b) => b.map((x) => x.getAttribute('data-tab')));
-  // 'security' (two-step sign-in) was added on purpose after Download wallet.
   expect(tabs).toEqual(['home', 'links', 'pay', 'cash', 'chat', 'profile', 'security']);
   await context.close();
 });

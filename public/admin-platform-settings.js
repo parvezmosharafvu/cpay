@@ -14,7 +14,6 @@
     // The on/off switches (legal_published, wallet_link_enabled) are in
     // Features (admin-owner-settings.js).
     ['Legal pages', ['legal_entity_name', 'legal_address', 'legal_effective_date', 'legal_jurisdiction', 'legal_courts', 'legal_privacy_email', 'legal_support_email']],
-    ['Wallet link', ['wallet_url']],
   ];
   const ADVANCED = [
     ['Instant forward', ['instant_forward_no_address', 'instant_forward_min_sat', 'instant_forward_max_usd', 'instant_forward_max_fee_pct', 'instant_forward_max_attempts']],
@@ -99,16 +98,13 @@
   function groupsHtml(groups, byKey) {
     return groups.map(([title, keys]) => `<h3>${esc(title)}</h3><div class="card flush"><table class="table"><tbody>${keys.filter((k) => byKey[k]).map((k) => rowHtml(byKey[k])).join('')}</tbody></table></div>`).join('');
   }
+  // CPAY runs in instant forward only: the fee is kept and the rest goes to
+  // the freelancer's own address; nothing is kept in CPAY. No mode chooser.
   function modeHtml(row) {
     if (!row) return '';
-    return `<h3>Payment mode</h3>
-      <div class="card" role="radiogroup" aria-label="Payment mode">
-        ${MODES.map(([v, t, d]) => `<label class="row" style="align-items:flex-start;gap:10px;margin:0 0 10px">
-          <input type="radio" name="psMode" value="${v}" ${row.value === v ? 'checked' : ''}>
-          <span><strong>${esc(t)}</strong>${row.value === v ? ' <span class="faint">(now)</span>' : ''}<br><span class="muted">${esc(d)}</span></span></label>`).join('')}
-        <button class="btn primary sm" id="psModeSave">Save payment mode</button>
-        <div class="faint" data-ps-status="payment_mode" role="status"></div>
-      </div>`;
+    return `<h3>How payments work</h3>
+      <div class="card"><p><strong>Instant forward</strong>${row.value === 'instant_forward' ? '' : ' <span class="err">(not active: ask your developer)</span>'}</p>
+        <p class="muted">CPAY receives each payment, keeps the platform fee below and sends the rest straight to the freelancer’s own Lightning or USDT address. CPAY keeps no balances: a freelancer without a payout address cannot take new payments until they add one.</p></div>`;
   }
   async function feeHtml() {
     const { data } = await client.from('app_settings').select('value').eq('key', 'default_platform_fee_percent').maybeSingle();
@@ -152,14 +148,6 @@
       ${groupsHtml(MAIN, byKey)}
       <div id="platformSettingsAudit"></div>`;
     wire(el, byKey);
-    const modeBtn = document.getElementById('psModeSave');
-    if (modeBtn) modeBtn.onclick = () => {
-      const picked = el.querySelector('input[name="psMode"]:checked');
-      const row = byKey.payment_mode;
-      if (!picked || picked.value === row.value) return;
-      const label = MODES.find(([v]) => v === picked.value)[1];
-      save({ ...row, label: 'Payment mode' }, picked.value, el.querySelector('[data-ps-status="payment_mode"]'), label);
-    };
     document.getElementById('psFeeSave').onclick = async () => {
       const st = document.getElementById('psFeeStatus');
       const raw = String(document.getElementById('psFee').value ?? '').trim();

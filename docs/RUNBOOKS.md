@@ -147,7 +147,7 @@ Since 20261021020000 the strong factor is a **passkey**. Admin actions,
 settings, withdrawals and payout-address changes require
 `public.strong_session()`: a session that signed in with a passkey (or, only
 during the switch-over, an existing aal2 session from an authenticator code
-enrolled earlier). New authenticator (TOTP) enrolment is off; Google sign-in
+enrolled earlier). New authenticator (TOTP) enrolment is off, and since 2026-10-21 codes are not verified either (factors kept); Google sign-in
 is off. An aal1 password session is refused wherever aal2 used to be needed.
 
 **Once enrolled, aal2 is required (migration 20261014080000).** An admin

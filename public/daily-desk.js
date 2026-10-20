@@ -1,5 +1,5 @@
 /* Daily accounting views shared by the freelancer and admin desks.
-   A business day is the database's (migration 0096): 5:00 PM to 5:00 PM
+   A business day is the database's (20261021030000): the Bangladesh calendar day, midnight to midnight
    Asia/Dhaka, keyed by the date it starts on. Every figure here comes from
    the RPCs; nothing is re-added in the browser except column totals. */
 const Daily = (() => {
@@ -24,9 +24,9 @@ const Daily = (() => {
   function dhakaTime(ts) {
     return new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: TZ });
   }
-  // "Thu 24 Sep → Fri 25 Sep": the day's two 5 PM edges.
+  // "Thu 24 Sep": one Bangladesh calendar day (midnight to midnight).
   function dayRange(row) {
-    return `${dhakaDay(row.day_start)} → ${dhakaDay(row.day_end)}`;
+    return dhakaDay(row.day_start);
   }
   function untilText(endIso) {
     const mins = Math.max(0, Math.round((new Date(endIso) - Date.now()) / 60000));
@@ -87,13 +87,13 @@ const Daily = (() => {
     return `<div class="card bizday">
       <div class="kicker">Today's business day</div>
       <div class="bizday-range"><span>${dhakaTime(today.day_start)} ${dhakaDay(today.day_start)}</span> <span>→ ${dhakaTime(today.day_end)} ${dhakaDay(today.day_end)}</span></div>
-      <p class="bizday-close"><strong>Today closes at 5:00 PM Bangladesh time</strong> <span class="faint">in ${untilText(today.day_end)}</span></p>
+      <p class="bizday-close"><strong>Today closes at midnight Bangladesh time</strong> <span class="faint">in ${untilText(today.day_end)}</span></p>
       <dl class="bizday-figs">
         <div><dt>Settled</dt><dd>${money(today.settled)}</dd></div>
         <div><dt>Payments</dt><dd>${num(today.payment_count)}</dd></div>
         <div><dt>${extra && extra.earningsLabel || 'Your earnings'}</dt><dd>${money(today.earnings)}</dd></div>
       </dl>
-      <p class="faint">Each day's figures lock at 5:00 PM Dhaka time (UTC+6).</p>
+      <p class="faint">Each day's figures lock at midnight Dhaka time (UTC+6).</p>
     </div>`;
   }
 
@@ -101,7 +101,7 @@ const Daily = (() => {
   function summaryTable(rows, opts = {}) {
     const today = rows[0] && rows[0].business_day;
     const body = rows.map((r) => `<tr data-day="${r.business_day}" class="pick${r.business_day === opts.selected ? ' sel' : ''}" tabindex="0">
-      <td class="lead"><div class="day">${escapeHtml(dayRange(r))}${r.business_day === today ? ' <span class="tag">Today</span>' : ''}</div><div class="faint">5:00 PM to 5:00 PM</div></td>
+      <td class="lead"><div class="day">${escapeHtml(dayRange(r))}${r.business_day === today ? ' <span class="tag">Today</span>' : ''}</div><div class="faint">12:00 AM to 12:00 AM</div></td>
       <td class="num" data-label="Links">${num(r.link_count)}<div class="faint">${num(r.paid_link_count)} paid</div></td>
       <td data-label="Cost rates">${rates(r.cost_rates)}</td>
       <td class="num" data-label="Payments">${num(r.payment_count)}</td>
@@ -201,7 +201,7 @@ const Daily = (() => {
     const every = Math.max(Math.ceil(n / 8), Math.ceil(50 / bw));
     const labels = rows.map((r, i) => ((n - 1 - i) % every === 0
       ? `<text x="${cx(i) + 20 > W ? W - 2 : cx(i)}" y="${H - 8}" class="ax" text-anchor="${cx(i) + 20 > W ? 'end' : 'middle'}">${escapeHtml(dhakaDay(r.day_start).replace(/^\w+ /, ''))}</text>` : '')).join('');
-    const hits = rows.map((r, i) => `<rect x="${padL + bw * i}" y="${top}" width="${bw}" height="${h1 + gap + h2}" class="hit"><title>${escapeHtml(dayRange(r))} (closes 5 PM)
+    const hits = rows.map((r, i) => `<rect x="${padL + bw * i}" y="${top}" width="${bw}" height="${h1 + gap + h2}" class="hit"><title>${escapeHtml(dayRange(r))} (closes at midnight)
 Settled ${money(r.settled)} · ${num(r.payment_count)} payments
 Platform fee ${money(r.platform_fee)}
 Withdrawal fee revenue ${money(r.withdrawal_fee_revenue)}</title></rect>`).join('');
@@ -218,7 +218,7 @@ Withdrawal fee revenue ${money(r.withdrawal_fee_revenue)}</title></rect>`).join(
     const opt = (p) => `<option value="${p.id}">${escapeHtml(p.display_name || p.email)} · ${escapeHtml(p.email)}</option>`;
     el.innerHTML = `<div class="card">
         <div class="card-head wrap">
-          <div><h3>Daily earnings</h3><div class="faint">Each bar is one business day, 5:00 PM to 5:00 PM Bangladesh time, labelled by the date it starts. The last bar is today and still open.</div></div>
+          <div><h3>Daily earnings</h3><div class="faint">Each bar is one Bangladesh calendar day, midnight to midnight. The last bar is today and still open.</div></div>
           <div class="row" role="group" aria-label="Range">${[7, 30, 90].map((d) => `<button type="button" class="pill${d === state.range ? ' active' : ''}" data-range="${d}">${d} days</button>`).join('')}</div>
         </div>
         <div class="filters">

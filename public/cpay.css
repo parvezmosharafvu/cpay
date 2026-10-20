@@ -1215,7 +1215,7 @@ body.ops{padding-bottom:48px}
 .captcha-box{margin:12px 0;min-height:0}
 .captcha-box:empty{display:none}
 
-/* ---------- sign-in extras: Google, divider, inline links, notices ---------- */
+/* ---------- sign-in extras: divider, inline links, notices ---------- */
 .oauth-btn{background:var(--surface);color:var(--text);border-color:var(--line-strong);box-shadow:var(--shadow-sm)}
 .oauth-btn:hover{background:var(--surface-2);border-color:color-mix(in srgb,var(--line) 70%,var(--text))}
 .oauth-btn:disabled{opacity:.6;cursor:progress}

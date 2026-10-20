@@ -253,7 +253,7 @@ Merge commit `git log` থেকে মিলিয়ে লেখা।
 | ২১ অক্টোবর ২০২৬ | **Login শুধু passkey + email verification:** Google বন্ধ, নতুন authenticator (TOTP) যোগ বন্ধ, admin কাজে passkey লাগে | #152 (`0d634e5`) |
 | ২১ অক্টোবর ২০২৬ | Repo পরিষ্কার, `AGENTS.md` আর `docs/SYSTEM-OVERVIEW.md` | #153 (`ce32488`) |
 | ২১ অক্টোবর ২০২৬ | **এই System guide**, শুধু owner দেখতে পারেন (`owner-guide` function) | #154 |
-| ২১ অক্টোবর ২০২৬ | **Google পুরোপুরি সরানো:** Supabase-এ Google-এর client id/secret মুছে ফেলা, admin account থেকে Google identity আলাদা করা, repo থেকে Google login-এর সব code আর লেখা বাদ | follow-up PR |
+| ২১ অক্টোবর ২০২৬ | **Google পুরোপুরি সরানো:** repo থেকে Google login-এর বাকি code, test mock আর লেখা বাদ; Supabase-এ Google provider বন্ধ। Client id/secret মোছা আর admin account থেকে Google identity আলাদা করা dashboard-এ বাকি (৯.৫ দেখুন) | #155 |
 
 <a id="todo"></a>
 ## ৯. এখন কী কী setting করতে হবে
@@ -289,7 +289,9 @@ Merge commit `git log` থেকে মিলিয়ে লেখা।
 
 - ❔ **Supabase PITR (Point-in-time recovery):** Supabase → Project Settings → Add-ons → Point in time recovery চালু আছে কিনা দেখুন (paid add-on)।
 - ⬜ **পুরনো authenticator code বন্ধ:** আপনি passkey দিয়ে admin-এ ঢুকে একটা setting বদলে দেখুন। ঠিক থাকলে Supabase → Authentication → Multi-Factor → TOTP **Verify** বন্ধ।
-- ✅ Google login বন্ধ আর পুরোপুরি সরানো।
+- ✅ Google login বন্ধ (provider off), repo থেকে সব Google code সরানো।
+- ⬜ **Google client id/secret মোছা:** Supabase → Authentication → Sign In / Providers → Google → **Client IDs** আর **Client Secret** খালি করুন → Save (provider off-ই থাকবে)। CLI এই দুটো field push করে না, তাই হাতে করতে হবে। তারপর Google Cloud Console → APIs & Services → Credentials → CPAY-এর OAuth client → **Delete**।
+- ⬜ **Admin account থেকে Google identity আলাদা করা:** account-এ এখনো `email` আর `google` দুটো identity আছে (password আর passkey আছে, তাই আটকে যাওয়ার ভয় নেই)। Supabase-এ অন্য user-এর identity মোছার কোনো admin API বা dashboard বাটন নেই। আপনি অনুমতি দিলে SQL editor-এ একটাই লাইন: `delete from auth.identities where provider = 'google' and user_id = '<আপনার user id>';` (Authentication → Users → আপনার account থেকে user id দেখে নিন)।
 
 ### ৯.৬ Real টাকা দিয়ে test (আপনি করবেন)
 

@@ -21,8 +21,7 @@ Two account types, chosen at sign-up (migration 20261017010000):
 The type is shown on the desk and to the admin reviewing the application.
 It grants nothing: both types have the same role (`creator`, shown as
 Freelancer), approval, fees, limits and payouts. Users cannot change it
-after sign-up; an admin can. Continue with Google opens an Individual
-account. There are no team members or organization settings, and no other
+after sign-up; an admin can. There are no team members or organization settings, and no other
 roles (`creator` and `admin` only).
 
 The website balance is **held by CPAY** for either type (custodial).

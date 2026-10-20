@@ -338,7 +338,6 @@
     "Share a link; payers choose an amount and pay a Lightning invoice.": "একটি লিংক শেয়ার করুন; পেমেন্টকারী অংক বেছে Lightning ইনভয়েসে পেমেন্ট করেন।",
     "Show": "দেখান",
     "Shown in the quote": "কোটে দেখানো হয়",
-    "Sign in with Google again": "আবার Google দিয়ে সাইন-ইন করুন",
     "Skip to desk": "ডেস্কে যান",
     "Small payments": "ছোট পেমেন্ট",
     "Spendable": "খরচযোগ্য",

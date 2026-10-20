@@ -9,11 +9,11 @@
     cached = (async () => {
       try {
         const r = await fetch(`${window.SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: window.SUPABASE_ANON_KEY } });
-        if (!r.ok) return { google: false, passkeys: false };
+        if (!r.ok) return { passkeys: false };
         const s = await r.json();
-        return { google: false, passkeys: s?.passkeys_enabled === true };
+        return { passkeys: s?.passkeys_enabled === true };
       } catch (e) {
-        return { google: false, passkeys: false };
+        return { passkeys: false };
       }
     })();
     return cached;

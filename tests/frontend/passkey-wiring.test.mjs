@@ -35,15 +35,15 @@ function features(settings) {
   return { win, calls: () => calls };
 }
 
-test('auth-features.js reads passkeys from Supabase Auth /settings once; Google is always off', async () => {
+test('auth-features.js reads passkeys from Supabase Auth /settings once; no Google field', async () => {
   const on = features({ external: { google: true }, passkeys_enabled: true });
-  assert.equal(JSON.stringify(await on.win.cpayAuthFeatures()), JSON.stringify({ google: false, passkeys: true }));
+  assert.equal(JSON.stringify(await on.win.cpayAuthFeatures()), JSON.stringify({ passkeys: true }));
   await on.win.cpayAuthFeatures();
   assert.equal(on.calls(), 1, 'cached per page');
   const off = features({ external: {} });
-  assert.equal(JSON.stringify(await off.win.cpayAuthFeatures()), JSON.stringify({ google: false, passkeys: false }));
+  assert.equal(JSON.stringify(await off.win.cpayAuthFeatures()), JSON.stringify({ passkeys: false }));
   const down = features('down');
-  assert.equal(JSON.stringify(await down.win.cpayAuthFeatures()), JSON.stringify({ google: false, passkeys: false }));
+  assert.equal(JSON.stringify(await down.win.cpayAuthFeatures()), JSON.stringify({ passkeys: false }));
 });
 
 function passkeyApi(win) {

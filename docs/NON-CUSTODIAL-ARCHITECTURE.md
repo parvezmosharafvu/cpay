@@ -176,7 +176,7 @@ Payment states (direct):
 
 | Threat | Mitigation | What remains |
 |---|---|---|
-| Someone with a merchant's session sets their own address | Fresh sign-in (password/passkey/Google, plus the code when an authenticator is set up) to save or remove; 24 h before it is used; audit log; the desk shows "waiting" with the time | An attacker who knows the password and passes two-step sign-in. Recommend e-mail notification of address changes (not built) |
+| Someone with a merchant's session sets their own address | Fresh sign-in (password/passkey, plus the code when an authenticator is set up) to save or remove; 24 h before it is used; audit log; the desk shows "waiting" with the time | An attacker who knows the password and passes two-step sign-in. Recommend e-mail notification of address changes (not built) |
 | CPAY (or someone who controls CPAY's servers or database) points future invoices elsewhere | Audit log; the payer sees the destination address on the page; the merchant sees every payment in their own wallet and can compare | This is the irreducible trust in an invoice-showing service. It cannot touch money already paid |
 | A provider sends an invoice for another amount, purpose or network, or one about to expire | Refused before the payer sees it | — |
 | A provider says "paid" falsely | Paid only with the preimage that matches this invoice; checked again by the database CHECK; an answer for another invoice is refused | The merchant's own provider knows the preimage from the start, so it could claim "paid" for an invoice nobody paid: that misleads only its own merchant's records, and the payer's own wallet shows whether they paid. A custodial provider that receives but never credits the merchant: the merchant's choice of provider |

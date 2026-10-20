@@ -8,8 +8,7 @@ let wdFilter = { status: '' };
 // account has an authenticator, otherwise 24 hours later (20261020060000).
 // my_payout_book returns usable_after.
 const PAYOUT_WAIT = 'It is used right away if your account has an authenticator, otherwise after 24 hours. You get a notice in your inbox.';
-const RECEIVE_HINT = `Changing this asks you to sign in again. ${PAYOUT_WAIT}`;
-const USDT_HINT = `One address per network. Used for withdrawals, and for receiving if you pick USDT above. Saving or changing an address asks you to sign in again. ${PAYOUT_WAIT}`;
+const USDT_HINT = `One address per network. New payments go here automatically if you have no Lightning address. Saving or changing an address asks you to sign in again. ${PAYOUT_WAIT}`;
 function netLabel(id) {
   return (USDT_NETWORKS.find(([n]) => n === id) || [id, id])[1];
 }
@@ -403,23 +402,16 @@ async function renderProfile() {
     return `<tr><td data-label="Network">${escapeHtml(netLabel(w.network))}</td><td data-label="Address" class="mono"><code>${escapeHtml(w.address)}</code></td><td data-label="Status">${readyText(w)}</td>
       <td class="table-actions"><button type="button" class="btn ghost sm" data-del-net="${escapeHtml(w.network)}">Remove</button></td></tr>`;
   }).join('');
+  // No choice to make: saving a USDT or Lightning address is enough
+  // (receive_target_for, 20261020080000). Lightning first, then USDT.
   const { data: rs } = await sb.rpc('my_receive_settings');
-  const method = rs?.method || 'lightning';
-  const forwarding = rs?.payment_mode === 'instant_forward';
-  const usdtChoice = rs?.usdt_network || book?.preferred_usdt_network || (wallets[0] && wallets[0].network) || '';
-  const usdtChoiceOpts = wallets.map((w) => `<option value="${escapeHtml(w.network)}" ${w.network === usdtChoice ? 'selected' : ''}>${escapeHtml(netLabel(w.network))}: ${escapeHtml(String(w.address).slice(0, 10))}…</option>`).join('');
+  const target = rs?.target_address || '';
+  const where = rs?.method === 'usdt' ? `USDT on ${netLabel(rs.usdt_network)}` : rs?.method === 'lightning' ? 'Lightning address' : '';
   el.innerHTML = `<div class="card" id="receiveCard">
     <div class="card-title"><div><h3>Where to receive</h3>
-      <p class="faint">${forwarding
-        ? 'CPAY receives each payment, keeps its fee and sends the rest straight to the place you pick here.'
-        : 'Pick where your money should go. Today payments add to your CPAY balance and you withdraw as USDT from Cash; this choice is used when CPAY sends payments on automatically.'}</p></div></div>
-    <fieldset class="choice" id="recvChoice"><legend>Send my money to</legend>
-      <label class="choice-opt"><input type="radio" name="recvMethod" value="lightning" ${method === 'lightning' ? 'checked' : ''}><span><strong>Lightning address</strong><span class="faint">Arrives in seconds. Small Lightning network fee.</span></span></label>
-      <label class="choice-opt"><input type="radio" name="recvMethod" value="usdt" ${method === 'usdt' ? 'checked' : ''} ${wallets.length ? '' : 'disabled'}><span><strong>USDT</strong><span class="faint">${wallets.length ? 'To a saved USDT address. Small payments are grouped until they reach the network minimum.' : 'Save a USDT address below first.'}</span></span></label>
-    </fieldset>
-    <div class="field" id="recvNetField" ${method === 'usdt' && wallets.length ? '' : 'hidden'}><label for="recvNet">USDT address to use</label><select id="recvNet">${usdtChoiceOpts}</select></div>
-    <button class="btn primary" id="saveRecv" type="button">Save choice</button>
-    <p class="hint">Changing this asks you to sign in again. It is used right away, and you get a notice in your inbox.</p>
+      <p class="faint">CPAY receives each payment, keeps its fee and sends the rest straight to your saved address.</p></div></div>
+    <p id="recvNow"></p>
+    <p class="hint">Save a USDT address below or a Lightning address. If you save both, Lightning is used.</p>
   </div>
   <div id="directCard" hidden></div>
   <div class="grid split">
@@ -433,7 +425,7 @@ async function renderProfile() {
     </div>
     <div class="card">
       <h3>USDT addresses</h3>
-      <p class="hint">One address per network. Used for withdrawals, and for receiving if you pick USDT above. Saving or changing an address asks you to sign in again; it works right away and you get a notice in your inbox.</p>
+      <p class="hint">One address per network. New payments go here automatically if you have no Lightning address. Saving or changing an address asks you to sign in again; it works right away and you get a notice in your inbox.</p>
       <div class="field"><label for="usdtNet">Network</label><select id="usdtNet">${netOpts}</select></div>
       <div class="field"><label for="usdtAddr">Wallet address</label><input id="usdtAddr" placeholder="Address for that network" autocomplete="off" spellcheck="false"></div>
       <button class="btn primary" id="saveUsdt" type="button">Save address</button>
@@ -448,21 +440,17 @@ async function renderProfile() {
       <button class="btn ghost" id="savePrefs" type="button">Save payout settings</button>
     </div>
   </div>`;
-  el.querySelector('#saveRecv').nextElementSibling.textContent = RECEIVE_HINT;
+  const recvNow = document.getElementById('recvNow');
+  if (target) {
+    recvNow.append('Payments go to: ', Object.assign(document.createElement('strong'), { textContent: where }), ' ');
+    recvNow.append(Object.assign(document.createElement('code'), { textContent: target }));
+  } else if (wallets.length) {
+    recvNow.textContent = 'Your saved address is not ready yet. Payments start once it is (at most 24 hours).';
+  } else {
+    recvNow.className = 'err';
+    recvNow.textContent = 'No address yet. Save a USDT or Lightning address to start receiving payments.';
+  }
   el.querySelector('#usdtNet').closest('.card').querySelector('.hint').textContent = USDT_HINT;
-  const recvNetField = document.getElementById('recvNetField');
-  document.querySelectorAll('input[name="recvMethod"]').forEach((r) => {
-    r.onchange = () => { recvNetField.hidden = !(r.value === 'usdt' && r.checked && wallets.length); };
-  });
-  document.getElementById('saveRecv').onclick = async () => {
-    const pick = document.querySelector('input[name="recvMethod"]:checked')?.value || 'lightning';
-    const call = () => sb.rpc('set_my_receive_method', { p_method: pick, p_network: pick === 'usdt' ? document.getElementById('recvNet').value : null });
-    const needsReauth = (r) => /^reauth_required/.test(String(r?.error?.message || ''));
-    const { error: e } = window.cpayWithStepUp ? await window.cpayWithStepUp(call, needsReauth) : await call();
-    if (e) return toast(String(e.message).replace(/^reauth_required:\s*/, ''));
-    toast(pick === 'usdt' ? 'You now receive in USDT' : 'You now receive on Lightning', true);
-    renderProfile();
-  };
   if (window.cpayDirect) window.cpayDirect.card(document.getElementById('directCard'), () => { renderProfile(); renderLinks(); });
   document.getElementById('saveProf').onclick = async () => {
     const { error: e } = await sb.rpc('update_my_public_profile', {

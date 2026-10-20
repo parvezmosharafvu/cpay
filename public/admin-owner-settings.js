@@ -30,10 +30,7 @@
 
   // ---- Features -------------------------------------------------------------
   const FEATURES = [
-    ['wallet_link_enabled', 'CPAY Wallet download link on the website', 'ওয়েবসাইটে CPAY Wallet ডাউনলোড লিংক দেখানো'],
     ['legal_published', 'Publish the legal pages (needs every legal field filled in)', 'আইনি পাতাগুলো প্রকাশ (সব আইনি তথ্য পূরণ করা লাগবে)'],
-    ['fee_pilot_no_fee', 'Pilot: no CPAY fee on direct payments', 'পাইলট: সরাসরি পেমেন্টে CPAY ফি নেই'],
-    ['fee_billing_enabled', 'Bill merchants a monthly subscription', 'মার্চেন্টদের মাসিক সাবস্ক্রিপশন বিল করা'],
   ];
   async function renderFeatures() {
     const host = document.getElementById('ownerFeatures');
@@ -215,7 +212,7 @@
     const host = document.getElementById('ownerSettingsNav');
     if (!host) return;
     const items = [['ownerFeatures', 'Features', 'ফিচার'], ['platformSettings', 'Payment & fees', 'পেমেন্ট ও ফি'], ['ownerDomains', 'Domains', 'ডোমেইন'],
-      ['ownerSecrets', 'Secrets & keys', 'গোপন কী'], ['ownerCloudflare', 'Cloudflare', 'Cloudflare'], ['settingsAdvanced', 'Advanced', 'উন্নত']];
+      ['ownerSecrets', 'Secrets & keys', 'গোপন কী'], ['ownerCloudflare', 'Cloudflare', 'Cloudflare']];
     host.replaceChildren(...items.map(([id, en, b]) => node('button', { class: 'pill', type: 'button', text: L(en, b),
       on: { click: () => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }) } })));
   }

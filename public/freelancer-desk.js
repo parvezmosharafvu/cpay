@@ -78,6 +78,8 @@ async function renderHome() {
   const b = Array.isArray(bal) ? bal[0] : bal || {};
   const s = Array.isArray(split) ? split[0] : split || {};
   const icon = (id) => `<svg class="ico" aria-hidden="true"><use href="#${id}"/></svg>`;
+  // Instant forward: CPAY keeps nothing new; only money from before can be withdrawn.
+  const leftover = Number(s.net ?? b.available ?? 0) > 0;
   const recentRows = (recent.data || []).map((p) => {
     const st = String(p.status || '').toLowerCase();
     return `<li><span class="act-ico ${escapeHtml(st)}" aria-hidden="true">${icon('i-in')}</span>
@@ -91,9 +93,9 @@ async function renderHome() {
       <div class="card balance-card">
         <div class="kicker">Available</div>
         <div class="kpi" data-kpi>${money(s.net ?? b.available)}</div>
-        <div class="faint">Held by CPAY, ready to withdraw</div>
+        <div class="faint">${leftover ? 'Held by CPAY, ready to withdraw' : 'New payments go straight to your own address'}</div>
         <div class="quick">
-          <button type="button" class="btn primary" data-jump="cash">${icon('i-out')}Withdraw USDT</button>
+          ${leftover ? `<button type="button" class="btn primary" data-jump="cash">${icon('i-out')}Withdraw USDT</button>` : ''}
           <button type="button" class="btn ghost" data-jump="links" data-focus="linkName">${icon('i-plus')}New payment link</button>
         </div>
       </div>

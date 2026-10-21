@@ -31,7 +31,7 @@ Read from the code and migrations, not from older reports.
 | USDT payout | CPAY's wallet sends after quote/confirm, step-up, 24 h address wait | `user-withdraw`, `withdraw.mjs` | The per-withdrawal check is the wallet's own balance; there is no check that the pooled wallet covers every ledger balance (solvency). Owner item, see §7 |
 | Auto-payout | Queued by `system_queue_withdrawal` when a merchant-set threshold is reached | SQL | Merchant opt-in; authorised |
 | Admin wallet sends | An active admin (aal2 when required) can send from the platform wallet | `admin-actions` | A custodial power. Guarded by "spendable = wallet − owed" and audited, but it exists |
-| CPAY Wallet | The member: keys made and kept on the phone, Spark operators co-sign | `wallet/` | Self-custodial with Spark's trust assumptions (§3B). Not published |
+| CPAY Wallet | The member: keys made and kept on the phone, the wallet network's operators co-sign | `wallet/` | Self-custodial with the wallet network's trust assumptions (§3B). Not published |
 
 Defects found and fixed in this change:
 
@@ -85,14 +85,14 @@ the moment it makes the invoice), not CPAY seeing the payment itself.
   separately (owner decision §6).
 - **Repo support:** built here (§4).
 
-### B. CPAY Wallet (self-custodial, Spark) as the merchant's wallet
+### B. CPAY Wallet (self-custodial, on the wallet network) as the merchant's wallet
 
 The member runs CPAY Wallet; payments go to its keys. Combined with A by giving the wallet a Lightning
 address.
 
-- **Trust assumptions** (from the library's configuration and Spark's design): transfers are co-signed by
-  2 of 3 Spark operators (FROST); safety relies on at least one operator deleting old key shares; Lightning
-  goes through a Spark service provider; a Lightning address needs the vendor's address server; the
+- **Trust assumptions** (from the library's configuration and the wallet network's design): transfers are co-signed by
+  2 of 3 wallet-network operators (FROST); safety relies on at least one operator deleting old key shares; Lightning
+  goes through the wallet network's service provider; a Lightning address needs the vendor's address server; the
   vendor's API key identifies the app.
 - **Operator powers:** operators cannot move funds without the user's key; they can stop co-signing
   (payments stop).

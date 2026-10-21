@@ -20,27 +20,27 @@
 </head>
 <body class="store">
 <a class="skip-link" href="#grid">Skip to payment options</a>
-<main class="wrap" style="max-width:860px">
+<main class="wrap store-wrap">
   <nav class="nav" aria-label="Store"><a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a></nav>
   <section class="store-hero" aria-live="polite">
     <div class="merchant-avatar skeleton avatar" id="avatar" aria-hidden="true"></div>
-    <h1 id="name"><span class="skeleton line lg" style="display:inline-block;width:180px">&nbsp;</span></h1>
-    <p id="tagline"><span class="skeleton line" style="display:inline-block;width:220px">&nbsp;</span></p>
+    <h1 id="name"><span class="skeleton line lg sk-name">&nbsp;</span></h1>
+    <p id="tagline"><span class="skeleton line sk-tagline">&nbsp;</span></p>
     <p id="bio" class="faint"></p>
-    <button id="share" class="btn ghost" type="button" style="margin-top:14px" hidden>Share store</button>
+    <button id="share" class="btn ghost store-share" type="button" hidden>Share store</button>
   </section>
   <section id="grid" class="store-grid" aria-label="Payment options"></section>
   <div id="state" class="store-empty" role="status">Loading storefront…</div>
-  <footer class="site" style="margin-top:40px;text-align:center">Powered by CPAY</footer>
+  <footer class="site store-foot">Powered by CPAY</footer>
 </main>
 <script>
 const sb=window.supabaseClient,params=new URLSearchParams(location.search),uid=params.get('u');
 const [avatar,name,tagline,bio,share,grid,state]=['avatar','name','tagline','bio','share','grid','state'].map(id=>document.getElementById(id));
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 (async()=>{
-  if(!uid){state.textContent='Store not found.';avatar.classList.remove('skeleton','avatar');avatar.textContent='?';name.textContent='Store not found';tagline.textContent='';return}
+  if(!uid){useNavyState();state.textContent='Store not found.';avatar.classList.remove('skeleton','avatar');avatar.textContent='?';name.textContent='Store not found';tagline.textContent='';return}
   const {data,error}=await sb.rpc('get_public_store',{p_user_id:uid});
-  if(error||!data?.length){state.textContent='Store not found or unavailable.';avatar.classList.remove('skeleton','avatar');avatar.textContent='?';name.textContent='Unavailable';tagline.textContent='';return}
+  if(error||!data?.length){useNavyState();state.textContent='Store not found or unavailable.';avatar.classList.remove('skeleton','avatar');avatar.textContent='?';name.textContent='Unavailable';tagline.textContent='';return}
   const r=data[0];
   document.title=(r.display_name||'CPAY freelancer')+' · CPAY';
   // Apply design before paint of content so the page colour does not flash.

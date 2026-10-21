@@ -16,7 +16,7 @@ browser (Vanilla HTML/CSS/JS, anon key + JWT, RLS)
   → Supabase Postgres (ledger, SECURITY DEFINER RPCs, pg_cron)
   → Edge functions (create-invoice, user-withdraw, admin-actions, …)
        → Bearer PAYMENT_SERVICE_SECRET
-  → payment-service (Node 22, Spark platform wallet, DATABASE_URL service role)
+  → payment-service (Node 22, platform wallet on the wallet network, DATABASE_URL service role)
 ```
 
 | Boundary | Rule |

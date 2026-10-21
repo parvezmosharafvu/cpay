@@ -9,8 +9,8 @@ Two different things that share an SDK and nothing else.
 |---|---|---|
 | What it is | One platform wallet run by CPAY that receives every customer payment and sends USDT payouts | An optional app each member installs on their own phone (PWA) |
 | Custody | **Custodial.** CPAY holds the keys (`BREEZ_MNEMONIC`). Member balances are ledger entries in Postgres, not separate wallets | **Non-custodial.** The 12-word phrase is made on the phone, stored only encrypted on the phone, never sent anywhere. CPAY cannot move or recover it |
-| Engine | Lightning/Spark wallet SDK (pinned 0.26.0), server build, in the wallet Edge Function | The same SDK's browser build (0.26.0), in the page |
-| Operator dependency | Spark operators co-sign transfers (2 of 3) | Same; disclosed on the welcome screen and security page |
+| Engine | Lightning wallet SDK from our payment provider (pinned 0.26.0), server build, in the wallet Edge Function | The same SDK's browser build (0.26.0), in the page |
+| Operator dependency | The wallet network's operators co-sign transfers (2 of 3) | Same; disclosed on the welcome screen and security page |
 | API key | `BREEZ_API_KEY` (server, Edge secret) | `WALLET_API_KEY` (its own key, build variable). Never the server key or any Supabase service key |
 | Data | `breez_wallet` schema + the CPAY ledger tables | The phone's IndexedDB; vendor real-time sync **off** by default and blocked by CSP |
 | Hosting | Supabase Edge Function behind the website's functions | Its own Cloudflare Worker `cpay-wallet` on its own hostname. **Not created yet** |

@@ -91,8 +91,31 @@ test('payment pages keep the light base and the merchant designs: no navy there'
     assert.doesNotMatch(s, /data-ui=/, f);
     assert.doesNotMatch(s, /color-scheme" content="dark"/, f);
   }
-  // Designs live on <html> (theme.js setDesign); navy is never set there by script.
-  for (const f of ['theme.js', 'app.js']) assert.doesNotMatch(pub(f), /data-ui/, f);
+  // Designs live on <html> (theme.js setDesign). Script sets navy only in
+  // useNavyState(), which the not-found states call; setDesign never does.
+  assert.doesNotMatch(pub('app.js'), /data-ui/, 'app.js');
+  const theme = pub('theme.js');
+  const navyFn = theme.match(/function useNavyState\(\) \{[\s\S]*?\n\}/);
+  assert.ok(navyFn, 'theme.js defines useNavyState');
+  assert.doesNotMatch(theme.replace(navyFn[0], ''), /data-ui/, 'theme.js outside useNavyState');
+});
+
+test('not-found states switch to navy; the payment card does not', () => {
+  const checkout = pub('404.html');
+  const nf = checkout.match(/function showNotFound\(\)\{[\s\S]*?\n\}/);
+  assert.ok(nf && /useNavyState\(\)/.test(nf[0]), '404.html showNotFound uses navy');
+  assert.equal((checkout.match(/useNavyState\(/g) || []).length, 1, '404.html calls navy only for not-found');
+  const store = pub('store.html');
+  assert.equal((store.match(/useNavyState\(\)/g) || []).length, 2, 'store.html: both not-found branches');
+});
+
+test('legal pages are navy with no page-level styles', () => {
+  for (const f of ['contact.html', 'privacy.html', 'terms.html', 'refund.html']) {
+    const s = pub(f);
+    assert.match(s, /<html lang="en" data-ui="navy">/, f);
+    assert.match(s, /<body class="legal">/, f);
+    assert.doesNotMatch(s, /<style>/, f);
+  }
 });
 
 test('checkout previews inside a navy page show the payer view', () => {

@@ -1,8 +1,11 @@
 # CPAY design system (v2, 2026-10-17)
 
 One stylesheet, [`public/cpay.css`](../public/cpay.css), styles every page. [`public/a11y.css`](../public/a11y.css)
-adds touch targets, focus rings and reduced motion. Pages carry no palette of their own. The website and
-desks opt in to the navy palette with `<html data-ui="navy">`. The payment pages (checkout, invoice, store)
+adds touch targets, focus rings and reduced motion. Pages carry no palette of their own. The website,
+desks and legal pages (contact, privacy, terms, refund; `body.legal`) opt in to the navy palette with
+`<html data-ui="navy">`. The not-found states of the checkout (`404.html`) and the store (`store.html`) are
+CPAY's own pages, not a merchant's, so they call `useNavyState()` (`theme.js`): it drops any checkout
+design and switches to navy. The payment pages (checkout, invoice, store)
 keep the light base under each merchant's chosen checkout design, so payers see the design the merchant picked.
 
 The visual direction comes from the owner's reference board (dark crypto-wallet interface, restrained cyan
@@ -146,3 +149,11 @@ The page shows a lamp with a pull chain, and the form card appears only when the
 - **Motion:** off under `prefers-reduced-motion`.
 - **Layout:** ≤ 900 px the lamp sits above a smaller card; the side panel is hidden in lamp mode.
 - **Tests:** e2e and smoke tests call `openAuthForm(page)` (tests/e2e/helpers.ts) before using the form.
+
+## Touch targets (v2.1, 2026-10-21)
+
+Every standalone tap target is at least `--touch` (44 px) tall: `.btn`, `.link-btn` (also inside the
+checkout), `.brand`, header `.nav-menu` links, `.foot-links`, the auth-card footer links ("Create one",
+"Log in"), `.back-link` on legal pages, and `.check` rows (the whole label is the target). Links inside a
+sentence of running text are exempt (WCAG 2.5.8 inline exception). Pages carry no inline `style=""` or
+`<style>` for layout; page rules live in `cpay.css`.

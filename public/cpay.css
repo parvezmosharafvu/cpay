@@ -1152,7 +1152,7 @@ body.ops{padding-bottom:48px}
   min-height:var(--touch);
 }
 .checkout .icon-btn,.checkout .key{min-width:var(--touch)}
-.checkout .link-btn{min-height:40px;padding:8px 12px}
+.checkout .link-btn{min-height:var(--touch);padding:8px 12px}
 .qr-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:12px}
 .qr-actions .link-btn{min-height:var(--touch)}
 @media (max-width:360px){
@@ -1445,3 +1445,33 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 }
 @media (max-width:420px){.currency-switch{height:32px;padding-left:8px}}
 .wallet-actions-bar{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+
+/* ---- Brand pages outside the desks (v2.1) --------------------------------
+   Legal pages (contact, privacy, terms, refund) and the not-found states of
+   the checkout (404.html) and store (store.html) use the navy palette. */
+#loadingState .sk-60{width:60%;margin-top:16px}
+#loadingState .sk-40{width:40%}
+#loadRetryBtn{max-width:280px;margin-top:8px}
+.store-wrap{max-width:860px}
+.store-hero .sk-name{display:inline-block;width:180px}
+.store-hero .sk-tagline{display:inline-block;width:220px}
+.store-share{margin-top:14px}
+.store-foot{margin-top:40px;text-align:center}
+body.legal main{max-width:720px;margin:32px auto;padding:0 20px;line-height:1.6;color:var(--text)}
+body.legal h1{font-size:var(--text-3xl,1.8rem);margin:0 0 12px;letter-spacing:-.02em}
+body.legal h2{font-size:1.15rem;margin-top:28px}
+body.legal p,body.legal li{color:var(--muted)}
+body.legal strong,body.legal b{color:var(--text)}
+body.legal a{color:var(--accent-text,var(--accent))}
+body.legal .draft{border:2px dashed var(--warn-line,#b45309);background:var(--warn-soft,#fffbeb);color:var(--text);padding:12px 16px;border-radius:var(--radius-sm,10px);margin-bottom:24px}
+body.legal .draft strong{color:var(--warn,#78350f)}
+
+/* ---- Touch targets: at least 44 px everywhere (WCAG 2.5.5) ------------- */
+.brand{min-height:var(--touch)}
+.link-btn{min-height:var(--touch);display:inline-flex;align-items:center}
+.nav-menu a,.foot-links a{min-height:var(--touch)}
+.back-link{display:inline-flex;align-items:center;min-height:var(--touch);font-weight:600}
+.auth-card .foot a{display:inline-flex;align-items:center;min-height:var(--touch);padding:0 6px;margin:0 -6px;font-weight:600}
+.label-row{align-items:center}
+.label-row .link-btn{margin:-6px 0;padding-right:0}
+.check{min-height:var(--touch);padding:11px 0;margin:0 0 4px}

@@ -103,24 +103,32 @@ async function call<T>(f: Fetch, cfg: BtcpayConfig, method: "GET" | "POST", path
   return await res.json() as T;
 }
 
-export const orderIdFor = (paymentId: string) => `cpay:${paymentId}`;
+// Short on purpose: BTCPay's default Lightning description template is
+// "Paid to {StoreName} (Order ID: {OrderId})", so a long orderId (the old
+// "cpay:<uuid>") made the BOLT11 ~506 chars and some exchanges rejected it.
+// The full payment id travels in metadata.cpayPaymentId instead.
+export const orderIdFor = (paymentId: string) => `cp${paymentId.replace(/-/g, "").slice(0, 8)}`;
+/** Pre-fix invoices (still open at deploy time) carried the long form. */
+export const legacyOrderIdFor = (paymentId: string) => `cpay:${paymentId}`;
+export const isCpayOrderId = (orderId: unknown, paymentId: string) =>
+  orderId === orderIdFor(paymentId) || orderId === legacyOrderIdFor(paymentId);
 
-/** The Greenfield create-invoice body. No paymentMethods: every method the store has on (Lightning + on-chain). */
-export function invoiceRequest(p: { paymentId: string; linkId: string; slug: string; amountCents: number; expiresMinutes: number; redirectUrl?: string }) {
-  return {
-    amount: (p.amountCents / 100).toFixed(2),
-    currency: "USD",
-    metadata: {
-      orderId: orderIdFor(p.paymentId),
-      cpayPaymentId: p.paymentId,
-      cpayLinkId: p.linkId,
-      itemDesc: `CPAY /${p.slug}`,
-    },
-    checkout: {
-      expirationMinutes: p.expiresMinutes,
-      ...(p.redirectUrl ? { redirectURL: p.redirectUrl, redirectAutomatically: false } : {}),
-    },
-  };
+/**
+ * The Greenfield create-invoice body.
+ * lightningOnly (Admin setting btcpay_lightning_only, default true) mirrors
+ * boltpay's request exactly: amount, currency, checkout {expirationMinutes,
+ * paymentMethods ["BTC-LN"], defaultPaymentMethod "BTC-LN"}, metadata
+ * {orderId, <link id>}, plus cpayPaymentId which the webhook needs. No
+ * itemDesc, no redirectURL. Otherwise every store method is offered.
+ */
+export function invoiceRequest(p: { paymentId: string; linkId: string; slug: string; amountCents: number; expiresMinutes: number; redirectUrl?: string; lightningOnly?: boolean }) {
+  const lnOnly = p.lightningOnly !== false;
+  const metadata: Record<string, string> = { orderId: orderIdFor(p.paymentId), cpayPaymentId: p.paymentId, cpayLinkId: p.linkId };
+  if (!lnOnly) metadata.itemDesc = "cpay payment";
+  const checkout: Record<string, unknown> = lnOnly
+    ? { expirationMinutes: p.expiresMinutes, paymentMethods: ["BTC-LN"], defaultPaymentMethod: "BTC-LN" }
+    : { expirationMinutes: p.expiresMinutes, ...(p.redirectUrl ? { redirectURL: p.redirectUrl, redirectAutomatically: false } : {}) };
+  return { amount: (p.amountCents / 100).toFixed(2), currency: "USD", checkout, metadata };
 }
 
 export const createInvoice = (f: Fetch, cfg: BtcpayConfig, body: ReturnType<typeof invoiceRequest>) =>
@@ -138,7 +146,8 @@ const isOnchain = (m: BtcpayPaymentMethod) => /^(BTC|BTC-CHAIN|BTC-OnChain)$/i.t
 export function payDetails(methods: BtcpayPaymentMethod[]) {
   const ln = methods.find((m) => isLightning(m) && m.activated !== false && typeof m.destination === "string");
   const oc = methods.find((m) => isOnchain(m) && m.activated !== false && typeof m.destination === "string");
-  const bolt11 = ln && /^ln[a-z0-9]+$/i.test(ln.destination!) ? ln.destination!.toLowerCase() : null;
+  const lnDest = ln ? ln.destination!.trim().replace(/^lightning:/i, "") : "";
+  const bolt11 = /^ln[a-z0-9]+$/i.test(lnDest) ? lnDest.toLowerCase() : null;
   return {
     bolt11,
     onchainAddress: oc?.destination ?? null,

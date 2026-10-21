@@ -45,11 +45,11 @@ function walletShell() {
           <div class="mono wallet-code" id="wrText"></div>
           <div class="row"><button class="btn ghost sm" id="wrCopy">Copy invoice</button><span class="faint" id="wrMeta"></span></div>
         </div>
-        <dl class="wallet-addrs" id="wrAddrs"><div><dt>Spark address</dt><dd class="faint">Loading…</dd></div></dl>
+        <dl class="wallet-addrs" id="wrAddrs"><div><dt>Wallet network address</dt><dd class="faint">Loading…</dd></div></dl>
       </div>
       <div class="card">
         <h3>Send</h3>
-        <div class="field"><label for="wsDest">To</label><input id="wsDest" placeholder="Lightning invoice, Lightning address or Spark address" autocomplete="off"></div>
+        <div class="field"><label for="wsDest">To</label><input id="wsDest" placeholder="Lightning invoice, Lightning address or Wallet network address" autocomplete="off"></div>
         <div class="field short"><label for="wsAmt">Amount (sats)</label><input id="wsAmt" type="number" min="1" step="1" inputmode="numeric" placeholder="Not needed for an invoice with an amount"></div>
         <button class="btn ghost" id="wsPrep">Preview fee</button>
         <div class="summary wallet-review" id="wsReview" hidden>
@@ -134,7 +134,7 @@ async function loadFiat() {
 async function loadAddresses() {
   try {
     const a = await walletCall('addresses');
-    const rows = [['Spark address', a.sparkAddress], ['Lightning address', a.lightningAddress]]
+    const rows = [['Wallet network address', a.sparkAddress], ['Lightning address', a.lightningAddress]]
       .map(([k, v]) => `<div><dt>${k}</dt><dd>${v ? `<span class="mono">${escapeHtml(v)}</span> <button class="btn ghost sm" data-copy="${escapeHtml(v)}">Copy</button>` : '<span class="faint">Not registered</span>'}</dd></div>`).join('');
     $w('wrAddrs').innerHTML = rows;
   } catch (e) { $w('wrAddrs').innerHTML = `<div><dt>Addresses</dt><dd class="err">${escapeHtml(e.message)}</dd></div>`; }
@@ -179,7 +179,7 @@ async function createInvoice() {
   btn.disabled = false;
 }
 
-const KIND_LABEL = { lightning: 'Lightning invoice', lightning_address: 'Lightning address', spark: 'Spark address', stablecoin: 'Stablecoin' };
+const KIND_LABEL = { lightning: 'Lightning invoice', lightning_address: 'Lightning address', spark: 'Wallet network address', stablecoin: 'Stablecoin' };
 
 async function prepareSend() {
   const btn = $w('wsPrep');

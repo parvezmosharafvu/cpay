@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { createHandler, type Deps } from "./handler.ts";
 import {
-  btcpayConfig, btcToSats, hmacSha256Hex, invoiceRequest, payDetails, settledFigures, verifyBtcpaySig, webhookSecrets,
+  btcpayConfig, btcToSats, hmacSha256Hex, invoiceRequest, isCpayOrderId, payDetails, settledFigures, verifyBtcpaySig, webhookSecrets,
 } from "../_shared/btcpay.ts";
 
 const PID = "11111111-2222-4333-8444-555555555555";
@@ -9,7 +9,7 @@ const cfg = { url: "https://btcpay.example.com", storeId: "StoreCpay123", apiKey
 const env = (o: Record<string, string>) => ({ get: (k: string) => o[k] });
 const inv = (over: Record<string, unknown> = {}) => ({
   id: "INV1", storeId: cfg.storeId, status: "Settled", amount: "20.00", currency: "USD",
-  metadata: { orderId: `cpay:${PID}`, cpayPaymentId: PID }, ...over,
+  metadata: { orderId: "cp" + PID.replace(/-/g, "").slice(0, 8), cpayPaymentId: PID }, ...over,
 });
 
 function deps(over: Partial<Deps> = {}) {
@@ -111,8 +111,20 @@ Deno.test("btcpay client helpers", async () => {
   assertEquals(webhookSecrets(env({ BTCPAY_WEBHOOK_SECRET: "a", BTCPAY_WEBHOOK_SECRET_3: "c" })), ["a", "c"]);
   const body = invoiceRequest({ paymentId: PID, linkId: "L", slug: "abc", amountCents: 1234, expiresMinutes: 60 });
   assertEquals(body.amount, "12.34");
-  assertEquals(body.metadata.orderId, `cpay:${PID}`);
-  assert(!("paymentMethods" in body.checkout), "every store method (Lightning + on-chain) must stay on");
+  assertEquals(body.metadata.orderId, "cp" + PID.replace(/-/g, "").slice(0, 8));
+  assert(body.metadata.orderId.length <= 12, "short orderId keeps the BOLT11 description short");
+  assertEquals(body, {
+    amount: "12.34", currency: "USD",
+    checkout: { expirationMinutes: 60, paymentMethods: ["BTC-LN"], defaultPaymentMethod: "BTC-LN" },
+    metadata: { orderId: body.metadata.orderId, cpayPaymentId: PID, cpayLinkId: "L" },
+  }, "default request mirrors boltpay (BTC-LN only)");
+  const open = invoiceRequest({ paymentId: PID, linkId: "L", slug: "abc", amountCents: 1234, expiresMinutes: 60, lightningOnly: false });
+  assert(!("paymentMethods" in open.checkout), "on-chain re-enabled when lightningOnly is false");
+  assertEquals(open.metadata.itemDesc, "cpay payment");
+  assertEquals(payDetails([{ paymentMethodId: "BTC-LN", destination: " lightning:LNBC1XYZ ", activated: true }]).bolt11, "lnbc1xyz");
+  assertEquals(body.currency, "USD");
+  assertEquals(body.checkout.expirationMinutes, 60);
+  assertEquals(body.metadata.cpayPaymentId, PID);
   const pd = payDetails([{ paymentMethodId: "BTC-LN", destination: "LNBC1ABCDEF", activated: true },
     { paymentMethodId: "BTC-CHAIN", destination: "bc1qxyz", paymentLink: "bitcoin:bc1qxyz?amount=0.1", activated: true }]);
   assertEquals(pd, { bolt11: "lnbc1abcdef", onchainAddress: "bc1qxyz", bitcoinUri: "bitcoin:bc1qxyz?amount=0.1" });
@@ -126,4 +138,10 @@ Deno.test("the BTCPay client never calls payout, pull-payment, refund or wallet 
   for (const bad of ["/payouts", "pull-payments", "/refund", "/wallet", "payment-requests"]) {
     assert(!code.includes(bad), `found ${bad}`);
   }
+});
+
+Deno.test("legacy long orderId (pre-fix open invoices) is still accepted", () => {
+  assert(isCpayOrderId(`cpay:${PID}`, PID));
+  assert(isCpayOrderId("cp" + PID.replace(/-/g, "").slice(0, 8), PID));
+  assert(!isCpayOrderId("boltpay:x", PID));
 });

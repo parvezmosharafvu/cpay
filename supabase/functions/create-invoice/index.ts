@@ -6,6 +6,7 @@ import {
 } from "./guards.ts";
 import { serviceAuthHeaders, serviceAuthMode } from "../_shared/service-auth.ts";
 import { coarseGeo } from "../_shared/geo.ts";
+import { btcpayConfig, createInvoice as btcpayCreate, getPaymentMethods as btcpayMethods, invoiceRequest, payDetails } from "../_shared/btcpay.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -15,6 +16,10 @@ const PAYMENT_SERVICE_URL = Deno.env.get("PAYMENT_SERVICE_URL") ?? "";
 const PAYMENT_SERVICE_SECRET = Deno.env.get("PAYMENT_SERVICE_SECRET") ?? "";
 const PAYMENT_SERVICE_AUTH_MODE = serviceAuthMode(Deno.env.get("PAYMENT_SERVICE_AUTH_MODE"));
 const INVOICE_MINUTES = 60;
+// BTCPay Server checkout (docs/BTCPAY.md): used only while the owner's
+// Admin → Settings switch btcpay_enabled is on. Receive only.
+const BTCPAY = btcpayConfig(Deno.env);
+const SITE_URL = (Deno.env.get("SITE_URL") ?? "").replace(/\/+$/, "");
 // Optional Cloudflare Turnstile (off unless both are set; see guards.ts).
 const TURNSTILE_MODE = turnstileMode(Deno.env.get("TURNSTILE_SECRET_KEY") ?? "", Deno.env.get("TURNSTILE_MODE"));
 const TURNSTILE_SECRET = Deno.env.get("TURNSTILE_SECRET_KEY") ?? "";
@@ -160,7 +165,27 @@ error: "This link's current price is too high to invoice. Lower the link's cost 
 }, 400);
 }
 
-if (!PAYMENT_SERVICE_URL || !PAYMENT_SERVICE_SECRET) {
+// The owner's choice (Admin → Settings → BTCPay Server, default off). A read
+// error fails closed rather than silently switching checkout.
+const { data: gatewayOn, error: gatewayErr } = await supabaseAdmin.rpc("gateway_checkout_enabled");
+if (gatewayErr) {
+  console.error("btcpay_enabled read failed:", gatewayErr.message);
+  return json({ error: "Payment service temporarily unavailable" }, 503);
+}
+const useBtcpay = gatewayOn === true;
+// Admin → Settings btcpay_lightning_only (default true): boltpay-identical
+// BTC-LN-only request. Read error -> Lightning only (the known-good shape).
+let btcpayLnOnly = true;
+if (useBtcpay) {
+  const { data: lnOnly, error: lnErr } = await supabaseAdmin.rpc("gateway_lightning_only");
+  if (lnErr) console.error("btcpay_lightning_only read failed, using Lightning only:", lnErr.message);
+  else btcpayLnOnly = lnOnly !== false;
+}
+if (useBtcpay && !BTCPAY) {
+  console.error("btcpay_enabled is on but BTCPAY_URL / BTCPAY_STORE_ID / BTCPAY_API_KEY are not set");
+  return json({ error: "Payments are temporarily unavailable" }, 503);
+}
+if (!useBtcpay && (!PAYMENT_SERVICE_URL || !PAYMENT_SERVICE_SECRET)) {
   console.error("PAYMENT_SERVICE_URL or PAYMENT_SERVICE_SECRET is not set");
   return json({ error: "Payments are temporarily unavailable" }, 503);
 }
@@ -233,6 +258,15 @@ if (insertErr || !payment) {
   return json({ error: "Could not record payment" }, 500);
 }
 
+if (useBtcpay) {
+  const res = await btcpayInvoice(payment.id, link.link_id, slug, chargedAmountCents, expiresAt, btcpayLnOnly);
+  if (res) return res;
+  const { error } = await supabaseAdmin.from("payments").delete().eq("id", payment.id).is("gateway_invoice_id", null);
+  if (error) console.error("Could not delete invoiceless payment", payment.id, error.message);
+  await releaseRateClaim();
+  return json({ error: "Could not create invoice" }, 502);
+}
+
 const bolt11 = await requestInvoice(payment.id);
 if (!bolt11) {
   // No payer ever saw an invoice for this row, so nothing can settle it.
@@ -268,9 +302,11 @@ async function requestInvoice(paymentId: string): Promise<string> {
   return "";
 }
 
-function invoiceResponse(paymentId: string, bolt11: string, amountRequested: number, expiresAt: string) {
-  const lightningUri = `lightning:${bolt11}`;
-  const cashAppUrl = `https://cash.app/launch/lightning/${encodeURIComponent(bolt11)}`;
+type GatewayExtra = { checkoutUrl: string | null; onchainAddress: string | null; bitcoinUri: string | null };
+
+function invoiceResponse(paymentId: string, bolt11: string, amountRequested: number, expiresAt: string, extra?: GatewayExtra) {
+  const lightningUri = bolt11 ? `lightning:${bolt11}` : "";
+  const cashAppUrl = bolt11 ? `https://cash.app/launch/lightning/${encodeURIComponent(bolt11)}` : "";
   return json({
     paymentId,
     payCode: bolt11,
@@ -279,7 +315,35 @@ function invoiceResponse(paymentId: string, bolt11: string, amountRequested: num
     cashAppUrl,
     amountRequested,
     expiresAt,
+    ...(extra ? { provider: "btcpay", ...extra } : {}),
   });
+}
+
+// BTCPay: one Greenfield invoice per payments row, tagged orderId
+// orderIdFor(). Lightning only (BTC-LN) unless btcpay_lightning_only is off.
+async function btcpayInvoice(paymentId: string, linkId: string, slug: string, cents: number, expiresAt: string, lightningOnly: boolean): Promise<Response | null> {
+  try {
+    const inv = await btcpayCreate(fetch, BTCPAY!, invoiceRequest({
+      paymentId, linkId, slug, amountCents: cents, expiresMinutes: INVOICE_MINUTES, lightningOnly,
+      redirectUrl: SITE_URL ? `${SITE_URL}/invoice-cpay-v2.html?id=${paymentId}` : undefined,
+    }));
+    const methods = await btcpayMethods(fetch, BTCPAY!, inv.id).catch(() => []);
+    const pd = payDetails(methods);
+    const { data: attached, error } = await supabaseAdmin.rpc("system_attach_gateway_invoice", {
+      p_payment_id: paymentId, p_gateway: "btcpay", p_invoice_id: inv.id, p_bolt11: pd.bolt11,
+    });
+    if (error || attached !== true) {
+      console.error("BTCPay invoice attach failed:", error?.message ?? "row changed");
+      return null;
+    }
+    return invoiceResponse(paymentId, pd.bolt11 ?? "", cents / 100, expiresAt, {
+      checkoutUrl: typeof inv.checkoutLink === "string" && inv.checkoutLink.startsWith("https://") ? inv.checkoutLink : null,
+      onchainAddress: pd.onchainAddress, bitcoinUri: pd.bitcoinUri,
+    });
+  } catch (e) {
+    console.error("BTCPay invoice failed:", (e as Error).message);
+    return null;
+  }
 }
 
 // true = allowed, false = over the limit, null = could not check (fail closed).
@@ -298,7 +362,7 @@ async function claimPublic(cfg: { bucket: string; limit: number; windowSeconds: 
 async function findByRequest(linkId: string, requestId: string): Promise<ExistingPayment | null | undefined> {
   const { data, error } = await supabaseAdmin
     .from("payments")
-    .select("id, status, amount_requested, expires_at, lightning_invoice")
+    .select("id, status, amount_requested, expires_at, lightning_invoice, gateway_invoice_id")
     .eq("payment_link_id", linkId)
     .eq("client_request_id", requestId)
     .maybeSingle();
@@ -306,12 +370,22 @@ async function findByRequest(linkId: string, requestId: string): Promise<Existin
     console.error("idempotency lookup failed:", error.message);
     return undefined;
   }
-  return (data as ExistingPayment | null) ?? null;
+  return (data as (ExistingPayment & { gateway_invoice_id?: string | null }) | null) ?? null;
 }
 
 async function replay(existing: ExistingPayment, chargedCents: number) {
   const decision = replayDecision(existing, chargedCents, Date.now());
   if (decision.kind === "error") return json({ error: decision.error }, decision.status);
+  const gatewayId = (existing as { gateway_invoice_id?: string | null }).gateway_invoice_id;
+  if (gatewayId) {
+    // Same BTCPay invoice again, never a second one (and never the wallet).
+    if (!BTCPAY) return json({ error: "Payments are temporarily unavailable" }, 503);
+    const methods = await btcpayMethods(fetch, BTCPAY, gatewayId).catch(() => []);
+    const pd = payDetails(methods);
+    return invoiceResponse(decision.paymentId, decision.bolt11 || pd.bolt11 || "", chargedCents / 100,
+      new Date(decision.expiresAt).toISOString(),
+      { checkoutUrl: `${BTCPAY.url}/i/${encodeURIComponent(gatewayId)}`, onchainAddress: pd.onchainAddress, bitcoinUri: pd.bitcoinUri });
+  }
   const bolt11 = decision.bolt11 || await requestInvoice(decision.paymentId);
   if (!bolt11) return json({ error: "Could not create invoice" }, 502);
   return invoiceResponse(decision.paymentId, bolt11, chargedCents / 100, new Date(decision.expiresAt).toISOString());

@@ -16,6 +16,7 @@ it run `node scripts/build-admin-guide.mjs` (CI checks the generated
 - `supabase/migrations/` schema, RLS, RPCs (append-only).
 - `supabase/functions/` Deno Edge Functions; `_shared/` common code.
   Wallets: `wallet-registry` (owner) + `admin-wallets.js` (Admin → Wallet).
+  BTCPay checkout (receive only): `btcpay-webhook` + `_shared/btcpay.ts` ([docs/BTCPAY.md](docs/BTCPAY.md)).
 - `worker/` Cloudflare link-preview Worker. `wallet/` CPay Wallet PWA.
 - `payment-service/` self-hosted Node fallback (not deployed, tested in CI).
 - `ci/` SQL suites and Python checks; `tests/` node/Playwright tests;

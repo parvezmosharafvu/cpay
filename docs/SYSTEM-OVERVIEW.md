@@ -69,6 +69,16 @@ The payer and the freelancer see one figure: **"You receive X"**.
   wallet #1). Owner-only management through the `wallet-registry` function
   (passkey session; add/remove need a fresh passkey).
 
+## BTCPay Server checkout (`20261021050000_gateway_checkout.sql`, [BTCPAY.md](BTCPAY.md))
+
+Off by default (`btcpay_enabled` in Admin → Settings). When on, `create-invoice`
+makes the invoice on the owner's BTCPay `cpay` store (Greenfield, Lightning +
+on-chain, `orderId = cpay:<payment id>`); `btcpay-webhook` verifies
+`BTCPay-Sig`, re-fetches the invoice and settles the same `payments` row
+(fee, then Auto withdraw or balance). BTCPay only receives; all sends stay
+in the CPAY wallet. On-chain receipts land in BTCPay's on-chain wallet, not
+the CPAY Lightning balance.
+
 ## Locations (`20261020090000_locations.sql`)
 
 Country/region/city come only from Cloudflare request headers

@@ -48,7 +48,8 @@ function cashAppUrl(bolt11){
 }
 function isPhone(){ return /iPad|iPhone|iPod|Android/.test(navigator.userAgent); }
 function el(id){ return document.getElementById(id); }
-function bareInvoice(){ return String(currentPayCode).replace(/^lightning:/i, ''); }
+// Bare lowercase BOLT11 only (no lightning: prefix, no BIP21), for QR and copy.
+function bareInvoice(){ return String(currentPayCode).trim().replace(/^lightning:/i, '').toLowerCase(); }
 function money(n){ return '$' + Number(n || 0).toFixed(2); }
 function shortRef(id){ return id.length > 18 ? id.slice(0, 8) + '…' + id.slice(-6) : id; }
 
@@ -197,6 +198,21 @@ function renderQr(qrText){
   box.dataset.rendered = '1';
 }
 
+// BTCPay checkout: a plain link to the store's checkout page, where the
+// payer can also pay with on-chain bitcoin. https only.
+function showCheckoutLink(url){
+  if (typeof url !== 'string' || !url.startsWith('https://')) return;
+  const anchor = document.getElementById('copyBtn');
+  if (!anchor || document.getElementById('checkoutLink')) return;
+  const a = document.createElement('a');
+  a.id = 'checkoutLink';
+  a.className = 'link-btn';
+  a.href = url;
+  a.rel = 'noopener';
+  a.textContent = 'Pay with on-chain bitcoin';
+  anchor.parentNode.insertAdjacentElement('afterend', a);
+}
+
 function readSession(){
   try {
     const saved = sessionStorage.getItem('invoiceSession');
@@ -260,8 +276,9 @@ async function boot(){
       ? cached.payUrl
       : 'lightning:' + bareInvoice();
     if (cached.cashAppUrl && cached.cashAppUrl.startsWith(CASHAPP_LIGHTNING)) currentCashAppUrl = cached.cashAppUrl;
-    renderQr(currentPayCode);
+    renderQr(bareInvoice());
   }
+  if (cacheMatches) showCheckoutLink(cached.checkoutUrl);
 
   let row;
   try { row = await fetchInvoiceRow(); }
@@ -275,7 +292,7 @@ async function boot(){
   if (!currentPayCode && row.lightning_invoice){
     currentPayCode = row.lightning_invoice;
     currentPayUrl = 'lightning:' + bareInvoice();
-    renderQr(currentPayCode);
+    renderQr(bareInvoice());
   }
   if (!currentPayCode){ showInvoiceGone(); return; }
 
@@ -703,8 +720,12 @@ async function regenerate(){
       throw new Error(typeof result.error === 'string' ? result.error : 'Could not create a new payment.');
     }
     if (window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
+    // BTCPay checkout (docs/BTCPAY.md): with no Lightning invoice, the
+    // payer goes straight to the store's own checkout page.
+    const checkoutUrl = typeof result.checkoutUrl === 'string' && result.checkoutUrl.startsWith('https://') ? result.checkoutUrl : '';
+    if (!result.payCode && checkoutUrl){ window.location.href = checkoutUrl; return; }
     sessionStorage.setItem('invoiceSession', JSON.stringify({
-      paymentId: result.paymentId, payCode: result.payCode, payUrl: result.payUrl,
+      paymentId: result.paymentId, payCode: result.payCode, payUrl: result.payUrl, checkoutUrl,
       cashAppUrl: result.cashAppUrl || '', returnUrl: '/' + slug, baseAmount: base,
       settlement: DIRECT ? 'direct' : 'custodial',
     }));

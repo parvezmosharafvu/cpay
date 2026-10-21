@@ -85,6 +85,13 @@ test('under the minimum accumulates; reaching it sends one batch once', async ()
   assert.equal(Number(b.amount_sat), 12_000);
   assert.deepEqual(breez.calls, [['send', b.id, 12_000]], 'one send, keyed by the batch');
   for (const r of await rowsOf(u)) { assert.equal(r.status, 'forwarded'); assert.equal(r.batch_id, b.id); }
+  // Traceability (20261021070000): saved wallet row and the wallet's payment id.
+  const w = (await db.query('select id from usdt_wallets where user_id = $1', [u])).rows[0].id;
+  assert.equal(b.usdt_wallet_id, w);
+  assert.equal(b.spark_payment_id, `pay-${b.id}`);
+  for (const r of await rowsOf(u)) assert.equal(r.usdt_wallet_id, w);
+  const audit = (await db.query(`select action from audit_log where subject_id = $1`, [b.id])).rows.map((x) => x.action);
+  assert.deepEqual(audit, ['forward.batch_forwarded']);
 });
 
 test('a send refused before anything left (expired quote) retries with a new batch', async () => {

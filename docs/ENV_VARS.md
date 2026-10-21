@@ -151,6 +151,18 @@ Used by `direct-invoice` and `settlement-destination` (direct settlement,
   `direct-invoice` makes **no new invoice** unless `TURNSTILE_MODE=enforce`
   (with its secret); status checks of existing payments still work.
 
+### BTCPay Server checkout (`create-invoice`, `btcpay-webhook`; [BTCPAY.md](BTCPAY.md))
+
+Only used while Admin → Settings → BTCPay Server (`btcpay_enabled`) is on.
+
+- [ ] `BTCPAY_URL` — `https://` address of the BTCPay Server, no path.
+- [ ] `BTCPAY_STORE_ID` — the `cpay` store id.
+- [ ] `BTCPAY_API_KEY` — Greenfield key with only *Create an invoice* and
+      *View invoices* on the `cpay` store. Never payout or wallet permissions.
+- [ ] `BTCPAY_WEBHOOK_SECRET` — the store webhook secret. `BTCPAY_WEBHOOK_SECRET_2`
+      … `_5` are also accepted while rotating.
+- `SITE_URL` *(optional)* — return link shown on the BTCPay checkout page.
+
 ## Payment service
 
 Set on the host that runs `payment-service/` (see

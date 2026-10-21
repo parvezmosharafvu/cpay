@@ -473,6 +473,11 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/multi_wallet_test.sql
 
+      - name: BTCPay checkout ledger, dedupe, fee and auto withdraw (20261021050000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/gateway_checkout_test.sql
+
       - name: Upgrade from the pre-Breez schema keeps balances (audit P3)
         env:
           PGPASSWORD: postgres
@@ -564,6 +569,10 @@ jobs:
         # words + checksum, rate limit, and the seed never appears in a
         # response, an error or a log line. Public BIP39 test vectors only.
         run: deno test supabase/functions/wallet-registry/
+
+      - name: btcpay-webhook (signature, re-fetch, settle) and BTCPay client
+        run: deno test --allow-read=supabase/functions supabase/functions/btcpay-webhook/
+
       - name: admin-actions admin gate against a mock Supabase
         # Local mock server only. Active admin allowed; suspended, pending
         # and rejected admin refused; creator, no or bad JWT refused; every
@@ -589,7 +598,7 @@ jobs:
         # and pass once they are allowed. This also lists the repo set.
         run: |
           set +e
-          out=$(python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination --undeployed owner-config --undeployed owner-guide --undeployed wallet-registry)
+          out=$(python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination --undeployed owner-config --undeployed owner-guide --undeployed wallet-registry --undeployed btcpay-webhook)
           code=$?
           set -e
           echo "$out"
@@ -597,7 +606,7 @@ jobs:
           [ "$(echo "$out" | grep -c '^  ORPHAN')" -eq 3 ] || { echo "expected exactly 3 orphans"; exit 1; }
           for f in reconcile reseller-digest telegram-report; do echo "$out" | grep -q "ORPHAN    $f " || { echo "missing orphan $f"; exit 1; }; done
           ! echo "$out" | grep -q '^  MISSING' || { echo "a repo function is missing from the fixture"; exit 1; }
-          python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination --undeployed owner-config --undeployed owner-guide --undeployed wallet-registry \
+          python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination --undeployed owner-config --undeployed owner-guide --undeployed wallet-registry --undeployed btcpay-webhook \
             --allow reconcile --allow reseller-digest --allow telegram-report
       - name: deployed-vs-repo drift check (2026-10-07 list, after orphan deletes)
         # Production list saved after reconcile, reseller-digest and
@@ -606,7 +615,7 @@ jobs:
         # (supabase/functions/breez-wallet/README.md). direct-invoice and
         # settlement-destination are new (20261018010000) and not in either
         # saved production list.
-        run: python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-07.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination --undeployed owner-config --undeployed owner-guide --undeployed wallet-registry
+        run: python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-07.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination --undeployed owner-config --undeployed owner-guide --undeployed wallet-registry --undeployed btcpay-webhook
 
   frontend:
     name: Pages parse and reference real things

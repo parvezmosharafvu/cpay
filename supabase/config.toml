@@ -120,3 +120,9 @@ enabled = false
 [auth.mfa.totp]
 enroll_enabled = false
 verify_enabled = false
+
+# BTCPay Server webhook (docs/BTCPAY.md). BTCPay cannot present a Supabase
+# JWT; every delivery is checked with the BTCPay-Sig HMAC instead, and the
+# invoice is re-fetched from BTCPay before anything is recorded.
+[functions.btcpay-webhook]
+verify_jwt = false

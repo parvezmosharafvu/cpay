@@ -13,6 +13,8 @@
   const MAIN = [
     // The on/off switches (legal_published, wallet_link_enabled) are in
     // Features (admin-owner-settings.js).
+    // BTCPay Server checkout (docs/BTCPAY.md): off until the owner turns it on.
+    ['BTCPay Server', ['btcpay_enabled']],
     ['Legal pages', ['legal_entity_name', 'legal_address', 'legal_effective_date', 'legal_jurisdiction', 'legal_courts', 'legal_privacy_email', 'legal_support_email']],
   ];
   const ADVANCED = [

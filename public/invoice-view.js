@@ -197,6 +197,21 @@ function renderQr(qrText){
   box.dataset.rendered = '1';
 }
 
+// BTCPay checkout: a plain link to the store's checkout page, where the
+// payer can also pay with on-chain bitcoin. https only.
+function showCheckoutLink(url){
+  if (typeof url !== 'string' || !url.startsWith('https://')) return;
+  const anchor = document.getElementById('copyBtn');
+  if (!anchor || document.getElementById('checkoutLink')) return;
+  const a = document.createElement('a');
+  a.id = 'checkoutLink';
+  a.className = 'link-btn';
+  a.href = url;
+  a.rel = 'noopener';
+  a.textContent = 'Pay with on-chain bitcoin';
+  anchor.parentNode.insertAdjacentElement('afterend', a);
+}
+
 function readSession(){
   try {
     const saved = sessionStorage.getItem('invoiceSession');
@@ -262,6 +277,7 @@ async function boot(){
     if (cached.cashAppUrl && cached.cashAppUrl.startsWith(CASHAPP_LIGHTNING)) currentCashAppUrl = cached.cashAppUrl;
     renderQr(currentPayCode);
   }
+  if (cacheMatches) showCheckoutLink(cached.checkoutUrl);
 
   let row;
   try { row = await fetchInvoiceRow(); }
@@ -703,8 +719,12 @@ async function regenerate(){
       throw new Error(typeof result.error === 'string' ? result.error : 'Could not create a new payment.');
     }
     if (window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
+    // BTCPay checkout (docs/BTCPAY.md): with no Lightning invoice, the
+    // payer goes straight to the store's own checkout page.
+    const checkoutUrl = typeof result.checkoutUrl === 'string' && result.checkoutUrl.startsWith('https://') ? result.checkoutUrl : '';
+    if (!result.payCode && checkoutUrl){ window.location.href = checkoutUrl; return; }
     sessionStorage.setItem('invoiceSession', JSON.stringify({
-      paymentId: result.paymentId, payCode: result.payCode, payUrl: result.payUrl,
+      paymentId: result.paymentId, payCode: result.payCode, payUrl: result.payUrl, checkoutUrl,
       cashAppUrl: result.cashAppUrl || '', returnUrl: '/' + slug, baseAmount: base,
       settlement: DIRECT ? 'direct' : 'custodial',
     }));

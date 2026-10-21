@@ -18,6 +18,7 @@ Admin panel-এ **সিস্টেম গাইড** বাটনে এই �
 8. [সাম্প্রতিক আপডেট](#updates)
 9. [এখন কী কী setting করতে হবে](#todo)
 10. [একাধিক wallet](#wallets)
+11. [BTCPay Server দিয়ে invoice](#btcpay)
 
 <a id="accounts"></a>
 ## ১. কোন কোন account লাগে
@@ -355,3 +356,40 @@ Admin → **Wallet** খুললে সবার উপরে **Wallets** ক�
 3. Wallet function শুধু wallet deploy script দিয়ে deploy করুন।
 4. সাইট (main-এ merge হলে নিজে থেকেই হয়)।
 
+<a id="btcpay"></a>
+## ১১. BTCPay Server দিয়ে invoice
+
+Admin → **Settings** → **BTCPay Server** চালু করলে নতুন সব invoice আপনার BTCPay Server-এর **cpay** store-এ তৈরি হয়। শুরুতে এটা **Off** থাকে, চালু করা আপনার সিদ্ধান্ত। Off করলে নতুন invoice আবার CPAY wallet থেকে হয়, আর BTCPay-এর খোলা invoice-গুলোও settle হয়।
+
+### কীভাবে কাজ করে
+
+- Payer CPAY-এর payment link-এই টাকার পরিমাণ লেখে। CPAY তখন BTCPay-তে invoice বানায়, `orderId` = `cpay:<payment id>`।
+- Store-এ যা চালু আছে সবই দেখায়: **Lightning** আর **on-chain bitcoin**। Pay পেজে Lightning QR থাকে, আর **Pay with on-chain bitcoin** link দিয়ে BTCPay-এর checkout পেজ খোলে।
+- টাকা এলে BTCPay webhook পাঠায়। CPAY signature (`BTCPay-Sig`) মিলিয়ে দেখে, তারপর BTCPay থেকে invoice আবার পড়ে নিশ্চিত হয়। একই invoice দুবার গোনা হয় না।
+- এরপর অন্য সব payment-এর মতোই: আগে platform fee (Admin settings-এ যা আছে, এখন ৫%), তারপর **Auto withdraw** On হলে বাকি টাকা user-এর address-এ যায়, Off হলে user-এর balance-এ জমা থাকে। Telegram-এ alert আসে।
+- BTCPay শুধু টাকা নেয়। CPAY কখনো BTCPay দিয়ে টাকা পাঠায় না। পাঠানো সব আগের মতো CPAY wallet থেকেই হয়।
+
+### জরুরি কথা: on-chain টাকা
+
+**On-chain bitcoin-এ দেওয়া টাকা BTCPay-এর on-chain wallet-এ জমা হয়, CPAY-এর Lightning balance-এ না।** User-কে CPAY তখনই credit দেয়, আর Auto withdraw CPAY wallet থেকে পাঠায়। তাই CPAY wallet-এ সবসময় যথেষ্ট টাকা (যেমন $110) রাখুন, আর on-chain-এ জমা টাকা নিজে CPAY wallet-এ সরিয়ে নিন।
+
+### Secret (শুধু নাম, chat-এ কখনো দেবেন না)
+
+- `BTCPAY_URL`: আপনার BTCPay-এর ঠিকানা, `https://` দিয়ে শুরু।
+- `BTCPAY_STORE_ID`: cpay store-এর ID (Store → Settings → General)।
+- `BTCPAY_API_KEY`: নিচের নিয়মে বানানো API key।
+- `BTCPAY_WEBHOOK_SECRET`: webhook-এর secret।
+
+### Setup-এর ধাপ (অন্য কোনো store-এ হাত দিতে হবে না)
+
+1. **API key:** BTCPay-তে Account → Manage account → **API Keys** → **Generate key**। শুধু দুটো permission টিক দিন: **Create an invoice** (`btcpay.store.cancreateinvoice`) আর **View invoices** (`btcpay.store.canviewinvoices`)। দুটোতেই শুধু **cpay** store বাছুন। Payout, pull payment, wallet বা অন্য কোনো permission দেবেন না।
+2. **Webhook:** cpay store → Settings → **Webhooks** → **Create webhook**।
+   - Payload URL: `https://riumaeihemgznvgattoc.supabase.co/functions/v1/btcpay-webhook`
+   - Event: **An invoice has been settled**, **An invoice has expired**, **An invoice became invalid**।
+   - Automatic redelivery চালু রাখুন। যে secret দেখায় সেটা কপি করুন।
+3. **Rate:** cpay store → Settings → Rates-এ spread ০% রাখুন।
+4. চারটা secret Supabase-এ Edge Function secret হিসেবে বসান।
+5. Deploy-এর ক্রম: migration `20261021050000_gateway_checkout.sql`, তারপর `btcpay-webhook` আর `create-invoice` function, শেষে সাইট।
+6. Admin → Settings → **BTCPay Server** → **On**। ছোট একটা Lightning আর একটা on-chain payment দিয়ে test করুন, Admin → Payments আর Telegram-এ দেখুন।
+
+বিস্তারিত: [BTCPAY.md](BTCPAY.md)।

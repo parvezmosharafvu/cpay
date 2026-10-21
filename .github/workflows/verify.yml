@@ -473,6 +473,11 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/multi_wallet_test.sql
 
+      - name: BTCPay checkout ledger, dedupe, fee and auto withdraw (20261021050000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/gateway_checkout_test.sql
+
       - name: Upgrade from the pre-Breez schema keeps balances (audit P3)
         env:
           PGPASSWORD: postgres
@@ -564,6 +569,10 @@ jobs:
         # words + checksum, rate limit, and the seed never appears in a
         # response, an error or a log line. Public BIP39 test vectors only.
         run: deno test supabase/functions/wallet-registry/
+
+      - name: btcpay-webhook (signature, re-fetch, settle) and BTCPay client
+        run: deno test --allow-read=supabase/functions supabase/functions/btcpay-webhook/
+
       - name: admin-actions admin gate against a mock Supabase
         # Local mock server only. Active admin allowed; suspended, pending
         # and rejected admin refused; creator, no or bad JWT refused; every

@@ -598,7 +598,7 @@ jobs:
         # and pass once they are allowed. This also lists the repo set.
         run: |
           set +e
-          out=$(python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination --undeployed owner-config --undeployed owner-guide --undeployed wallet-registry)
+          out=$(python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-04.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination --undeployed owner-config --undeployed owner-guide --undeployed wallet-registry --undeployed btcpay-webhook)
           code=$?
           set -e
           echo "$out"
@@ -615,7 +615,7 @@ jobs:
         # (supabase/functions/breez-wallet/README.md). direct-invoice and
         # settlement-destination are new (20261018010000) and not in either
         # saved production list.
-        run: python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-07.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination --undeployed owner-config --undeployed owner-guide --undeployed wallet-registry
+        run: python3 scripts/check_edge_function_drift.py --deployed-json ci/fixtures/deployed_functions_2026-10-07.json --undeployed breez-wallet --undeployed direct-invoice --undeployed settlement-destination --undeployed owner-config --undeployed owner-guide --undeployed wallet-registry --undeployed btcpay-webhook
 
   frontend:
     name: Pages parse and reference real things

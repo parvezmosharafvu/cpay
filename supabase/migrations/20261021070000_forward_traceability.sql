@@ -52,9 +52,11 @@ create trigger trg_forward_batches_fill_destination before insert on public.forw
   for each row execute function public.forward_batch_fill_destination();
 
 -- Backfill USDT rows that already exist (current saved wallet for that network).
+-- Only rows that are not finished: payment_forwards_guard refuses any change
+-- to a 'forwarded' or 'released' row, and that guard stays as it is.
 update public.payment_forwards f set usdt_wallet_id = w.id
   from public.usdt_wallets w
- where f.kind = 'usdt' and f.usdt_wallet_id is null and w.user_id = f.user_id and w.network = f.network
+ where f.kind = 'usdt' and f.usdt_wallet_id is null and f.status not in ('forwarded', 'released') and w.user_id = f.user_id and w.network = f.network
    and (f.address is null or f.address = w.address);
 update public.forward_batches b set usdt_wallet_id = w.id
   from public.usdt_wallets w

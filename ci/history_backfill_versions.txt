@@ -1,0 +1,5 @@
+# Versions production already recorded before the repo had the file. Added to
+# supabase/migrations only so local and remote history match; exempt from the
+# "sort after main" rule because they are already applied, not new.
+20261021042511
+20261021042956

@@ -12,7 +12,7 @@
 // 5. Telegram alert (best effort, never blocks the answer).
 // Nothing here sends money.
 import {
-  type BtcpayConfig, type BtcpayInvoice, type BtcpayPaymentMethod, orderIdFor, settledFigures, verifyBtcpaySig,
+  type BtcpayConfig, type BtcpayInvoice, type BtcpayPaymentMethod, isCpayOrderId, settledFigures, verifyBtcpaySig,
 } from "../_shared/btcpay.ts";
 
 export type SettleOutcome =
@@ -61,7 +61,7 @@ export function createHandler(d: Deps) {
     if (inv.id !== invoiceId || (inv.storeId && inv.storeId !== d.config.storeId)) return json({ error: "Invoice mismatch" }, 400);
     const meta = inv.metadata ?? {};
     const paymentId = typeof meta.cpayPaymentId === "string" && UUID.test(meta.cpayPaymentId) ? meta.cpayPaymentId : null;
-    if (!paymentId || meta.orderId !== orderIdFor(paymentId)) return json({ ignored: "not a CPAY invoice" });
+    if (!paymentId || !isCpayOrderId(meta.orderId, paymentId)) return json({ ignored: "not a CPAY invoice" });
 
     if (type === "InvoiceExpired" || type === "InvoiceInvalid") {
       const want = type === "InvoiceExpired" ? "Expired" : "Invalid";

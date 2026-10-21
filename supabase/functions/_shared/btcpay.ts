@@ -103,7 +103,15 @@ async function call<T>(f: Fetch, cfg: BtcpayConfig, method: "GET" | "POST", path
   return await res.json() as T;
 }
 
-export const orderIdFor = (paymentId: string) => `cpay:${paymentId}`;
+// Short on purpose: BTCPay's default Lightning description template is
+// "Paid to {StoreName} (Order ID: {OrderId})", so a long orderId (the old
+// "cpay:<uuid>") made the BOLT11 ~506 chars and some exchanges rejected it.
+// The full payment id travels in metadata.cpayPaymentId instead.
+export const orderIdFor = (paymentId: string) => `cp${paymentId.replace(/-/g, "").slice(0, 8)}`;
+/** Pre-fix invoices (still open at deploy time) carried the long form. */
+export const legacyOrderIdFor = (paymentId: string) => `cpay:${paymentId}`;
+export const isCpayOrderId = (orderId: unknown, paymentId: string) =>
+  orderId === orderIdFor(paymentId) || orderId === legacyOrderIdFor(paymentId);
 
 /** The Greenfield create-invoice body. No paymentMethods: every method the store has on (Lightning + on-chain). */
 export function invoiceRequest(p: { paymentId: string; linkId: string; slug: string; amountCents: number; expiresMinutes: number; redirectUrl?: string }) {
@@ -114,7 +122,7 @@ export function invoiceRequest(p: { paymentId: string; linkId: string; slug: str
       orderId: orderIdFor(p.paymentId),
       cpayPaymentId: p.paymentId,
       cpayLinkId: p.linkId,
-      itemDesc: `CPAY /${p.slug}`,
+      itemDesc: "cpay payment",
     },
     checkout: {
       expirationMinutes: p.expiresMinutes,

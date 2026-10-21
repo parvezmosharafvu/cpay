@@ -25,7 +25,7 @@
   --shadow-sm:0 1px 2px rgba(16,24,40,.05);
   --shadow:0 1px 3px rgba(16,24,40,.07),0 1px 2px rgba(16,24,40,.04);
   --shadow-lg:0 12px 32px rgba(16,24,40,.10);
-  --font:Inter,"Noto Sans Bengali",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font:Inter,"Noto Sans Bengali",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Nirmala UI","Bangla Sangam MN","Kohinoor Bangla",sans-serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
   --space-5:20px; --space-6:24px; --space-7:32px; --space-8:48px;
@@ -1403,3 +1403,45 @@ dialog.pay-details::backdrop{background:rgba(16,24,40,.5)}
   .owner-card .table td.num,#platformSettings .table td.num{text-align:left;white-space:normal!important;padding-top:0}
   #platformSettings .table td.num .input{width:100%;margin-bottom:6px}
 }
+
+/* ---------- responsive audit (Oct 2026) ---------- */
+/* Display currency picker in the desk top bar (currency-pref.js). */
+.currency-switch{appearance:none;-webkit-appearance:none;-moz-appearance:none;height:36px;padding:0 28px 0 10px;border:1px solid var(--line);border-radius:10px;background-color:var(--surface-2);color:var(--text);font:600 13px/1 var(--font);cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a1b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;background-size:14px}
+.currency-switch:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.currency-switch option{background:var(--surface);color:var(--text)}
+/* Every select gets the same chevron and dark styling on WebKit, Firefox and Chromium (no native gradient on iOS). */
+select:not([multiple]):not(.currency-switch){-webkit-appearance:none;-moz-appearance:none;appearance:none;padding-right:34px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a1b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;background-size:16px}
+select option{background:var(--surface);color:var(--text)}
+/* iOS zooms into inputs under 16px; keep form text at 16px on phones. */
+@media (max-width:900px){input,select,textarea{font-size:16px}.currency-switch{font-size:13px}}
+/* Number inputs: no spinner clutter on Firefox/WebKit. */
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+/* Long ids, addresses and invoices never push a card wider than the screen. */
+.card,.kpi,.faint,.mono,td{overflow-wrap:anywhere;min-width:0}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+.main{min-width:0;overflow-x:clip}
+/* Wallet cards: 4 across on desktop, 2 on tablet, 1 on phone. */
+.grid.kpis.wallet-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:1180px){.grid.kpis.wallet-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.grid.kpis.wallet-kpis{grid-template-columns:1fr}}
+/* Tables marked stack-sm become one card per row on phones. */
+@media (max-width:640px){
+  .table.stack-sm,.card.flush .table.stack-sm{min-width:0;width:100%}
+  .table.stack-sm thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .table.stack-sm,.table.stack-sm tbody,.table.stack-sm tr,.table.stack-sm td{display:block}
+  .table.stack-sm tr{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 10px;background:var(--surface-2)}
+  .card.flush .table.stack-sm tbody{padding:0 12px}
+  .table.stack-sm td{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:6px 0;border:0;text-align:right}
+  .table.stack-sm td::before{content:attr(data-label);flex:0 0 auto;max-width:45%;text-align:left;color:var(--faint);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  .table.stack-sm td[data-label=""]::before,.table.stack-sm td.empty::before{content:none}
+  .table.stack-sm td.empty{justify-content:center;text-align:center}
+  .table.stack-sm td:last-child{flex-wrap:wrap;justify-content:flex-end}
+  .table.stack-sm td.num{text-align:right}
+}
+/* Notch and home-bar safe areas on the sides too (landscape iPhone). */
+@supports (padding:max(0px)){
+  @media (max-width:900px){.main{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}.app-top{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}}
+}
+@media (max-width:420px){.currency-switch{height:32px;padding-left:8px}}
+.wallet-actions-bar{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}

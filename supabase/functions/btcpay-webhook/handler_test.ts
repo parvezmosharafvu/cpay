@@ -113,11 +113,18 @@ Deno.test("btcpay client helpers", async () => {
   assertEquals(body.amount, "12.34");
   assertEquals(body.metadata.orderId, "cp" + PID.replace(/-/g, "").slice(0, 8));
   assert(body.metadata.orderId.length <= 12, "short orderId keeps the BOLT11 description short");
-  assertEquals(body.metadata.itemDesc, "cpay payment");
+  assertEquals(body, {
+    amount: "12.34", currency: "USD",
+    checkout: { expirationMinutes: 60, paymentMethods: ["BTC-LN"], defaultPaymentMethod: "BTC-LN" },
+    metadata: { orderId: body.metadata.orderId, cpayPaymentId: PID, cpayLinkId: "L" },
+  }, "default request mirrors boltpay (BTC-LN only)");
+  const open = invoiceRequest({ paymentId: PID, linkId: "L", slug: "abc", amountCents: 1234, expiresMinutes: 60, lightningOnly: false });
+  assert(!("paymentMethods" in open.checkout), "on-chain re-enabled when lightningOnly is false");
+  assertEquals(open.metadata.itemDesc, "cpay payment");
+  assertEquals(payDetails([{ paymentMethodId: "BTC-LN", destination: " lightning:LNBC1XYZ ", activated: true }]).bolt11, "lnbc1xyz");
   assertEquals(body.currency, "USD");
   assertEquals(body.checkout.expirationMinutes, 60);
   assertEquals(body.metadata.cpayPaymentId, PID);
-  assert(!("paymentMethods" in body.checkout), "every store method (Lightning + on-chain) must stay on");
   const pd = payDetails([{ paymentMethodId: "BTC-LN", destination: "LNBC1ABCDEF", activated: true },
     { paymentMethodId: "BTC-CHAIN", destination: "bc1qxyz", paymentLink: "bitcoin:bc1qxyz?amount=0.1", activated: true }]);
   assertEquals(pd, { bolt11: "lnbc1abcdef", onchainAddress: "bc1qxyz", bitcoinUri: "bitcoin:bc1qxyz?amount=0.1" });

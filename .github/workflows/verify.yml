@@ -76,6 +76,8 @@ jobs:
           added=$(git diff --name-only --diff-filter=A origin/main HEAD -- supabase/migrations/ | xargs -r -n1 basename | cut -d_ -f1)
           bad=""
           for v in $added; do
+            # Already applied in production; added only to match its history.
+            if grep -qx "$v" ci/history_backfill_versions.txt; then continue; fi
             if [ "$(printf '%s\n%s\n' "$v" "$base_max" | sort | tail -1)" != "$v" ] || [ "$v" = "$base_max" ]; then bad="$bad $v"; fi
           done
           if [ -n "$bad" ]; then

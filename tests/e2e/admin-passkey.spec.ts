@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { makeUser, login, loginAdmin, withPasskeys, readyAddress, db, ORIGIN, TRON, type User } from './helpers';
+import { makeUser, login, loginAdmin, withPasskeys, readyAddress, db, ORIGIN, TRON, type User, openAuthForm } from './helpers';
 // @ts-ignore -- plain ESM helper shared with the fake Supabase Auth
 import { totp } from '../../e2e/totp.mjs';
 
@@ -18,6 +18,7 @@ const amr = (page: Page) => page.evaluate(async () => {
 
 async function logout(page: Page) {
   await Promise.all([page.waitForURL(/login\.html/), page.click('#logoutBtn')]);
+  await openAuthForm(page);
 }
 
 test('a new admin adds a passkey at the first sign-in, then reaches the admin desk with it', async ({ page }) => {

@@ -1,0 +1,81 @@
+/* Pull-chain lamp on login.html and register.html (see lamp.js).
+   Everything here applies only once lamp.js has added html.lamp-js, so a page
+   without JavaScript keeps the plain split layout with the form visible. */
+.lamp{display:none}
+.lamp-js .lamp{display:block}
+
+.lamp-js body.auth.split{background:radial-gradient(900px 600px at 30% 20%,rgba(34,211,238,0) 0,transparent 70%),var(--bg);transition:background .6s var(--ease,ease)}
+.lamp-js.lamp-on body.auth.split{background:radial-gradient(900px 640px at 32% 24%,var(--glow,rgba(34,211,238,.16)) 0,transparent 70%),var(--bg)}
+.lamp-js .auth-shell{grid-template-columns:1fr}
+.lamp-js .auth-aside{display:none}
+.lamp-js .auth-main{grid-template-columns:minmax(0,340px) minmax(0,440px);justify-content:center;align-items:center;gap:clamp(24px,6vw,96px);place-items:center}
+
+/* Lamp art */
+.lamp{position:relative;width:240px;height:400px;--pull:0px}
+.lamp-art{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.lamp-art .shade{fill:var(--surface-3,#1a2945);stroke:var(--line-strong);stroke-width:2;transition:fill .4s var(--ease,ease),filter .4s}
+.lamp-art .shade-inner{fill:#0c1627;transition:fill .4s}
+.lamp-art .stand{stroke:var(--line-strong);stroke-width:5;stroke-linecap:round}
+.lamp-art .base{fill:var(--surface-3,#1a2945);stroke:var(--line-strong);stroke-width:2}
+.lamp-art .beam{opacity:0;transform-origin:120px 118px;transform:scaleY(.6);transition:opacity .5s var(--ease,ease),transform .6s var(--ease,ease)}
+.lamp-on .lamp-art .shade{fill:#67e8f9;filter:drop-shadow(0 0 18px rgba(34,211,238,.7))}
+.lamp-on .lamp-art .shade-inner{fill:#ecfeff}
+.lamp-on .lamp-art .beam{opacity:1;transform:none}
+
+/* Chain: a real button. The visible chain is thin; the hit area is 44 px. */
+.lamp-chain{position:absolute;left:65.8%;top:28.5%;width:44px;height:104px;margin-left:-22px;padding:0;border:0;background:transparent;cursor:grab;touch-action:none;border-radius:var(--radius-pill,999px);transform:translateY(var(--pull));transition:transform .45s cubic-bezier(.34,1.56,.64,1)}
+.lamp.dragging .lamp-chain{transition:none;cursor:grabbing}
+.lamp-chain .chain-line{position:absolute;left:50%;top:0;width:2px;height:74px;margin-left:-1px;background:repeating-linear-gradient(180deg,var(--muted) 0 4px,transparent 4px 6px)}
+.lamp-chain .chain-knob{position:absolute;left:50%;top:72px;width:18px;height:18px;margin-left:-9px;border-radius:50%;background:var(--surface-3,#1a2945);border:2px solid var(--muted);transition:background .3s,border-color .3s,box-shadow .3s}
+.lamp-on .lamp-chain .chain-knob{background:var(--accent);border-color:#67e8f9;box-shadow:0 0 14px rgba(34,211,238,.7)}
+.lamp-chain:hover .chain-knob{border-color:var(--accent)}
+.lamp-chain:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lamp.tug .lamp-chain{animation:cpay-tug .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes cpay-tug{0%{transform:translateY(0)}35%{transform:translateY(34px)}100%{transform:translateY(0)}}
+.lamp-hint{position:absolute;left:-40px;right:-40px;bottom:-30px;margin:0;text-align:center;color:var(--faint);font-size:var(--text-xs,12px);transition:opacity .3s}
+.lamp-on .lamp-hint{opacity:0}
+
+/* The form card: glass, lit by the lamp, shown only when the light is on. */
+.lamp-js .auth-shell .auth-card .card{background:rgba(15,26,46,.55);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(103,232,249,.18);border-radius:var(--radius-xl,20px);padding:clamp(20px,4vw,32px);box-shadow:0 0 0 1px rgba(255,255,255,.02) inset,0 30px 80px -30px rgba(34,211,238,.35)}
+.lamp-js .auth-card{transition:opacity .6s var(--ease,ease) .1s,transform .6s var(--ease,ease) .1s,filter .6s}
+.lamp-js:not(.lamp-on) .auth-card{opacity:0;transform:translateY(12px);filter:blur(4px);pointer-events:none}
+.lamp-js .auth-card .btn.primary{background:linear-gradient(135deg,#67e8f9 0%,var(--accent) 50%,#06b6d4 100%);color:var(--on-accent,#04222b);border-color:transparent}
+.lamp-js .auth-card .btn.primary:hover:not(:disabled){background:linear-gradient(135deg,#a5f3fc 0%,#67e8f9 50%,var(--accent) 100%);color:var(--on-accent,#04222b)}
+
+/* Password managers: the animation name lets lamp.js notice autofill. */
+@keyframes cpay-autofill{from{opacity:1}to{opacity:1}}
+.lamp-js .auth-card input:-webkit-autofill{animation:cpay-autofill .01s}
+.lamp-js .auth-card input:autofill{animation:cpay-autofill .01s}
+
+/* Tablet and phone: lamp above a smaller card. */
+@media (max-width:900px){
+  .lamp-js .auth-main{grid-template-columns:minmax(0,440px);gap:8px;place-items:start center;align-content:start;padding:72px 16px 40px}
+  .lamp{width:150px;height:250px;justify-self:center}
+  .lamp-chain{height:84px}
+  .lamp-chain .chain-line{height:54px}
+  .lamp-chain .chain-knob{top:52px}
+  .lamp-hint{bottom:-22px;left:-60px;right:-60px}
+  .lamp{margin-bottom:24px}
+}
+@media (max-width:420px){
+  .lamp-js .auth-shell .auth-card .card{padding:18px}
+}
+
+@media (prefers-reduced-motion: reduce){
+  .lamp-chain,.lamp-js .auth-card,.lamp-art .beam,.lamp-art .shade{transition:none !important}
+  .lamp.tug .lamp-chain{animation:none}
+  .lamp-js .auth-card input:-webkit-autofill,.lamp-js .auth-card input:autofill{animation-duration:.01ms !important}
+}
+
+/* Brand: one home link outside the form, so it stays reachable while the
+   light is off. Without JS the page keeps its own brand links. */
+.lamp-brand{display:none}
+.lamp-js .lamp-brand{display:inline-flex;position:absolute;top:clamp(16px,3vw,32px);left:clamp(16px,4vw,48px)}
+.lamp-js .auth-main{position:relative;padding-top:clamp(72px,10vh,96px)}
+.lamp-js .auth-shell .auth-card > .brand{display:none}
+
+/* Touch targets in the lit card: at least 44 px (--touch). */
+.lamp-js .lamp-brand,.lamp-js .auth-card .link-btn,.lamp-js .auth-card .foot a{min-height:var(--touch,44px);display:inline-flex;align-items:center}
+.lamp-js .auth-card .foot a{padding:0 6px;margin:0 -6px;font-weight:600}
+.lamp-js .auth-card .label-row{align-items:center}
+.lamp-js .auth-card .label-row .link-btn{margin:-6px 0;padding-right:0}

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { makeUser, login, db, uniq, ORIGIN, SITE, PASSWORD, expectCleanCopy } from './helpers';
+import { makeUser, login, db, uniq, ORIGIN, SITE, PASSWORD, expectCleanCopy, openAuthForm } from './helpers';
 
 const SENT = /^If an account uses that email, a reset link is on its way/;
 const mailFor = async (email: string) => (await fetch(`${ORIGIN}/__e2e/mailbox?to=${encodeURIComponent(email)}`)).json();
@@ -7,6 +7,7 @@ const mailFor = async (email: string) => (await fetch(`${ORIGIN}/__e2e/mailbox?t
 test('register creates a pending Freelancer application', async ({ page }) => {
   const email = `${uniq('reg')}@test.invalid`;
   await page.goto('/register.html');
+  await openAuthForm(page);
   await expectCleanCopy(page);
   await page.fill('#displayName', 'New Person');
   await page.fill('#email', email);
@@ -19,6 +20,7 @@ test('register creates a pending Freelancer application', async ({ page }) => {
 
 test('register rejects a short password before calling the server', async ({ page }) => {
   await page.goto('/register.html');
+  await openAuthForm(page);
   await page.fill('#email', `${uniq('reg')}@test.invalid`);
   await page.fill('#password', 'short');
   await page.click('#submitBtn');
@@ -49,6 +51,7 @@ test('wrong password and pending account are refused with a clear message', asyn
 test('password recovery: request a link, set a new password, log in with it', async ({ page, browser }) => {
   const u = await makeUser({ name: 'Recover Me' });
   await page.goto('/login.html');
+  await openAuthForm(page);
   await page.fill('#email', u.email);
   await page.click('#forgotBtn');
   await expect(page.locator('#okMsg')).toHaveText(SENT);
@@ -76,6 +79,7 @@ test('password recovery: request a link, set a new password, log in with it', as
 test('forgot password answers the same for an unknown email and sends nothing', async ({ page }) => {
   const email = `${uniq('nobody')}@test.invalid`;
   await page.goto('/login.html');
+  await openAuthForm(page);
   await page.fill('#email', email);
   await page.click('#forgotBtn');
   await expect(page.locator('#okMsg')).toHaveText(SENT);
@@ -86,6 +90,7 @@ test('forgot password answers the same for an unknown email and sends nothing', 
 test('a reset link that falls back to the home page (Site URL) still opens the reset form', async ({ page, browser }) => {
   const u = await makeUser({ name: 'Home Landing' });
   await page.goto('/login.html');
+  await openAuthForm(page);
   await page.fill('#email', u.email);
   await page.click('#forgotBtn');
   await expect(page.locator('#okMsg')).toHaveText(SENT);
@@ -136,6 +141,7 @@ test('the reset page refuses a missing or ordinary session, and a malformed link
 test('reset rejects short and mismatched passwords before calling the server', async ({ page }) => {
   const u = await makeUser({ name: 'Validate Me' });
   await page.goto('/login.html');
+  await openAuthForm(page);
   await page.fill('#email', u.email);
   await page.click('#forgotBtn');
   await expect(page.locator('#okMsg')).toHaveText(SENT);
@@ -155,6 +161,7 @@ test('reset rejects short and mismatched passwords before calling the server', a
 test('branded-template link: nothing is used until Continue; a second use is refused', async ({ page }) => {
   const u = await makeUser({ name: 'Token Hash' });
   await page.goto('/login.html');
+  await openAuthForm(page);
   await page.fill('#email', u.email);
   await page.click('#forgotBtn');
   await expect(page.locator('#okMsg')).toHaveText(SENT);

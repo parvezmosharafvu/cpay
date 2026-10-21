@@ -134,6 +134,11 @@ export function createForwarder({ breez, db, withdrawals = null, btcUsdRate = nu
 
   async function fromBatchPayment(b, p, feeUsd = null) {
     const o = outcomeOf(p);
+    // The wallet's own payment id, kept apart from payment_ref (set once).
+    if (p?.id != null) {
+      try { await db.query('select public.system_usdt_batch_payment($1, $2)', [b.id, String(p.id)]); }
+      catch (e) { log({ event: 'forward-usdt-payment-id', batchId: b.id, error: String(e?.message ?? e).slice(0, 200) }); }
+    }
     if (o.status === 'paid') return finishBatch(b.id, 'forwarded', { ref: String(p.id), receive: o.delivered != null ? String(o.delivered) : null, feeUsd });
     if (o.status === 'failed') return finishBatch(b.id, 'retry', { error: o.note ?? 'send failed' });
     if (o.status === 'stuck') log({ event: 'forward-usdt-stuck', batchId: b.id, paymentId: p.id });

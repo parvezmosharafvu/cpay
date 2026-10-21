@@ -173,6 +173,14 @@ if (gatewayErr) {
   return json({ error: "Payment service temporarily unavailable" }, 503);
 }
 const useBtcpay = gatewayOn === true;
+// Admin → Settings btcpay_lightning_only (default true): boltpay-identical
+// BTC-LN-only request. Read error -> Lightning only (the known-good shape).
+let btcpayLnOnly = true;
+if (useBtcpay) {
+  const { data: lnOnly, error: lnErr } = await supabaseAdmin.rpc("gateway_lightning_only");
+  if (lnErr) console.error("btcpay_lightning_only read failed, using Lightning only:", lnErr.message);
+  else btcpayLnOnly = lnOnly !== false;
+}
 if (useBtcpay && !BTCPAY) {
   console.error("btcpay_enabled is on but BTCPAY_URL / BTCPAY_STORE_ID / BTCPAY_API_KEY are not set");
   return json({ error: "Payments are temporarily unavailable" }, 503);
@@ -251,7 +259,7 @@ if (insertErr || !payment) {
 }
 
 if (useBtcpay) {
-  const res = await btcpayInvoice(payment.id, link.link_id, slug, chargedAmountCents, expiresAt);
+  const res = await btcpayInvoice(payment.id, link.link_id, slug, chargedAmountCents, expiresAt, btcpayLnOnly);
   if (res) return res;
   const { error } = await supabaseAdmin.from("payments").delete().eq("id", payment.id).is("gateway_invoice_id", null);
   if (error) console.error("Could not delete invoiceless payment", payment.id, error.message);
@@ -312,12 +320,11 @@ function invoiceResponse(paymentId: string, bolt11: string, amountRequested: num
 }
 
 // BTCPay: one Greenfield invoice per payments row, tagged orderId
-// "cpay:<payment id>". No paymentMethods list, so every method the cpay
-// store has on (Lightning and on-chain) is offered.
-async function btcpayInvoice(paymentId: string, linkId: string, slug: string, cents: number, expiresAt: string): Promise<Response | null> {
+// orderIdFor(). Lightning only (BTC-LN) unless btcpay_lightning_only is off.
+async function btcpayInvoice(paymentId: string, linkId: string, slug: string, cents: number, expiresAt: string, lightningOnly: boolean): Promise<Response | null> {
   try {
     const inv = await btcpayCreate(fetch, BTCPAY!, invoiceRequest({
-      paymentId, linkId, slug, amountCents: cents, expiresMinutes: INVOICE_MINUTES,
+      paymentId, linkId, slug, amountCents: cents, expiresMinutes: INVOICE_MINUTES, lightningOnly,
       redirectUrl: SITE_URL ? `${SITE_URL}/invoice-cpay-v2.html?id=${paymentId}` : undefined,
     }));
     const methods = await btcpayMethods(fetch, BTCPAY!, inv.id).catch(() => []);

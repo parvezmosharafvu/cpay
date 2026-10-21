@@ -70,3 +70,16 @@ function invoiceDesignFor(invoiceTheme, linkDesign) {
   const v = String(invoiceTheme || '').toLowerCase();
   return (v && v !== 'default' && resolveDesign(v)) || resolveDesign(linkDesign) || window.CPAY_LAYOUT;
 }
+
+// Not-found states belong to CPAY, not to a merchant: drop any checkout
+// design and show them in the navy brand palette (docs/DESIGN-SYSTEM.md).
+function useNavyState() {
+  const root = document.documentElement;
+  root.removeAttribute('data-layout');
+  root.removeAttribute('data-entry');
+  root.setAttribute('data-ui', 'navy');
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', '#0a1120');
+  const scheme = document.querySelector('meta[name="color-scheme"]');
+  if (scheme) scheme.setAttribute('content', 'dark');
+}

@@ -30,15 +30,15 @@
     <div class="checkout-card state-panel" id="loadingState" role="status" aria-live="polite">
       <div class="spinner" aria-hidden="true"></div>
       <div class="state-sub">Loading payment page…</div>
-      <div class="skeleton line" style="width:60%;margin-top:16px" aria-hidden="true"></div>
-      <div class="skeleton line" style="width:40%" aria-hidden="true"></div>
+      <div class="skeleton line sk-60" aria-hidden="true"></div>
+      <div class="skeleton line sk-40" aria-hidden="true"></div>
     </div>
 
     <div class="checkout-card state-panel" id="loadErrorCard" hidden aria-hidden="true">
       <div class="state-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div>
       <div class="state-title">We couldn't load this payment page</div>
       <div class="state-sub">Check your connection and try again.</div>
-      <button class="pay-btn" id="loadRetryBtn" type="button" style="max-width:280px;margin-top:8px">Retry</button>
+      <button class="pay-btn" id="loadRetryBtn" type="button">Retry</button>
     </div>
 
     <div class="checkout-card state-panel" id="notFoundCard" hidden aria-hidden="true">
@@ -311,6 +311,7 @@ function showNotFound(){
   setPanel('paymentCard', false);
   setPanel('notTakingCard', false);
   setPanel('notFoundCard', true);
+  if (typeof useNavyState === 'function') useNavyState();
   document.title = 'Payment link not found — CPAY';
 }
 // A direct link whose owner has no usable wallet address (or direct

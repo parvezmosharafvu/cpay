@@ -1,6 +1,6 @@
 # cpay architecture
 
-Internal document. The payment processor is a Lightning/Spark wallet SDK;
+Internal document. The payment processor is a Lightning wallet SDK from our payment provider;
 no user-facing page names it (see "What users see").
 
 Product payout is USDT to a saved address (USDC only if a route exists).
@@ -26,7 +26,7 @@ browser ──► public/ (static, Cloudflare Workers assets)
    └──────► wallet Edge Function (production since 2026-10-13; its core/
                is the same code as payment-service/), or payment-service/
                (Node 22, self-hosted fallback after a seed restore)
-               holds the one platform wallet (Lightning/Spark SDK)
+               holds the one platform wallet (Lightning wallet SDK)
                writes the ledger through the service role
 ```
 

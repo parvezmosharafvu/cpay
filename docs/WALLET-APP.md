@@ -7,7 +7,7 @@ product** from the website:
 | | CPAY website | CPAY Wallet |
 |---|---|---|
 | Who holds the money | CPAY (custodial; platform wallet + ledger) | the member (keys on the phone) |
-| Source of truth for its balance | the website ledger (`get_my_balance`, payments, withdrawals) | the wallet's own keys on the Spark network |
+| Source of truth for its balance | the website ledger (`get_my_balance`, payments, withdrawals) | the wallet's own keys on the wallet network |
 | Code | `public/`, `supabase/`, `payment-service/` | `wallet/` |
 | Hosting | the CPAY hostname (Workers Builds: cpay) | its own hostname, its own Workers project |
 | Deployed by merging to main | yes | no |
@@ -64,8 +64,8 @@ Release-check separation, as the repository works today:
 
 ## Operator outage / unilateral exit
 
-The wallet's money is on Spark. If the Spark operators (listed in
-`wallet/SECURITY.md`) stop co-signing, payments stop but the money is not lost: Spark
+The wallet's money is on the wallet network. If the network's operators (listed in
+`wallet/SECURITY.md`) stop co-signing, payments stop but the money is not lost: the wallet network
 keeps pre-signed Bitcoin transactions that let the owner exit to the
 Bitcoin blockchain alone.
 

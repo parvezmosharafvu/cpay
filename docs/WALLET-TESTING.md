@@ -32,7 +32,7 @@ a person with a phone or real money.
 ## Not yet proven (needs a person)
 
 - **A real payment between two wallets.** Funding needs coins from the
-  Spark regtest faucet, which is a web page and cannot be scripted from CI.
+  wallet network's regtest faucet, which is a web page and cannot be scripted from CI.
   Steps are below.
 - **A real phone.** Chromium's installability check passes, and the tests
   run with a Pixel 7 profile, but no physical Android or iPhone has been used.
@@ -57,7 +57,7 @@ a person with a phone or real money.
 4. **Create a new wallet.** Write the 12 words on paper. Tick the box, enter
    the requested words, choose a passphrase of at least 10 characters.
 5. **Receive** → enter 1000 sats → **Create invoice**. A QR code appears.
-6. **Show deposit address** → copy the `bcrt1…` address → open the Spark
+6. **Show deposit address** → copy the `bcrt1…` address → open the wallet network's
    regtest faucet (linked from the wallet library's "Getting started" guide) on
    another device and send test coins to it. After confirmation the
    balance appears (the library claims the deposit by itself).

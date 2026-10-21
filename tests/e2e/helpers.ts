@@ -55,6 +55,7 @@ export async function readyAddress(userId: string, network = 'tron', address = T
 
 export async function login(page: Page, u: User) {
   await page.goto('/login.html');
+  await openAuthForm(page);
   await page.fill('#email', u.email);
   await page.fill('#password', u.password);
   await page.click('#submitBtn');
@@ -93,4 +94,14 @@ export async function loginAdmin(page: Page, u: User) {
   await login(page, u);
   await page.locator('dialog [data-role="ok"]').click();
   await page.waitForURL(/admin\.html/);
+}
+
+/** Log-in and register show the form only after the lamp chain is pulled
+ *  (public/lamp.js). Pull it unless the page already opened the form. */
+export async function openAuthForm(page: Page) {
+  const chain = page.locator('#lampChain');
+  if (!(await chain.count())) return;
+  if ((await chain.getAttribute('aria-pressed')) !== 'true') await chain.click();
+  await expect(chain).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('main.auth-card')).not.toHaveAttribute('inert', '');
 }

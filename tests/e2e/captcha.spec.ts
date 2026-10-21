@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { makeUser, makeLink, login, db, uniq, ORIGIN, SITE, PASSWORD, TRON, paymentsFor, readyAddress } from './helpers';
+import { makeUser, makeLink, login, db, uniq, ORIGIN, SITE, PASSWORD, TRON, paymentsFor, readyAddress, openAuthForm } from './helpers';
 
 // Supabase Auth CAPTCHA protection (production since 2026-10-15): sign-in,
 // sign-up and reset-email requests without a Turnstile token are refused
@@ -81,6 +81,7 @@ test('forgot password and resend carry a token; a refused check says nothing abo
   await captcha(true);
   // No site key: refused as a security check, not "no account".
   await page.goto('/login.html');
+  await openAuthForm(page);
   await page.fill('#email', u.email);
   await page.click('#forgotBtn');
   await expect(page.locator('#errorMsg')).toHaveText(CAPTCHA_MSG);
@@ -89,6 +90,7 @@ test('forgot password and resend carry a token; a refused check says nothing abo
   const fresh = await page.context().newPage();
   await fakeTurnstile(fresh);
   await fresh.goto('/login.html');
+  await openAuthForm(fresh);
   await fresh.fill('#email', u.email);
   await fresh.click('#forgotBtn');
   await expect(fresh.locator('#okMsg')).toHaveText(/^If an account uses that email/);
@@ -113,6 +115,7 @@ test('registration carries a token', async ({ page }) => {
   await captcha(true);
   await fakeTurnstile(page);
   await page.goto('/register.html');
+  await openAuthForm(page);
   await page.fill('#displayName', 'Captcha Signup');
   await page.fill('#email', email);
   await page.fill('#password', PASSWORD);
@@ -162,6 +165,7 @@ test('the sign-up confirmation email can be sent again with a token', async ({ p
     await captcha(true);
     await fakeTurnstile(page);
     await page.goto('/register.html');
+    await openAuthForm(page);
     await page.fill('#email', email);
     await page.fill('#password', PASSWORD);
     await page.click('#submitBtn');

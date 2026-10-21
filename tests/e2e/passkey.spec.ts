@@ -1,5 +1,5 @@
 import { test, expect, type Page, type CDPSession } from '@playwright/test';
-import { makeUser, login, db, ORIGIN, TRON, readyAddress, type User } from './helpers';
+import { makeUser, login, db, ORIGIN, TRON, readyAddress, type User, openAuthForm } from './helpers';
 
 // Passkeys (Supabase Auth, WebAuthn) with Chromium's virtual authenticator:
 // the browser runs the real ceremony and the stand-in Auth checks the real
@@ -20,6 +20,7 @@ async function authenticator(page: Page): Promise<{ cdp: CDPSession; id: string 
 
 async function logout(page: Page) {
   await Promise.all([page.waitForURL(/login\.html/), page.click('#logoutBtn')]);
+  await openAuthForm(page);
 }
 
 async function addPasskey(page: Page) {
@@ -40,6 +41,7 @@ const amrMethods = (page: Page) => page.evaluate(async () => {
 test('passkey buttons stay hidden while passkeys are off', async ({ page }) => {
   await toggle(false);
   await page.goto('/login.html');
+  await openAuthForm(page);
   await page.waitForLoadState('networkidle');
   await expect(page.locator('#passkeyBtn')).toBeHidden();
   await expect(page.locator('[data-alt]')).toBeHidden();

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { makeUser, makeLink, login, db, ORIGIN, expectCleanCopy, type User, withPasskeys } from './helpers';
+import { makeUser, makeLink, login, db, ORIGIN, expectCleanCopy, type User, withPasskeys, openAuthForm } from './helpers';
 
 // Direct settlement (20261018010000): payers pay the Freelancer's own wallet
 // through the fake merchant provider in e2e/fake-lnurl.mjs. Nothing here
@@ -82,6 +82,7 @@ test.describe.serial('direct payments to the Freelancer\'s own wallet', () => {
     // Signed out: the login page comes first; the address survives it.
     await page.goto('/dashboard.html#direct=carol.shop%40pay.example.com');
     await page.waitForURL(/login\.html/);
+    await openAuthForm(page);
     await page.fill('#email', u.email);
     await page.fill('#password', u.password);
     await page.click('#submitBtn');

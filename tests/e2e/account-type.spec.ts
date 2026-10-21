@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { makeUser, login, db, uniq, PASSWORD, expectCleanCopy, loginAdmin } from './helpers';
+import { makeUser, login, db, uniq, PASSWORD, expectCleanCopy, loginAdmin, openAuthForm } from './helpers';
 
 // Account type (CPAY design artifacts): Individual or Business / Organization,
 // chosen at sign-up, shown on the desk and to the admin reviewing the
@@ -11,6 +11,7 @@ const profileOf = async (email: string) =>
 test('register as a Business / Organization records the type and the name; approval is unchanged', async ({ page }) => {
   const email = `${uniq('biz')}@test.invalid`;
   await page.goto('/register.html');
+  await openAuthForm(page);
   await expectCleanCopy(page);
   await expect(page.locator('input[name="accountType"][value="individual"]')).toBeChecked();
   await expect(page.locator('#businessField')).toBeHidden();
@@ -36,6 +37,7 @@ test('register as a Business / Organization records the type and the name; appro
 test('register keeps Individual by default and never sends a business name for it', async ({ page }) => {
   const email = `${uniq('ind')}@test.invalid`;
   await page.goto('/register.html');
+  await openAuthForm(page);
   // A name typed, then the choice switched back: it is not sent.
   await page.getByLabel(/Business \/ Organization/).check();
   await page.fill('#businessName', 'Left Behind Co');

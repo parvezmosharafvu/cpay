@@ -130,6 +130,26 @@ The redesign is static files only: no migration, no Edge Function and no setting
 merge commit, or redeploy the previous Workers deployment of `cpay`. Script URLs carry new `?v=` values, so
 browsers fetch the matching versions.
 
+## Pull-chain lamp (log in and register)
+
+`login.html` and `register.html` load [`lamp.css`](../public/lamp.css) and [`lamp.js`](../public/lamp.js).
+The page shows a lamp with a pull chain, and the form card appears only when the light is on.
+
+- **Chain:** a real `<button id="lampChain">` with `aria-pressed`, `aria-controls` (the card id) and the label
+  "Turn on the light to sign in". Tap/click, Enter/Space or a downward drag (pointer events, release past
+  28 px) toggles it. Its hit area is 44 px wide.
+- **Form:** always in the DOM. While off, `main.auth-card` is `inert` and `aria-hidden`; focus inside it moves
+  to the chain first.
+- **Progressive enhancement:** the form is hidden only under `html.lamp-js`, which `lamp.js` adds. No JS, or
+  a failed init, means the form shows.
+- **Opens without a pull:** a URL hash, an auth result in the query (`error`, `confirmed`, `code`, `type`, …),
+  typing, password-manager autofill, or a message shown in the card.
+- **Look:** shade, beam and card glow use the cyan accent; the card is glass (`backdrop-filter`); the primary
+  button is a cyan gradient with dark `--on-accent` text.
+- **Motion:** off under `prefers-reduced-motion`.
+- **Layout:** ≤ 900 px the lamp sits above a smaller card; the side panel is hidden in lamp mode.
+- **Tests:** e2e and smoke tests call `openAuthForm(page)` (tests/e2e/helpers.ts) before using the form.
+
 ## Touch targets (v2.1, 2026-10-21)
 
 Every standalone tap target is at least `--touch` (44 px) tall: `.btn`, `.link-btn` (also inside the

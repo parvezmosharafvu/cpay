@@ -27,6 +27,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
 <link rel="stylesheet" href="a11y.css">
+<link rel="stylesheet" href="lamp.css">
+<script src="lamp.js"></script>
 <script src="auth-link.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
 <script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="turnstile.js"></script><script src="auth-features.js"></script><script src="passkey.js"></script><script src="mfa.js"></script>
@@ -79,6 +81,19 @@
       <p class="faint">Your CPAY balance is held by CPAY. Payments are sent over the Bitcoin Lightning Network.</p>
     </aside>
     <div class="auth-main">
+    <a class="brand lamp-brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
+    <div class="lamp" data-lamp>
+      <svg class="lamp-art" viewBox="0 0 240 400" aria-hidden="true" focusable="false">
+        <defs><linearGradient id="lampBeam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#67e8f9" stop-opacity=".45"/><stop offset=".6" stop-color="#22d3ee" stop-opacity=".12"/><stop offset="1" stop-color="#22d3ee" stop-opacity="0"/></linearGradient></defs>
+        <polygon class="beam" points="54,118 186,118 290,400 -50,400" fill="url(#lampBeam)"/>
+        <line class="stand" x1="120" y1="118" x2="120" y2="362"/>
+        <rect class="base" x="68" y="358" width="104" height="18" rx="9"/>
+        <path class="shade" d="M80 40h80l30 76H50z"/>
+        <ellipse class="shade-inner" cx="120" cy="116" rx="70" ry="5"/>
+      </svg>
+      <button class="lamp-chain" id="lampChain" type="button" aria-pressed="false" aria-controls="loginCard" aria-label="Turn on the light to sign in"><span class="chain-line" aria-hidden="true"></span><span class="chain-knob" aria-hidden="true"></span></button>
+      <p class="lamp-hint" aria-hidden="true">Pull the chain to sign in</p>
+    </div>
     <main class="auth-card">
     <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
     <div class="card" id="loginCard">

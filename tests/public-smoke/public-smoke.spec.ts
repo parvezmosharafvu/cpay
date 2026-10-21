@@ -47,6 +47,11 @@ test('payment slug page keeps loading and retry controls (JS off)', async ({ bro
 
 test('login form has 44px touch targets', async ({ page }) => {
   await page.goto('/login.html', { waitUntil: 'domcontentloaded' });
+  await page.locator('#lampChain').click();
+  await expect(page.locator('main.auth-card')).not.toHaveAttribute('inert', '');
+  const chain = await page.locator('#lampChain').boundingBox();
+  expect(chain!.height).toBeGreaterThanOrEqual(44);
+  expect(chain!.width).toBeGreaterThanOrEqual(44);
   const box = await page.locator('#submitBtn').boundingBox();
   expect(box!.height).toBeGreaterThanOrEqual(44);
   const email = await page.locator('#email').boundingBox();
@@ -109,5 +114,80 @@ test('freelancer desk has no Download wallet link and keeps its tabs', async ({ 
   await expect(page.locator('.side a.navi[href="/assets/wallet.html"]')).toHaveCount(0);
   const tabs = await page.locator('.side .navi[data-tab]').evaluateAll((b) => b.map((x) => x.getAttribute('data-tab')));
   expect(tabs).toEqual(['home', 'links', 'pay', 'cash', 'chat', 'profile', 'security']);
+  await context.close();
+});
+
+// Pull-chain lamp (public/lamp.js): the form shows only after the chain is
+// pulled, stays in the DOM (inert while off), and shows without JS.
+for (const p of [{ path: '/login.html', card: 'loginCard' }, { path: '/register.html', card: 'registerCard' }]) {
+  test(`lamp on ${p.path}: chain is a real toggle button; click, keyboard and drag`, async ({ page }) => {
+    await page.goto(p.path, { waitUntil: 'domcontentloaded' });
+    const chain = page.locator('#lampChain');
+    const card = page.locator('main.auth-card');
+    await expect(chain).toHaveAttribute('aria-pressed', 'false');
+    await expect(chain).toHaveAttribute('aria-controls', p.card);
+    await expect(chain).toHaveAttribute('aria-label', 'Turn on the light to sign in');
+    await expect(card).toHaveAttribute('inert', '');
+    await expect(card).toHaveAttribute('aria-hidden', 'true');
+    await expect(page.locator(`#${p.card}`)).toHaveCount(1);
+    await chain.click();
+    await expect(chain).toHaveAttribute('aria-pressed', 'true');
+    await expect(card).not.toHaveAttribute('inert', '');
+    await expect(page.locator('#email')).toBeEditable();
+    await chain.focus();
+    await page.keyboard.press('Enter');
+    await expect(chain).toHaveAttribute('aria-pressed', 'false');
+    await expect(card).toHaveAttribute('inert', '');
+    await page.keyboard.press('Space');
+    await expect(chain).toHaveAttribute('aria-pressed', 'true');
+    await chain.click();
+    const b = (await chain.boundingBox())!;
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height - 10);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height + 50, { steps: 6 });
+    await page.mouse.up();
+    await expect(chain).toHaveAttribute('aria-pressed', 'true');
+    await expect(card).not.toHaveAttribute('aria-hidden', 'true');
+  });
+
+  test(`lamp on ${p.path}: without JavaScript the form shows`, async ({ browser }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false });
+    const page = await context.newPage();
+    await page.goto(p.path, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#email')).toBeVisible();
+    await expect(page.locator('#submitBtn')).toBeVisible();
+    await expect(page.locator('#lampChain')).toBeHidden();
+    await context.close();
+  });
+
+  test(`lamp on ${p.path}: a URL hash or auth result opens the form`, async ({ page }) => {
+    await page.goto(`${p.path}#${p.card}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#lampChain')).toHaveAttribute('aria-pressed', 'true');
+    await page.goto(`${p.path}?error=access_denied`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('main.auth-card')).not.toHaveAttribute('inert', '');
+  });
+}
+
+test('lamp with reduced motion: no transition on the card or chain', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/login.html', { waitUntil: 'domcontentloaded' });
+  await page.locator('#lampChain').click();
+  const t = await page.evaluate(() => ['main.auth-card', '#lampChain'].map((s) => parseFloat(getComputedStyle(document.querySelector(s)!).transitionDuration) || 0));
+  expect(Math.max(...t)).toBeLessThanOrEqual(0.01);
+});
+
+test('lamp on a phone: lamp above the card, chain at least 44px', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  await page.goto('/login.html', { waitUntil: 'domcontentloaded' });
+  await page.locator('#lampChain').tap();
+  await expect(page.locator('#lampChain')).toHaveAttribute('aria-pressed', 'true');
+  const lamp = (await page.locator('[data-lamp]').boundingBox())!;
+  const card = (await page.locator('#loginCard').boundingBox())!;
+  expect(lamp.y + lamp.height).toBeLessThanOrEqual(card.y);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  for (const id of ['#lampChain', '#forgotBtn', '#submitBtn', '#email', '#password']) {
+    expect((await page.locator(id).boundingBox())!.height, id).toBeGreaterThanOrEqual(44);
+  }
   await context.close();
 });

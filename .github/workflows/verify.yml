@@ -428,6 +428,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/forward_traceability_test.sql
+      - name: Forward traceability applies over finished forwards (20261021070000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/forward_traceability_backfill_test.sql
       - name: Manual withdrawal cannot spend one balance twice (concurrent confirms)
         env:
           PGPASSWORD: postgres

@@ -48,7 +48,8 @@ function cashAppUrl(bolt11){
 }
 function isPhone(){ return /iPad|iPhone|iPod|Android/.test(navigator.userAgent); }
 function el(id){ return document.getElementById(id); }
-function bareInvoice(){ return String(currentPayCode).replace(/^lightning:/i, ''); }
+// Bare lowercase BOLT11 only (no lightning: prefix, no BIP21), for QR and copy.
+function bareInvoice(){ return String(currentPayCode).trim().replace(/^lightning:/i, '').toLowerCase(); }
 function money(n){ return '$' + Number(n || 0).toFixed(2); }
 function shortRef(id){ return id.length > 18 ? id.slice(0, 8) + '…' + id.slice(-6) : id; }
 
@@ -275,7 +276,7 @@ async function boot(){
       ? cached.payUrl
       : 'lightning:' + bareInvoice();
     if (cached.cashAppUrl && cached.cashAppUrl.startsWith(CASHAPP_LIGHTNING)) currentCashAppUrl = cached.cashAppUrl;
-    renderQr(currentPayCode);
+    renderQr(bareInvoice());
   }
   if (cacheMatches) showCheckoutLink(cached.checkoutUrl);
 
@@ -291,7 +292,7 @@ async function boot(){
   if (!currentPayCode && row.lightning_invoice){
     currentPayCode = row.lightning_invoice;
     currentPayUrl = 'lightning:' + bareInvoice();
-    renderQr(currentPayCode);
+    renderQr(bareInvoice());
   }
   if (!currentPayCode){ showInvoiceGone(); return; }
 

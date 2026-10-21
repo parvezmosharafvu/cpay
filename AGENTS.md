@@ -17,6 +17,9 @@ it run `node scripts/build-admin-guide.mjs` (CI checks the generated
 - `supabase/functions/` Deno Edge Functions; `_shared/` common code.
   Wallets: `wallet-registry` (owner) + `admin-wallets.js` (Admin → Wallet).
   BTCPay checkout (receive only): `btcpay-webhook` + `_shared/btcpay.ts` ([docs/BTCPAY.md](docs/BTCPAY.md)).
+  Owner guide: `owner-guide` serves `guide.ts`, generated from
+  `docs/SYSTEM-GUIDE-BN.md` by `node scripts/build-admin-guide.mjs`
+  (CI: `node scripts/build-admin-guide.mjs --check`).
 - `worker/` Cloudflare link-preview Worker. `wallet/` CPay Wallet PWA.
 - `payment-service/` self-hosted Node fallback (not deployed, tested in CI).
 - `ci/` SQL suites and Python checks; `tests/` node/Playwright tests;
@@ -35,7 +38,7 @@ Withdraw page (passkey confirm). One "You receive X" figure.
   an explicit owner request. Amounts are computed server-side.
 - Only an admin may reverse a settled payment.
 - Admin/settings/withdraw/address change require `strong_session()` (passkey).
-- Auth = email+password (verified) + passkeys. No Google, no new TOTP.
+- Auth = email+password (verified) + passkeys. No Google, no TOTP (enrol and verify both off).
 - Locations: headers only, display-only, no GPS/IP; visible to link owner
   (own payments) and admins only.
 - Wallet function: single instance PER WALLET (advisory lease keyed by
@@ -69,6 +72,7 @@ python3 ci/check_legal.py            # --release also requires filled legal fiel
 python3 ci/check_frontend.py
 python3 ci/check_workflows.py
 python3 ci/check_md_links.py
+node scripts/build-admin-guide.mjs --check
 node --test tests/frontend/*.test.mjs
 deno test supabase/functions/_shared/ supabase/functions/create-invoice/
 deno test supabase/functions/health/   # primary wallet last-synced (Dhaka time)

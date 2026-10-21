@@ -22,7 +22,7 @@ searched when something specific breaks later.
 
 ## 1. Payment provider
 
-A Lightning/Spark wallet SDK, run by the payment service in `payment-service/` (see
+A Lightning wallet SDK from our payment provider, run by the payment service in `payment-service/` (see
 its README). It needs `PAYMENT_SERVICE_URL` and `PAYMENT_SERVICE_SECRET`
 as Edge Function secrets (§2.1). Withdrawals are still paid by hand.
 

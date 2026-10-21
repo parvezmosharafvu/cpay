@@ -1,4 +1,4 @@
-# CPAY system overview (current, 2026-10-21, main @ c1dd66d)
+# CPAY system overview (current, 2026-10-21, main @ 0bbda0e)
 
 This is the single source of truth for how CPAY works **today**. Older design
 documents carry a "Historical document" banner; where they disagree with this
@@ -20,7 +20,7 @@ The payer and the freelancer see one figure: **"You receive X"**.
 | Static site | `public/` (no build step), served by Cloudflare Workers (`wrangler.jsonc`) | `404.html` + `invoice-view.js` = the one-page checkout/invoice for any slug |
 | Link previews | `worker/og-preview-worker.js` | OG metadata; forwards coarse geo headers |
 | Database | `supabase/migrations/` (Postgres, RLS, `SECURITY DEFINER` RPCs) | append-only history |
-| Edge Functions (Deno) | `supabase/functions/*` | `create-invoice`, `direct-invoice`, `user-withdraw`, `admin-actions`, `auth-settings`, the wallet function, `settlement-destination`, `owner-config`, `telegram-notify`, `daily-report`, `ledger-backup`, `health`, `og-image` |
+| Edge Functions (Deno) | `supabase/functions/*` | `create-invoice`, `direct-invoice`, `user-withdraw`, `admin-actions`, `auth-settings`, the wallet function, `settlement-destination`, `owner-config`, `telegram-notify`, `daily-report`, `ledger-backup`, `health`, `og-image`, `wallet-registry` (owner only: add/primary/disable wallets), `owner-guide` (Bangla guide, owner only), `btcpay-webhook` |
 | Wallet function | the wallet directory under `supabase/functions/` | one or more wallets ([MULTI-WALLET.md](MULTI-WALLET.md)), each a **single instance** via its own advisory lease; deploy **only** with the wallet deploy script in `scripts/`; `RECEIPT_RECORDING` is hard-coded off |
 | Self-hosted fallback | `payment-service/` (Node 22) | not deployed; still tested in CI (core parity with the wallet function) |
 | CPay Wallet PWA | `wallet/` | separate optional phone wallet on its own hostname |

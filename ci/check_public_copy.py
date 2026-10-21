@@ -46,6 +46,38 @@ def check_provider_name_hidden() -> None:
         print(f"ok   provider name absent from {len(files)} public files (pages, README, SECURITY, docs)")
 
 
+def check_wallet_network_name_hidden() -> None:
+    # The wallet network's brand ("Spark") stays out of every public file:
+    # README, SECURITY, docs/ and public/. Word boundary, case-insensitive.
+    # Allowances (code identifiers only): JavaScript comment lines, and a
+    # JS object key `spark:` (the destination-kind value the wallet API
+    # returns, e.g. KIND_LABEL in admin-wallet.js). camelCase identifiers
+    # such as sparkAddress do not match the word boundary.
+    files = [
+        p for p in sorted(glob.glob("public/**/*", recursive=True))
+        if os.path.isfile(p)
+        and os.path.splitext(p)[1] in (".html", ".js", ".css", ".json", ".svg", ".txt", ".xml", ".webmanifest")
+    ] + ["README.md", "SECURITY.md"] + sorted(glob.glob("docs/**/*.md", recursive=True))
+    pat = re.compile(r"\bspark\b", re.I)
+    js_key = re.compile(r"\bspark\s*:")
+    hits = []
+    for path in files:
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for n, line in enumerate(fh, 1):
+                if path.endswith(".js"):
+                    if line.lstrip().startswith("//"):
+                        continue
+                    line = js_key.sub("", line)
+                if pat.search(line):
+                    hits.append(f"{path}:{n}")
+    if hits:
+        failures.append(f"wallet network named in a public file: {hits[:10]}")
+    else:
+        print(f"ok   wallet network name absent from {len(files)} public files (pages, README, SECURITY, docs)")
+
+
 def check_no_traditional_payment_terms() -> None:
     # CPAY receives Lightning and pays out USDT/USDC only. The public site
     # and docs must not name bKash, Nagad, Binance Pay or a bank, not even
@@ -86,6 +118,7 @@ def check_no_any_wallet_claim() -> None:
 
 
 check_provider_name_hidden()
+check_wallet_network_name_hidden()
 check_no_traditional_payment_terms()
 check_no_any_wallet_claim()
 

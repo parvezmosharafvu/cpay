@@ -96,7 +96,7 @@ npm run build
 
 ## Payments
 
-Payments run on a Lightning/Spark wallet SDK through `payment-service/` (see
+Payments run on a Lightning wallet SDK from our payment provider through `payment-service/` (see
 `docs/ARCHITECTURE.md` and `docs/SIMPLE-MODEL.md`).
 
 - Receive: a standard Lightning invoice (BOLT11), paid from a wallet that

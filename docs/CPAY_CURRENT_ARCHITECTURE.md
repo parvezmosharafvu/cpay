@@ -13,7 +13,7 @@ this page records what is running now and how that was established.
 | Link previews | Cloudflare Worker `cpay-og-preview` (`worker/`) | Worker listing |
 | Database and ledger | Supabase project `riumaeihemgznvgattoc` (Postgres 17, ap-southeast-1, **Free plan**) | Management API |
 | Server functions | Supabase Edge Functions: create-invoice, user-withdraw, admin-actions, health, daily-report, ledger-backup, telegram-notify, auth-settings, og-image | `list_edge_functions`; versions in [CPAY_TEST_RESULTS.md](CPAY_TEST_RESULTS.md) |
-| **Wallet engine** | The wallet Edge Function (Lightning/Spark wallet SDK), **v17**, deployed by hand on 2026-10-13 17:28 UTC | `breez_wallet.control`: `enabled = true`, `owner = 'supabase-edge'`; a lease every minute (65 in the last hour); its leases served the last three payments (2026-10-12/13) |
+| **Wallet engine** | The wallet Edge Function (Lightning wallet SDK from our payment provider), **v17**, deployed by hand on 2026-10-13 17:28 UTC | `breez_wallet.control`: `enabled = true`, `owner = 'supabase-edge'`; a lease every minute (65 in the last hour); its leases served the last three payments (2026-10-12/13) |
 | Self-hosted payment service (`payment-service/`) | **Not running.** Kept as the documented fallback after a seed restore | The control row names the Edge owner; the Azure host was deleted (BACKUP-RECOVERY.md) |
 | Scheduled jobs | pg_cron: wallet sync (every minute), Telegram send (every minute), health (every 15 min), receipt-review sweep (every 10 min), daily report, ledger backup | `cron.job`, all last runs `succeeded` |
 

@@ -2,7 +2,8 @@ function $(id){ return document.getElementById(id); }
 function escapeHtml(s){
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-function money(n){ return '$' + Number(n ?? 0).toFixed(2); }
+// Display currency from the top bar (currency-pref.js); USD when none is set.
+function money(n){ return window.cpayCurrency ? window.cpayCurrency.format(n) : '$' + Number(n ?? 0).toFixed(2); }
 // Individual or Business / Organization (profiles.account_type, chosen at
 // sign-up). Display only: the type grants nothing. Returns plain text.
 function accountTypeText(row){

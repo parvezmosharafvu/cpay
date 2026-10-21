@@ -30,7 +30,7 @@ function walletShell() {
       <div class="card"><div class="kicker">Owed to freelancers</div><div class="kpi" id="wbOwed">-</div><div class="faint" id="wbOwedSats"></div></div>
       <div class="card"><div class="kicker">Spendable</div><div class="kpi" id="wbSpend">-</div><div class="faint">Balance minus what freelancers are owed</div></div>
       <div class="card"><div class="kicker">Wallet rate</div><div class="kpi" id="wbRate">-</div>
-        <div class="row"><select id="wbCur" class="input sm-select" aria-label="Currency"></select><span class="faint" id="wbCurBal"></span></div></div>
+        <div class="faint" id="wbCurBal"></div></div>
     </div>
     <div class="grid split">
       <div class="card">
@@ -89,7 +89,7 @@ function walletShell() {
     </div>
     <div class="card flush">
       <h3>History</h3>
-      <table class="table"><thead><tr><th>When</th><th>Type</th><th>Status</th><th class="num">Amount</th><th class="num">Fee</th><th>Details</th></tr></thead><tbody id="whRows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody></table>
+      <div class="table-wrap"><table class="table stack-sm"><thead><tr><th>When</th><th>Type</th><th>Status</th><th class="num">Amount</th><th class="num">Fee</th><th>Details</th></tr></thead><tbody id="whRows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody></table></div>
       <div class="row wallet-pager"><button class="btn ghost sm" id="whPrev">Newer</button><button class="btn ghost sm" id="whNext">Older</button><span class="faint" id="whPage"></span></div>
     </div>`;
 }
@@ -104,7 +104,7 @@ function renderBalance() {
   $w('wbOwedSats').textContent = i.owedToCreatorsSat != null ? `${sats(i.owedToCreatorsSat)} held for freelancers` : '';
   $w('wbSpend').textContent = sats(i.spendableSat);
   $w('wbRate').textContent = cur?.btcRate ? `${fiatValue(1e8, cur)}` : (i.btcUsdRate ? `$${Number(i.btcUsdRate).toLocaleString('en-US')}` : '-');
-  $w('wbCurBal').textContent = cur ? `per BTC · balance ${fiatValue(i.balanceSats, cur) ?? 'no rate'}` : 'per BTC';
+  $w('wbCurBal').textContent = cur ? `${cur.id} per BTC · balance ${fiatValue(i.balanceSats, cur) ?? 'no rate'}` : 'per BTC · change currency in the top bar';
 }
 
 async function loadInfo() {
@@ -125,8 +125,8 @@ async function loadFiat() {
   try {
     const { currencies } = await walletCall('fiat');
     walletState.fiat = currencies;
-    $w('wbCur').innerHTML = currencies.map((c) => `<option value="${escapeHtml(c.id)}"${c.btcRate ? '' : ' disabled'}>${escapeHtml(c.id)} · ${escapeHtml(c.name)}</option>`).join('');
-    $w('wbCur').value = walletState.currency;
+    // The currency is picked once in the top bar (currency-pref.js); the wallet only shares its rates.
+    if (window.cpayCurrency) window.cpayCurrency.setRates(currencies);
     renderBalance();
   } catch (e) { $w('wbCurBal').textContent = e.message; }
 }
@@ -321,7 +321,8 @@ async function renderWallet() {
     const v = e.target.closest('[data-copy]')?.dataset.copy;
     if (v) { try { await navigator.clipboard.writeText(v); toast('Copied', true); } catch { toast('Could not copy'); } }
   });
-  $w('wbCur').onchange = () => { walletState.currency = $w('wbCur').value; renderBalance(); };
+  walletState.currency = window.cpayCurrency ? window.cpayCurrency.get() : 'USD';
+  document.addEventListener('cpay:currency', (e) => { walletState.currency = e.detail.code; renderBalance(); });
   $w('wrBtn').onclick = createInvoice;
   $w('wrCopy').onclick = async () => { try { await navigator.clipboard.writeText($w('wrText').textContent); toast('Invoice copied', true); } catch { toast('Could not copy'); } };
   $w('wsPrep').onclick = prepareSend;

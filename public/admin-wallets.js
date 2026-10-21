@@ -94,8 +94,9 @@
     id.append(el('div', null, w.fingerprint ? `fp ${w.fingerprint}` : '-'));
     if (w.node_pubkey) id.append(el('div', 'faint', `node ${w.node_pubkey.slice(0, 10)}…${w.node_pubkey.slice(-6)}`));
     tr.append(id);
-    const act = el('td');
-    const btn = (label, fn, cls = 'btn ghost sm') => { const b = el('button', cls, label); b.type = 'button'; b.onclick = fn; act.append(b); return b; };
+    const act = el('td', 'wallet-actions');
+    const bar = el('div', 'wallet-actions-bar'); act.append(bar);
+    const btn = (label, fn, cls = 'btn ghost sm') => { const b = el('button', cls, label); b.type = 'button'; b.onclick = fn; bar.append(b); return b; };
     if (!w.is_primary && w.status === 'active') btn('Make primary', () => act1({ action: 'set_primary', id: w.id }, `Make "${w.label}" the primary wallet? New invoices, forwards and withdrawals will use it.`));
     btn('Rename', async () => {
       const label = window.prompt('New name', w.label);
@@ -191,7 +192,7 @@
     head.append(h);
     head.append(el('div', 'kpi', `Total ${fmtSats(d.total_balance_sat)}`));
     card.append(head);
-    const table = el('table', 'table');
+    const table = el('table', 'table stack-sm');
     const thead = el('thead'); const hr = el('tr');
     for (const t of ['Wallet', 'Status', 'Balance', 'Health', 'Fingerprint', '']) hr.append(el('th', null, t));
     thead.append(hr);

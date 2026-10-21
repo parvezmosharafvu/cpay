@@ -59,7 +59,7 @@ function walletShell() {
       <div class="card"><div class="kicker">Owed to freelancers</div><div class="kpi" id="wbOwed">-</div><div class="faint" id="wbOwedSats"></div></div>
       <div class="card"><div class="kicker">Spendable</div><div class="kpi" id="wbSpend">-</div><div class="faint">Balance minus what freelancers are owed</div></div>
       <div class="card"><div class="kicker">Wallet rate</div><div class="kpi" id="wbRate">-</div>
-        <div class="row"><select id="wbCur" class="input sm-select" aria-label="Currency"></select><span class="faint" id="wbCurBal"></span></div></div>
+        <div class="faint" id="wbCurBal"></div></div>
     </div>
     <div class="withdraw">
       <div class="card">
@@ -86,7 +86,7 @@ function walletShell() {
     </div>
     <div class="card flush">
       <h3>History</h3>
-      <table class="table"><thead><tr><th>When</th><th>Type</th><th>Status</th><th class="num">Amount</th><th class="num">Fee</th><th>Details</th></tr></thead><tbody id="whRows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody></table>
+      <div class="table-wrap"><table class="table stack-sm"><thead><tr><th>When</th><th>Type</th><th>Status</th><th class="num">Amount</th><th class="num">Fee</th><th>Details</th></tr></thead><tbody id="whRows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody></table></div>
       <div class="row wallet-pager"><button class="btn ghost sm" id="whPrev">Newer</button><button class="btn ghost sm" id="whNext">Older</button><span class="faint" id="whPage"></span></div>
     </div>`;
 }
@@ -94,7 +94,8 @@ function walletShell() {
 async function renderWallet() {
   const root = $w('wallet');
   root.innerHTML = walletShell();
-  $w('wbCur').onchange = () => { walletState.currency = $w('wbCur').value; renderBalance(); };
+  walletState.currency = window.cpayCurrency ? window.cpayCurrency.get() : 'USD';
+  document.addEventListener('cpay:currency', (e) => { walletState.currency = e.detail.code; renderBalance(); });
   $w('wqBtn').onclick = getQuote;
   $w('wqGo').onclick = confirmQuote;
   for (const id of ['wqNet', 'wqAddr', 'wqAmt']) {

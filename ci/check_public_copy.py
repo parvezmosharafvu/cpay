@@ -46,6 +46,26 @@ def check_provider_name_hidden() -> None:
         print(f"ok   provider name absent from {len(files)} public files (pages, README, SECURITY, docs)")
 
 
+def check_wallet_network_name_hidden() -> None:
+    # The wallet's network brand ("Spark") stays out of the main public
+    # docs. Word boundary, case-insensitive. Wallet PWA docs and pages that
+    # must disclose the network's trust assumptions are not scanned.
+    files = ["README.md", "SECURITY.md", "docs/SYSTEM-OVERVIEW.md", "docs/SYSTEM-GUIDE-BN.md"]
+    pat = re.compile(r"\bspark\b", re.I)
+    hits = []
+    for path in files:
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for n, line in enumerate(fh, 1):
+                if pat.search(line):
+                    hits.append(f"{path}:{n}")
+    if hits:
+        failures.append(f"wallet network named in a main public doc: {hits[:10]}")
+    else:
+        print(f"ok   wallet network name absent from {len(files)} main public docs")
+
+
 def check_no_traditional_payment_terms() -> None:
     # CPAY receives Lightning and pays out USDT/USDC only. The public site
     # and docs must not name bKash, Nagad, Binance Pay or a bank, not even
@@ -86,6 +106,7 @@ def check_no_any_wallet_claim() -> None:
 
 
 check_provider_name_hidden()
+check_wallet_network_name_hidden()
 check_no_traditional_payment_terms()
 check_no_any_wallet_claim()
 

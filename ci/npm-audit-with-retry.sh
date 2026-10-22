@@ -25,7 +25,10 @@ for attempt in 1 2 3; do
   if grep -Eq 'npm (warn|error) audit 400 Bad Request - POST https://registry[.]npmjs[.]org/-/npm/v1/security/audits/quick' "${audit_log}"; then
     rm -f "${audit_log}"
     echo "::warning::npm Quick Audit endpoint returned 400; retrying the full security audit with pinned npm@11.21.1" >&2
-    if npx --yes npm@11.21.1 audit --omit=dev --audit-level=high --fetch-retries=0 --fetch-timeout=45000; then
+    # Registry bulk advisories can time out even when package installs work.
+    # Modern npm may retry network transport twice; a missing audit result
+    # still refuses release. No advisory level or lockfile is changed.
+    if npx --yes npm@11.21.1 audit --omit=dev --audit-level=high --fetch-retries=2 --fetch-retry-mintimeout=5000 --fetch-retry-maxtimeout=15000 --fetch-timeout=90000; then
       exit 0
     fi
     echo "::error::Modern npm audit also failed; dependency security gate remains blocked" >&2

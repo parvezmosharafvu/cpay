@@ -63,7 +63,7 @@ found **three `paid` withdrawal records** whose request times fall between
 17 and 19 October 2026. This corrects the historical count only: there is
 still no independently attested payer invoice → settlement → user balance →
 provider-delivered withdrawal trail linked to an owner-controlled test
-account. Payout recipients, bank/payment identifiers and private ledger
+account. Payout recipients, destination identifiers and private ledger
 values were not accessed or published. The controlled payout acceptance
 blocker remains open; no additional transaction is required merely to
 update the historical evidence.

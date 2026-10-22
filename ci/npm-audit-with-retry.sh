@@ -21,7 +21,7 @@ for attempt in 1 2 3; do
   cat "${audit_log}"
   # The audit endpoint can return 502/503/504; no other nonzero result
   # may be retried, and all unsuccessful audits block the release.
-  if ! grep -Eq 'npm (warn|error) audit (502|503|504) .*POST https://registry\\.npmjs\\.org/-/npm/v1/security/audits(/quick)?' "${audit_log}"; then
+  if ! grep -Eq 'npm (warn|error) audit (502|503|504) .*POST https://registry[.]npmjs[.]org/-/npm/v1/security/audits(/quick)?' "${audit_log}"; then
     rm -f "${audit_log}"
     echo "::error::npm audit failed; dependency security gate remains blocked" >&2
     exit 1

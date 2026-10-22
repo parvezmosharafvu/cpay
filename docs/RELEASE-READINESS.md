@@ -10,6 +10,12 @@ Later edits on the same review branch harden the release gate: a future or inval
 
 The production-only items in the table below and the [open owner blockers](RELEASE-BLOCKERS.md) remain outstanding. In particular, neither synthetic CI nor a preview proves wallet solvency, real reconciliation, independent physical recovery keys, a current restore test, legal publication, or physical device/screen-reader acceptance.
 
+## Connected CPAY Supabase evidence (read-only, 2026-10-22)
+
+The correct connected project was independently resolved as `riumaeihemgznvgattoc` (ACTIVE_HEALTHY, Pro organisation), matching `public/config.js` and `supabase/config.toml`. A new automated frontend check fails if these project references drift. The live metadata query reported 163 recorded migrations, 16 active Edge Functions, and RLS enabled on all 33 ordinary `public` tables. The Security Advisor still reports role-grant/search-path/MFA findings. Full classification and remaining scoped remediation are in [SUPABASE-SECURITY-ADVISOR-REVIEW.md](SUPABASE-SECURITY-ADVISOR-REVIEW.md).
+
+This evidence does **not** prove function-by-function authorization, exact production source SHA, verified passkey recovery, current wallet solvency, restore recoverability, or real reconciliation. No production database writes, financial operations or operational settings were changed. Release approval remains withheld until owner decisions and independent operational acceptance.
+
 ## Verified locally
 
 | Area | Evidence | Limit |

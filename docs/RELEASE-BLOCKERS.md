@@ -1,6 +1,6 @@
 # Release blockers
 
-Read by `scripts/release-gate.mjs`: any row with severity Critical or High and status `open` refuses a release (and fails CI). Owner-only items are Medium, so the gate does not stop on them: **every open row below must be closed or explicitly accepted by the owner before a release.** Keep one row per finding; close it with the PR that fixed it.
+Read by `scripts/release-gate.mjs`: open Critical/High findings always refuse a release; unresolved Medium owner findings also refuse a release. CI continues to check the Critical/High rule independently. **Before a production release, each Medium item must be closed or explicitly accepted by the owner with a dated evidence reference.** To accept a Medium item, set its status to `accepted` and record `Owner accepted YYYY-MM-DD (#issue-or-PR)` (or a full evidence URL) in the Owner / PR column. Acceptance must be a real owner decision; source edits or passing CI do not constitute approval. An `accepted` row without the dated owner statement and evidence link remains blocking. Keep one row per finding; close fixed items with the PR that fixed them. The separate Legal / Contact publication release gate is never bypassed by acceptance.
 
 Rows last checked against production on 2026-10-16 (Supabase SQL, Auth logs, security advisors, organisation plan).
 

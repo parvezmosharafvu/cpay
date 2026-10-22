@@ -56,11 +56,6 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Generate migration filename with Supabase CLI (temporary bootstrap)
-        run: |
-          npx --yes supabase@2.119.0 migration new pin_forward_delete_guard_path
-          find supabase/migrations -maxdepth 1 -name '*_pin_forward_delete_guard_path.sql' -printf 'CLI_CREATED_MIGRATION=%f\\n'
-
       - name: Migration numbers are unique
         run: |
           dupes=$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -d_ -f1 | sort | uniq -d)

@@ -82,6 +82,8 @@ Deno.test("plugin payment methods are not mislabeled as CPAY Lightning reserves"
   const existingChain = settledFigures(inv(), [{ paymentMethodId: "BTC-CHAIN", totalPaid: "0.0002" }]);
   assertEquals(existingLightning.rail, "lightning");
   assertEquals(existingChain.rail, "onchain");
+  assertEquals(settledFigures(inv(), [{ paymentMethodId: "BTC-LNURL", totalPaid: "0.0002" }]).rail, "lightning");
+  assertEquals(settledFigures(inv(), [{ paymentMethodId: "BTC-LNURLPAY", totalPaid: "0.0002" }]).rail, "lightning");
   assertEquals(settledFigures(inv(), [{ paymentMethodId: "CUSTOM-ASSET", totalPaid: "0.0002" }]).rail, "plugin");
   assertEquals(settledFigures(inv(), []).rail, "unreported");
 });

@@ -175,8 +175,10 @@ export function settledFigures(inv: BtcpayInvoice, methods: BtcpayPaymentMethod[
   // A BTCPay plugin may add payment methods other than BTC Lightning or
   // BTC on-chain. Do not describe an unknown method as Lightning or assume
   // the funds reached the CPAY wallet. Reporting only: settlement unchanged.
+  // LNURL-pay (and Lightning Address) payments settle on the store's own
+  // Lightning node: BTC-LNURL since BTCPay 2.0, BTC-LNURLPAY before it.
   const rail = !best.id ? "unreported"
-    : /^BTC-(LN|LightningNetwork)$/i.test(best.id) ? "lightning"
+    : /^BTC-(LN|LightningNetwork|LNURL|LNURLPAY)$/i.test(best.id) ? "lightning"
     : /^(BTC|BTC-CHAIN|BTC-OnChain)$/i.test(best.id) ? "onchain"
     : "plugin";
   return { paidUsd: usd, amountSat: sats, method: best.id || null, onchain: rail === "onchain", rail };

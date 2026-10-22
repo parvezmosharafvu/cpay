@@ -2,6 +2,14 @@
 
 Reviewed 2026-10-22 (Asia/Dhaka). Scope: supplied CPAY source ZIP and local test/build evidence. No production release approval is issued by this report.
 
+## Later GitHub verification (2026-10-22)
+
+This file started as a local source-ZIP review. Since then, [PR #169](https://github.com/parvezmosharafvu/cpay/pull/169) imported the reviewed changes to a Git branch. GitHub [Verify #604](https://github.com/parvezmosharafvu/cpay/actions/runs/39716367388) succeeded across all seven jobs on commit `cee66091ba537a033e7c5f3be88bd45ff4c8b63f`, including a disposable Postgres/PostgREST stack, payment-service and RLS E2E scenarios, wallet checks and production dependency audits. This **resolves the earlier lack of GitHub CI evidence for that specific SHA**; it does not retroactively make the local ZIP environment capable of running those tests.
+
+Later edits on the same review branch harden the release gate: a future or invalid restore-drill date, invalid age limit, or invalid clock input must refuse release; regression tests cover those cases. The **latest review-branch commit still needs its own successful Verify run**, and a future `main` merge/release must be checked independently for its exact SHA. The Cloudflare PR preview is not evidence of a production deployment.
+
+The production-only items in the table below and the [open owner blockers](RELEASE-BLOCKERS.md) remain outstanding. In particular, neither synthetic CI nor a preview proves wallet solvency, real reconciliation, independent physical recovery keys, a current restore test, legal publication, or physical device/screen-reader acceptance.
+
 ## Verified locally
 
 | Area | Evidence | Limit |

@@ -77,6 +77,14 @@ matching secret is set. Invalid/unsigned requests then use the
 non-privileged Worker-egress rate-limit bucket, not a caller-supplied
 per-IP key. Regression tests cover signature tampering, expiry,
 missing signatures, and the shared-secret transition.
+The direct-invoice create and status endpoints now use the same signed
+proxy-IP verification as ordinary invoices. Invalid or unsigned signatures
+use the shared Worker-egress bucket when the Edge signing key is present.
+Missing Cloudflare connecting-IP headers cannot be replaced with
+caller-supplied X-Real-IP/X-Forwarded-For headers. The Turnstile verifier
+receives only a bare IP; tests cover the direct and forwarded paths.
+This is review-source coverage, not activation of live direct settlement.
+
 **This work did not change or verify production secret configuration.**
 Until a separately approved operator rollout confirms both matching keys
 are configured, the legacy unsigned path may remain available. Public-invoice production controls

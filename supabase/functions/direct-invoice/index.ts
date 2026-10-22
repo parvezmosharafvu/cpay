@@ -127,5 +127,6 @@ Deno.serve(createHandler({
   rate,
   turnstile: (token, ip) => checkTurnstile(TURNSTILE_MODE, TURNSTILE_SECRET, token, ip),
   createAllowed: directInvoicesAllowed(TURNSTILE_MODE, SUPABASE_URL),
+  ipSigningSecret: Deno.env.get("INVOICE_IP_SIGNING_SECRET") ?? "",
   reconcileSecret: Deno.env.get("DIRECT_RECONCILE_SECRET") ?? "",
 }));

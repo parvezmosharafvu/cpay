@@ -3,6 +3,8 @@ import { createHandler, type Db, type DirectRow, type Link, type NewRow, type Pu
 import type { SettlementProvider } from "../_shared/direct-settlement.ts";
 import { LnurlError, type Verification } from "../_shared/lnurl.ts";
 import { decodeBolt11 } from "../_shared/bolt11.ts";
+import { CLOUDFLARE_WORKER_EGRESS, sha256Hex } from "../create-invoice/guards.ts";
+import { signClientIp } from "../../../worker/ip-signature.mjs";
 import { buildInvoice, randomPreimage } from "../_shared/bolt11_testkit.ts";
 
 const NOW = 1_800_000_000_000;
@@ -12,11 +14,11 @@ const RATE = { usdPerBtc: 100_000, usdPerBtcCents: 10_000_000n, sources: ["a", "
 
 type Row = NewRow & { id: string; status: "pending" | "paid" | "expired"; preimage: string | null; paid_at: string | null };
 
-function world(over: Partial<{ createAllowed: boolean; stopped: boolean | undefined; enabled: boolean | undefined; link: Link | null | undefined; dest: typeof DEST | null; maxCents: number }> = {}) {
+function world(over: Partial<{ createAllowed: boolean; stopped: boolean | undefined; enabled: boolean | undefined; link: Link | null | undefined; dest: typeof DEST | null; maxCents: number; ipSigningSecret: string }> = {}) {
   const rows = new Map<string, Row>();
   const preimages = new Map<string, string>();
   const verdicts = new Map<string, Verification | "throw">();
-  const calls = { release: 0, provider: 0, checks: 0, claims: 0 };
+  const calls = { release: 0, provider: 0, checks: 0, claims: 0, rateKeys: [] as Array<{ bucket: string; hash: string }>, turnstileIps: [] as string[] };
   let claimAllowed = true;
   const env = {
     stopped: "stopped" in over ? over.stopped : false,
@@ -35,7 +37,7 @@ function world(over: Partial<{ createAllowed: boolean; stopped: boolean | undefi
   const db: Db = {
     paymentsStopped: () => Promise.resolve(env.stopped),
     directEnabled: () => Promise.resolve(env.enabled),
-    claimPublic: () => Promise.resolve(true),
+    claimPublic: (bucket, keyHash) => { calls.rateKeys.push({ bucket, hash: keyHash }); return Promise.resolve(true); },
     linkForSlug: () => Promise.resolve(env.link),
     profileMaxCents: () => Promise.resolve(env.maxCents),
     claimOwnerRate: () => Promise.resolve(true),
@@ -87,8 +89,9 @@ function world(over: Partial<{ createAllowed: boolean; stopped: boolean | undefi
   let now = NOW;
   const handler = createHandler({
     db, provider, rate: () => Promise.resolve(RATE),
-    turnstile: (token) => Promise.resolve(token === "bad" ? { ok: false } : { ok: true }),
+    turnstile: (token, ip) => { calls.turnstileIps.push(ip); return Promise.resolve(token === "bad" ? { ok: false } : { ok: true }); },
     createAllowed: over.createAllowed ?? true,
+    ipSigningSecret: over.ipSigningSecret,
     reconcileSecret: "s3cret", now: () => now, log: () => {},
   });
   const post = async (body: unknown, headers: Record<string, string> = {}) => {
@@ -241,4 +244,48 @@ Deno.test("reconcile: secret required; checks open payments", async () => {
     db: {} as Db, provider: {} as SettlementProvider, rate: () => Promise.reject(new Error()), turnstile: () => Promise.resolve({ ok: true }), createAllowed: true, reconcileSecret: "",
   });
   assertEquals((await unset(new Request("https://fn", { method: "POST", body: JSON.stringify({ action: "reconcile" }) }))).status, 503);
+});
+
+
+Deno.test("direct-invoice create/status: signed Worker IP prevents forged per-address identities", async () => {
+  const secret = "synthetic-signing-test-key";
+  const ip = "198.51.100.71";
+  const signed = await signClientIp(ip, secret, NOW);
+  assert(signed);
+  const proxy = { "cf-connecting-ip": CLOUDFLARE_WORKER_EGRESS, "x-cpay-client-ip": ip };
+  const signedHeaders = { ...proxy, "x-cpay-ip-timestamp": signed.timestamp, "x-cpay-ip-signature": signed.signature };
+  const w = world({ ipSigningSecret: secret });
+  const good = await w.post({ slug: "alice-pay", amount: 10 }, signedHeaders);
+  assertEquals(good.status, 200);
+  assertEquals(w.calls.turnstileIps.at(-1), ip);
+  assertEquals(w.calls.rateKeys.find((x) => x.bucket === "direct_ip")?.hash, await sha256Hex(`ip:proxied:${ip}`));
+  const offset = w.calls.rateKeys.length;
+  assertEquals((await w.post({ action: "status", id: good.body.paymentId }, signedHeaders)).status, 200);
+  assertEquals(w.calls.rateKeys.slice(offset).find((x) => x.bucket === "direct_status")?.hash, await sha256Hex(`status:proxied:${ip}`));
+
+  const forged = world({ ipSigningSecret: secret });
+  const bad = { ...signedHeaders, "x-cpay-client-ip": "198.51.100.72" };
+  const response = await forged.post({ slug: "alice-pay", amount: 10 }, bad);
+  assertEquals(response.status, 200);
+  assertEquals(forged.calls.turnstileIps.at(-1), "");
+  assertEquals(forged.calls.rateKeys.find((x) => x.bucket === "direct_ip")?.hash, await sha256Hex(`ip:worker:${CLOUDFLARE_WORKER_EGRESS}`));
+  const next = forged.calls.rateKeys.length;
+  await forged.post({ action: "status", id: response.body.paymentId }, bad);
+  assertEquals(forged.calls.rateKeys.slice(next).find((x) => x.bucket === "direct_status")?.hash, await sha256Hex(`status:worker:${CLOUDFLARE_WORKER_EGRESS}`));
+
+  const unsigned = world({ ipSigningSecret: secret });
+  await unsigned.post({ slug: "alice-pay", amount: 10 }, proxy);
+  assertEquals(unsigned.calls.turnstileIps.at(-1), "");
+  const legacy = world();
+  await legacy.post({ slug: "alice-pay", amount: 10 }, proxy);
+  assertEquals(legacy.calls.turnstileIps.at(-1), ip);
+});
+
+Deno.test("direct-invoice missing peer IP: forged XFF cannot evade a shared bucket", async () => {
+  const w = world();
+  await w.post({ slug: "alice-pay", amount: 10 }, { "x-forwarded-for": "198.51.100.11", "x-real-ip": "203.0.113.1" });
+  await w.post({ slug: "alice-pay", amount: 10 }, { "x-forwarded-for": "198.51.100.12", "x-real-ip": "203.0.113.2" });
+  const expected = await sha256Hex("ip:unknown");
+  assertEquals(w.calls.rateKeys.filter((x) => x.bucket === "direct_ip").map((x) => x.hash), [expected, expected]);
+  assertEquals(w.calls.turnstileIps, ["", ""]);
 });

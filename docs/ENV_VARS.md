@@ -267,3 +267,11 @@ that real payer invoices still rate-limit by client and forged requests
 do not impersonate payers, then rotate per policy. Do not confuse
 signed IP metadata with authentication or a completed Turnstile
 enforcement rollout.
+
+
+The same optional `INVOICE_IP_SIGNING_SECRET` is also consumed by
+`direct-invoice` for create and status rate limits, in addition to
+`create-invoice`. Its value is still configured only by the operator
+and must match the Worker. The direct API trusts only the actual
+Cloudflare connecting-IP header, never caller-controlled
+`X-Real-IP` or `X-Forwarded-For` values.

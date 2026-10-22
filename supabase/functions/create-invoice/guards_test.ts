@@ -25,10 +25,11 @@ Deno.test("replay: different amount, used or expiring request is refused (409)",
   eq(replayDecision({ ...open, expires_at: "2026-10-07T12:00:30Z" }, 1234, NOW).kind, "error", "expires within a minute");
 });
 
-Deno.test("client key: cloudflare header, then x-real-ip, then first forwarded hop", () => {
+Deno.test("client key: untrusted forwarding headers cannot split rate-limit buckets", async () => {
   eq(clientKey(new Headers({ "cf-connecting-ip": "1.2.3.4", "x-forwarded-for": "9.9.9.9" })), "1.2.3.4", "cf");
-  eq(clientKey(new Headers({ "x-real-ip": "5.6.7.8" })), "5.6.7.8", "real");
-  eq(clientKey(new Headers({ "x-forwarded-for": "7.7.7.7, 10.0.0.1" })), "7.7.7.7", "xff");
+  eq(clientKey(new Headers({ "x-real-ip": "5.6.7.8" })), "unknown", "real header untrusted");
+  eq(clientKey(new Headers({ "x-forwarded-for": "7.7.7.7, 10.0.0.1" })), "unknown", "xff untrusted");
+  eq(await verifiedClientKey(new Headers({ "x-forwarded-for": "7.7.7.7" }), "scoped-secret"), "unknown", "signed-IP helper also ignores untrusted headers");
   eq(clientKey(new Headers()), "unknown", "none");
 });
 

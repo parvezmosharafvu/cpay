@@ -11,9 +11,10 @@ export function parseRequestId(value: unknown): string | null {
 }
 
 /**
- * The address that connected to the platform edge. Cloudflare's header
- * first (Supabase sits behind Cloudflare), then the first X-Forwarded-For
- * hop. Only used as a rate-limit key, hashed before it is stored.
+ * The address that connected to the platform edge, identified by
+ * Cloudflare's connecting-IP header. Caller-supplied X-Real-IP or
+ * X-Forwarded-For are never trusted as substitutes.
+ * The key is hashed before storage and is used only for rate limits.
  */
 // Subrequests from any Cloudflare Worker (ours included) arrive from this
 // address, so it identifies no payer. For those, our Worker passes the
@@ -66,10 +67,9 @@ export function clientKey(headers: Headers): string {
     return fwd && IP_LIKE.test(fwd) ? `proxied:${fwd}` : `worker:${cf}`;
   }
   if (cf) return cf;
-  const real = headers.get("x-real-ip")?.trim();
-  if (real) return real;
-  const xff = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return xff || "unknown";
+  // Unknown callers share one conservative bucket instead of controlling
+  // their own rate-limit identity via untrusted forwarding headers.
+  return "unknown";
 }
 
 export async function sha256Hex(text: string): Promise<string> {

@@ -88,6 +88,14 @@ export function drillProblem(md, maxDays, nowMs = Date.now()) {
   return null;
 }
 
+// A skipped legal check is useful for diagnostics, never a release approval.
+export function legalGateProblem(argv, checkPublished) {
+  if (argv.includes('--skip-legal')) return 'legal publication check skipped (--skip-legal is diagnostics only; production release refused)';
+  try { checkPublished(); return null; } catch {
+    return 'legal pages not published: fill every legal field and turn on Publish in Admin → Settings (ci/check_legal.py --release)';
+  }
+}
+
 const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 
 function main(argv) {
@@ -115,12 +123,8 @@ function main(argv) {
   if (blockers.length) fails.push(`${blockers.length} open Critical/High item(s) in docs/RELEASE-BLOCKERS.md`);
   const ownerBlockers = pendingOwnerBlockers(blockersDoc);
   if (ownerBlockers.length) fails.push(`${ownerBlockers.length} unresolved Medium owner item(s): close or record explicit owner acceptance (date + evidence link) in docs/RELEASE-BLOCKERS.md`);
-  if (argv.includes('--skip-legal')) {
-    // Diagnostics only: bypassing this check must never yield RELEASE GATE PASSED.
-    fails.push('legal publication check skipped (--skip-legal is diagnostics only; production release refused)');
-  } else {
-    try { sh('python3', ['ci/check_legal.py', '--release']); } catch { fails.push('legal pages not published: fill every legal field and turn on Publish in Admin → Settings (ci/check_legal.py --release)'); }
-  }
+  const legalProblem = legalGateProblem(argv, () => sh('python3', ['ci/check_legal.py', '--release']));
+  if (legalProblem) fails.push(legalProblem);
   console.log(`checked: sha=origin/main, clean worktree, Verify, Workers Builds: cpay, restore drill, blockers${argv.includes('--skip-legal') ? '' : ', legal'}`);
   console.log(fails.length ? `RELEASE REFUSED for ${sha}:\n- ${fails.join('\n- ')}` : `RELEASE GATE PASSED for ${sha}`);
   return fails.length ? 1 : 0;

@@ -228,3 +228,19 @@ Git history and must be considered public.
    (create it under the same name — `vault.create_secret` upserts by name,
    so both cron triggers keep working with no SQL changes)
 4. Confirm the next nightly run in the ledger-backup function logs.
+
+
+## Scheduled-function credential isolation (source staged 2026-10-22)
+
+This review branch supports optional scoped credentials for `daily-report`
+(`DAILY_REPORT_CRON_SECRET`), `ledger-backup` (`LEDGER_BACKUP_CRON_SECRET`),
+`health` (`HEALTH_CRON_SECRET`), `telegram-notify`
+(`TELEGRAM_NOTIFY_CRON_SECRET`), and `breez-wallet`
+(`BREEZ_WALLET_CRON_SECRET`). Each uses `CRON_SECRET` only when its dedicated
+variable is absent. Once a dedicated variable exists, even when empty, its
+endpoint rejects the old shared credential; a bad blank configuration fails
+closed. This is source support, **not** an applied production rotation.
+Schedulers and the corresponding Vault secrets must be switched together,
+with live checks, under the owner's approved change window. Never give a
+cron secret to a third-party monitor. See
+[CRON-SECRET-CUTOVER.md](CRON-SECRET-CUTOVER.md).

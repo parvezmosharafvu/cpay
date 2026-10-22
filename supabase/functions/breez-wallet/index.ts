@@ -20,6 +20,7 @@ import { connect, defaultConfig, postgresStorage, SdkBuilder } from "npm:@breezt
 import { endPostgresPools, installPostgresGlobals, withPoolScope } from "./pg-globals.ts";
 import { createHost, WALLET_IDLE_MS } from "./runtime.ts";
 import { createWalletManager } from "./multi.ts";
+import { configuredCronSecret } from "./cron-secret.mjs";
 
 // Constant-time, and an unset secret never matches. Kept in this file:
 // scripts/deploy-breez-wallet.sh deploys only this folder, so the function
@@ -60,13 +61,15 @@ function secretsRedactor(values: string[]) {
     .reduce((out, v) => out.split(v).join("[redacted]"), line);
 }
 
+const cronSecret = configuredCronSecret((name) => Deno.env.get(name), "BREEZ_WALLET_CRON_SECRET").trim();
 const DB_URL = env("BREEZ_DB_URL");
-const redactSecrets = secretsRedactor([env("BREEZ_MNEMONIC"), env("BREEZ_API_KEY"), env("PAYMENT_SERVICE_SECRET"), env("CRON_SECRET"), DB_URL]);
+const redactSecrets = secretsRedactor([env("BREEZ_MNEMONIC"), env("BREEZ_API_KEY"), env("PAYMENT_SERVICE_SECRET"), env("CRON_SECRET"), cronSecret, DB_URL]);
 const redact = (s: string) => redactSecrets(s).replace(/postgres(?:ql)?:\/\/\S+/g, "[db-url]");
 const log = (e: Record<string, unknown>) => console.log(redact(JSON.stringify({ at: new Date().toISOString(), ...e })));
 
 function configError(): string | null {
-  const missing = ["BREEZ_MNEMONIC", "BREEZ_NETWORK", "BREEZ_DB_URL", "PAYMENT_SERVICE_SECRET", "CRON_SECRET"].filter((k) => !env(k));
+  const missing = ["BREEZ_MNEMONIC", "BREEZ_NETWORK", "BREEZ_DB_URL", "PAYMENT_SERVICE_SECRET"].filter((k) => !env(k));
+  if (!cronSecret) missing.push("BREEZ_WALLET_CRON_SECRET/CRON_SECRET");
   if (env("BREEZ_NETWORK") === "mainnet" && !env("BREEZ_API_KEY")) missing.push("BREEZ_API_KEY");
   if (env("PAYMENT_SERVICE_SECRET") && env("PAYMENT_SERVICE_SECRET").length < 32) missing.push("PAYMENT_SERVICE_SECRET(>=32)");
   const words = env("BREEZ_MNEMONIC").split(/\s+/).filter(Boolean).length;
@@ -147,7 +150,7 @@ Deno.serve(async (req) => {
   const h = getManager();
   try {
     if (url.pathname.endsWith("/cron/sync")) {
-      const s = env("CRON_SECRET");
+      const s = cronSecret;
       if (req.method !== "POST" || !cronSecretMatches(req.headers.get("x-cron-secret"), s)) {
         return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
       }

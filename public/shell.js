@@ -59,6 +59,37 @@
   // Keep the tab bar, the top bar title and the account labels in step with
   // whatever the desk script marks active or writes.
   const title = document.getElementById('pageTitle');
+  // Display-only section guidance; existing desk scripts still own routing.
+  const sectionHints = {
+    "home": "Your balance, recent payments and next actions in one place.",
+    "links": "Create and manage the payment links you share with customers.",
+    "pay": "Find a payment and open its details to check the current status.",
+    "cash": "Check your available balance, choose a destination and confirm with your passkey.",
+    "chat": "Keep account questions and replies together in your conversation.",
+    "profile": "Manage your account details and saved receive addresses.",
+    "security": "Manage your passkeys and review account security.",
+    "daily": "Review earnings by Bangladesh business day.",
+    "people": "Find an account, review its details and manage permitted settings.",
+    "apps": "Review applications and their current approval status.",
+    "payments": "Filter platform payments and inspect individual payment details.",
+    "payouts": "Review withdrawal requests, destinations and delivery status.",
+    "locations": "View reported locations for context only; they do not affect payments.",
+    "forwards": "Review automatic forwards, including held amounts and failed attempts.",
+    "wallet": "Check wallet balances, primary status and the latest sync.",
+    "health": "Check service availability and the latest reported sync times.",
+    "receipts": "Review receipt evidence alongside the related payment.",
+    "system": "Review system operations and available maintenance controls.",
+    "audit": "Review recorded actions and their timestamps.",
+    "settings": "Manage payment, account and publication settings.",
+    "guide": "Read setup steps and troubleshooting guidance in Bangla."
+};
+  const adminHints = {
+    "home": "Review platform activity and the queues that need attention.",
+    "links": "Review payment links across the platform.",
+    "chat": "Review account conversations and reply from the inbox."
+};
+  const hint = document.getElementById('sectionHint');
+  const isAdminDesk = !!document.getElementById('adminMain');
   function sync() {
     const active = side.querySelector('.navi.active[data-tab]');
     const tab = active ? active.dataset.tab : '';
@@ -72,10 +103,18 @@
     document.querySelectorAll('.tabbar [data-nav-open]').forEach((b) => b.classList.toggle('active', !!tab && !matched));
     if (title && active) {
       const label = active.querySelector('.navi-label');
-      title.textContent = (label ? label.textContent : active.textContent).replace(/\s*\(\d+\)$/, '').trim();
+      const text = (label ? label.textContent : active.textContent).replace(/\s*\(\d+\)$/, '').trim();
+      if (title.textContent !== text) title.textContent = text;
+    }
+    if (hint) {
+      const english = (isAdminDesk && adminHints[tab]) || sectionHints[tab] || '';
+      const text = window.cpayI18n ? window.cpayI18n.t(english) : english;
+      if (hint.textContent !== text) hint.textContent = text;
+      hint.hidden = !text;
     }
   }
-  new MutationObserver(sync).observe(side, { subtree: true, attributes: true, attributeFilter: ['class'] });
+  document.addEventListener('cpay:lang', sync);
+  new MutationObserver(sync).observe(side, { subtree: true, attributes: true, attributeFilter: ['class'], childList: true, characterData: true });
 
   function mirror() {
     document.querySelectorAll('[data-mirror]').forEach((n) => {

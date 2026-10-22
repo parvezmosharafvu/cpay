@@ -1,7 +1,7 @@
 /* Pull-chain lamp for the log-in and register pages (docs/DESIGN-SYSTEM.md).
    Progressive enhancement: the form is only hidden once this script has
    added html.lamp-js, so without JavaScript the form simply shows. The form
-   stays in the DOM; while the light is off it is inert and aria-hidden. */
+   starts visible; explicitly switching the light off makes it inert and aria-hidden. */
 (function () {
   'use strict';
   var root = document.documentElement;
@@ -43,7 +43,7 @@
     }
     window.cpayLamp = { open: function () { if (!on) set(true, { quiet: true }); }, isOn: function () { return on; } };
 
-    set(false, { quiet: true });
+    set(true, { quiet: true });
 
     // Drag the chain down and let go; a tap, Enter or Space also toggles.
     var startY = null, pulled = 0, dragged = false, MAX = 72, THRESHOLD = 28;

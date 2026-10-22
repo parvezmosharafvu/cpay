@@ -9,11 +9,12 @@
 //                             admin group
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { createHandler, outboxFromSupabase } from "./handler.ts";
+import { configuredCronSecret } from "../_shared/scoped-cron-secret.mjs";
 
 const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
 Deno.serve(createHandler({
-  cronSecret: Deno.env.get("CRON_SECRET") ?? "",
+  cronSecret: configuredCronSecret((name) => Deno.env.get(name), "TELEGRAM_NOTIFY_CRON_SECRET"),
   botToken: (Deno.env.get("ALERT_TELEGRAM_BOT_TOKEN") ?? "").trim(),
   adminChatId: (Deno.env.get("ALERT_TELEGRAM_CHAT_ID") ?? "").trim(),
   settledToAdmin: (Deno.env.get("ALERT_ON_SETTLED") ?? "true").toLowerCase() !== "false",

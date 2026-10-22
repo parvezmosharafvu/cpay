@@ -3,10 +3,19 @@
   "private": true,
   "scripts": {
     "build": "node -e \"console.log('build: static site in public/, nothing to bundle')\"",
-    "prepare:upload": "node scripts/prepare-direct-upload.mjs"
+    "prepare:upload": "node scripts/prepare-direct-upload.mjs",
+    "test:frontend": "node --test tests/frontend/*.test.mjs",
+    "test:public": "playwright test -c tests/public-smoke/playwright.config.ts --workers=1",
+    "test:accessibility": "playwright test -c tests/public-smoke/playwright.config.ts accessibility.spec.ts --workers=1",
+    "test:payment:unit": "node --test --test-concurrency=1 payment-service/auth.test.mjs payment-service/money.test.mjs payment-service/config.test.mjs payment-service/hardening.test.mjs payment-service/dockerfile.test.mjs",
+    "check:integration": "node scripts/check-local-integration.mjs"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
     "@playwright/test": "^1.55.1",
-    "pg": "^8.23.1"
+    "jsqr": "1.4.0",
+    "pg": "^8.23.1",
+    "pngjs": "7.0.0",
+    "qrcodejs": "1.0.0"
   }
 }

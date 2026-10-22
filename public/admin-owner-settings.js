@@ -35,7 +35,7 @@
   async function renderFeatures() {
     const host = document.getElementById('ownerFeatures');
     if (!host) return;
-    const { data, error } = await client.rpc('admin_platform_settings');
+    const { data, error } = await adminPanelRead(() => client.rpc('admin_platform_settings'));
     const rows = Object.fromEntries((data || []).map((r) => [r.key, r]));
     const list = node('div', { class: 'owner-list' });
     for (const [key, en, b] of FEATURES) {
@@ -45,11 +45,14 @@
       const on = r.value === true;
       const sw = node('input', { type: 'checkbox', role: 'switch', checked: on, 'aria-label': L(en, b) });
       sw.addEventListener('change', async () => {
+        if (sw.disabled) return;
         const want = sw.checked;
         if (r.dangerous && !window.confirm(L(`${en}: turn ${want ? 'on' : 'off'}? This is recorded in the audit log.`,
           `${b}: ${want ? 'চালু' : 'বন্ধ'} করবেন? এটি অডিট লগে লেখা থাকবে।`))) { sw.checked = !want; return; }
         say(st, L('Saving…', 'সংরক্ষণ হচ্ছে…'));
-        const { error: e } = await client.rpc('admin_set_platform_setting', { p_key: key, p_value: want });
+        sw.disabled = true;
+        const { error: e } = await Promise.resolve().then(() => client.rpc('admin_set_platform_setting', { p_key: key, p_value: want })).catch(error => ({ error }));
+        sw.disabled = false;
         if (e) { sw.checked = !want; say(st, e.message, false); return; }
         say(st, want ? L('On', 'চালু') : L('Off', 'বন্ধ'), true);
       });
@@ -66,9 +69,17 @@
   async function renderDomains() {
     const host = document.getElementById('ownerDomains');
     if (!host) return;
-    const { data, error } = await client.from('site_domains').select('hostname, purpose, is_active, is_primary_site').order('sort_order');
+    const { data, error } = await adminPanelRead(() => client.from('site_domains').select('hostname, purpose, is_active, is_primary_site').order('sort_order'));
     const st = status();
-    const run = async (fn, okText) => { say(st, L('Saving…', 'সংরক্ষণ হচ্ছে…')); const { error: e } = await fn(); if (e) say(st, e.message, false); else { await renderDomains(); } return !e && okText; };
+    let writing = false;
+    const run = async (fn, okText) => {
+      if (writing) return; writing = true;
+      const controls = [...host.querySelectorAll('button')]; controls.forEach(b => { b.disabled = true; });
+      say(st, L('Saving…', 'সংরক্ষণ হচ্ছে…'));
+      try { const { error: e } = await fn(); if (e) throw e; await renderDomains(); return okText; }
+      catch (error) { say(st, error.message || L('Result uncertain. Refresh before trying again.', 'ফলাফল নিশ্চিত নয়। আবার চেষ্টা করার আগে রিফ্রেশ করুন।'), false); }
+      finally { writing = false; controls.forEach(b => { b.disabled = false; }); }
+    };
     const body = node('tbody');
     for (const d of data || []) {
       const actions = d.is_primary_site ? node('span', { class: 'faint', text: L('Main site', 'মূল সাইট') }) : node('span', null,
@@ -82,8 +93,8 @@
         node('td', { text: d.is_active ? L('On', 'চালু') : L('Off', 'বন্ধ') }), node('td', { class: 'num' }, actions)));
     }
     if (!(data || []).length) body.append(node('tr', null, node('td', { colspan: '4', class: 'empty', text: L('No domains yet', 'এখনো কোনো ডোমেইন নেই') })));
-    const host_ = node('input', { id: 'odHost', placeholder: 'pay.example.com', autocomplete: 'off', spellcheck: 'false', 'aria-label': L('Domain', 'ডোমেইন') });
-    const purpose = node('select', { id: 'odPurpose', 'aria-label': L('Purpose', 'কাজ') },
+    const host_ = node('input', { id: 'odHost', class: 'input', placeholder: 'pay.example.com', autocomplete: 'off', spellcheck: 'false', 'aria-label': L('Domain', 'ডোমেইন') });
+    const purpose = node('select', { id: 'odPurpose', class: 'input', 'aria-label': L('Purpose', 'কাজ') },
       ...Object.entries(PURPOSE).map(([v, [en, b]]) => node('option', { value: v, text: L(en, b) })));
     const add = node('button', { class: 'btn primary sm', type: 'button', text: L('Add domain', 'ডোমেইন যোগ করুন'),
       on: { click: () => run(() => client.rpc('admin_save_domain', { p_hostname: host_.value, p_purpose: purpose.value, p_active: true })) } });
@@ -114,13 +125,25 @@
     GITHUB_TOKEN: ['Ledger backup to GitHub.', 'GitHub-এ লেজার ব্যাকআপ।'],
   };
   async function fn(method, body) {
-    const { data, error } = await client.functions.invoke('owner-config', { method, body });
+    let response;
+    try { response = method === 'GET' ? await adminPanelRead(() => client.functions.invoke('owner-config', { method, body })) : await client.functions.invoke('owner-config', { method, body }); }
+    catch { return { ok: false, message: L('Result uncertain. Refresh before trying again.', 'ফলাফল নিশ্চিত নয়। আবার চেষ্টা করার আগে রিফ্রেশ করুন।') }; }
+    const { data, error } = response;
     if (!error) return { ok: true, data };
     let payload = null;
     try { payload = await error.context.json(); } catch { payload = null; }
     return { ok: false, data: payload, code: payload?.code, message: payload?.error || error.message };
   }
-  const change = (body) => (window.cpayWithStepUp ? window.cpayWithStepUp(() => fn('POST', body)) : fn('POST', body));
+  let ownerWriting = false;
+  const change = async (body) => {
+    if (ownerWriting) return { ok: false, message: L('Another change is in progress.', 'আরেকটি পরিবর্তন চলছে।') };
+    ownerWriting = true;
+    const controls = [...document.querySelectorAll('#ownerSecrets button, #ownerCloudflare input')];
+    const disabled = controls.map(b => b.disabled); controls.forEach(b => { b.disabled = true; });
+    try { return await (window.cpayWithStepUp ? window.cpayWithStepUp(() => fn('POST', body)) : fn('POST', body)); }
+    catch { return { ok: false, message: L('Result uncertain. Refresh before trying again.', 'ফলাফল নিশ্চিত নয়। আবার চেষ্টা করার আগে রিফ্রেশ করুন।') }; }
+    finally { ownerWriting = false; controls.forEach((b,i) => { b.disabled = disabled[i]; }); }
+  };
 
   function setupNote(missing) {
     return node('div', { class: 'owner-setup' },
@@ -150,8 +173,8 @@
     }
     if (!(info.secrets || []).length) body.append(node('tr', null, node('td', { colspan: '2', class: 'empty', text: L('(none)', '(কিছু নেই)') })));
     const form = {
-      name: node('input', { placeholder: 'MY_SECRET_NAME', autocomplete: 'off', spellcheck: 'false', 'aria-label': L('Name', 'নাম') }),
-      value: node('input', { type: 'password', autocomplete: 'new-password', placeholder: L('Value (shown never again)', 'মান (আর কখনো দেখানো হবে না)'), 'aria-label': L('Value', 'মান') }),
+      name: node('input', { class: 'input', placeholder: 'MY_SECRET_NAME', autocomplete: 'off', spellcheck: 'false', 'aria-label': L('Name', 'নাম') }),
+      value: node('input', { class: 'input', type: 'password', autocomplete: 'new-password', placeholder: L('Value (shown never again)', 'মান (আর কখনো দেখানো হবে না)'), 'aria-label': L('Value', 'মান') }),
     };
     const save = node('button', { class: 'btn primary sm', type: 'button', text: L('Set secret', 'সিক্রেট সেট করুন'), on: { click: async () => {
       const name = form.name.value.trim().toUpperCase();
@@ -221,7 +244,7 @@
   async function render() {
     if (busy || !client || !document.getElementById('ownerFeatures')) return;
     busy = true;
-    try { nav(); await Promise.all([renderFeatures(), renderDomains(), renderSecrets()]); } finally { busy = false; }
+    try { nav(); await Promise.allSettled([renderFeatures(), renderDomains(), renderSecrets()]); } finally { busy = false; }
   }
   document.addEventListener('click', (e) => {
     if (e.target.closest && e.target.closest('.navi[data-tab="settings"]')) setTimeout(render, 0);

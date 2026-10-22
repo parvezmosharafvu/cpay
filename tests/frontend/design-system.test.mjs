@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = new URL('../../public/', import.meta.url);
@@ -62,7 +63,7 @@ test('auth alerts use role=alert and hidden attribute', () => {
 });
 
 test('public HTML files do not embed stack traces or wallet secrets', () => {
-  const dir = new URL('../../public/', import.meta.url).pathname;
+  const dir = fileURLToPath(new URL('../../public/', import.meta.url));
   for (const name of readdirSync(dir)) {
     if (!/\.(html|js|css)$/.test(name)) continue;
     const src = readFileSync(join(dir, name), 'utf8');

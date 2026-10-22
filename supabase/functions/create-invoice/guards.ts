@@ -11,9 +11,10 @@ export function parseRequestId(value: unknown): string | null {
 }
 
 /**
- * The address that connected to the platform edge. Cloudflare's header
- * first (Supabase sits behind Cloudflare), then the first X-Forwarded-For
- * hop. Only used as a rate-limit key, hashed before it is stored.
+ * The address that connected to the platform edge, identified by
+ * Cloudflare's connecting-IP header. Caller-supplied X-Real-IP or
+ * X-Forwarded-For are never trusted as substitutes.
+ * The key is hashed before storage and is used only for rate limits.
  */
 // Subrequests from any Cloudflare Worker (ours included) arrive from this
 // address, so it identifies no payer. For those, our Worker passes the
@@ -22,6 +23,43 @@ export function parseRequestId(value: unknown): string | null {
 export const CLOUDFLARE_WORKER_EGRESS = "2a06:98c0:3600::103";
 const IP_LIKE = /^[0-9a-fA-F:.]{2,45}$/;
 
+/**
+ * Validate a signed Worker attribution when the Edge signing key is set.
+ * Missing/invalid/expired signatures collapse to the shared Worker egress
+ * bucket instead of accepting a spoofable per-payer forwarded IP.
+ * With no key configured, retain legacy behavior for staged rollout.
+ */
+export async function verifiedClientKey(headers: Headers, secret: string, nowMs = Date.now()): Promise<string> {
+  const cf = headers.get("cf-connecting-ip")?.trim();
+  if (cf !== CLOUDFLARE_WORKER_EGRESS || !secret) return clientKey(headers);
+  const fallback = `worker:${cf}`;
+  const ip = headers.get("x-cpay-client-ip")?.trim() ?? "";
+  const timestamp = headers.get("x-cpay-ip-timestamp")?.trim() ?? "";
+  const signature = headers.get("x-cpay-ip-signature")?.trim() ?? "";
+  if (!IP_LIKE.test(ip) || !/^\d{10}$/.test(timestamp)
+      || !/^[A-Za-z0-9_-]{43}$/.test(signature) || !Number.isFinite(nowMs)) return fallback;
+  const seconds = Number(timestamp);
+  if (!Number.isSafeInteger(seconds) || Math.abs(nowMs / 1000 - seconds) > 90) return fallback;
+  try {
+    const binary = atob(signature.replace(/-/g, "+").replace(/_/g, "/") + "=");
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    const key = await crypto.subtle.importKey(
+      "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"],
+    );
+    const payload = new TextEncoder().encode(`cpay:create-invoice:ip:v1\n${ip}\n${timestamp}`);
+    return await crypto.subtle.verify("HMAC", key, bytes, payload) ? `proxied:${ip}` : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Turnstile siteverify requires a bare IP, never a rate-limit bucket label. */
+export function turnstileRemoteIp(rateKey: string): string {
+  if (rateKey.startsWith("worker:")) return "";
+  if (rateKey.startsWith("proxied:")) return rateKey.slice("proxied:".length);
+  return rateKey === "unknown" ? "" : rateKey;
+}
+
 export function clientKey(headers: Headers): string {
   const cf = headers.get("cf-connecting-ip")?.trim();
   if (cf === CLOUDFLARE_WORKER_EGRESS) {
@@ -29,10 +67,9 @@ export function clientKey(headers: Headers): string {
     return fwd && IP_LIKE.test(fwd) ? `proxied:${fwd}` : `worker:${cf}`;
   }
   if (cf) return cf;
-  const real = headers.get("x-real-ip")?.trim();
-  if (real) return real;
-  const xff = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return xff || "unknown";
+  // Unknown callers share one conservative bucket instead of controlling
+  // their own rate-limit identity via untrusted forwarding headers.
+  return "unknown";
 }
 
 export async function sha256Hex(text: string): Promise<string> {
@@ -70,8 +107,9 @@ export function replayDecision(existing: ExistingPayment, chargedCents: number, 
 
 export type TurnstileMode = "off" | "monitor" | "enforce";
 
-export function turnstileMode(secret: string, mode: string | undefined): TurnstileMode {
-  if (!secret) return "off";
+export function turnstileMode(_secret: string, mode: string | undefined): TurnstileMode {
+  // The requested enforcement mode must never silently downgrade to off
+  // when the secret is missing. checkTurnstile refuses this configuration.
   return mode === "enforce" ? "enforce" : mode === "monitor" ? "monitor" : "off";
 }
 
@@ -79,7 +117,7 @@ export function turnstileMode(secret: string, mode: string | undefined): Turnsti
  * Cloudflare Turnstile siteverify. Off unless TURNSTILE_SECRET_KEY and
  * TURNSTILE_MODE are set. "monitor" verifies and logs but never blocks;
  * "enforce" refuses a missing or failed token. A siteverify outage fails
- * closed only in enforce mode.
+ * closed in enforce mode, even when the secret was not configured.
  */
 export async function checkTurnstile(
   mode: TurnstileMode, secret: string, token: unknown, ip: string,
@@ -88,7 +126,11 @@ export async function checkTurnstile(
   if (mode === "off") return { ok: true };
   const t = typeof token === "string" ? token.trim() : "";
   let verdict: { ok: boolean; reason?: string };
-  if (!t || t.length > 2048) {
+  // Refuse *before* any outbound request if enforce was configured without
+  // a usable secret. Even a stubbed verifier must not be able to approve it.
+  if (!secret.trim()) {
+    verdict = { ok: false, reason: "configuration" };
+  } else if (!t || t.length > 2048) {
     verdict = { ok: false, reason: "missing" };
   } else {
     try {

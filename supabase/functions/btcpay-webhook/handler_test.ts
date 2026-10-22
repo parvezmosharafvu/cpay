@@ -63,6 +63,31 @@ Deno.test("on-chain settle alert says it lands in the BTCPay on-chain wallet", a
   assert(calls.alerts[0].includes("BTCPay on-chain wallet"));
 });
 
+Deno.test("plugin payment methods are not mislabeled as CPAY Lightning reserves", async () => {
+  const plugin = deps({
+    getPaymentMethods: () => Promise.resolve([{ paymentMethodId: "CUSTOM-ASSET", totalPaid: "0.0003" }]),
+  });
+  assertEquals((await post(plugin.h, settledEv)).status, 200);
+  assertEquals(plugin.calls.settle.length, 1, "operator alert changes must not modify accounting");
+  assertEquals((plugin.calls.settle[0] as { method?: string }).method, "CUSTOM-ASSET");
+  assert(plugin.calls.alerts[0].includes("plugin/other payment method"));
+  assert(!plugin.calls.alerts[0].includes("via Lightning"));
+
+  const missing = deps({ getPaymentMethods: () => Promise.resolve([]) });
+  assertEquals((await post(missing.h, settledEv)).status, 200);
+  assert(missing.calls.alerts[0].includes("unreported BTCPay payment method"));
+  assert(!missing.calls.alerts[0].includes("via Lightning"));
+
+  const existingLightning = settledFigures(inv(), [{ paymentMethodId: "BTC-LN", totalPaid: "0.0002" }]);
+  const existingChain = settledFigures(inv(), [{ paymentMethodId: "BTC-CHAIN", totalPaid: "0.0002" }]);
+  assertEquals(existingLightning.rail, "lightning");
+  assertEquals(existingChain.rail, "onchain");
+  assertEquals(settledFigures(inv(), [{ paymentMethodId: "BTC-LNURL", totalPaid: "0.0002" }]).rail, "lightning");
+  assertEquals(settledFigures(inv(), [{ paymentMethodId: "BTC-LNURLPAY", totalPaid: "0.0002" }]).rail, "lightning");
+  assertEquals(settledFigures(inv(), [{ paymentMethodId: "CUSTOM-ASSET", totalPaid: "0.0002" }]).rail, "plugin");
+  assertEquals(settledFigures(inv(), []).rail, "unreported");
+});
+
 Deno.test("body says settled but BTCPay says Processing: nothing recorded", async () => {
   const { h, calls } = deps({ getInvoice: () => Promise.resolve(inv({ status: "Processing" })) });
   assertEquals((await post(h, settledEv)).status, 200);

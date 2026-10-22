@@ -54,7 +54,7 @@ async function walletCall(action, body = {}) {
 }
 
 function walletShell() {
-  return `<div class="grid kpis wallet-kpis">
+  return `<div class="card-head"><div><h2>Platform wallet</h2><p class="faint">Review balances and history before preparing a transfer.</p></div><button id="walletReadRefresh" type="button" class="btn ghost">Refresh wallet</button></div><p id="walletReadStatus" role="status" class="faint"></p><div class="grid kpis wallet-kpis">
       <div class="card"><div class="kicker">Wallet balance</div><div class="kpi" id="wbSats">-</div><div class="faint" id="wbUsd">Loading…</div></div>
       <div class="card"><div class="kicker">Owed to freelancers</div><div class="kpi" id="wbOwed">-</div><div class="faint" id="wbOwedSats"></div></div>
       <div class="card"><div class="kicker">Spendable</div><div class="kpi" id="wbSpend">-</div><div class="faint">Balance minus what freelancers are owed</div></div>
@@ -96,6 +96,7 @@ async function renderWallet() {
   root.innerHTML = walletShell();
   walletState.currency = window.cpayCurrency ? window.cpayCurrency.get() : 'USD';
   document.addEventListener('cpay:currency', (e) => { walletState.currency = e.detail.code; renderBalance(); });
+  $w('walletReadRefresh').onclick = () => Promise.allSettled([loadInfo(), loadFiat(), loadHistory()]);
   $w('wqBtn').onclick = getQuote;
   $w('wqGo').onclick = confirmQuote;
   for (const id of ['wqNet', 'wqAddr', 'wqAmt']) {

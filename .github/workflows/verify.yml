@@ -105,6 +105,33 @@ jobs:
           done
           echo "All migrations applied cleanly to an empty database."
 
+      - name: Read-only solvency evidence has explicit unverified verdict
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # CI uses disposable data. Never print a production solvency report
+          # to a public GitHub Actions log.
+          report=$(psql -h localhost -U postgres -v ON_ERROR_STOP=1 -A -t -f ci/solvency_readonly_snapshot.sql)
+          printf '%s' "$report" | jq -e '
+            .verdict == "UNVERIFIED"
+            and .liabilities_usd.accounts_checked >= 0
+            and .liabilities_usd.gross_claims_minimum >= 0
+            and .liabilities_usd.anomaly_count >= 0
+            and .wallet_evidence_sat.mainnet_wallet_count >= 0
+            and .wallet_evidence_sat.mainnet_wallets_without_usable_recent_report >= 0
+          ' >/dev/null
+          echo "Solvency evidence query is read-only, parseable and non-authorizing."
+
+      - name: Restrict direct EXECUTE on payment security triggers
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/payment_trigger_exec_privileges_test.sql
+
+      - name: Forward delete guard survives pinned search_path (transaction rollback)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/payment_forward_guard_search_path_test.sql
+
       - name: Preserve receipt history while restoring settlement behavior
         env:
           PGPASSWORD: postgres
@@ -205,6 +232,8 @@ jobs:
           for f in supabase/migrations/*.sql; do
             psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -q -f "$f"
           done
+          # Verify the ACL cleanup against Supabase-like function defaults.
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/payment_trigger_exec_privileges_test.sql
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/anon_rpc_allowlist.sql
           # anon has no access to the payments table at all (20261007110000),
           # with production's default grants; the invoice page RPCs still work.
@@ -674,7 +703,7 @@ jobs:
           npm ci --no-audit --no-fund
           cd wallet && npm ci --ignore-scripts --no-audit --no-fund
       - name: Wallet dependency audit (high and above fails)
-        run: cd wallet && npm audit --omit=dev --audit-level=high
+        run: bash ci/npm-audit-with-retry.sh wallet
       - name: Build rules (no fake engine in production, hashes, strict CSP)
         run: node --test tests/wallet/build.test.mjs tests/wallet/verify-release.test.mjs tests/wallet/passkey-origin.test.mjs tests/wallet/lnaddress.test.mjs
       - name: Browser tests (phrase never leaves the page, link is optional and revocable, offline unlock, real library under CSP)
@@ -740,8 +769,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Production dependency audit (high and above fails)
         run: |
-          npm audit --omit=dev --audit-level=high
-          cd payment-service && npm audit --omit=dev --audit-level=high
+          bash ci/npm-audit-with-retry.sh .
+          bash ci/npm-audit-with-retry.sh payment-service
       - name: Deployment artifact builds clean
         run: npm run build && npm run prepare:upload
       - name: Local Markdown links resolve

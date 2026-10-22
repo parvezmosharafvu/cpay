@@ -122,8 +122,8 @@
 
   <section id="s-home" hidden>
     <div class="card own">
-      <p class="label">This wallet · your keys</p>
-      <p class="big"><span id="balSats">0</span> sats</p>
+      <div class="workspace-head"><p class="label">This wallet · your keys</p><button id="walletRefresh" type="button">Refresh</button></div><p id="walletReadStatus" class="muted small" role="status"></p>
+      <p class="big"><span id="balSats">—</span> sats</p>
       <p class="muted small">Held by the keys on this phone. Not part of your CPAY website balance.</p>
       <div class="row">
         <button type="button" class="primary" id="receiveBtn">Receive</button>
@@ -145,7 +145,7 @@
         <p class="label">Lightning invoice</p>
         <canvas class="qr" id="rcvQr" role="img" aria-label="QR code of the Lightning invoice" hidden></canvas>
         <textarea id="rcvInvoice" rows="4" readonly></textarea>
-        <div class="row"><button type="button" id="rcvCopy">Copy</button><button type="button" id="rcvShare" hidden>Share</button></div>
+        <p id="rcvCopyStatus" class="muted small" role="status"></p><div class="row"><button type="button" id="rcvCopy">Copy</button><button type="button" id="rcvShare" hidden>Share</button></div>
       </div>
       <div id="lnaBox" hidden>
         <h3>Lightning address</h3>
@@ -210,7 +210,7 @@
 
     <p class="notice" id="pendingSends" role="status" hidden></p>
     <div class="card">
-      <h2>Activity</h2>
+      <h2>Activity</h2><p id="activityReadStatus" class="muted small" role="status"></p><div class="activity-filters"><div><label for="activityStatus">Status</label><select id="activityStatus"><option value="">All</option><option value="pending">In progress</option><option value="completed">Completed</option><option value="failed">Failed</option></select></div><div><label for="activitySearch">Search loaded activity</label><input id="activitySearch" type="search" placeholder="Reference, send or receive"></div></div><p id="activityCount" class="muted small" role="status"></p>
       <ul class="list" id="history"></ul>
       <p class="muted small" id="historyEmpty">No payments yet.</p>
     </div>

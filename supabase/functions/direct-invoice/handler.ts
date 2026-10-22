@@ -20,7 +20,7 @@
 
 import { formatCents, parseAmountToCents, toCents } from "../_shared/money.ts";
 import { invoiceChargeCents } from "../create-invoice/invoice-amount.ts";
-import { clientKey, parseRequestId, sha256Hex } from "../create-invoice/guards.ts";
+import { parseRequestId, sha256Hex, turnstileRemoteIp, verifiedClientKey } from "../create-invoice/guards.ts";
 import { centsToMsat, type Rate } from "../_shared/btc-rate.ts";
 import {
   CHECK_INTERVAL_SECONDS, EXPIRY_GRACE_MS, nextAction, providerMessage, publicStatus, type DirectStatus, type SettlementProvider,
@@ -104,6 +104,8 @@ export type Deps = {
   turnstile: (token: unknown, ip: string) => Promise<{ ok: boolean; reason?: string }>;
   /** False while Turnstile is not enforced: no new invoices (status and reconcile still work). */
   createAllowed: boolean;
+  /** Optional scoped Worker -> Edge IP signature credential. */
+  ipSigningSecret?: string;
   reconcileSecret: string;
   now?: () => number;
   log?: (msg: string, extra?: unknown) => void;
@@ -209,9 +211,9 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
     if (!SLUG.test(slug)) return json({ error: "Invalid payment link" }, 400);
     if (amountCents === null || amountCents < 100 || amountCents > 500000) return json({ error: "Amount must be between $1 and $5000" }, 400);
     const requestId = parseRequestId(body.requestId);
-    const ip = clientKey(req.headers);
+    const ip = await verifiedClientKey(req.headers, deps.ipSigningSecret ?? "", now());
 
-    const ts = await deps.turnstile(body.turnstileToken, ip);
+    const ts = await deps.turnstile(body.turnstileToken, turnstileRemoteIp(ip));
     if (ts.reason) log("turnstile", ts.reason);
     if (!ts.ok) return json({ error: "Please complete the verification and try again." }, 403);
     const ipLimit = await limited(LIMITS.ip, `ip:${ip}`);
@@ -318,7 +320,8 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
   async function status(req: Request, body: Record<string, unknown>): Promise<Response> {
     const id = String(body.id ?? "").trim();
     if (!UUID.test(id)) return json({ error: "Payment not found" }, 404);
-    const limit = await limited(LIMITS.status, `status:${clientKey(req.headers)}`);
+    const ip = await verifiedClientKey(req.headers, deps.ipSigningSecret ?? "", now());
+    const limit = await limited(LIMITS.status, `status:${ip}`);
     if (limit) return limit;
     let row = await db.publicRow(id);
     if (row === undefined) return json({ error: BUSY }, 503);

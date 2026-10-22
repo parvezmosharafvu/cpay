@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { secretMatches } from "../_shared/secret-compare.ts";
+import { configuredCronSecret } from "../_shared/scoped-cron-secret.mjs";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN")!;
@@ -132,7 +133,7 @@ return count ?? 0;
 }
 
 Deno.serve(async (req) => {
-const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+const cronSecret = configuredCronSecret((name) => Deno.env.get(name), "LEDGER_BACKUP_CRON_SECRET");
 // An unset CRON_SECRET used to make `undefined !== undefined` false, so a
 // misconfigured deploy left the whole-ledger export open to the internet.
 if (!secretMatches(req.headers.get("x-cron-secret"), cronSecret)) {

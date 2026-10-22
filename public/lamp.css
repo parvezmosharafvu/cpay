@@ -79,3 +79,13 @@
 .lamp-js .auth-card .foot a{padding:0 6px;margin:0 -6px;font-weight:600}
 .lamp-js .auth-card .label-row{align-items:center}
 .lamp-js .auth-card .label-row .link-btn{margin:-6px 0;padding-right:0}
+
+/* A compact lamp keeps the form near the top on phones. */
+@media (max-width:900px){
+  .lamp-js .auth-main{padding-top:124px}
+  .lamp-js .lamp{position:absolute;right:16px;top:12px;width:60px;height:100px;margin:0}
+  .lamp-js .lamp-hint{display:none}
+  .lamp-js .lamp-chain{top:22%;height:76px}
+  .lamp-js .lamp-chain .chain-line{height:46px}
+  .lamp-js .lamp-chain .chain-knob{top:44px}
+}

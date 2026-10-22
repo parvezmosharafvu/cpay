@@ -84,7 +84,9 @@
       <li data-step="detected">Detected</li>
       <li data-step="settled">Paid</li>
     </ol>
+    <p class="invoice-sync" id="statusSync" role="status" aria-live="polite">Payment status updates automatically.</p>
   </div>
+  <p class="checkout-review-note">Check the recipient and amount in your wallet before confirming. Pay this request only once.</p>
 
   <div class="pay-actions" id="payActions">
     <button id="payBtn" class="pill-btn btn-pay" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg><span id="payBtnLabel">Pay with Lightning</span></button>
@@ -132,12 +134,13 @@
   <div class="receipt" id="receiptCard">
     <div class="receipt-row"><span>Paid to</span><b id="rcpMerchant">-</b></div>
     <div class="receipt-row"><span>Amount</span><b id="rcpAmount">-</b></div>
-    <div class="receipt-row"><span>Date</span><b id="rcpDate">-</b></div>
+    <div class="receipt-row"><span>Confirmation seen</span><b id="rcpDate">-</b></div>
     <div class="receipt-row"><span>Reference</span><b class="mono" id="rcpRef">-</b></div>
     <div class="receipt-row" id="rcpProofRow" hidden><span>Proof of payment</span><b class="mono" id="rcpProof">-</b></div>
   </div>
   <p class="direct-note" id="rcpDirectNote" hidden></p>
 
+  <p class="receipt-help">Keep this reference if you contact the merchant. The time shown is when this page saw the confirmation.</p>
   <div class="receipt-actions">
     <button class="pill-btn btn-copy" id="rcpCopyBtn" type="button">Copy reference</button>
     <button class="pill-btn btn-copy" id="rcpSaveBtn" type="button">Save receipt</button>
@@ -171,7 +174,7 @@
     </div>
     <p class="muted"><b>On this phone:</b> tap <b>Pay with Lightning</b> or <b>Pay with Cash App</b>. Your wallet opens with the payment loaded and you confirm it.</p>
     <p class="muted"><b>On a computer:</b> scan the QR code with your phone's wallet app.</p>
-    <p style="margin:0;font-weight:600">If nothing opens:</p>
+    <p class="payment-help-label">If nothing opens:</p>
     <ol>
       <li>Tap <b>Copy payment request</b>.</li>
       <li>Open your wallet and choose <b>Send</b> or <b>Scan</b>.</li>
@@ -185,6 +188,6 @@
 
 <div id="toast" class="float-toast" role="status" aria-live="polite"></div>
 
-<script src="invoice-view.js"></script>
+<script src="invoice-view.js?v=2"></script>
 </body>
 </html>

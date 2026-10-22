@@ -76,16 +76,18 @@ dashboard or the private backup repo. Record each in the drill log above.
    backup, so a bad event late in the day loses up to 24 h of ledger rows;
    then the ledger git snapshot is the only finer-grained copy of
    payments and withdrawals.
-   *Checked read-only on 2026-10-14:* the organisation is on the Supabase
-   **Free plan** (Management API). Free projects have no point-in-time
-   recovery and no downloadable daily backups, so today the git snapshot
-   below is the **only** copy of the ledger, and nothing backs up
-   `auth.users`, the audit log, receipts, webhooks or the wallet schema.
-   Owner decision (budget): upgrade to Pro (daily backups, 7 days) and, for
-   a money ledger, add PITR. Until then, take a manual dump before every
-   migration: Dashboard → Database → Backups is not available on Free, so
-   use `supabase db dump --db-url <connection string>` from a trusted
-   machine and store the file privately.
+   *Historical verification (2026-10-14):* the organisation was on
+   the Supabase **Free plan** at that date. The later
+   [release-blockers record](RELEASE-BLOCKERS.md) reports an upgrade to
+   **Pro on 2026-10-16**, with daily backups available. Do not reuse
+   the earlier "Free plan today" finding as current evidence.
+   **Still unverified:** whether PITR is enabled, the actual retention
+   and last successful backup in the active project, and a tested
+   restoration of current Auth, wallet and ledger state. The earlier
+   export drill does not close those gaps. The owner must inspect the
+   backup settings and record a separate, safely isolated restore
+   rehearsal before approving production release. Keep manual pre-change
+   snapshots private until full coverage is independently confirmed.
    The ledger-backup run itself: the 18:15 UTC run answered
    `backed up`, `verified: true` (payments 4, withdrawals 0, payment links 1,
    profiles 18, daily stats 26). No repository visible to the audit's GitHub

@@ -133,10 +133,11 @@ browsers fetch the matching versions.
 ## Pull-chain lamp (log in and register)
 
 `login.html` and `register.html` load [`lamp.css`](../public/lamp.css) and [`lamp.js`](../public/lamp.js).
-The page shows a lamp with a pull chain, and the form card appears only when the light is on.
+The page shows a lamp with a pull chain. Since the 2026-10-22 public-journey update,
+the light starts on and the form is immediately usable. Turning the lamp off is optional.
 
 - **Chain:** a real `<button id="lampChain">` with `aria-pressed`, `aria-controls` (the card id) and the label
-  "Turn on the light to sign in". Tap/click, Enter/Space or a downward drag (pointer events, release past
+  "Show or hide the form". Tap/click, Enter/Space or a downward drag (pointer events, release past
   28 px) toggles it. Its hit area is 44 px wide.
 - **Form:** always in the DOM. While off, `main.auth-card` is `inert` and `aria-hidden`; focus inside it moves
   to the chain first.
@@ -147,7 +148,7 @@ The page shows a lamp with a pull chain, and the form card appears only when the
 - **Look:** shade, beam and card glow use the cyan accent; the card is glass (`backdrop-filter`); the primary
   button is a cyan gradient with dark `--on-accent` text.
 - **Motion:** off under `prefers-reduced-motion`.
-- **Layout:** ≤ 900 px the lamp sits above a smaller card; the side panel is hidden in lamp mode.
+- **Layout:** ≤ 900 px the lamp is compact at the top right; the form starts near the top; the side panel is hidden in lamp mode.
 - **Tests:** e2e and smoke tests call `openAuthForm(page)` (tests/e2e/helpers.ts) before using the form.
 
 ## Touch targets (v2.1, 2026-10-21)
@@ -157,3 +158,153 @@ checkout), `.brand`, header `.nav-menu` links, `.foot-links`, the auth-card foot
 "Log in"), `.back-link` on legal pages, and `.check` rows (the whole label is the target). Links inside a
 sentence of running text are exempt (WCAG 2.5.8 inline exception). Pages carry no inline `style=""` or
 `<style>` for layout; page rules live in `cpay.css`.
+
+## Section context and audit worklist (2026-10-22)
+
+The complete section-by-section backlog is in
+[CORE-DESIGN-WORKLIST.md](CORE-DESIGN-WORKLIST.md). It records completed
+changes separately from visual and production checks still needed.
+
+Both desks now have one shared `#sectionHint` above the active section.
+`shell.js` follows the existing active navigation item and supplies a short
+English/Bangla explanation for each section. Admin and member overviews,
+links and conversations have audience-specific wording. It does not switch
+routes, fetch account data or change permissions. Unknown sections hide the
+hint. Language changes refresh both the hint and the top-bar heading.
+
+The shared foundation also wraps long headings and card headers, protects
+section grid children from forcing overflow, and styles invalid select
+controls consistently with inputs. Small desk buttons keep the same 44 px
+minimum touch height as other actions. Admin conversation and owner-guide
+rules now live in `cpay.css` rather than an embedded style block.
+
+These source changes are covered by local checks and unit tests. Browser
+layout, authenticated data states and production health require separate
+verification; they are not certified by the unit test result.
+
+## Home and authentication journey (2026-10-22)
+
+Home explains both receiving modes in a shared two-card layout. The hero,
+three-step explanation and custody panel describe fee-first handling without
+changing calculations. Native details/summary navigation exposes section links
+on smaller screens (1120 px and below, allowing longer translated labels).
+The example desk picture remains labelled as an example.
+
+Home, Login, Register and Reset load the same `i18n.js` used by the desks,
+with a dedicated language-switch mount and Bengali font support.
+`auth-ui.js` enhances password visibility and marked Enter-key actions only;
+existing page scripts retain authentication and validation. Password values
+are never read by this presentation helper. Skip-link targets are focusable.
+
+The lamp starts on. Its explicit off state, reduced-motion handling,
+autofill behavior and no-JavaScript fallback remain. On phones it occupies
+a compact top-right area rather than a full-height row before the form.
+Implementation tests pass; browser acceptance is tracked separately in
+[CORE-DESIGN-WORKLIST.md](CORE-DESIGN-WORKLIST.md).
+
+## Dashboard and link workspace (2026-10-22)
+
+The member overview leads with the available amount and receiving-mode
+status, then actions and recent payments. The daily breakdown loads in a
+separate panel. Read failures can be retried without sending money. The
+receiving-mode label explicitly reports unavailable settings; it does not
+infer that Auto withdraw is off. A newer refresh supersedes older reads.
+
+Payment links use local name/slug and status filters, an announced result
+count and explicit Preview/Copy/status actions. The new-link composer is a
+native details panel; it opens for an empty account or from the new-link
+shortcut. Filters and successful status changes update only the list,
+preserving the draft and design choices. Existing creation, fee and
+settlement RPCs remain unchanged. Small screens use the existing responsive
+table cards, with translated `data-label` captions.
+
+Source behavior is covered by unit tests. Browser acceptance for real
+layouts and authenticated states remains tracked under V01.
+
+## Payment history and withdrawal journey (2026-10-22)
+
+Payment history pages use 50-row server pages; filter changes reset the
+offset. Each row has an explicit details action as well as its existing
+row interaction. The modal timeline displays recorded timestamps only.
+Read retries and stale-response guards apply to lists and details. Closing
+a detail dialog restores focus and invalidates its pending response.
+
+Withdraw introduces a three-step orientation: destination/amount, quote,
+passkey confirmation. The original quote and send implementation remains
+unchanged. Zero-balance and unavailable-receiving-mode states are explicit.
+Withdrawal history can be refreshed separately, without replacing the form;
+it states its latest-40 limit and distinguishes an empty result from a
+status filter with no matches. New wording has English/Bangla entries.
+
+These are source implementations; browser acceptance remains pending.
+
+## Profile and Security (2026-10-22)
+
+Profile separates public storefront fields from receiving status and saved
+addresses. Section links, privacy labels, field hints and a collapsible
+balance-payout preference group clarify which controls affect public copy
+and which affect private settings. An unavailable receiving-mode read is
+not interpreted as Off. Public drafts stay in page memory during address
+reloads; they are not persisted across a browser reload. Duplicate saves
+are blocked and address removal requires confirmation.
+
+Security uses DOM text nodes for credential names, with loading/error
+feedback, a read-only refresh, key count and backup guidance. Failed list
+reads do not offer Add/Remove. Credential actions are serialized and retain
+the existing confirmation and last-admin-key guards. Only reads refresh
+after completion; credential mutations are never automatically retried.
+
+The authentication client and server-side authorization remain unchanged.
+Browser layout and real-device passkey ceremonies still require acceptance.
+
+## Support conversations and checkout feedback (2026-10-22)
+
+Member support shows the newest 80 messages in chronological order. Admin
+Inbox uses an account selector, local search and a separate conversation
+card showing up to the newest 300 messages. Multiline composers use
+Ctrl/Command+Enter to send. Page-memory drafts survive read refreshes and
+account changes; they do not persist across a browser reload. In-flight
+mutations cannot be duplicated, and uncertain sends are never retried
+automatically. Messages remain escaped text with preserved line breaks.
+
+Checkout uses a separate live region for status-read availability. Network
+read failures cannot imply settlement or trigger new invoices. Merchant
+palettes and both invoice entry points retain identical shared markup.
+Receipt time is labelled Confirmation seen because it is the time the page
+observed the confirmation. The underlying invoice, amount and expiry
+logic remains unchanged. Checkout keeps its existing language behavior.
+
+Browser layouts, live support messaging and real-payment acceptance remain
+tracked separately from source tests.
+
+## Store and operational overview — batch 7
+
+Store discovery filters only the already loaded public payment links. Search never creates an invoice. Read failures expose retry; sharing has cancellation and clipboard failure feedback. Merchant theme behavior is preserved. Admin overview reads have bounded waits and response guards; wallet availability does not block the activity boards. Unavailable balances and queues are distinct from zero and empty results. Review shortcuts lead to the existing administrative sections; payment calculations and protected mutation endpoints remain unchanged. Browser and live-service acceptance remain pending.
+
+## Administrative review queues — batch 8
+
+Users and applications preserve search/status state through read refreshes, show explicit read failures and expose references in native details. Optional account reads may fail independently; unknown withdrawal settings are disabled rather than assumed. Application history uses the existing nullable status parameter; review actions appear only on waiting rows. Payout filters cover the latest 120 requests, and forward filters read up to 200 records for the selected status; both limits are visible. Forward search is local to loaded records and does not call a mutation. Existing payout step-up, confirmation prompts, monetary values and administrative endpoints remain. Busy state prevents duplicate application/payout decisions and serializes forward actions in their panels. These guards do not replace server authorization or transaction locking. Browser and live acceptance remain pending.
+
+## Wallet and location states — batch 9
+
+Platform wallet refresh reads balances, currency rates and history without submitting a quote or send. Failed balance reads clear stale figures; read completion time is separate from registry sync time. Owner registry refresh preserves the existing add-form DOM, shows sync details and removes stale lists on failure; mutation serialization supplements existing server constraints and passkey checks. Location filters preserve drafts and show format validation, bounded read failures, current-profile versus payment-date scope, and detail-list limits. Location references remain display only. No monetary formula, send implementation, schema or authorization rule was changed. Browser and live-service acceptance remain pending.
+
+## Operational evidence and receipt decisions — batch 10
+
+Health and System show partial-read failures independently, preserving successful snapshot evidence without interpreting an absent query as healthy or alert-free. Refreshes read existing endpoints; old responses cannot replace newer reads. Audit shows full references and labels its latest-120-row search scope. Receipt review shows full evidence in native details, labels its latest-200-record status scope and serializes each receipt decision while preserving the note prompt. Resolving/dismissing records an audited flag only; it does not move money. Shared CSS handles operational card layout and scrollable evidence tables. Browser and live backend acceptance remain pending.
+
+## Settings drafts and owner guide navigation — batch 11
+
+Platform Settings preserves ordinary field drafts in memory and serializes its save operations, while read failures remain distinct from real zero-valued fees. Existing grouped owner sections, confirmation prompts, RPC contracts and step-up remain. Owner-config transport failures return explicit uncertainty and secret fields retain post-attempt clearing. Owner guide adds heading navigation and separate guide/status refreshes, with distinct unavailable, owner-only and weak-session feedback. The guide is still owner served; only secret names are displayed. Bangla quick-reference content and its generated function payload were rebuilt together. Live settings were not changed; browser/live acceptance and owner-guide deployment remain pending.
+
+## Wallet PWA read states and activity — batch 12
+
+Wallet PWA balances and activity have independent read status, bounded waits and guards against stale/locked-session responses. Local activity filters show loaded-record counts and complete references; pending send checks remain read-only. Receive copy has explicit fallback feedback. Send preparation/confirmation/outcome/retry code, recovery, engine, service worker and custody boundaries remain unchanged. Owner deferred Legal / Contact entry to the dashboard after project completion; publication is not approved by this source update. Wallet build is pending dependency installation, and browser/real-device/offline/live-wallet acceptance remains pending.
+
+## Bengali fallback and Settings controls — batch 14
+
+Shared CSS self-hosts Noto Sans Bengali 400/600 Bengali subsets, sourced from Fontsource 5.3.0 under the bundled SIL OFL license. The existing font stack uses this fallback for Bengali letters and punctuation while retaining Latin/system faces. Settings editors wrap fields and Save controls inside the card; owner domain/secret inputs reuse the shared input class. Automated desk fixtures verify EN/BN navigation and page bounds at 390px and 1440px; full live/populated/physical-device acceptance is still pending.
+
+## Invoice notices and mobile payout details — batch 15
+
+Checkout float notices override the desk toast top anchor so they remain short bottom notices instead of stretching across the invoice. The QR logo hides when only request-text fallback is available. Payout tables reuse the shared responsive labelled rows; narrow-container details and addresses wrap in full. Presentation changes preserve source amounts, protected controls and invoice/status logic. Local browser fixtures cover all ten merchant designs at 390px/1440px; real QR/network/physical-device acceptance remains separate.

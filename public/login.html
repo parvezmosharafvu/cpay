@@ -24,7 +24,7 @@
 <meta name="twitter:description" content="Log in to your CPAY freelancer dashboard.">
 <meta name="twitter:image" content="https://pay-cashapp.buzz/assets/og/og-home.png?v=4">
 <meta name="description" content="Log in to your CPAY freelancer dashboard.">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=Noto+Sans+Bengali:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
 <link rel="stylesheet" href="a11y.css">
 <link rel="stylesheet" href="lamp.css">
@@ -35,6 +35,7 @@
 </head>
 <body class="auth split">
   <a class="skip-link" href="#loginCard">Skip to form</a>
+  <div class="page-language" data-language-switch></div>
   <svg class="sr-only" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
   <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
@@ -76,7 +77,7 @@
       <div>
         <h2>Welcome back to CPAY</h2>
         <p>Your balance, payments and withdrawals in one desk.</p>
-        <ul class="ticks"><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>See each payment as it settles</li><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Withdraw USDT with the fee shown first</li><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Two-step sign-in and passkeys</li></ul>
+        <ul class="ticks"><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>See each payment as it settles</li><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Withdraw USDT with the fee shown first</li><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Email sign-in and passkey protection</li></ul>
       </div>
       <p class="faint">Your CPAY balance is held by CPAY. Payments are sent over the Bitcoin Lightning Network.</p>
     </aside>
@@ -91,19 +92,19 @@
         <path class="shade" d="M80 40h80l30 76H50z"/>
         <ellipse class="shade-inner" cx="120" cy="116" rx="70" ry="5"/>
       </svg>
-      <button class="lamp-chain" id="lampChain" type="button" aria-pressed="false" aria-controls="loginCard" aria-label="Turn on the light to sign in"><span class="chain-line" aria-hidden="true"></span><span class="chain-knob" aria-hidden="true"></span></button>
-      <p class="lamp-hint" aria-hidden="true">Pull the chain to sign in</p>
+      <button class="lamp-chain" id="lampChain" type="button" aria-pressed="true" aria-controls="loginCard" aria-label="Show or hide the form"><span class="chain-line" aria-hidden="true"></span><span class="chain-knob" aria-hidden="true"></span></button>
+      <p class="lamp-hint" aria-hidden="true">Pull to switch the form light</p>
     </div>
     <main class="auth-card">
     <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
-    <div class="card" id="loginCard">
-      <h1>Log in</h1>
+    <div class="card" id="loginCard" tabindex="-1">
+      <div class="auth-heading"><span class="kicker">Your workspace</span><h1>Log in</h1></div>
       <p class="sub">Welcome back to your CPAY dashboard.</p>
       <div class="alt-signin" data-alt hidden>
         <div data-passkey hidden><button class="btn oauth-btn block lg" id="passkeyBtn" type="button"><svg class="pk-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>Sign in with a passkey</button></div>
         <div class="or-divider" role="separator"><span>or</span></div>
       </div>
-      <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" inputmode="email" required></div>
+      <div class="field"><label for="email">Email</label><input id="email" data-enter-submit="submitBtn" type="email" autocomplete="email" inputmode="email" required></div>
       <div class="field"><div class="label-row"><label for="password">Password</label><button class="link-btn" id="forgotBtn" type="button">Forgot password?</button></div><input id="password" type="password" autocomplete="current-password" required></div>
       <div id="captchaBox" class="captcha-box"></div>
       <button class="btn primary block lg" id="submitBtn" type="button">Log in</button>
@@ -118,6 +119,8 @@
   </main>
     </div>
   </div>
+<script src="i18n.js?v=3"></script>
+<script src="auth-ui.js?v=1"></script>
 <script>
 const errEl = () => document.getElementById('errorMsg');
 const okEl = () => document.getElementById('okMsg');

@@ -145,71 +145,33 @@ from CPAY's side; the merchant's own wallet has the money.
 
 Since 20261021020000 the strong factor is a **passkey**. Admin actions,
 settings, withdrawals and payout-address changes require
-`public.strong_session()`: a session that signed in with a passkey (or, only
-during the switch-over, an existing aal2 session from an authenticator code
-enrolled earlier). New authenticator (TOTP) enrolment is off, and since 2026-10-21 codes are not verified either (factors kept); Google sign-in
+`public.strong_session()`: a session that signed in with a passkey (with a
+legacy aal2 fallback retained in the database). New authenticator (TOTP) enrolment is off, and since 2026-10-21 codes are not verified either (factors kept); Google sign-in
 is off. An aal1 password session is refused wherever aal2 used to be needed.
 
-**Once enrolled, aal2 is required (migration 20261014080000).** An admin
-with a verified authenticator is an admin only in an aal2 session, even
-while the flag below is off: `is_admin()` and the admin-actions and
-auth-settings gates refuse a password-only token (for example from a
-password-reset link). Admins without an authenticator are unaffected, so
-this cannot lock anyone out. A password reset for an account with an
-authenticator also asks for the code before the new password is saved.
+**Current administrator readiness.** Keep two independent passkeys (for
+example, one on a phone and one in a password manager). Verify each can
+sign in before depending on it for recovery. Admins cannot delete their
+last passkey. Never share credential material in a ticket or chat.
 
-- **Enrol two authenticators**: your phone and a backup device kept
-  offline. CPAY shows no recovery codes, so the second authenticator is the
-  recovery path.
-- **Audit**: enrol, verify and remove write `security.mfa.*` rows to
-  `audit_log`; wrong codes write `security.mfa.challenge_failed` (at most
-  20 an hour per user). The factor secret is never stored there.
-- **Never** paste a code, QR image or authenticator key into a ticket or chat.
+**Recovery.** Losing an authenticator is no longer the relevant recovery
+case: codes cannot be enrolled or verified. Use another enrolled passkey.
+If every passkey is lost, escalate to the owner for an identity-verified
+recovery procedure; this runbook does not authorize deleting factors,
+disabling security globally, or treating a password reset as a strong session.
 
-**Break-glass (every authenticator lost).** Only the owner, from the
-Supabase dashboard, whose own login must have MFA. Do not disable security
-globally instead.
-
-```sql
-select id, friendly_name, status, created_at from auth.mfa_factors
- where user_id = (select id from auth.users where email = '<admin email>');
-delete from auth.mfa_factors where id = '<factor id>';
--- audit_log: security.mfa.factor_removed_by_operator
-```
-
-Then sign in with the password and enrol two new authenticators at once.
-
-**Requiring it (owner rollout, migration 20261014030000).** Admin → Settings
-→ "Require two-step sign-in for admins" (`app_settings.admin_mfa_required`,
-JSON boolean, ships `false`). Turn it on only after every active admin has
-enrolled, signed in with a code and confirmed a payout; the database refuses
-otherwise (and refuses an aal1 session). When on: `is_admin()`, the
-admin-actions and auth-settings gates and every admin RLS policy need aal2,
-so a password-only session (including a direct RPC) gets no admin access;
-an admin's last authenticator cannot be removed from Security (break-glass
-above still works). Afterwards set the Edge secret `ADMIN_MFA_EXPECTED=true`
-so health alerts if it is ever switched off. Health also alerts if
-`STEP_UP_MAX_AGE_SECONDS` is `0` or if it is on while an active admin has
-no authenticator. To roll back, switch it off in Settings (needs aal2) or,
-as the owner in the SQL editor:
-`update app_settings set value = 'false'::jsonb where key = 'admin_mfa_required';`
-After a break-glass removal with it on, the admin signs in with the
-password and enrols from Security (allowed at aal1), which restores access.
-
-**Deploy.** A merge to main deploys this by itself: the Supabase GitHub
-integration applies the migrations and redeploys the changed functions, and
-Workers Builds deploys the pages. Observed on 2026-10-14 for #102: both
-migrations were applied and `admin-actions`, `auth-settings` and `health`
-redeployed within a minute of the merge; the next `health` run was 200. If
-deploying by hand, apply migrations `20261014020000` and `20261014030000`
-before the functions. The pages work before the migrations too (enrolment
-is Supabase Auth; the wrong-code audit note is best effort).
+The authenticator rollout from 2026-10-14 is historical and must not be
+used to configure current accounts. See [SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md)
+for current authentication and deployment order. Production passkey readiness
+still requires owner verification.
 
 ## Payout safety: step-up and address cooldown
 
 - **Step-up** (`_shared/step-up.ts`): confirming a payout needs a sign-in in
   the last `STEP_UP_MAX_AGE_SECONDS` (default 10 minutes); the dashboard asks
-  for the password and retries once. Rollback: set the Edge secret to `0`.
+  for a fresh sign-in. A strong session is also required: a password reset
+  alone is insufficient. See `STEP_UP_MESSAGE` and `sessionIsStrong()` in
+  the shared helper; do not disable the freshness check for recovery.
 - **Address change needs a passkey, usable at once** (20261021020000; the
   old 24 h cooldown from 20261009010000 is gone). Saving or changing a payout
   address is refused unless the session signed in with a passkey; every save

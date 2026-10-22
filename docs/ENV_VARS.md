@@ -228,3 +228,50 @@ Git history and must be considered public.
    (create it under the same name — `vault.create_secret` upserts by name,
    so both cron triggers keep working with no SQL changes)
 4. Confirm the next nightly run in the ledger-backup function logs.
+
+
+## Scheduled-function credential isolation (source staged 2026-10-22)
+
+This review branch supports optional scoped credentials for `daily-report`
+(`DAILY_REPORT_CRON_SECRET`), `ledger-backup` (`LEDGER_BACKUP_CRON_SECRET`),
+`health` (`HEALTH_CRON_SECRET`), `telegram-notify`
+(`TELEGRAM_NOTIFY_CRON_SECRET`), and the standalone wallet sync endpoint
+(`BREEZ_WALLET_CRON_SECRET`). Each uses `CRON_SECRET` only when its dedicated
+variable is absent. Once a dedicated variable exists, even when empty, its
+endpoint rejects the old shared credential; a bad blank configuration fails
+closed. This is source support, **not** an applied production rotation.
+Schedulers and the corresponding Vault secrets must be switched together,
+with live checks, under the owner's approved change window. Never give a
+cron secret to a third-party monitor. See
+[CRON-SECRET-CUTOVER.md](CRON-SECRET-CUTOVER.md).
+
+
+## Signed Worker client-IP attribution — staged (not enabled in production)
+
+The site Worker can sign its `x-cpay-client-ip` header with a fresh
+timestamp and HMAC-SHA256 using `INVOICE_IP_SIGNING_SECRET`. Set the
+**same high-entropy secret** privately in the Cloudflare Worker and the
+Supabase Edge project only during a separately approved rollout; do not
+put it in a public client or repository. The Worker adds
+`x-cpay-ip-timestamp` and `x-cpay-ip-signature` to proxied
+create-invoice requests. Once the Edge value exists, missing, forged or
+expired attribution is refused for **per-IP identification** and
+requests fall into the shared Worker egress rate-limit bucket.
+The function's other per-link/owner rate limits still apply.
+
+When the Edge secret is absent, existing unsigned forwarding remains
+temporarily accepted for backward compatibility. **That fallback is not
+proof of production protection.** Deploy the matching Worker first,
+then enable the matching Edge secret in a coordinated window, check
+that real payer invoices still rate-limit by client and forged requests
+do not impersonate payers, then rotate per policy. Do not confuse
+signed IP metadata with authentication or a completed Turnstile
+enforcement rollout.
+
+
+The same optional `INVOICE_IP_SIGNING_SECRET` is also consumed by
+`direct-invoice` for create and status rate limits, in addition to
+`create-invoice`. Its value is still configured only by the operator
+and must match the Worker. The direct API trusts only the actual
+Cloudflare connecting-IP header, never caller-controlled
+`X-Real-IP` or `X-Forwarded-For` values.

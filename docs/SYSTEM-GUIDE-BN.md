@@ -19,6 +19,7 @@ Admin panel-এ **সিস্টেম গাইড** বাটনে এই �
 9. [এখন কী কী setting করতে হবে](#todo)
 10. [একাধিক wallet](#wallets)
 11. [BTCPay Server দিয়ে invoice](#btcpay)
+12. [Settings ও যাচাইয়ের দ্রুত নির্দেশনা](#review-workflow)
 
 <a id="accounts"></a>
 ## ১. কোন কোন account লাগে
@@ -394,3 +395,21 @@ Admin → **Settings** → **BTCPay Server** চালু করলে নতু
 6. Admin → Settings → **BTCPay Server** → **On**। ছোট একটা Lightning আর একটা on-chain payment দিয়ে test করুন, Admin → Payments আর Telegram-এ দেখুন।
 
 বিস্তারিত: [BTCPAY.md](BTCPAY.md)।
+
+
+<a id="review-workflow"></a>
+## ১২. Settings ও যাচাইয়ের দ্রুত নির্দেশনা
+
+Settings-এ Payment & fees, Legal pages, Domains, Secrets & keys আলাদা অংশে দেখুন। কোনো setting বদলানোর আগে বর্তমান মান, কোন account-এ প্রভাব পড়বে এবং confirmation-এর লেখা মিলিয়ে নিন। প্রতিটি Save শুধু সেই setting বদলায়; সব ঘর একসঙ্গে সংরক্ষণ করে না। Platform Settings-এর অসম্পূর্ণ সাধারণ লেখার খসড়া এই খোলা পাতায় থাকে; reload করলে হারাবে। Secret-এর মান খসড়া হিসেবে সংরক্ষণ করা হয় না।
+
+| যা দেখছেন | কী করবেন |
+|---|---|
+| Platform fee unavailable | Refresh settings করুন। অনুপস্থিত মানকে 0% ধরে Save করবেন না। |
+| Save ব্যর্থ বা ফল নিশ্চিত নয় | একই পরিবর্তন বারবার পাঠাবেন না। বর্তমান মান ও settings audit দেখে তারপর সিদ্ধান্ত নিন। |
+| Guide লোড হচ্ছে না | গাইডের retry ব্যবহার করুন। সাময়িক connection failure মানেই owner access বাতিল নয়। |
+| Guide passkey sign-in চাইছে | Owner account দিয়ে passkey-সহ আবার sign in করুন। অন্য admin-এর access বাড়াবেন না। |
+| Secret-এর অবস্থা দেখা যাচ্ছে না | অবস্থা রিফ্রেশ করুন। শুধু নাম আছে/নেই দেখা যায়; এটি secret-এর মান সঠিক বা service সচল থাকার প্রমাণ নয়। |
+| Receipt review Resolve / Dismiss | এটি audited decision flag। টাকা পাঠানো, ledger ঠিক করা বা payment settle করা নয়। |
+| Wallet balance unavailable | Wallet refresh করুন। পুরোনো বা অনুপস্থিত balance দিয়ে আরেকটি send করবেন না। |
+
+গাইডের উপরের অংশ বাছাই দিয়ে সরাসরি প্রয়োজনীয় অংশে যান। গাইডের refresh এবং secret-status refresh শুধু তথ্য পড়ে; কোনো setting বদলায় না। এখানে বর্ণিত UI-এর local tests পাস করলেও production setup, live permissions, wallet sync এবং প্রকৃত payment verification আলাদাভাবে যাচাই করতে হবে।

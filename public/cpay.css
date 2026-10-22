@@ -1,3 +1,6 @@
+/* Noto Sans Bengali 5.3.0 from Fontsource; SIL OFL in fonts/NotoSansBengali-LICENSE.txt. */
+@font-face{font-family:"Noto Sans Bengali";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/noto-sans-bengali-bengali-400-normal.woff2") format("woff2");unicode-range:U+0951-0952,U+0964-0965,U+0980-09FF,U+200C-200D,U+25CC}
+@font-face{font-family:"Noto Sans Bengali";font-style:normal;font-weight:600;font-display:swap;src:url("fonts/noto-sans-bengali-bengali-600-normal.woff2") format("woff2");unicode-range:U+0951-0952,U+0964-0965,U+0980-09FF,U+200C-200D,U+25CC}
 /* CPAY design system (v2). Every page links this one file; pages carry no palette of their own.
    :root is the payment pages' base (checkout, invoice, store) under each
    merchant's chosen design. The website and desks opt in to the navy palette
@@ -1475,3 +1478,157 @@ body.legal .draft strong{color:var(--warn,#78350f)}
 .label-row{align-items:center}
 .label-row .link-btn{margin:-6px 0;padding-right:0}
 .check{min-height:var(--touch);padding:11px 0;margin:0 0 4px}
+
+/* Shared desk section context; applies to every route, including async panels. */
+.section-hint{max-width:72ch;margin:0 0 var(--space-5);padding:0 0 var(--space-4);border-bottom:1px solid var(--line);color:var(--muted);font-size:var(--text-md);line-height:1.6;overflow-wrap:anywhere}
+.main > section > *{min-width:0}
+.card-head{flex-wrap:wrap}
+.main :is(.card-title,h2,h3){overflow-wrap:anywhere}
+.main :is(input,select,textarea):disabled{cursor:not-allowed}
+.main .field select[aria-invalid="true"]{border-color:var(--danger);box-shadow:0 0 0 3px color-mix(in srgb,var(--danger) 18%,transparent)}
+
+/* Admin conversations and owner guide use the shared stylesheet. */
+.msg-bubble{padding:9px 12px;border-radius:10px;max-width:85%;background:var(--surface-2);border:1px solid var(--line)}
+.msg-bubble.admin{background:var(--accent-soft);border-color:var(--accent-ring);margin-left:auto}
+.msg-bubble.creator{margin-right:auto}
+#threadList{min-height:180px}
+.navi-guide{border:1px solid var(--accent-ring);background:var(--accent-soft)}
+.guide{line-height:1.7;font-family:'Noto Sans Bengali',Inter,sans-serif}
+.guide h2{margin-top:0}.guide h3{margin-top:28px;border-top:1px solid var(--line);padding-top:16px}
+.guide code{word-break:break-all}.guide td,.guide th{vertical-align:top}
+.guide-anchor{display:block;scroll-margin-top:72px}
+.guide-badges{display:flex;flex-wrap:wrap;gap:6px}.guide-badges .badge{font-size:12px}
+@media (max-width:640px){.guide{padding:14px}.guide table{font-size:13px}}
+
+/* Public journey: home navigation, receiving choices and authentication. */
+.site-utility{display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:0 0 10px}
+.site-explore{display:none;position:relative;margin-right:auto}
+.site-explore summary{min-height:var(--touch);display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);color:var(--muted);cursor:pointer;list-style:none}
+.site-explore summary::-webkit-details-marker{display:none}
+.site-explore summary::after{content:"+";font-size:20px;color:var(--accent)}
+.site-explore[open] summary::after{content:"−"}
+.site-explore ul{position:absolute;top:100%;left:0;z-index:var(--z-drawer);width:min(280px,calc(100vw - 32px));list-style:none;margin:8px 0 0;padding:8px;background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--radius);box-shadow:var(--shadow-lg)}
+.site-explore a{display:flex;align-items:center;min-height:var(--touch);padding:8px 12px;border-radius:var(--radius-sm);color:var(--text)}
+.site-explore a:hover{background:var(--accent-soft);text-decoration:none}
+.site .section{scroll-margin-top:150px}
+.hero h1{max-width:13ch;text-wrap:balance}
+.hero .eyebrow{max-width:100%;line-height:1.5}
+.mock-bars span:nth-child(6n + 1){height:34%}.mock-bars span:nth-child(6n + 2){height:52%}
+.mock-bars span:nth-child(6n + 3){height:41%}.mock-bars span:nth-child(6n + 4){height:76%}
+.mock-bars span:nth-child(6n + 5){height:58%}.mock-bars span:nth-child(6n){height:92%}
+.receiving-options .card{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
+.receiving-options h3,.receiving-options p{margin:0}
+.receiving-options .link-btn{margin-top:auto;gap:8px;white-space:normal;text-align:left}
+.page-language{position:absolute;right:24px;top:20px;z-index:var(--z-nav)}
+.lamp-js .page-language{right:100px}
+.auth-heading{margin-bottom:12px}
+.auth-heading h1{margin:8px 0 0;text-wrap:balance}
+.auth .auth-card{min-width:0}
+.auth .label-row{gap:12px;flex-wrap:wrap}
+.password-control{position:relative;width:100%;min-width:0}
+.field .password-control input{padding-right:76px}
+.password-toggle{position:absolute;right:4px;top:50%;transform:translateY(-50%);min-height:var(--touch);min-width:64px;padding:6px 10px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--accent);font-size:var(--text-sm);font-weight:600;cursor:pointer}
+.password-toggle:hover{background:var(--accent-soft)}
+.auth .page-language .lang-switch{min-height:var(--touch)}
+@media (max-width:960px){.site-explore{display:block}.site-utility{justify-content:space-between}}
+@media (max-width:600px){.hero .row{display:grid;grid-template-columns:minmax(0,1fr)}.hero .row .btn{white-space:normal;text-align:center}.hero .trust{display:grid;gap:12px}.mock-activity b{overflow-wrap:anywhere}.auth:not(:has(.lamp)) .auth-main{padding-top:88px}}
+@media (max-width:360px){.site .nav{gap:8px}.site .nav-links .btn{padding:10px}.site .brand{font-size:18px}}
+
+/* Long translated navigation labels switch to the compact menu earlier. */
+@media (max-width:1120px){.site .nav-menu{display:none}.site .site-explore{display:block}.site .site-utility{justify-content:space-between}}
+
+/* Dashboard and payment-link workspace. Values remain server supplied. */
+.overview-tools{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.overview-tools p{margin:0}
+#homeSummary .summary-grid{grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr));align-items:center}
+#homeSummary .summary-available .kpi{font-size:clamp(30px,4vw,44px);line-height:1.2;letter-spacing:-.03em;overflow-wrap:anywhere}
+#homeAuto{display:inline-block;margin-top:10px;padding:4px 8px;border:1px solid var(--line);border-radius:var(--radius-sm);color:var(--text)}
+.home-actions > .btn:only-child{grid-column:1 / -1}
+.link-composer > summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;min-height:var(--touch);cursor:pointer;font-size:var(--text-lg);font-weight:600;list-style:none}
+.link-composer > summary::-webkit-details-marker{display:none}
+.link-composer > summary::after{content:"+";color:var(--accent);font-size:24px}
+.link-composer[open] > summary::after{content:"−"}
+.link-composer > summary .faint{font-weight:400;font-size:var(--text-sm);margin-left:auto}
+.link-composer-body{padding-top:var(--space-5);margin-top:var(--space-4);border-top:1px solid var(--line)}
+#linkRows .table-actions{white-space:normal}
+#linkRows .table-actions .btn{margin:3px 4px 3px 0}
+@media (max-width:720px){#homeSummary .summary-grid{grid-template-columns:1fr}.link-composer > summary .faint{flex-basis:100%;margin-left:0;order:2}}
+
+/* Payment history and withdrawal journey. */
+.history-pagination{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:16px;border-top:1px solid var(--line)}
+.history-pagination p{margin:0}
+.history-pagination .row{gap:8px}
+.withdraw-journey{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;list-style:none;margin:0;padding:0}
+.withdraw-journey li{display:flex;align-items:center;gap:12px;padding:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--muted);font-size:var(--text-sm)}
+.withdraw-journey strong{display:grid;place-items:center;flex-shrink:0;width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+.withdraw-history-head p{margin:8px 0 0}
+.payment-timeline{list-style:none;display:grid;gap:12px;margin:20px 0;padding:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface-2)}
+.payment-timeline li{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:var(--text-sm)}
+.payment-timeline span{color:var(--muted)}
+@media(max-width:720px){.withdraw-journey{grid-template-columns:1fr}.withdraw-journey li{padding:12px}.history-pagination .row{width:100%}.history-pagination .btn{flex:1}}
+
+/* Profile groups and credential management share the desk components. */
+.profile-sections{display:flex;gap:8px;flex-wrap:wrap}
+.profile-sections a{display:inline-flex;align-items:center;min-height:var(--touch);padding:8px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);color:var(--muted);font-size:var(--text-sm)}
+.profile-sections a:hover{border-color:var(--accent);color:var(--text);text-decoration:none}
+.profile-workspace{align-items:start}
+.profile-workspace .card-title{flex-wrap:wrap;gap:12px}
+.profile-address-list{margin:var(--space-5) 0;overflow:hidden}
+.profile-preferences{border-top:1px solid var(--line);padding-top:var(--space-4)}
+.profile-preferences summary{min-height:var(--touch);cursor:pointer;font-weight:600;line-height:1.5;padding:8px 0}
+.profile-preferences[open] summary{margin-bottom:12px}
+:is(#publicProfileCard,#savedUsdtCard,#receiveCard,#locationHost){scroll-margin-top:96px}
+.security-recovery{border-left:3px solid var(--accent)}
+.security-recovery p:last-child{margin-bottom:0}
+.passkey-list .pk-name{min-width:0;overflow-wrap:anywhere}
+.passkey-list .btn{flex-shrink:0}
+@media(max-width:520px){.profile-sections a{flex:1 1 40%;justify-content:center;text-align:center}.passkey-list li{flex-wrap:wrap}.passkey-list .pk-name{flex:1 1 160px}}
+
+/* Conversations and checkout feedback reuse the current palette. */
+.inbox-layout{display:grid;grid-template-columns:minmax(240px,.75fr) minmax(0,1.6fr);gap:16px;align-items:start}
+.inbox-accounts{min-width:0}
+.chat-card{min-width:0}
+.chat-card .card-title{flex-wrap:wrap;gap:12px}
+.conversation-log{min-height:180px;max-height:440px;padding:12px 0;overscroll-behavior:contain}
+.chat-message-meta{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:var(--faint);font-size:var(--text-xs);margin-bottom:6px}
+.message-body{white-space:pre-wrap;overflow-wrap:anywhere}
+.chat-composer{margin-top:16px}
+.chat-compose-actions{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.chat-compose-actions p{margin:0;max-width:52ch}
+.chat-feedback{min-height:1.5em;margin:12px 0 0;color:var(--muted);font-size:var(--text-sm)}
+.checkout #paymentCard{flex-direction:column}
+.checkout-currency-note{font-size:var(--text-sm);color:var(--muted);margin-bottom:8px}
+.invoice-sync{font-size:var(--text-sm);line-height:1.5;color:var(--muted);margin:12px 0 0;text-align:center}
+.invoice-sync[data-connection="interrupted"]{padding:10px 12px;background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn-line);border-radius:var(--radius-sm)}
+.checkout-review-note,.receipt-help{font-size:var(--text-sm);line-height:1.6;color:var(--muted);text-align:center;margin:12px 0 18px;overflow-wrap:anywhere}
+.payment-help-label{margin:0;font-weight:600}
+@media(max-width:1080px){.inbox-layout{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:520px){.chat-compose-actions .btn{width:100%}.conversation-log{max-height:360px}.msg,.msg-bubble{max-width:95%}}
+
+/* Store discovery and overview shortcuts. */
+.store-tools{max-width:520px;margin:0 auto 24px}.store-tools input{width:100%}.store-tools label{display:block;margin-bottom:8px}.overview-queues{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:20px}.overview-queues a{color:inherit}.store-grid .card{min-width:0;overflow-wrap:anywhere}
+
+/* Administrative review details use shared surface and type tokens. */
+.section-note{padding:0 20px;color:var(--muted)}
+.review-details{display:grid;gap:6px;min-width:180px;max-width:420px;white-space:normal;overflow-wrap:anywhere;text-align:left}
+.review-details dt{font-size:.85em;color:var(--muted)}.review-details dd{margin:0 0 6px}
+.table details summary{cursor:pointer;padding:10px 0;white-space:nowrap}.table details{max-width:420px}
+.forward-summary{display:flex;gap:16px;flex-wrap:wrap;margin-block:14px}
+
+.health-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+
+.guide-toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.guide-toolbar select{max-width:100%;flex:1;min-width:180px}.guide h3{scroll-margin-top:90px}
+
+/* Keep setting Save controls visible next to long translated fields. */
+#platformSettings .setting-controls,#platformSettingsAdvanced .setting-controls{width:60%;white-space:normal}
+.setting-editor{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.setting-editor>.input{flex:1 1 220px;min-width:0;width:auto;max-width:100%}
+.setting-editor>.btn{flex:0 0 auto}
+@media(max-width:720px){#platformSettings .setting-controls,#platformSettingsAdvanced .setting-controls{width:auto}.setting-editor>.input{flex-basis:100%}}
+
+@container(max-width:640px){.rtable td.table-actions>details{width:100%;max-width:100%}.rtable .review-details{min-width:0;max-width:100%;overflow-wrap:anywhere}}
+/* Invoice notices must not inherit the desk toast's top anchor. */
+.checkout #toast.float-toast{top:auto;right:auto;left:50%;width:max-content;max-width:calc(100vw - 32px);height:auto;min-height:0;bottom:max(24px,env(safe-area-inset-bottom))}
+@container(max-width:640px){.rtable td.table-actions>details{white-space:normal;min-width:0;overflow-wrap:anywhere}}
+@container(max-width:640px){.card.flush .table.rtable td.mono{max-width:none;white-space:normal;overflow:visible;text-overflow:clip}}
+#qrcode:has(.qr-fallback)+.qr-logo{display:none}

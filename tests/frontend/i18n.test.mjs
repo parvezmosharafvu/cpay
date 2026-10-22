@@ -39,3 +39,15 @@ test('Settings owner sections never use innerHTML', () => {
   assert.doesNotMatch(src, /innerHTML|outerHTML|insertAdjacentHTML|document\.write/);
   assert.match(read('admin.html'), /<script src="admin-owner-settings\.js/);
 });
+
+test('responsive table data-label translates to Bangla and restores English', () => {
+  const attributes = new Map([['data-label','Name']]);
+  const cell = { dataset: {}, closest: () => null, getAttribute: (a) => attributes.get(a) ?? null, setAttribute: (a,v) => attributes.set(a,v) };
+  const body = { nodeType: 1, dataset: {}, closest: () => null, getAttribute: () => null, querySelectorAll: () => [cell] };
+  const context = { window:{}, localStorage:{getItem:()=>null,setItem(){}}, CustomEvent:class{}, document:{readyState:'loading',addEventListener(){},body,documentElement:{},createTreeWalker:()=>({nextNode:()=>null}),dispatchEvent(){}}, NodeFilter:{SHOW_TEXT:4} };
+  vm.runInNewContext(read('i18n.js'),context);
+  context.window.cpayI18n.set('bn');
+  assert.equal(attributes.get('data-label'),'নাম');
+  context.window.cpayI18n.set('en');
+  assert.equal(attributes.get('data-label'),'Name');
+});

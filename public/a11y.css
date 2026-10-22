@@ -20,4 +20,4 @@
 .main .btn,.main input,.main select,.main textarea{
   min-height:44px;
 }
-.main .btn.sm{min-height:40px;padding:8px 12px}
+.main .btn.sm{min-height:44px;padding:8px 12px}

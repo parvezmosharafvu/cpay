@@ -137,7 +137,7 @@ test('the Freelancer desk has a Security tab for passkeys', () => {
   assert.ok(s.includes('data-tab="security"'));
   assert.ok(s.includes('<section id="security" hidden></section>'));
   const m = s.indexOf('src="mfa.js"');
-  assert.ok(m >= 0 && m < s.indexOf('src="admin-security.js"'), 'mfa.js before the Security UI');
+  assert.ok(m >= 0 && m < s.indexOf('src="admin-security.js'), 'mfa.js before the Security UI');
   // The admin-only rule (last passkey kept) does not apply on the Freelancer desk.
   assert.match(pub('admin-security.js'), /if \(adminDesk && keys\.length <= 1\)/);
 });

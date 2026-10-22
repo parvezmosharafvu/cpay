@@ -16,6 +16,18 @@ The correct connected project was independently resolved as `riumaeihemgznvgatto
 
 This evidence does **not** prove function-by-function authorization, exact production source SHA, verified passkey recovery, current wallet solvency, restore recoverability, or real reconciliation. No production database writes, financial operations or operational settings were changed. Release approval remains withheld until owner decisions and independent operational acceptance.
 
+## Pending production migration — forward-delete guard search path
+
+The review branch now includes Supabase CLI-generated migration
+`20261022051634_pin_forward_delete_guard_path.sql`, which pins the existing
+`public.payment_forwards_no_delete()` trigger's search path without altering
+its body or privileges. The database CI suite applies it on a disposable
+PostgreSQL stack and checks deletion remains prohibited. This **source fix is
+not deployed to CPAY's live Supabase project**; the live Advisor warning
+requires a separate approved migration deployment and post-deploy read-only
+verification. Existing release blockers, including Legal / Contact owner
+publication and the independent wallet/restore security checks, remain open.
+
 ## Verified locally
 
 | Area | Evidence | Limit |

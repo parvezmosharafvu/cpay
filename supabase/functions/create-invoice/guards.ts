@@ -35,7 +35,7 @@ export async function verifiedClientKey(headers: Headers, secret: string, nowMs 
   const ip = headers.get("x-cpay-client-ip")?.trim() ?? "";
   const timestamp = headers.get("x-cpay-ip-timestamp")?.trim() ?? "";
   const signature = headers.get("x-cpay-ip-signature")?.trim() ?? "";
-  if (!IP_LIKE.test(ip) || !/^\\d{10}$/.test(timestamp)
+  if (!IP_LIKE.test(ip) || !/^\d{10}$/.test(timestamp)
       || !/^[A-Za-z0-9_-]{43}$/.test(signature) || !Number.isFinite(nowMs)) return fallback;
   const seconds = Number(timestamp);
   if (!Number.isSafeInteger(seconds) || Math.abs(nowMs / 1000 - seconds) > 90) return fallback;
@@ -45,7 +45,7 @@ export async function verifiedClientKey(headers: Headers, secret: string, nowMs 
     const key = await crypto.subtle.importKey(
       "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"],
     );
-    const payload = new TextEncoder().encode(`cpay:create-invoice:ip:v1\\n${ip}\\n${timestamp}`);
+    const payload = new TextEncoder().encode(`cpay:create-invoice:ip:v1\n${ip}\n${timestamp}`);
     return await crypto.subtle.verify("HMAC", key, bytes, payload) ? `proxied:${ip}` : fallback;
   } catch {
     return fallback;

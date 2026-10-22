@@ -10,7 +10,7 @@ not a production-ready approval; the shared-cron blocker stays open.
 | ledger-backup | LEDGER_BACKUP_CRON_SECRET |
 | health | HEALTH_CRON_SECRET |
 | telegram-notify | TELEGRAM_NOTIFY_CRON_SECRET |
-| breez-wallet/cron/sync | BREEZ_WALLET_CRON_SECRET |
+| Wallet sync endpoint | BREEZ_WALLET_CRON_SECRET |
 
 Dedicated value takes full precedence over `CRON_SECRET`. Even an empty
 configured override blocks requests. Prior legacy callers cannot authenticate

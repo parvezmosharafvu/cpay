@@ -235,7 +235,7 @@ Git history and must be considered public.
 This review branch supports optional scoped credentials for `daily-report`
 (`DAILY_REPORT_CRON_SECRET`), `ledger-backup` (`LEDGER_BACKUP_CRON_SECRET`),
 `health` (`HEALTH_CRON_SECRET`), `telegram-notify`
-(`TELEGRAM_NOTIFY_CRON_SECRET`), and `breez-wallet`
+(`TELEGRAM_NOTIFY_CRON_SECRET`), and the standalone wallet sync endpoint
 (`BREEZ_WALLET_CRON_SECRET`). Each uses `CRON_SECRET` only when its dedicated
 variable is absent. Once a dedicated variable exists, even when empty, its
 endpoint rejects the old shared credential; a bad blank configuration fails

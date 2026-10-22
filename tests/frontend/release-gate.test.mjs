@@ -59,6 +59,25 @@ test('owner-accepted items are case-insensitive but need dated evidence', () => 
   assert.equal(pendingOwnerBlockers(md).length, 0);
 });
 
+test('High/Critical cannot be waived by an accepted or unknown status', () => {
+  const rows = [
+    '| A | High | accepted | Owner accepted 2026-10-22 (#10) |',
+    '| B | Critical | unknown | pending |',
+    '| C | Critical | closed | #11 |',
+    '| D | Medium | open | pending |',
+  ].join('\n');
+  assert.equal(openBlockers(rows).length, 2);
+});
+
+test('future and invalid owner-acceptance dates remain blocking', () => {
+  const today = Date.parse('2026-10-22T12:00:00+06:00');
+  const row = (date) => `| A | Medium | accepted | Owner accepted ${date} (#169) |`;
+  assert.equal(pendingOwnerBlockers(row('2026-10-22'), today).length, 0);
+  assert.equal(pendingOwnerBlockers(row('2026-10-23'), today).length, 1);
+  assert.equal(pendingOwnerBlockers(row('2026-02-30'), today).length, 1);
+  assert.equal(pendingOwnerBlockers(row('2026-10-22'), NaN).length, 1);
+});
+
 test('repository blockers file has no open Critical/High today', async () => {
   const { readFileSync } = await import('node:fs');
   assert.equal(openBlockers(readFileSync('docs/RELEASE-BLOCKERS.md', 'utf8')).length, 0);

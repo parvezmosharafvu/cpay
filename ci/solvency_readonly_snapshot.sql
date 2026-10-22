@@ -17,14 +17,14 @@ WITH
            coalesce(sum(greatest(coalesce(amount_requested, 0), 0)), 0) AS pending_usd,
            count(*) FILTER (WHERE amount_requested IS NULL OR amount_requested < 0) AS anomalous_count
     FROM public.withdrawals
-    WHERE status NOT IN ('paid', 'rejected', 'failed')
+    WHERE status IS NULL OR status NOT IN ('paid', 'rejected', 'failed')
   ),
   pending_forwards AS (
     SELECT count(*) AS pending_count,
            coalesce(sum(greatest(coalesce(amount_usd, 0), 0)), 0) AS pending_usd,
            count(*) FILTER (WHERE amount_usd IS NULL OR amount_usd < 0) AS anomalous_count
     FROM public.payment_forwards
-    WHERE status IN ('queued', 'sending', 'retry', 'owed')
+    -- Future/unknown states remain liabilities until explicitly reconciled.\n    WHERE status IS NULL OR status NOT IN ('forwarded', 'released')
   ),
   registered_wallets AS (
     SELECT count(*) FILTER (WHERE w.network = 'mainnet') AS mainnet_count,

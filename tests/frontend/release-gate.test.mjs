@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { latestDrill, drillProblem, openBlockers, isEntrypoint } from '../../scripts/release-gate.mjs';
+import { latestDrill, drillProblem, openBlockers, pendingOwnerBlockers, isEntrypoint } from '../../scripts/release-gate.mjs';
 import { mkdtempSync, writeFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -37,6 +37,28 @@ test('open Critical/High blockers are found, closed and Medium are not', () => {
   const md = '| A | High | open | x |\n| B | Critical | closed | y |\n| C | Medium | open | z |\n| D | critical | OPEN | w |';
   assert.equal(openBlockers(md).length, 2);
 });
+test('Medium owner blockers require a dated owner approval with an evidence link', () => {
+  const md = [
+    '| A | Medium | open | Owner decision |',
+    '| B | Medium | closed | #123 |',
+    '| C | Medium | accepted | Owner accepted 2026-10-22 (#169) |',
+    '| D | Medium | accepted | Maintainer accepted 2026-10-22 (#169) |',
+    '| E | Medium | accepted | Owner accepted 2026-10-22 |',
+    '| F | High | open | Owner accepted 2026-10-22 (#169) |',
+    '| Mention Medium in description | Low | open | other |',
+    '| G | Medium | unknown | Owner decision |',
+  ].join('\n');
+  const pending = pendingOwnerBlockers(md);
+  assert.equal(pending.length, 4);
+  for (const name of ['A', 'D', 'E', 'G']) assert.ok(pending.some((row) => row.startsWith(`| ${name} |`)));
+  assert.equal(openBlockers(md).length, 1);
+});
+
+test('owner-accepted items are case-insensitive but need dated evidence', () => {
+  const md = '| A | medium | ACCEPTED | Owner accepted on 2026-10-22 https://github.com/example/project/issues/1 |';
+  assert.equal(pendingOwnerBlockers(md).length, 0);
+});
+
 test('repository blockers file has no open Critical/High today', async () => {
   const { readFileSync } = await import('node:fs');
   assert.equal(openBlockers(readFileSync('docs/RELEASE-BLOCKERS.md', 'utf8')).length, 0);

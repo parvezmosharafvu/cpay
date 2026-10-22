@@ -48,7 +48,7 @@ test('older invoice links still open on the invoice page', async ({ page }) => {
   await expect(page.locator('#amountDue')).toContainText('5.00');
 });
 
-test('overview: actions on their own, one summary card without link cost, recent payments open details', async ({ page }) => {
+test('overview: balance summary first, separate actions, recent payments open details', async ({ page }) => {
   const u = await makeUser({ name: 'Overview Owner' });
   await db.query('update profiles set platform_fee_percent = 2 where id = $1', [u.id]);
   const slug = await makeLink(u.id, { name: 'Area Link' });
@@ -67,10 +67,10 @@ test('overview: actions on their own, one summary card without link cost, recent
   await expect(summary).toContainText('Platform fee');
   await expect(summary).not.toContainText(/link cost/i);
   await expect(summary.locator('button')).toHaveCount(0);
-  // Order: actions, then the summary, then recent payments.
+  // The redesigned overview leads with the balance, then actions and recent payments.
   const y = async (sel: string) => (await page.locator(sel).boundingBox())!.y;
-  expect(await y('#homeActions')).toBeLessThan(await y('#homeSummary'));
-  expect(await y('#homeSummary')).toBeLessThan(await y('#homeRecent'));
+  expect(await y('#homeSummary')).toBeLessThan(await y('#homeActions'));
+  expect(await y('#homeActions')).toBeLessThan(await y('#homeRecent'));
 
   await page.locator(`#recentPays [data-pay-id="${p.id}"]`).click();
   const d = page.locator('#payDetails');

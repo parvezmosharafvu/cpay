@@ -105,6 +105,23 @@ jobs:
           done
           echo "All migrations applied cleanly to an empty database."
 
+      - name: Read-only solvency evidence has explicit unverified verdict
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # CI uses disposable data. Never print a production solvency report
+          # to a public GitHub Actions log.
+          report=$(psql -h localhost -U postgres -v ON_ERROR_STOP=1 -A -t -f ci/solvency_readonly_snapshot.sql)
+          printf '%s' "$report" | jq -e '
+            .verdict == "UNVERIFIED"
+            and .liabilities_usd.accounts_checked >= 0
+            and .liabilities_usd.gross_claims_minimum >= 0
+            and .liabilities_usd.anomaly_count >= 0
+            and .wallet_evidence_sat.mainnet_wallet_count >= 0
+            and .wallet_evidence_sat.mainnet_wallets_without_usable_recent_report >= 0
+          ' >/dev/null
+          echo "Solvency evidence query is read-only, parseable and non-authorizing."
+
       - name: Forward delete guard survives pinned search_path (transaction rollback)
         env:
           PGPASSWORD: postgres

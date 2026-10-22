@@ -11,21 +11,31 @@
 //   6. legal pages published from Admin → Settings with every field filled (ci/check_legal.py --release)
 // Read-only: it never deploys anything. Usage:
 //   node scripts/release-gate.mjs [--sha <sha>] [--drill-max-days 90] [--skip-legal]
-// Exit 0 = GO for this SHA, 1 = refused (reasons printed).
+// --skip-legal is diagnostic only and always refuses release.\n// Exit 0 = GO for this SHA, 1 = refused (reasons printed).
 import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export function latestDrill(md) {
-  const rows = md.split('\n').filter((l) => /^\|\s*\d{4}-\d{2}-\d{2}/.test(l));
+  // Use the Result column only. A successful drill must not be inferred from
+  // the source/target description, and a later same-day failed drill wins.
   let best = null;
-  for (const r of rows) {
-    const date = r.match(/^\|\s*(\d{4}-\d{2}-\d{2})/)[1];
-    const pass = /\*\*Pass\.?\*\*|\|\s*Pass\b/i.test(r);
-    if (!best || date > best.date) best = { date, pass };
+  for (const row of md.split('\n')) {
+    const found = row.match(/^\|\s*(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}))?\s*\|/);
+    if (!found) continue;
+    const date = found[1];
+    const time = found[2] || '00:00';
+    const validTime = Number(time.slice(0, 2)) < 24 && Number(time.slice(3)) < 60;
+    const cells = row.trim().split('|').slice(1, -1).map((v) => v.trim());
+    const result = cells.length >= 5 ? cells[4] : '';
+    const pass = /^\*{0,2}Pass\b/i.test(result);
+    const key = `${date}T${time}`;
+    // Tie-break toward the later row: the log is append-only.
+    if (!best || key >= best.key) best = { key, date, pass, validTime };
   }
-  return best;
+  if (!best) return null;
+  return best.validTime ? { date: best.date, pass: best.pass } : { date: best.date, pass: false, invalidTime: true };
 }
 
 export function openBlockers(md) {
@@ -64,6 +74,7 @@ export function drillProblem(md, maxDays, nowMs = Date.now()) {
   if (!Number.isFinite(nowMs)) return 'invalid current time for restore drill check';
   const d = latestDrill(md);
   if (!d) return 'no restore drill recorded in docs/BACKUP-RECOVERY.md';
+  if (d.invalidTime) return `latest restore drill (${d.date}) has invalid time`;
   if (!d.pass) return `latest restore drill (${d.date}) did not pass`;
   const dateUTC = new Date(`${d.date}T00:00:00Z`);
   if (!Number.isFinite(dateUTC.getTime()) || dateUTC.toISOString().slice(0, 10) !== d.date) {
@@ -104,7 +115,10 @@ function main(argv) {
   if (blockers.length) fails.push(`${blockers.length} open Critical/High item(s) in docs/RELEASE-BLOCKERS.md`);
   const ownerBlockers = pendingOwnerBlockers(blockersDoc);
   if (ownerBlockers.length) fails.push(`${ownerBlockers.length} unresolved Medium owner item(s): close or record explicit owner acceptance (date + evidence link) in docs/RELEASE-BLOCKERS.md`);
-  if (!argv.includes('--skip-legal')) {
+  if (argv.includes('--skip-legal')) {
+    // Diagnostics only: bypassing this check must never yield RELEASE GATE PASSED.
+    fails.push('legal publication check skipped (--skip-legal is diagnostics only; production release refused)');
+  } else {
     try { sh('python3', ['ci/check_legal.py', '--release']); } catch { fails.push('legal pages not published: fill every legal field and turn on Publish in Admin → Settings (ci/check_legal.py --release)'); }
   }
   console.log(`checked: sha=origin/main, clean worktree, Verify, Workers Builds: cpay, restore drill, blockers${argv.includes('--skip-legal') ? '' : ', legal'}`);

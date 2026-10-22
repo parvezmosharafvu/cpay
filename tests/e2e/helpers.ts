@@ -96,8 +96,7 @@ export async function loginAdmin(page: Page, u: User) {
   await page.waitForURL(/admin\.html/);
 }
 
-/** Log-in and register show the form only after the lamp chain is pulled
- *  (public/lamp.js). Pull it unless the page already opened the form. */
+/** Forms start visible. Reopen the optional lamp if an earlier step hid it. */
 export async function openAuthForm(page: Page) {
   const chain = page.locator('#lampChain');
   if (!(await chain.count())) return;

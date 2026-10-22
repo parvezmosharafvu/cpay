@@ -92,8 +92,8 @@ a payment (headers can be spoofed).
 ## Auth (`20261021020000_passkey_step_up.sql`)
 
 - Sign-up/sign-in: email + password with **email verification**, or a
-  **passkey**. Google sign-in is removed. Authenticator codes (TOTP) are fully off since 2026-10-21 (enrol and verify; factors kept). New authenticator (TOTP) enrolment
-  is off; previously enrolled codes still verify during the switch-over.
+  **passkey**. Google sign-in is removed. Authenticator codes (TOTP) are fully off since 2026-10-21:
+  both enrolment and verification are disabled; stored factors are retained.
 - Daily figures use the Bangladesh calendar day, midnight to midnight Asia/Dhaka (`business_day()`, 20261021030000).
 - `public.strong_session()` = passkey session (or legacy aal2, kept as a fallback; unreachable now that TOTP verify is off). Required for
   admin actions, settings, withdrawals and payout-address changes.
@@ -128,3 +128,61 @@ More detail: [ARCHITECTURE.md](ARCHITECTURE.md), [AUTO-WITHDRAW.md](AUTO-WITHDRA
 [INSTANT-FORWARD.md](INSTANT-FORWARD.md), [PAYMENT-STATES.md](PAYMENT-STATES.md),
 [FINANCIAL-INVARIANTS.md](FINANCIAL-INVARIANTS.md), [DEPLOYMENT.md](DEPLOYMENT.md),
 [TESTING.md](TESTING.md).
+
+## Desk presentation (2026-10-22)
+
+The freelancer overview shows available balance and recent activity before
+the daily breakdown completes. Refresh/retry controls are read-only. If
+receiving settings cannot be loaded, the mode is shown as unavailable.
+Payment links have local search/status filters and a collapsible creation
+panel; filtering and confirmed live/off changes preserve its draft. These
+presentation changes do not change fees, balances or settlement rules.
+See [CORE-DESIGN-WORKLIST.md](CORE-DESIGN-WORKLIST.md) for implementation
+status and pending browser/production acceptance.
+
+Payment history uses the existing paginated RPC (50 records per page).
+Payment details show recorded timestamps, with read-only retries and
+stale-response guards. Withdrawal history refreshes independently of the
+quote form; it shows up to the latest 40 matching records. Withdrawal
+quote/confirm requests, amounts and passkey requirements are unchanged.
+
+Profile separates public information and private receiving settings, and
+reports receiving-mode read failures explicitly. Security provides read-only
+refresh and backup-passkey guidance; Add/Remove actions keep the existing
+strong-session and last-admin-key guards. Public form drafts are page-local
+only. Authentication and payout-address authorization are unchanged.
+
+Member support displays the newest 80 messages; Admin Inbox displays up to
+the newest 300, with drafts kept separately per selected account in page
+memory. Send/clear requests are not automatically retried. Checkout status
+read availability is displayed separately from payment status; receipt
+time is labelled as the time confirmation was observed by the page. These
+changes do not alter invoice creation, settlement or merchant themes.
+
+## Store and overview presentation — batch 7
+
+Store discovery filters only the already loaded public payment links. Search never creates an invoice. Read failures expose retry; sharing has cancellation and clipboard failure feedback. Merchant theme behavior is preserved. Admin overview reads have bounded waits and response guards; wallet availability does not block the activity boards. Unavailable balances and queues are distinct from zero and empty results. Review shortcuts lead to the existing administrative sections; payment calculations and protected mutation endpoints remain unchanged. Browser and live-service acceptance remain pending.
+
+## Administrative list and review presentation — batch 8
+
+Users and applications preserve search/status state through read refreshes, show explicit read failures and expose references in native details. Optional account reads may fail independently; unknown withdrawal settings are disabled rather than assumed. Application history uses the existing nullable status parameter; review actions appear only on waiting rows. Payout filters cover the latest 120 requests, and forward filters read up to 200 records for the selected status; both limits are visible. Forward search is local to loaded records and does not call a mutation. Existing payout step-up, confirmation prompts, monetary values and administrative endpoints remain. Busy state prevents duplicate application/payout decisions and serializes forward actions in their panels. These guards do not replace server authorization or transaction locking. Browser and live acceptance remain pending.
+
+## Wallet and Locations presentation — batch 9
+
+Platform wallet refresh reads balances, currency rates and history without submitting a quote or send. Failed balance reads clear stale figures; read completion time is separate from registry sync time. Owner registry refresh preserves the existing add-form DOM, shows sync details and removes stale lists on failure; mutation serialization supplements existing server constraints and passkey checks. Location filters preserve drafts and show format validation, bounded read failures, current-profile versus payment-date scope, and detail-list limits. Location references remain display only. No monetary formula, send implementation, schema or authorization rule was changed. Browser and live-service acceptance remain pending.
+
+## Health, audit and receipt review presentation — batch 10
+
+Health and System show partial-read failures independently, preserving successful snapshot evidence without interpreting an absent query as healthy or alert-free. Refreshes read existing endpoints; old responses cannot replace newer reads. Audit shows full references and labels its latest-120-row search scope. Receipt review shows full evidence in native details, labels its latest-200-record status scope and serializes each receipt decision while preserving the note prompt. Resolving/dismissing records an audited flag only; it does not move money. Shared CSS handles operational card layout and scrollable evidence tables. Browser and live backend acceptance remain pending.
+
+## Settings and owner guide presentation — batch 11
+
+Platform Settings preserves ordinary field drafts in memory and serializes its save operations, while read failures remain distinct from real zero-valued fees. Existing grouped owner sections, confirmation prompts, RPC contracts and step-up remain. Owner-config transport failures return explicit uncertainty and secret fields retain post-attempt clearing. Owner guide adds heading navigation and separate guide/status refreshes, with distinct unavailable, owner-only and weak-session feedback. The guide is still owner served; only secret names are displayed. Bangla quick-reference content and its generated function payload were rebuilt together. Live settings were not changed; browser/live acceptance and owner-guide deployment remain pending.
+
+## Wallet PWA workspace and owner-deferred legal input — batch 12
+
+Wallet PWA balances and activity have independent read status, bounded waits and guards against stale/locked-session responses. Local activity filters show loaded-record counts and complete references; pending send checks remain read-only. Receive copy has explicit fallback feedback. Send preparation/confirmation/outcome/retry code, recovery, engine, service worker and custody boundaries remain unchanged. Owner deferred Legal / Contact entry to the dashboard after project completion; publication is not approved by this source update. Wallet build is pending dependency installation, and browser/real-device/offline/live-wallet acceptance remains pending.
+
+## Local browser evidence — batch 13
+
+Public layouts/smoke and wallet browser suites now have local Chromium evidence recorded in [LOCAL-BROWSER-QA.md](LOCAL-BROWSER-QA.md). Login/register put the keyboard skip link before the language switch. The wallet real-SDK regtest build succeeds with locked dependencies installed. Signed-in section visual QA, Bengali typography, physical-device testing, live payment/authorization checks and release acceptance remain pending. No deployment or legal publication was performed.

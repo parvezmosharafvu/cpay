@@ -19,8 +19,15 @@
   const fmtSats = (n) => (n == null ? '-' : `${Number(n).toLocaleString('en-US')} sats`);
   const say = (m, ok) => (typeof window.toast === 'function' ? window.toast(m, ok) : null);
   let state = { owner: null, data: null };
+  let registryBusy = false;
+  let registryReadVersion = 0;
+  function busy(value) {
+    registryBusy = value;
+    document.getElementById('walletRegistry')?.querySelectorAll('button').forEach(b => { b.disabled = value; });
+  }
 
   const MESSAGES = {
+    uncertain: 'The result could not be confirmed. Refresh wallets before trying again.',
     duplicate_wallet: 'This wallet is already added.',
     seed_word_count: 'Enter exactly 12 words.',
     seed_unknown_word: 'One of the words is not a seed word. Check the spelling.',
@@ -43,7 +50,10 @@
   const msgOf = (code) => MESSAGES[code] || 'That did not work. Try again.';
 
   async function call(body) {
-    const { data, error } = await client().functions.invoke('wallet-registry', { body });
+    let result;
+    try { result = await client().functions.invoke('wallet-registry', { body }); }
+    catch { return { ok: false, code: 'uncertain' }; }
+    const { data, error } = result;
     if (!error) return { ok: true, data };
     let p = null;
     try { p = await error.context.json(); } catch (e) { p = null; }
@@ -89,6 +99,10 @@
     else if (w.synced_at) health.append(el('span', null, `Synced ${new Date(w.synced_at).toLocaleTimeString()}`));
     else health.append(el('span', 'faint', w.status === 'active' ? 'Waiting for first sync' : 'Not synced'));
     if (w.open_invoices || w.pending_sends) health.append(el('div', 'faint', `${w.open_invoices || 0} open invoices · ${w.pending_sends || 0} sends in progress`));
+    const detail = el('details'); detail.append(el('summary', null, 'Sync details'));
+    detail.append(el('p', 'faint', w.synced_at ? new Date(w.synced_at).toLocaleString() : 'No sync recorded'));
+    if (w.last_error) detail.append(el('p', 'err', w.last_error));
+    health.append(detail);
     tr.append(health);
     const id = el('td', 'mono');
     id.append(el('div', null, w.fingerprint ? `fp ${w.fingerprint}` : '-'));
@@ -113,22 +127,29 @@
   }
 
   async function act1(body, question) {
+    if (registryBusy) return;
     if (question && !window.confirm(question)) return;
-    const r = await call(body);
-    if (!r.ok) { say(msgOf(r.code)); return; }
-    say('Saved', true);
-    load();
+    busy(true);
+    try {
+      const r = await call(body);
+      if (!r.ok) { say(msgOf(r.code)); return; }
+      say('Saved', true); await load();
+    } finally { busy(false); }
   }
 
   async function remove(w) {
+    if (registryBusy) return;
     const typed = window.prompt(`To remove "${w.label}", type its name exactly. Its seed is deleted from the server; keep your own backup if you may need it.`);
     if (typed == null) return;
     if (typed !== w.label) { say(msgOf('confirmation_mismatch')); return; }
-    if (!(await passkey('Confirm with your passkey to remove a wallet.'))) return;
-    const r = await call({ action: 'remove', id: w.id, confirm: typed });
-    if (!r.ok) { say(msgOf(r.code)); return; }
-    say('Wallet removed', true);
-    load();
+    busy(true);
+    try {
+      if (!(await passkey('Confirm with your passkey to remove a wallet.'))) return;
+      const r = await call({ action: 'remove', id: w.id, confirm: typed });
+      if (!r.ok) { say(msgOf(r.code)); return; }
+      say('Wallet removed', true); await load();
+    } catch { say(msgOf('uncertain')); }
+    finally { busy(false); }
   }
 
   function addForm() {
@@ -157,6 +178,8 @@
       hint.className = code ? 'hint err' : 'hint ok';
     };
     go.onclick = async () => {
+      if (registryBusy || go.disabled) return;
+      busy(true);
       go.disabled = true;
       let value = seed.value;
       seed.value = ''; // cleared at once, whatever happens next
@@ -172,8 +195,9 @@
         name.value = '';
         say(`Wallet added (fingerprint ${r.data.wallet.fingerprint})`, true);
         load();
-      } finally {
+      } catch { say(msgOf('uncertain')); } finally {
         value = '';
+        busy(false);
         go.disabled = false;
       }
     };
@@ -182,6 +206,7 @@
   }
 
   function render(host) {
+    const existingForm = host.querySelector('[data-role="wallet-add"]');
     host.replaceChildren();
     const d = state.data;
     const card = el('div', 'card');
@@ -191,6 +216,7 @@
     h.append(el('p', 'faint', 'The primary wallet makes new invoices and pays forwards and withdrawals. Other active wallets are checked every minute, so payments to their earlier invoices still arrive.'));
     head.append(h);
     head.append(el('div', 'kpi', `Total ${fmtSats(d.total_balance_sat)}`));
+    const refresh = el('button', 'btn ghost', 'Refresh wallets'); refresh.type = 'button'; refresh.onclick = load; refresh.disabled = registryBusy; head.append(refresh);
     card.append(head);
     const table = el('table', 'table stack-sm');
     const thead = el('thead'); const hr = el('tr');
@@ -201,17 +227,28 @@
     table.append(thead, tb);
     const wrap = el('div', 'table-wrap'); wrap.append(table);
     card.append(wrap);
-    host.append(card, addForm());
+    host.append(card, existingForm || addForm());
+    busy(registryBusy);
   }
 
   async function load() {
     const host = document.getElementById('walletRegistry');
     if (!host) return;
-    const r = await call({ action: 'list' });
-    if (!r.ok) {
-      if (r.code === 'owner_only') { state.owner = false; host.remove(); return; }
-      host.replaceChildren(el('div', 'card', r.code === 'aal2_required' ? 'Sign in again with your passkey to manage wallets.' : 'Wallets did not load.'));
-      return;
+    const version = ++registryReadVersion;
+    let timer, r;
+    try { r = await Promise.race([call({ action: 'list' }), new Promise(resolve => { timer = setTimeout(() => resolve({ ok: false, code: 'read_timeout' }), 12000); })]); }
+    finally { clearTimeout(timer); }
+    if (version !== registryReadVersion) return;
+    if (!r.ok || !r.data) {
+      if (r.code === 'owner_only') { state.owner = false; state.data = null; host.remove(); return; }
+      state.data = null;
+      const form = host.querySelector('[data-role="wallet-add"]');
+      const card = el('div', 'card');
+      const message = el('p', 'err', r.code === 'aal2_required' ? 'Sign in again with your passkey to manage wallets.' : 'Wallets did not load.'); message.setAttribute('role','alert');
+      const retry = el('button', 'btn ghost', 'Refresh wallets'); retry.type = 'button'; retry.onclick = load; retry.disabled = registryBusy;
+      card.append(message, retry); host.replaceChildren(card);
+      if (form) host.append(form);
+      busy(registryBusy); return;
     }
     state.owner = true;
     state.data = r.data;

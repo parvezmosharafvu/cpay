@@ -24,7 +24,7 @@
 <meta name="twitter:description" content="An Individual or Business / Organization account: payment links, a storefront and USDT payouts.">
 <meta name="twitter:image" content="https://pay-cashapp.buzz/assets/og/og-home.png?v=4">
 <meta name="description" content="An Individual or Business / Organization account: payment links, a storefront and USDT payouts.">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=Noto+Sans+Bengali:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
 <link rel="stylesheet" href="a11y.css">
 <link rel="stylesheet" href="lamp.css">
@@ -34,6 +34,7 @@
 </head>
 <body class="auth split">
   <a class="skip-link" href="#registerCard">Skip to form</a>
+  <div class="page-language" data-language-switch></div>
   <svg class="sr-only" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
   <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
@@ -74,7 +75,7 @@
       <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
       <div>
         <h2>Start getting paid in Lightning</h2>
-        <p>Payment links with a US dollar balance held by CPAY, and USDT withdrawals to an address you save.</p>
+        <p>Payment links with Auto withdraw to a saved address, or a balance held by CPAY.</p>
         <ul class="ticks"><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Payment links and a public store page</li><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Individual or Business / Organization accounts</li><li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>An admin reviews every new account</li></ul>
       </div>
       <p class="faint">Your CPAY balance is held by CPAY. Payments are sent over the Bitcoin Lightning Network.</p>
@@ -90,15 +91,15 @@
         <path class="shade" d="M80 40h80l30 76H50z"/>
         <ellipse class="shade-inner" cx="120" cy="116" rx="70" ry="5"/>
       </svg>
-      <button class="lamp-chain" id="lampChain" type="button" aria-pressed="false" aria-controls="registerCard" aria-label="Turn on the light to sign in"><span class="chain-line" aria-hidden="true"></span><span class="chain-knob" aria-hidden="true"></span></button>
-      <p class="lamp-hint" aria-hidden="true">Pull the chain to sign in</p>
+      <button class="lamp-chain" id="lampChain" type="button" aria-pressed="true" aria-controls="registerCard" aria-label="Show or hide the form"><span class="chain-line" aria-hidden="true"></span><span class="chain-knob" aria-hidden="true"></span></button>
+      <p class="lamp-hint" aria-hidden="true">Pull to switch the form light</p>
     </div>
     <main class="auth-card">
     <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
-    <div class="card" id="registerCard">
+    <div class="card" id="registerCard" tabindex="-1">
       <div id="formState">
-        <h1>Open a CPAY account</h1>
-        <p class="sub">Payment links, a storefront and USDT payouts, for yourself or for a business.</p>
+        <div class="auth-heading"><span class="kicker">Get started</span><h1>Open a CPAY account</h1></div>
+        <p class="sub">Payment links for yourself or your business. Confirm your email, then wait for admin approval.</p>
         <fieldset class="choice" id="accountType">
           <legend>Account type</legend>
           <label class="choice-opt"><input type="radio" name="accountType" value="individual" checked><span><strong>Individual</strong><span class="faint">You, under your own name</span></span></label>
@@ -106,8 +107,8 @@
         </fieldset>
         <div class="field" id="businessField" hidden><label for="businessName">Business or organization name</label><input id="businessName" autocomplete="organization" maxlength="120" aria-describedby="businessHint"><p class="hint" id="businessHint">Shown to the admin who reviews your account.</p></div>
         <div class="field"><label for="displayName">Display name</label><input id="displayName" autocomplete="name"></div>
-        <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" inputmode="email" required></div>
-        <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="new-password" aria-describedby="passwordHint" placeholder="At least 8 characters" minlength="8" required></div>
+        <div class="field"><label for="email">Email</label><input id="email" data-enter-submit="submitBtn" type="email" autocomplete="email" inputmode="email" required></div>
+        <div class="field"><label for="password">Password</label><input id="password" data-enter-submit="submitBtn" type="password" autocomplete="new-password" aria-describedby="passwordHint" placeholder="At least 8 characters" minlength="8" required></div>
         <p class="hint" id="passwordHint">At least 8 characters. We send a link to confirm your email.</p>
         <div id="captchaBox" class="captcha-box"></div>
         <button class="btn primary block lg" id="submitBtn" type="button">Create account</button>
@@ -126,6 +127,8 @@
   </main>
     </div>
   </div>
+<script src="i18n.js?v=3"></script>
+<script src="auth-ui.js?v=1"></script>
 <script>
 // Individual or Business / Organization (CPAY design artifacts). The type
 // is recorded on the profile at sign-up and grants nothing by itself.

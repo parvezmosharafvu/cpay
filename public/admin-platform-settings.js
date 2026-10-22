@@ -36,6 +36,23 @@
   const LIST_KINDS = ['hosts', 'strings', 'uuids'];
   const NUM_KINDS = ['money', 'days', 'sats', 'percent', 'attempts'];
 
+  const drafts = new Map();
+  let saving = false;
+  async function commit(write, statusEl) {
+    if (saving) return false;
+    saving = true;
+    const controls = [...document.querySelectorAll('#platformSettings button, #platformSettingsAdvanced button')];
+    const disabled = controls.map(b => b.disabled);
+    controls.forEach(b => { b.disabled = true; });
+    statusEl.textContent = 'Saving…'; statusEl.className = 'faint';
+    try {
+      const { error } = await write();
+      if (error) throw error;
+      statusEl.textContent = 'Saved'; statusEl.className = 'ok'; return true;
+    } catch (error) {
+      statusEl.textContent = error.message || 'Save could not be confirmed. Refresh before trying again.'; statusEl.className = 'err'; return false;
+    } finally { saving = false; controls.forEach((b,i) => { b.disabled = disabled[i]; }); }
+  }
   function show(row) {
     const v = row.value;
     if (row.kind === 'boolean') return v === true ? 'On' : 'Off';
@@ -58,6 +75,7 @@
     let cur = row.value;
     if (LIST_KINDS.includes(row.kind)) cur = (cur || []).join('\n');
     else if (cur === null) cur = '';
+    if (drafts.has(row.key)) cur = drafts.get(row.key);
     const field = LIST_KINDS.includes(row.kind)
       ? `<textarea class="input" id="${id}" rows="2" aria-label="${esc(row.label)}" placeholder="One per line">${esc(cur)}</textarea>`
       : `<input class="input" id="${id}" aria-label="${esc(row.label)}" value="${esc(cur)}" ${row.kind === 'date_or_empty' ? 'placeholder="YYYY-MM-DD"' : ''}>`;
@@ -77,25 +95,25 @@
 
   async function save(row, value, statusEl, shown) {
     if (row.dangerous && !window.confirm(confirmText(row, shown ?? (CHOICES[row.key] ? show({ ...row, value }) : value)))) return;
-    statusEl.textContent = 'Saving…';
-    const { error } = await client.rpc('admin_set_platform_setting', { p_key: row.key, p_value: value });
-    if (error) { statusEl.textContent = error.message; statusEl.className = 'err'; return; }
-    statusEl.textContent = 'Saved'; statusEl.className = 'ok';
-    render();
+    const before = drafts.get(row.key);
+    if (await commit(() => client.rpc('admin_set_platform_setting', { p_key: row.key, p_value: value }), statusEl)) {
+      if (drafts.get(row.key) === before) drafts.delete(row.key);
+      render();
+    }
   }
 
   async function renderAudit() {
     const el = document.getElementById('platformSettingsAudit');
     if (!el) return;
-    const { data, error } = await client.rpc('admin_audit_log', { p_limit: 30, p_offset: 0, p_action: 'settings.platform' });
-    if (error) { el.innerHTML = `<p class="err" role="alert">${esc(error.message)}</p>`; return; }
+    const { data, error } = await adminPanelRead(() => client.rpc('admin_audit_log', { p_limit: 30, p_offset: 0, p_action: 'settings.platform' }));
+    if (error) { adminPanelError(el, error.message, render); return; }
     const rows = (data || []).map((a) => `<tr><td>${esc(new Date(a.occurred_at).toLocaleString())}</td><td>${esc(a.actor_email)}</td><td class="mono">${esc(a.subject_id)}</td><td class="mono">${esc(JSON.stringify(a.old_value?.value ?? null))}</td><td class="mono">${esc(JSON.stringify(a.new_value?.value ?? null))}</td></tr>`).join('');
     el.innerHTML = `<h3>Settings changes</h3><div class="card flush"><table class="table"><thead><tr><th>When</th><th>Who</th><th>Setting</th><th>From</th><th>To</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="empty">No changes yet</td></tr>'}</tbody></table></div>`;
   }
 
   function rowHtml(r) {
     return `<tr><td>${r.dangerous ? '⚠ ' : ''}${esc(r.label)}<div class="faint">Now: ${esc(show(r))}${r.updated_at ? ` · changed ${esc(new Date(r.updated_at).toLocaleString())} by ${esc(r.updated_by_email || '?')}` : ' · default'}</div><div class="faint" data-ps-status="${r.key}" role="status"></div></td>
-      <td class="num" style="white-space:nowrap">${editor(r)}</td></tr>`;
+      <td class="setting-controls"><div class="setting-editor">${editor(r)}</div></td></tr>`;
   }
   function groupsHtml(groups, byKey) {
     return groups.map(([title, keys]) => `<h3>${esc(title)}</h3><div class="card flush"><table class="table"><tbody>${keys.filter((k) => byKey[k]).map((k) => rowHtml(byKey[k])).join('')}</tbody></table></div>`).join('');
@@ -127,27 +145,29 @@
         ? 'Turn auto withdraw on for everyone without their own setting? New payments will be sent to their saved address.'
         : 'Turn auto withdraw off for everyone without their own setting? New payments will be added to their balance, and waiting sends go back to their balance.';
       if (!window.confirm(msg)) return;
-      st.textContent = 'Saving…'; st.className = 'faint';
-      const { error: e } = await client.rpc('admin_set_auto_withdraw_global', { p_on: on });
-      if (e) { st.textContent = e.message; st.className = 'err'; return; }
-      render();
+      if (await commit(() => client.rpc('admin_set_auto_withdraw_global', { p_on: on }), st)) render();
     };
     const on = el.querySelector('#awOn'); const off = el.querySelector('#awOff');
     if (on) on.onclick = () => go(true);
     if (off) off.onclick = () => go(false);
   }
   async function feeHtml() {
-    const { data } = await client.from('app_settings').select('value').eq('key', 'default_platform_fee_percent').maybeSingle();
+    const { data, error } = await adminPanelRead(() => client.from('app_settings').select('value').eq('key', 'default_platform_fee_percent').maybeSingle());
+    if (error || !data) return '<div class="card"><p class="err" role="alert">Platform fee unavailable. Refresh settings to try again.</p></div>';
     const v = data?.value;
     const pct = Number((v && typeof v === 'object' ? v.percent : v) ?? 0);
     return `<h3>Platform fee</h3>
       <div class="card"><p class="muted">CPAY’s fee on each payment, in Balance and Instant forward modes. An account’s own fee (Manage users) wins over this.</p>
-        <div class="field short"><label for="psFee">Fee %</label><input id="psFee" type="number" min="0" max="90" step="0.1" value="${pct}"></div>
+        <div class="field short"><label for="psFee">Fee %</label><input id="psFee" type="number" min="0" max="90" step="0.1" value="${esc(drafts.has('platform-fee') ? drafts.get('platform-fee') : pct)}"></div>
         <button class="btn primary sm" id="psFeeSave">Save fee</button>
         <div class="faint" id="psFeeStatus" role="status"></div></div>`;
   }
 
   function wire(el, byKey) {
+    for (const key of Object.keys(byKey)) {
+      const input = document.getElementById('ps_' + key);
+      if (input) input.oninput = () => drafts.set(key, input.value);
+    }
     el.querySelectorAll('[data-ps-key]').forEach((b) => {
       b.onclick = () => {
         const row = byKey[b.dataset.psKey];
@@ -164,14 +184,14 @@
   let seq = 0;
   async function render() {
     const el = host();
-    if (!el || !client) return;
+    if (!el || !client || saving) return;
     const mine = ++seq;
-    const { data, error } = await client.rpc('admin_platform_settings');
+    const { data, error } = await adminPanelRead(() => client.rpc('admin_platform_settings'));
     const fee = error ? '' : await feeHtml();
     if (mine !== seq) return;  // a newer render is under way
-    if (error) { el.innerHTML = `<p class="err" role="alert">${esc(error.message)}</p>`; return; }
+    if (error) { adminPanelError(el, error.message, render); return; }
     const byKey = Object.fromEntries((data || []).map((r) => [r.key, r]));
-    el.innerHTML = `<h2>Settings</h2>
+    el.innerHTML = `<div class="card-head"><h2>Settings</h2><button id="psRefresh" type="button" class="btn ghost">Refresh settings</button></div><p class="faint">Edits stay in this page until saved. Each Save changes only its own setting.</p>
       <p class="muted">Changes need two-step sign-in and are recorded below. Settings marked ⚠ ask for confirmation.</p>
       ${modeHtml(byKey.payment_mode)}
       ${fee}
@@ -179,15 +199,17 @@
       <div id="platformSettingsAudit"></div>`;
     wire(el, byKey);
     wireMode(el);
-    document.getElementById('psFeeSave').onclick = async () => {
+    document.getElementById('psRefresh').onclick = render;
+    const feeInput = document.getElementById('psFee');
+    if (feeInput) feeInput.oninput = () => drafts.set('platform-fee', feeInput.value);
+    const feeSave = document.getElementById('psFeeSave');
+    if (feeSave) feeSave.onclick = async () => {
       const st = document.getElementById('psFeeStatus');
       const raw = String(document.getElementById('psFee').value ?? '').trim();
       const n = Number(raw);
       if (!/^\d+(\.\d{1,3})?$/.test(raw) || n > 90) { st.textContent = 'Enter a number from 0 to 90'; st.className = 'err'; return; }
       if (!window.confirm(`Set the platform fee to ${n}% for every account without its own fee? This is recorded in the audit log.`)) return;
-      st.textContent = 'Saving…';
-      const { error: e } = await client.rpc('admin_set_default_platform_fee', { p_percent: n });
-      st.textContent = e ? e.message : 'Saved'; st.className = e ? 'err' : 'ok';
+      if (await commit(() => client.rpc('admin_set_default_platform_fee', { p_percent: n }), st) && drafts.get('platform-fee') === raw) drafts.delete('platform-fee');
     };
     const adv = document.getElementById('platformSettingsAdvanced');
     if (adv) { adv.innerHTML = groupsHtml(ADVANCED, byKey); wire(adv, byKey); }

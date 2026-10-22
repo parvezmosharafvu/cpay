@@ -15,11 +15,17 @@
   ];
   let result = null;   // { ok, html } | { ok:false, code }
   let shown = false;
+  let sequence = 0;
+  let statusVersion = 0;
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 
   async function fetchGuide() {
     if (!client) return { ok: false, code: 'no_client' };
-    const { data, error } = await client.functions.invoke('owner-guide', { method: 'GET' });
+    let response, timer;
+    try { response = await Promise.race([client.functions.invoke('owner-guide', { method: 'GET' }), new Promise(resolve => { timer = setTimeout(() => resolve({ error: { message: 'unavailable' } }), 12000); })]); }
+    catch { return { ok: false, code: 'unavailable' }; }
+    finally { clearTimeout(timer); }
+    const { data, error } = response;
     if (!error && data && typeof data.html === 'string') return { ok: true, html: data.html };
     let code = null;
     try { code = (await error.context.json()).code; } catch (e) { code = null; }
@@ -27,9 +33,11 @@
   }
 
   async function status(box) {
+    const version = ++statusVersion;
     box.replaceChildren(el('p', 'faint', 'Secret-এর অবস্থা দেখা হচ্ছে…'));
     let data = null;
-    try { const r = await client.functions.invoke('owner-config', { method: 'GET' }); if (!r.error) data = r.data; } catch (e) { data = null; }
+    try { const r = await adminPanelRead(() => client.functions.invoke('owner-config', { method: 'GET' })); if (!r.error) data = r.data; } catch (e) { data = null; }
+    if (version !== statusVersion) return;
     if (!data || !data.supabase || !data.supabase.ready) {
       box.replaceChildren(el('p', 'faint', 'Secret-এর অবস্থা এখন দেখা যাচ্ছে না (CPAY_SUPABASE_ACCESS_TOKEN নেই, বা আবার passkey দিয়ে sign in করুন)।'));
       return;
@@ -48,10 +56,14 @@
   async function render() {
     const host = document.getElementById('guide');
     if (!host || shown) return;
-    if (!result || !result.ok) result = await fetchGuide();
+    const version = ++sequence;
+    if (!result || !result.ok) { const next = await fetchGuide(); if (version !== sequence) return; result = next; }
     if (!result.ok) {
-      host.replaceChildren(el('p', 'err', result.code === 'aal2_required'
-        ? 'গাইড দেখতে passkey দিয়ে আবার sign in করুন।' : 'এই গাইড শুধু owner দেখতে পারেন।'));
+      const message = result.code === 'aal2_required' ? 'গাইড দেখতে passkey দিয়ে আবার sign in করুন।'
+        : result.code === 'owner_only' ? 'এই গাইড শুধু owner দেখতে পারেন।' : 'গাইড এখন লোড হয়নি। আবার চেষ্টা করুন।';
+      const retry = el('button', 'btn ghost', 'আবার চেষ্টা করুন'); retry.type = 'button';
+      retry.onclick = () => { result = null; shown = false; render(); };
+      host.replaceChildren(el('p', 'err', message), retry);
       return;
     }
     const tpl = document.createElement('template');
@@ -60,7 +72,18 @@
     const box = el('div', 'card guide-status');
     const card = el('div', 'card guide');
     card.append(tpl.content);
-    host.replaceChildren(box, card);
+    const toolbar = el('div', 'card guide-toolbar');
+    const label = el('label', null, 'অংশ বেছে নিন'); label.htmlFor = 'guideJump';
+    const jump = el('select'); jump.id = 'guideJump';
+    jump.append(el('option', null, 'অংশ বেছে নিন'));
+    const headings = [...card.querySelectorAll('h3')];
+    headings.forEach((heading, i) => { heading.id = 'guide-section-' + i; const option = el('option', null, heading.textContent); option.value = heading.id; jump.append(option); });
+    jump.onchange = () => { const target = document.getElementById(jump.value); if (target) { target.setAttribute('tabindex','-1'); target.focus({ preventScroll: true }); target.scrollIntoView({ behavior:'smooth', block:'start' }); } };
+    const refresh = el('button', 'btn ghost', 'গাইড রিফ্রেশ করুন'); refresh.type = 'button';
+    refresh.onclick = () => { result = null; shown = false; render(); };
+    const refreshStatus = el('button', 'btn ghost', 'অবস্থা রিফ্রেশ করুন'); refreshStatus.type = 'button'; refreshStatus.onclick = () => status(box);
+    toolbar.append(label, jump, refresh, refreshStatus);
+    host.replaceChildren(toolbar, box, card);
     shown = true;
     card.addEventListener('click', (e) => {
       const a = e.target.closest && e.target.closest('a[href^="#guide-"]');
@@ -75,11 +98,14 @@
   // Show the button only to the owner (200, or 403 aal2_required which the
   // function returns only after the owner check passed).
   async function probe() {
-    result = await fetchGuide();
+    const version = ++sequence;
+    const next = await fetchGuide();
+    if (version !== sequence) return;
+    result = next;
     const btn = document.querySelector('.navi[data-tab="guide"]');
     const owner = result.ok || result.code === 'aal2_required';
     if (btn) btn.hidden = !owner;
-    if (!owner) { const s = document.getElementById('guide'); if (s) s.replaceChildren(); if (location.hash === '#guide') location.hash = '#home'; }
+    if (!owner && result.code === 'owner_only') { const s = document.getElementById('guide'); if (s) s.replaceChildren(); if (location.hash === '#guide') location.hash = '#home'; }
     else if (location.hash === '#guide') render();
   }
   document.addEventListener('click', (e) => {

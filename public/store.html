@@ -29,17 +29,31 @@
     <p id="bio" class="faint"></p>
     <button id="share" class="btn ghost store-share" type="button" hidden>Share store</button>
   </section>
+  <div class="store-tools" id="store-tools" hidden>
+    <label for="store-search">Find a payment option</label>
+    <input id="store-search" type="search" placeholder="Search by name or link" autocomplete="off">
+    <p id="store-count" class="faint" role="status"></p>
+  </div>
+  <p id="share-status" class="faint" role="status"></p>
   <section id="grid" class="store-grid" aria-label="Payment options"></section>
   <div id="state" class="store-empty" role="status">Loading storefront…</div>
+  <button id="store-retry" type="button" class="btn ghost" hidden>Try again</button>
   <footer class="site store-foot">Powered by CPAY</footer>
 </main>
 <script>
 const sb=window.supabaseClient,params=new URLSearchParams(location.search),uid=params.get('u');
 const [avatar,name,tagline,bio,share,grid,state]=['avatar','name','tagline','bio','share','grid','state'].map(id=>document.getElementById(id));
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-(async()=>{
+const retry=document.getElementById('store-retry');
+retry.onclick=loadStore;
+async function loadStore(){
+  retry.hidden=true;
+  state.textContent='Loading storefront…';
+  let timer;
+  try{
   if(!uid){useNavyState();state.textContent='Store not found.';avatar.classList.remove('skeleton','avatar');avatar.textContent='?';name.textContent='Store not found';tagline.textContent='';return}
-  const {data,error}=await sb.rpc('get_public_store',{p_user_id:uid});
+  const {data,error}=await Promise.race([sb.rpc('get_public_store',{p_user_id:uid}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Store read timed out')),15000)})]);
+  if(error)throw error;
   if(error||!data?.length){useNavyState();state.textContent='Store not found or unavailable.';avatar.classList.remove('skeleton','avatar');avatar.textContent='?';name.textContent='Unavailable';tagline.textContent='';return}
   const r=data[0];
   document.title=(r.display_name||'CPAY freelancer')+' · CPAY';
@@ -54,10 +68,35 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
   else avatar.textContent=(r.display_name||'$').trim().charAt(0).toUpperCase()||'$';
   const links=Array.isArray(r.links)?r.links:[];
   state.style.display='none';
-  grid.innerHTML=links.length?links.map(l=>`<article class="card"><h3>${esc(l.display_name||l.slug)}</h3><div class="faint mono">/${esc(l.slug)}</div><a class="btn primary block" href="/${encodeURIComponent(l.slug)}">${esc(r.cta||'Pay now')}</a></article>`).join(''):'<div class="store-empty">No active payment links yet.</div>';
+  const search=document.getElementById('store-search');
+  document.getElementById('store-tools').hidden=false;
+  const renderLinks=()=>{
+    const query=search.value.trim().toLowerCase();
+    const found=links.filter(l=>String(l.display_name||'').toLowerCase().includes(query)||String(l.slug||'').toLowerCase().includes(query));
+    document.getElementById('store-count').textContent=found.length+' / '+links.length+' payment options';
+    grid.innerHTML=found.map(l=>`<article class="card"><h3>${esc(l.display_name||l.slug)}</h3><div class="faint mono">/${esc(l.slug)}</div><a class="btn primary block" href="/${encodeURIComponent(l.slug)}">${esc(r.cta||'Pay now')}</a></article>`).join('');
+    state.style.display=found.length?'none':'block';
+    state.textContent=links.length?'No matching payment options. Try another search.':'No active payment links yet.';
+  };
+  search.oninput=renderLinks;renderLinks();
   share.hidden=false;
-  share.onclick=async()=>{const url=location.href;if(navigator.share)try{await navigator.share({title:r.display_name||'CPAY Store',text:r.tagline||'Payment options',url})}catch{}else{try{await navigator.clipboard.writeText(url);share.textContent='Store link copied';setTimeout(()=>share.textContent='Share store',1800)}catch{}}};
-})();
+  share.onclick=async()=>{
+    if(share.disabled)return;
+    share.disabled=true;
+    const status=document.getElementById('share-status');status.textContent='';
+    try{
+      if(navigator.share){try{await navigator.share({title:r.display_name||'CPAY Store',text:r.tagline||'Payment options',url:location.href});return}catch(e){if(e.name==='AbortError')return}}
+      await navigator.clipboard.writeText(location.href);status.textContent='Store link copied';
+    }catch{status.textContent='Copy the store link from your address bar.'}
+    finally{share.disabled=false}
+  };
+  }catch{
+    useNavyState();avatar.classList.remove('skeleton','avatar');avatar.textContent='?';
+    name.textContent='Store unavailable';tagline.textContent='';
+    state.style.display='block';state.textContent='Could not load this store. Try again.';retry.hidden=false;
+  }finally{clearTimeout(timer)}
+}
+loadStore();
 </script>
 </body>
 </html>

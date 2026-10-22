@@ -205,10 +205,10 @@ function withdrawForm(whoHtml){
       <div class="field" id="wNetField"><label for="wNet">Send to</label><select id="wNet"></select></div>
       <div class="field" id="wAmtField"><label for="wAmt">Amount (USD)</label><input id="wAmt" type="number" min="1" step="0.01" inputmode="decimal" placeholder="0.00">
         <button type="button" class="btn ghost sm" id="wAll">Withdraw all</button></div>
-      <div class="field"><label for="wDest" id="wDestLabel">USDT address</label><input id="wDest" autocomplete="off" spellcheck="false"></div>
+      <div class="field"><label for="wDest" id="wDestLabel">USDT address</label><input id="wDest" autocomplete="off" spellcheck="false" aria-describedby="wHint"></div>
       <p class="hint" id="wHint"></p>
     </div>
-    <aside class="card summary" aria-live="polite">
+    <aside class="card summary" aria-live="polite" aria-label="Withdrawal quote">
       <h3>Review</h3>
       <dl>
         <div><dt>Network</dt><dd id="sumMethod">-</dd></div>

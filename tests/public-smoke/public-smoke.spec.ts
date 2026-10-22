@@ -47,7 +47,7 @@ test('payment slug page keeps loading and retry controls (JS off)', async ({ bro
 
 test('login form has 44px touch targets', async ({ page }) => {
   await page.goto('/login.html', { waitUntil: 'domcontentloaded' });
-  await page.locator('#lampChain').click();
+  await expect(page.locator('#lampChain')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('main.auth-card')).not.toHaveAttribute('inert', '');
   const chain = await page.locator('#lampChain').boundingBox();
   expect(chain!.height).toBeGreaterThanOrEqual(44);
@@ -118,18 +118,21 @@ test('freelancer desk has no Download wallet link and keeps its tabs', async ({ 
 });
 
 // Pull-chain lamp (public/lamp.js): the form shows only after the chain is
-// pulled, stays in the DOM (inert while off), and shows without JS.
+// toggled; it starts open, stays in the DOM (inert while off), and shows without JS.
 for (const p of [{ path: '/login.html', card: 'loginCard' }, { path: '/register.html', card: 'registerCard' }]) {
   test(`lamp on ${p.path}: chain is a real toggle button; click, keyboard and drag`, async ({ page }) => {
     await page.goto(p.path, { waitUntil: 'domcontentloaded' });
     const chain = page.locator('#lampChain');
     const card = page.locator('main.auth-card');
-    await expect(chain).toHaveAttribute('aria-pressed', 'false');
+    await expect(chain).toHaveAttribute('aria-pressed', 'true');
     await expect(chain).toHaveAttribute('aria-controls', p.card);
-    await expect(chain).toHaveAttribute('aria-label', 'Turn on the light to sign in');
-    await expect(card).toHaveAttribute('inert', '');
-    await expect(card).toHaveAttribute('aria-hidden', 'true');
+    await expect(chain).toHaveAttribute('aria-label', 'Show or hide the form');
+    await expect(card).not.toHaveAttribute('inert', '');
+    await expect(card).not.toHaveAttribute('aria-hidden', 'true');
     await expect(page.locator(`#${p.card}`)).toHaveCount(1);
+    await chain.click();
+    await expect(chain).toHaveAttribute('aria-pressed', 'false');
+    await expect(card).toHaveAttribute('inert', '');
     await chain.click();
     await expect(chain).toHaveAttribute('aria-pressed', 'true');
     await expect(card).not.toHaveAttribute('inert', '');
@@ -180,7 +183,6 @@ test('lamp on a phone: lamp above the card, chain at least 44px', async ({ brows
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   const page = await context.newPage();
   await page.goto('/login.html', { waitUntil: 'domcontentloaded' });
-  await page.locator('#lampChain').tap();
   await expect(page.locator('#lampChain')).toHaveAttribute('aria-pressed', 'true');
   const lamp = (await page.locator('[data-lamp]').boundingBox())!;
   const card = (await page.locator('#loginCard').boundingBox())!;

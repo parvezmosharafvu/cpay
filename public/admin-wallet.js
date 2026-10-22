@@ -100,16 +100,31 @@ function renderBalance() {
   const cur = walletState.fiat.find((c) => c.id === walletState.currency);
   $w('wbSats').textContent = sats(i.balanceSats);
   $w('wbUsd').textContent = i.balanceUsd != null ? `${money(i.balanceUsd)} at the wallet rate` : (i.rateError || 'No rate');
-  $w('wbOwed').textContent = money(i.owedToCreatorsUsd);
+  $w('wbOwed').textContent = i.owedToCreatorsUsd == null ? '—' : money(i.owedToCreatorsUsd);
   $w('wbOwedSats').textContent = i.owedToCreatorsSat != null ? `${sats(i.owedToCreatorsSat)} held for freelancers` : '';
   $w('wbSpend').textContent = sats(i.spendableSat);
   $w('wbRate').textContent = cur?.btcRate ? `${fiatValue(1e8, cur)}` : (i.btcUsdRate ? `$${Number(i.btcUsdRate).toLocaleString('en-US')}` : '-');
   $w('wbCurBal').textContent = cur ? `${cur.id} per BTC · balance ${fiatValue(i.balanceSats, cur) ?? 'no rate'}` : 'per BTC · change currency in the top bar';
 }
 
+let walletInfoReadVersion = 0;
+let walletHistoryReadVersion = 0;
 async function loadInfo() {
-  try { walletState.info = await walletCall('info'); renderBalance(); }
+  const version = ++walletInfoReadVersion;
+  const status = $w('walletReadStatus');
+  if (status) status.textContent = 'Reading wallet balance…';
+  try {
+    const info = await walletCall('info');
+    if (version !== walletInfoReadVersion) return;
+    walletState.info = info; renderBalance();
+    if (status) status.textContent = 'Balance read completed at ' + new Date().toLocaleTimeString();
+  }
   catch (e) {
+    if (version !== walletInfoReadVersion) return;
+    walletState.info = null;
+    ['wbSats','wbOwed','wbSpend','wbRate'].forEach(id => { $w(id).textContent = '—'; });
+    $w('wbOwedSats').textContent = ''; $w('wbCurBal').textContent = '';
+    if (status) status.textContent = 'Balance unavailable. Refresh before relying on these figures.';
     const retry = document.createElement('button'); retry.className = 'btn ghost sm'; retry.textContent = 'Retry';
     retry.onclick = () => {
       $w('wbUsd').textContent = 'Loading…';
@@ -146,8 +161,11 @@ function paymentDetails(p) {
 
 async function loadHistory() {
   const { page, pageSize } = walletState;
+  const version = ++walletHistoryReadVersion;
+  $w('whPrev').disabled = true; $w('whNext').disabled = true;
   try {
     const r = await walletCall('payments', { offset: page * pageSize, limit: pageSize });
+    if (version !== walletHistoryReadVersion) return;
     $w('whRows').innerHTML = r.payments.map((p) => `<tr>
         <td>${escapeHtml(when(p.at))}</td><td>${p.type === 'send' ? 'Sent' : 'Received'}</td><td>${badge(p.status)}</td>
         <td class="num">${p.type === 'send' ? '−' : '+'}${Number(p.amountSat).toLocaleString('en-US')}</td>
@@ -156,7 +174,7 @@ async function loadHistory() {
     $w('whPrev').disabled = page === 0;
     $w('whNext').disabled = !r.hasMore;
     $w('whPage').textContent = r.payments.length ? `Page ${page + 1}` : '';
-  } catch (e) { $w('whRows').innerHTML = `<tr><td colspan="6" class="empty err">${escapeHtml(e.message)}</td></tr>`; }
+  } catch (e) { if (version !== walletHistoryReadVersion) return; $w('whRows').innerHTML = `<tr><td colspan="6" class="empty err">${escapeHtml(e.message)}</td></tr>`; $w('whPage').textContent = 'History unavailable. Refresh wallet to try again.'; $w('whPrev').disabled = page === 0; $w('whNext').disabled = true; }
 }
 
 function drawQr(text) {

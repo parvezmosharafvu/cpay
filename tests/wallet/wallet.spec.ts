@@ -599,3 +599,20 @@ test('lightning address → CPAY direct payments: the desk opens with it filled 
   expect(new Set(rpcs)).toEqual(new Set(['/rest/v1/rpc/get_my_balance', '/rest/v1/rpc/get_my_direct_settlement']));
   expect(log.every((r: any) => !/settlement-destination|functions\/v1/.test(r.path))).toBe(true);
 });
+
+// Automated accessibility of the stable phone UI; test engine only.
+test('phone accessibility: welcome, unlocked overview and locked vault', async ({ page }) => {
+  const { default: AxeBuilder } = await import('@axe-core/playwright');
+  const scan = async () => {
+    const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+    expect(result.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.target) }))).toEqual([]);
+  };
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Create a new wallet' })).toBeVisible();
+  await scan();
+  await createWallet(page);
+  await scan();
+  await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await expect(page.locator('#unlockPass')).toBeVisible();
+  await scan();
+});

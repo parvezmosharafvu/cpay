@@ -385,17 +385,30 @@ function applyStatus(row){
 // No Realtime: anon has no SELECT on payments (20261007110000), so other
 // payers' rows can never be listed. The page follows its own invoice by id.
 // The same read-only status RPC the page loads with (get_invoice_public,
-// this invoice's id only), every few seconds while the tab is visible. Errors are ignored and retried; the
-// expiry timer still bounds the wait.
+// this invoice's id only), every few seconds while the tab is visible. Errors
+// update separate read-availability feedback and are retried; the expiry
+// timer still bounds the wait.
 function schedulePoll(delay = POLL_MS){
   clearTimeout(pollTimer);
   if (finished) return;
   pollTimer = setTimeout(pollOnce, delay);
 }
+// Connection feedback is display-only; it never confirms a payment.
+function updateStatusSync(connected){
+  const note = el('statusSync');
+  if (!note) return;
+  const text = connected ? 'Payment status updates automatically.' : 'Payment status is temporarily unavailable. We are checking again. Check your wallet before trying to pay again.';
+  if (note.textContent !== text) note.textContent = text;
+  note.dataset.connection = connected ? 'ok' : 'interrupted';
+}
 async function pollOnce(){
   if (finished) return;
   if (document.visibilityState === 'hidden'){ schedulePoll(); return; }
-  try { applyStatus(await fetchInvoiceRow()); } catch {}
+  try {
+    const row = await fetchInvoiceRow();
+    applyStatus(row);
+    if (!finished) updateStatusSync(Boolean(row));
+  } catch { if (!finished) updateStatusSync(false); }
   schedulePoll();
 }
 document.addEventListener('visibilitychange', () => {
@@ -630,7 +643,7 @@ function receiptText(){
     '',
     `Paid to    ${receipt.merchant}`,
     `Amount     $${receipt.amount} USD`,
-    `Date       ${receipt.date}`,
+    `Confirmation seen  ${receipt.date}`,
     `Reference  ${receipt.reference}`,
     ...(receipt.direct && receipt.direct.proof ? [
       `Paid to    ${receipt.direct.destination} (the merchant's own wallet)`,

@@ -12,7 +12,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=Noto+Sans+Bengali:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cpay.css">
 <link rel="stylesheet" href="a11y.css">
 <script src="auth-link.js"></script>
@@ -20,6 +20,7 @@
 <script src="config.js"></script><script src="theme.js"></script><script src="app.js"></script><script src="turnstile.js"></script><script src="auth-features.js"></script><script src="passkey.js"></script><script src="mfa.js"></script>
 </head>
 <body class="auth split">
+  <div class="page-language" data-language-switch></div>
   <a class="skip-link" href="#resetCard">Skip to form</a>
   <svg class="sr-only" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
@@ -69,7 +70,7 @@
     <div class="auth-main">
     <main class="auth-card">
     <a class="brand" href="/login.html"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg></span>CPAY</a>
-    <div class="card" id="resetCard" aria-live="polite">
+    <div class="card" id="resetCard" tabindex="-1" aria-live="polite">
       <div id="checking" data-state="checking">
         <h1>Set a new password</h1>
         <p class="sub" aria-busy="true">Checking your reset link…</p>
@@ -86,7 +87,7 @@
         <p class="sub">Choose a new password for your CPAY account.</p>
         <div class="field"><label for="password">New password</label><input id="password" type="password" autocomplete="new-password" aria-describedby="passwordHint" minlength="8" maxlength="72" required></div>
         <p class="hint" id="passwordHint">8 to 72 characters. A long phrase is easiest to remember.</p>
-        <div class="field"><label for="password2">Confirm new password</label><input id="password2" type="password" autocomplete="new-password" maxlength="72" required></div>
+        <div class="field"><label for="password2">Confirm new password</label><input id="password2" data-enter-submit="saveBtn" type="password" autocomplete="new-password" maxlength="72" required></div>
         <button class="btn primary block lg" id="saveBtn" type="button">Save password</button>
       </div>
 
@@ -111,6 +112,8 @@
   </main>
     </div>
   </div>
+<script src="i18n.js?v=3"></script>
+<script src="auth-ui.js?v=1"></script>
 <script>
 // Password recovery (Supabase Auth). The reset link signs this browser in
 // with a short-lived recovery session; this page lets that session set a

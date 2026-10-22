@@ -52,3 +52,5 @@ a { color: var(--accent); }
 canvas.qr { display: block; margin: 8px auto; width: 240px; max-width: 100%; height: auto; image-rendering: pixelated; border-radius: 8px; }
 .notice { margin: 12px 0; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--danger); color: var(--danger); background: transparent; font-size: 14px; }
 .notice[hidden] { display: none; }
+
+.workspace-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.activity-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.list details p{overflow-wrap:anywhere}.list summary{cursor:pointer;padding:10px 0}.list li>p{margin:6px 0}

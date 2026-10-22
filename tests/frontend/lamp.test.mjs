@@ -12,9 +12,9 @@ for (const [page, card] of [['login.html', 'loginCard'], ['register.html', 'regi
     const btn = s.match(/<button class="lamp-chain"[^>]*>/);
     assert.ok(btn, 'chain is a <button>');
     assert.match(btn[0], /type="button"/);
-    assert.match(btn[0], /aria-pressed="false"/);
+    assert.match(btn[0], /aria-pressed="true"/);
     assert.match(btn[0], new RegExp(`aria-controls="${card}"`));
-    assert.match(btn[0], /aria-label="Turn on the light to sign in"/);
+    assert.match(btn[0], /aria-label="Show or hide the form"/);
     assert.match(s, new RegExp(`id="${card}"`));
     // The form is never hidden in the markup; only lamp.js hides it.
     assert.doesNotMatch(s, /<main class="auth-card"[^>]*(inert|aria-hidden|hidden)/);

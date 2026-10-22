@@ -47,11 +47,12 @@
   // Payment details: one dialog, the owner's own payment only (the RPC is
   // SECURITY INVOKER, so row-level security decides).
   let dlg = null;
+  let paymentReadVersion = 0;
   let opener = null; // the row that opened the dialog gets focus back on close
   function dialog() {
     if (dlg) return dlg;
     dlg = document.createElement('dialog');
-    dlg.addEventListener('close', () => { if (opener && opener.isConnected) opener.focus(); opener = null; });
+    dlg.addEventListener('close', () => { paymentReadVersion++; if (opener && opener.isConnected) opener.focus(); opener = null; });
     dlg.id = 'payDetails';
     dlg.className = 'pay-details';
     dlg.setAttribute('aria-labelledby', 'payDetailsTitle');
@@ -62,14 +63,19 @@
   const row = (k, v, cls) => (v === null || v === undefined || v === '') ? '' : `<div class="pd-row${cls ? ' ' + cls : ''}"><dt>${escapeHtml(k)}</dt><dd>${v}</dd></div>`;
   const FORWARD = { queued: 'Waiting to send', sending: 'Sending', forwarded: 'Sent to you', retry: 'Retrying', owed: 'Held, owed to you', skipped: 'Not forwarded' };
   async function openPayment(id) {
+    const version = ++paymentReadVersion;
     const d = dialog();
     if (!d.open) opener = document.activeElement;
     d.innerHTML = `<div class="pd-head"><h3 id="payDetailsTitle">Payment details</h3><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div><p class="muted">Loading…</p>`;
     d.querySelector('[data-close]').onclick = () => d.close();
     if (!d.open) { try { d.showModal(); } catch (e) { d.setAttribute('open', ''); } }
-    const { data: p, error } = await sb().rpc('get_my_payment_details', { p_payment_id: id });
+    let p, error;
+    try { ({ data: p, error } = await sb().rpc('get_my_payment_details', { p_payment_id: id })); }
+    catch (failure) { error = failure; }
+    if (version !== paymentReadVersion || !d.open) return;
     if (error || !p) {
-      d.querySelector('p').outerHTML = deskError(error ? error.message : 'This payment is not available.');
+      d.querySelector('p').outerHTML = deskError(error ? error.message : 'This payment is not available.') + '<button type="button" class="btn ghost" data-payment-retry>Try again</button>';
+      d.querySelector('[data-payment-retry]').onclick = () => openPayment(id);
       return;
     }
     const f = p.forward;
@@ -79,16 +85,18 @@
     ].join('');
     d.innerHTML = `<div class="pd-head"><h3 id="payDetailsTitle">Payment details</h3><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
       <div class="pd-amount"><div class="kicker">You receive</div><div class="kpi" id="pdReceive">${p.you_receive != null ? money(p.you_receive) : '—'}</div>${badge(p.status)}</div>
+      <ol class="payment-timeline" aria-label="Payment timeline">
+        <li><span>Created</span><strong>${escapeHtml(when(p.created_at))}</strong></li>
+        ${p.settled_at ? `<li><span>Settled</span><strong>${escapeHtml(when(p.settled_at))}</strong></li>` : ''}
+        ${f?.forwarded_at ? `<li><span>Sent</span><strong>${escapeHtml(when(f.forwarded_at))}</strong></li>` : ''}
+      </ol>
       <dl class="pd-list">
         ${row('Amount paid', money(p.amount_settled ?? p.amount_requested))}
         ${fees}
         ${row('Status', escapeHtml(p.status))}
-        ${row('Created', escapeHtml(when(p.created_at)))}
-        ${row('Settled', p.settled_at ? escapeHtml(when(p.settled_at)) : null)}
         ${row('Link', p.link_slug ? `/${escapeHtml(p.link_slug)}${p.link_name ? ' · ' + escapeHtml(p.link_name) : ''}` : null)}
         ${row('Payer location', escapeHtml(place(p.payer_city, p.payer_region, countryName(p.payer_country))) || 'Unknown')}
         ${f ? row('Forward', escapeHtml((FORWARD[f.status] || f.status) + (f.kind === 'usdt' ? ` · USDT${f.network ? ' on ' + f.network : ''}` : ' · Lightning') + (f.reason ? ` (${f.reason})` : ''))) : ''}
-        ${f && f.forwarded_at ? row('Sent', escapeHtml(when(f.forwarded_at))) : ''}
         ${row('Reference', p.invoice_ref ? `<code>${escapeHtml(p.invoice_ref)}</code>` : null)}
       </dl>
       <p class="faint">Payer location is approximate (country, region, city from the connection). CPAY does not record exact positions.</p>`;
@@ -96,8 +104,8 @@
   }
   function bindPaymentRows(root) {
     root.querySelectorAll('[data-pay-id]').forEach((n) => {
-      n.onclick = () => openPayment(n.dataset.payId);
-      n.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPayment(n.dataset.payId); } };
+      n.onclick = (event) => { if (event) event.stopPropagation(); openPayment(n.dataset.payId); };
+      n.onkeydown = (e) => { if (e.target && e.target !== n) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPayment(n.dataset.payId); } };
     });
   }
 

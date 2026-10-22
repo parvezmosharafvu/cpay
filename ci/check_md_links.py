@@ -8,7 +8,17 @@ fetched: CI must not depend on third-party uptime.
 import re, subprocess, sys, pathlib, urllib.parse
 
 root = pathlib.Path(__file__).resolve().parent.parent
-files = subprocess.run(['git', 'ls-files', '*.md'], cwd=root, capture_output=True, text=True, check=True).stdout.split()
+tracked = subprocess.run(['git', 'ls-files', '-z', '*.md'], cwd=root, capture_output=True, text=True)
+if tracked.returncode == 0:
+    files = [f for f in tracked.stdout.split('\0') if f]
+else:
+    # Source ZIP exports have no .git directory. Do not scan dependencies.
+    if (root / '.git').exists():
+        sys.exit(tracked.stderr.strip() or 'Unable to enumerate tracked Markdown files')
+    excluded = {'.git', 'node_modules', '.venv', 'vendor'}
+    files = sorted(str(p.relative_to(root)) for p in root.rglob('*.md')
+                   if not excluded.intersection(p.relative_to(root).parts))
+    print('Source archive: checking Markdown files without Git metadata.')
 link = re.compile(r'(?<!!)\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)|!\[[^\]]*\]\(([^)\s]+)\)')
 bad = []
 for f in files:

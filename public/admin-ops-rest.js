@@ -59,9 +59,10 @@ function healthAgeText(sec) {
   return `${Math.round(s / 86400)} d ago`;
 }
 async function walletHealthCards() {
-  const { data, error } = await sb.rpc('admin_wallet_health');
+  const { data, error } = await adminPanelRead(() => sb.rpc('admin_wallet_health'));
   if (error) return `<div class="card"><p class="err" role="alert">Subsystem health did not load: ${escapeHtml(error.message)}</p></div>`;
   const cards = (data && data.cards) || [];
+  if (!cards.length) return '<div class="card"><p class="faint">Subsystem health unavailable. Refresh health to try again.</p></div>';
   const repo = 'https://github.com/parvezmosharafvu/cpay/blob/main/';
   const items = cards.map((c) => {
     const st = HEALTH_STATE_LABEL[c.state] ? c.state : 'unknown';
@@ -72,50 +73,69 @@ async function walletHealthCards() {
       ${c.runbook ? `<a href="${escapeHtml(repo + c.runbook)}" target="_blank" rel="noopener noreferrer">Runbook</a>` : ''}
     </div>`;
   }).join('');
-  return `<div class="health-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">${items}</div><p class="faint">Checked ${escapeHtml(data && data.checked_at ? (typeof when === 'function' ? when(data.checked_at) : data.checked_at) : '')}</p>`;
+  return `<div class="health-grid">${items}</div><p class="faint">Checked ${escapeHtml(data && data.checked_at ? (typeof when === 'function' ? when(data.checked_at) : data.checked_at) : '')}</p>`;
 }
+const opsReadVersions = { health: 0, system: 0, audit: 0 };
+function opsHeader(title, id, label) {
+  return `<div class="card-head"><h3>${title}</h3><button type="button" class="btn ghost" id="${id}">${label}</button></div>`;
+}
+function opsUnavailable(message) { return `<div class="card"><p class="err" role="alert">${escapeHtml(message || 'Snapshot unavailable. Refresh to try again.')}</p></div>`; }
 async function renderHealth() {
   const el = document.getElementById('health'); if (!el) return;
-  const subsystems = await walletHealthCards().catch(() => '');
-  const { data, error } = await sb.rpc('admin_ops_snapshot');
-  if (error) { el.innerHTML = typeof deskError === 'function' ? deskError(error.message) : `<p class="err" role="alert">${escapeHtml(error.message)}</p>`; return; }
-  const s = data || {};
-  el.innerHTML = `<div class="card"><h3>Health</h3><p class="faint">Can payments and payouts run right now?</p></div>${subsystems}${kvCard('Switches', s.flags)}${kvCard('Payouts', s.withdrawals)}${kvCard('Pipeline', s.pipeline)}${kvCard('Receiving', s.receiving)}${kvCard('Accounts', s.profiles)}${kvCard('Domains', s.domains)}`;
+  const version = ++opsReadVersions.health;
+  el.setAttribute('aria-busy', 'true');
+  const [subsystems, snapshot] = await Promise.all([
+    walletHealthCards(), adminPanelRead(() => sb.rpc('admin_ops_snapshot')),
+  ]);
+  if (version !== opsReadVersions.health) return;
+  el.setAttribute('aria-busy', 'false');
+  const s = snapshot.data || {};
+  el.innerHTML = `${opsHeader('Health','healthRefresh','Refresh health')}<p class="faint">Read-only snapshots. Check the reported time and runbook before acting.</p>${subsystems}${snapshot.error || !snapshot.data ? opsUnavailable(snapshot.error?.message) : `${kvCard('Switches', s.flags)}${kvCard('Payouts', s.withdrawals)}${kvCard('Pipeline', s.pipeline)}${kvCard('Receiving', s.receiving)}${kvCard('Accounts', s.profiles)}${kvCard('Domains', s.domains)}`}`;
+  document.getElementById('healthRefresh').onclick = renderHealth;
 }
 async function renderSystem() {
   const el = document.getElementById('system'); if (!el) return;
-  const snap = await sb.rpc('admin_system_snapshot');
-  const alerts = await sb.rpc('admin_system_alerts');
-  if (snap.error) { el.innerHTML = typeof deskError === 'function' ? deskError(snap.error.message) : `<p class="err" role="alert">${escapeHtml(snap.error.message)}</p>`; return; }
+  const version = ++opsReadVersions.system;
+  el.setAttribute('aria-busy', 'true');
+  const [snap, alerts] = await Promise.all([
+    adminPanelRead(() => sb.rpc('admin_system_snapshot')), adminPanelRead(() => sb.rpc('admin_system_alerts')),
+  ]);
+  if (version !== opsReadVersions.system) return;
+  el.setAttribute('aria-busy', 'false');
   const s = snap.data || {};
-  const alertRows = ((alerts.data && alerts.data.alerts) || []).map((a) => `<tr><td>${escapeHtml(a.severity || '')}</td><td>${escapeHtml(a.title || '')}</td><td>${escapeHtml(a.detail || '')}</td></tr>`).join('');
-  el.innerHTML = `<div class="card"><h3>System</h3><p class="faint">Database, traffic and queues. Read only.</p></div>${kvCard('Database', s.database)}${kvCard('Last 24 hours', s.traffic)}${kvCard('Queues', s.queues)}${kvCard('Platform', s.platform)}${kvCard('Timing', s.latency)}<div class="card flush"><h3 style="padding:16px 20px 0">Alerts</h3><table class="table"><thead><tr><th>Level</th><th>Title</th><th>Detail</th></tr></thead><tbody>${alertRows || '<tr><td colspan="3" class="empty">No alerts</td></tr>'}</tbody></table></div>`;
+  const alertRows = ((alerts.data && alerts.data.alerts) || []).map(a => `<tr><td>${escapeHtml(a.severity || '')}</td><td>${escapeHtml(a.title || '')}</td><td>${escapeHtml(a.detail || '')}</td></tr>`).join('');
+  el.innerHTML = `${opsHeader('System','systemRefresh','Refresh system')}<p class="faint">Database, traffic and queues. Read only.</p>${snap.error || !snap.data ? opsUnavailable(snap.error?.message) : `${kvCard('Database', s.database)}${kvCard('Last 24 hours', s.traffic)}${kvCard('Queues', s.queues)}${kvCard('Platform', s.platform)}${kvCard('Timing', s.latency)}`}<div class="card flush"><div class="card-head"><h3>Alerts</h3></div><div class="scroll"><table class="table"><thead><tr><th>Level</th><th>Title</th><th>Detail</th></tr></thead><tbody>${alerts.error || !alerts.data ? '<tr><td colspan="3" class="err" role="alert">Alerts unavailable. Refresh system to try again.</td></tr>' : alertRows || '<tr><td colspan="3" class="empty">No alerts</td></tr>'}</tbody></table></div></div>`;
+  document.getElementById('systemRefresh').onclick = renderSystem;
 }
 let auditFilter = { search: '' };
 async function renderAudit() {
   const el = document.getElementById('audit'); if (!el) return;
+  const version = ++opsReadVersions.audit;
   el.innerHTML = typeof deskSkeleton === 'function' ? deskSkeleton(4) : '<p class="muted">Loading…</p>';
-  const { data, error } = await sb.from('audit_log').select('id,occurred_at,actor_email,action,subject_type,subject_id,note').order('occurred_at', { ascending: false }).limit(120);
-  if (error) { el.innerHTML = typeof deskError === 'function' ? deskError(error.message) : `<p class="err" role="alert">${escapeHtml(error.message)}</p>`; return; }
+  const { data, error } = await adminPanelRead(() => sb.from('audit_log').select('id,occurred_at,actor_email,action,subject_type,subject_id,note').order('occurred_at', { ascending: false }).limit(120));
+  if (version !== opsReadVersions.audit) return;
+  if (error) { adminPanelError(el, error.message, renderAudit); return; }
   const q = (auditFilter.search || '').trim().toLowerCase();
   const filtered = (data || []).filter((r) => {
     if (!q) return true;
     const hay = `${r.actor_email || ''} ${r.action || ''} ${r.subject_type || ''} ${r.note || ''} ${r.subject_id || ''}`.toLowerCase();
     return hay.includes(q);
   });
-  const rows = filtered.map((r) => `<tr><td>${escapeHtml(when(r.occurred_at))}</td><td>${escapeHtml(r.actor_email || '')}</td><td>${escapeHtml(r.action || '')}</td><td>${escapeHtml(r.subject_type || '')}</td><td class="mono">${escapeHtml(String(r.subject_id || '').slice(0, 8))}</td><td>${escapeHtml(r.note || '')}</td></tr>`).join('');
+  const rows = filtered.map((r) => `<tr><td>${escapeHtml(when(r.occurred_at))}</td><td>${escapeHtml(r.actor_email || '')}</td><td>${escapeHtml(r.action || '')}</td><td>${escapeHtml(r.subject_type || '')}</td><td class="mono">${escapeHtml(r.subject_id || '—')}<details><summary>Audit reference</summary>${escapeHtml(r.id)}</details></td><td>${escapeHtml(r.note || '')}</td></tr>`).join('');
   const toolbar = typeof deskFilterBar === 'function' ? deskFilterBar(`
     <div class="field grow"><label for="auditSearch">Search audit</label>
       <input id="auditSearch" type="search" placeholder="Actor, action, note…" value="${escapeHtml(auditFilter.search)}"></div>
   `, `<button type="button" class="btn primary" id="auditApply">Apply</button>
-      <button type="button" class="btn ghost" id="auditClear">Clear</button>`) : '';
+      <button type="button" class="btn ghost" id="auditClear">Clear</button><button type="button" class="btn ghost" id="auditRefresh">Refresh audit</button>`) : '';
   el.innerHTML = `<div class="card flush">
     ${toolbar}
     <div class="card-head"><h3>Audit log</h3><span class="meta-count">${filtered.length} shown</span></div>
-    <p class="role-note" style="padding:0 20px">Read-only visibility of server-written audit rows. RLS restricts this table to admins.</p>
+    <p class="section-note">Read-only server audit trail. Search covers the latest 120 rows, including full subject references.</p>
     <div class="scroll"><table class="table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Type</th><th>Id</th><th>Note</th></tr></thead>
     <tbody>${rows || `<tr><td colspan="6">${typeof deskEmpty === 'function' ? deskEmpty('No audit rows', 'Admin actions will appear here.') : '<span class="empty">No audit rows</span>'}</td></tr>`}</tbody></table></div>
   </div>`;
+  document.getElementById('auditRefresh')?.addEventListener('click', renderAudit);
+  document.getElementById('auditSearch')?.addEventListener('input', e => { auditFilter.search = e.target.value; });
   document.getElementById('auditApply')?.addEventListener('click', () => {
     auditFilter = { search: document.getElementById('auditSearch')?.value.trim() || '' };
     renderAudit();

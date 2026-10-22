@@ -245,6 +245,7 @@ async function start(phrase) {
   engine = engine || await createEngine();
   await engine.connect(phrase, () => { refresh(); if (!$('fundOut').hidden) renderDeposits(); });
   try { await navigator.storage?.persist?.(); } catch { /* best effort */ }
+  walletReadActive = true;
   show('home');
   $('fundPanel').hidden = cfg.network !== 'regtest';
   armLock();
@@ -266,23 +267,61 @@ function renderBackupStatus() {
 }
 
 // ---- home ------------------------------------------------------------
+let walletReadActive = false;
+let walletReadVersion = 0;
+let activityRows = [];
+async function walletRead(read) {
+  let timer;
+  try { return { data: await Promise.race([Promise.resolve().then(read), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Read timed out')), 15000); })]) }; }
+  catch (error) { return { error }; }
+  finally { clearTimeout(timer); }
+}
+function drawWalletActivity() {
+  const filter = $('activityStatus').value;
+  const query = $('activitySearch').value.trim().toLowerCase();
+  const visible = activityRows.filter(p => (!filter || p.status === filter) && `${p.id || ''} ${p.type || ''} ${p.status || ''}`.toLowerCase().includes(query));
+  $('history').replaceChildren(...visible.map(p => {
+    const li = document.createElement('li');
+    const amount = document.createElement('strong');
+    amount.textContent = `${p.type === 'send' ? '−' : '+'}${sats(p.amountSats)} sats`;
+    const detail = document.createElement('p'); detail.className = 'muted small';
+    const status = p.status === 'pending' && p.type === 'send' ? 'in progress, do not pay again' : p.status;
+    detail.textContent = `${p.type === 'send' ? 'Outgoing' : 'Incoming'} · ${status}${p.type === 'send' && p.feesSats ? ` · fee ${sats(p.feesSats)} sats` : ''}${p.timestamp ? ' · ' + new Date(p.timestamp * 1000).toLocaleString() : ''}`;
+    li.append(amount, detail);
+    if (p.id) { const reference = document.createElement('details'); const label = document.createElement('summary'); label.textContent = 'Payment reference'; const value = document.createElement('p'); value.className = 'mono'; value.textContent = String(p.id); reference.append(label, value); li.append(reference); }
+    return li;
+  }));
+  $('historyEmpty').hidden = visible.length > 0;
+  $('historyEmpty').textContent = activityRows.length ? 'No activity matches these filters.' : 'No payments yet.';
+  $('activityCount').textContent = visible.length + ' / ' + activityRows.length + ' loaded payments';
+}
+$('activityStatus').onchange = drawWalletActivity;
+$('activitySearch').oninput = drawWalletActivity;
+$('walletRefresh').onclick = () => refresh();
 async function refresh() {
-  if (!engine) return;
-  try {
-    const { balanceSats } = await engine.info();
-    $('balSats').textContent = sats(balanceSats);
-    const list = await engine.payments();
-    $('history').replaceChildren(...list.map((p) => {
-      const li = document.createElement('li');
-      const sign = p.type === 'send' ? '−' : '+';
-      const when = p.timestamp ? new Date(p.timestamp * 1000).toLocaleString() : '';
-      const status = p.status === 'pending' && p.type === 'send' ? 'in progress, do not pay again' : p.status;
-      li.textContent = `${sign}${sats(p.amountSats)} sats · ${status}${p.type === 'send' && p.feesSats ? ` · fee ${sats(p.feesSats)}` : ''} · ${when}`;
-      return li;
-    }));
-    $('historyEmpty').hidden = list.length > 0;
-    await reconcileSends();
-  } catch { /* keep the last numbers on a failed refresh */ }
+  if (!engine || !walletReadActive) return;
+  const current = engine, version = ++walletReadVersion;
+  const valid = () => walletReadActive && engine === current && version === walletReadVersion;
+  $('walletRefresh').disabled = true;
+  $('walletReadStatus').textContent = 'Reading wallet balance…';
+  $('activityReadStatus').textContent = 'Reading activity…';
+  const balance = walletRead(() => current.info()).then(result => {
+    if (!valid()) return;
+    $('balSats').textContent = result.error || result.data?.balanceSats == null ? '—' : sats(result.data.balanceSats);
+    $('walletReadStatus').textContent = result.error || result.data?.balanceSats == null ? 'Balance unavailable. Refresh to try again.' : 'Balance read completed at ' + new Date().toLocaleTimeString();
+  });
+  const activity = walletRead(() => current.payments()).then(result => {
+    if (!valid()) return;
+    activityRows = Array.isArray(result.data) ? result.data : [];
+    drawWalletActivity();
+    if (result.error) $('historyEmpty').hidden = true;
+    $('activityReadStatus').textContent = result.error ? 'Activity unavailable. Refresh before paying again.' : 'Activity read completed at ' + new Date().toLocaleTimeString();
+  });
+  await Promise.all([balance, activity]);
+  if (!valid()) return;
+  $('walletRefresh').disabled = false;
+  try { await reconcileSends(current, version); }
+  catch { if (valid()) { $('pendingSends').textContent = 'Payment checks unavailable. Check Activity before paying again.'; $('pendingSends').hidden = false; } }
 }
 
 // Sends this phone started whose outcome is not settled yet, checked
@@ -290,14 +329,18 @@ async function refresh() {
 // record of is kept a day for the "you already tried this" warning: a new
 // send gets a new idempotency key, which nothing would de-duplicate. Only
 // the library's own "pending" counts as in progress.
-async function reconcileSends() {
+async function reconcileSends(current = engine, version = walletReadVersion) {
   let open = 0;
   for (const s of sends()) {
-    const p = await engine.payment(s.k);
+    const result = await walletRead(() => current.payment(s.k));
+    if (result.error) throw result.error;
+    const p = result.data;
+    if (!walletReadActive || version !== walletReadVersion || current !== engine) return;
     if (p && (p.status === 'completed' || p.status === 'failed')) forgetSend(s.k);
     else if (!p && Date.now() - s.t > 86_400_000) forgetSend(s.k);
     else if (p) open++;
   }
+  if (!walletReadActive || version !== walletReadVersion || current !== engine) return;
   $('pendingSends').textContent = open
     ? `${open} payment${open === 1 ? ' is' : 's are'} not confirmed yet. ${open === 1 ? 'It' : 'They'} may still complete: check Activity before paying again.`
     : '';
@@ -313,6 +356,7 @@ $('sendBtn').onclick = () => { $('sendPanel').hidden = !$('sendPanel').hidden; $
 $('receiveForm').onsubmit = async (e) => {
   e.preventDefault();
   err('rcvErr');
+  $('rcvCopyStatus').textContent = '';
   try {
     const amount = Number($('rcvAmount').value) || undefined;
     const r = await engine.receive({ amountSats: amount, description: $('rcvNote').value.trim() });
@@ -324,7 +368,7 @@ $('receiveForm').onsubmit = async (e) => {
     err('rcvErr', x.message || 'Could not create an invoice. Check the connection and try again.');
   }
 };
-$('rcvCopy').onclick = () => navigator.clipboard?.writeText($('rcvInvoice').value);
+$('rcvCopy').onclick = async () => { try { await navigator.clipboard.writeText($('rcvInvoice').value); $('rcvCopyStatus').textContent = 'Invoice copied'; } catch { $('rcvCopyStatus').textContent = 'Copy the invoice from the field above.'; } };
 
 // ---- Lightning address -------------------------------------------------
 // Only on builds that name a domain (LIGHTNING_ADDRESS_DOMAIN). Names are
@@ -570,10 +614,14 @@ $('wipeForm').onsubmit = async (e) => {
 };
 
 async function lock() {
+  walletReadActive = false; walletReadVersion++;
+  activityRows = []; $('history').replaceChildren(); $('balSats').textContent = '—';
+  $('pendingSends').textContent = ''; $('pendingSends').hidden = true;
   clearTimeout(lockTimer);
   if (engine) await engine.disconnect();
   $('revealWords').replaceChildren();
   $('rcvInvoice').value = '';
+  $('rcvCopyStatus').textContent = '';
   $('rcvOut').hidden = true;
   $('rcvQr').hidden = true;
   $('fundAddr').value = '';

@@ -106,7 +106,7 @@ test('not-found states switch to navy; the payment card does not', () => {
   assert.ok(nf && /useNavyState\(\)/.test(nf[0]), '404.html showNotFound uses navy');
   assert.equal((checkout.match(/useNavyState\(/g) || []).length, 1, '404.html calls navy only for not-found');
   const store = pub('store.html');
-  assert.equal((store.match(/useNavyState\(\)/g) || []).length, 2, 'store.html: both not-found branches');
+  assert.equal((store.match(/useNavyState\(\)/g) || []).length, 3, 'store.html: missing, not-found and read-error branches');
 });
 
 test('legal pages are navy with no page-level styles', () => {
@@ -140,7 +140,7 @@ test('shared components read status colours from tokens, so both palettes work',
 test('the website says CPAY holds website balances, and never calls itself non-custodial', () => {
   const home = pub('index.html');
   assert.match(home, /id="custody"/);
-  assert.match(home, /Your CPAY balance is <strong>held by CPAY<\/strong>/);
+  assert.match(home, /With Auto withdraw off, your balance is <strong>held by CPAY<\/strong>/);
   assert.match(home, /CPAY Wallet, when it is released, is a separate app/);
   const desk = pub('freelancer-desk.js');
   assert.match(desk, /Held by CPAY, ready to withdraw/);

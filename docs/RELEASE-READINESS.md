@@ -77,9 +77,9 @@ matching secret is set. Invalid/unsigned requests then use the
 non-privileged Worker-egress rate-limit bucket, not a caller-supplied
 per-IP key. Regression tests cover signature tampering, expiry,
 missing signatures, and the shared-secret transition.
-**Neither secret has been configured in production.** The legacy mode
-still accepts the old header until an operator verifies the
-coordinated Worker/Edge rollout. Public-invoice production controls
+**This work did not change or verify production secret configuration.**
+Until a separately approved operator rollout confirms both matching keys
+are configured, the legacy unsigned path may remain available. Public-invoice production controls
 remain an open owner blocker.
 
 ## Verified locally

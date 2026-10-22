@@ -19,8 +19,21 @@ for attempt in 1 2 3; do
   fi
 
   cat "${audit_log}"
-  # The audit endpoint can return 502/503/504; no other nonzero result
-  # may be retried, and all unsuccessful audits block the release.
+  # npm's retiring Quick Audit endpoint can now return HTTP 400 after a
+  # failed Bulk Advisory request. Run a *full* audit with a pinned modern
+  # client, and accept only its actual clean exit code. Never skip auditing.
+  if grep -Eq 'npm (warn|error) audit 400 Bad Request - POST https://registry[.]npmjs[.]org/-/npm/v1/security/audits/quick' "${audit_log}"; then
+    rm -f "${audit_log}"
+    echo "::warning::npm Quick Audit endpoint returned 400; retrying the full security audit with pinned npm@11.21.1" >&2
+    if npx --yes npm@11.21.1 audit --omit=dev --audit-level=high --fetch-retries=0 --fetch-timeout=45000; then
+      exit 0
+    fi
+    echo "::error::Modern npm audit also failed; dependency security gate remains blocked" >&2
+    exit 1
+  fi
+
+  # Transient 502/503/504 registry errors get a bounded retry. All other
+  # errors and all high/critical advisories fail closed.
   if ! grep -Eq 'npm (warn|error) audit (502|503|504) .*POST https://registry[.]npmjs[.]org/-/npm/v1/security/audits(/quick)?' "${audit_log}"; then
     rm -f "${audit_log}"
     echo "::error::npm audit failed; dependency security gate remains blocked" >&2

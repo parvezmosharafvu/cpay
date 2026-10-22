@@ -32,10 +32,20 @@ export function openBlockers(md) {
 }
 
 export function drillProblem(md, maxDays, nowMs = Date.now()) {
+  // Invalid options and evidence must never silently make the release gate pass.
+  if (!Number.isInteger(maxDays) || maxDays < 0) return 'invalid restore drill age limit';
+  if (!Number.isFinite(nowMs)) return 'invalid current time for restore drill check';
   const d = latestDrill(md);
   if (!d) return 'no restore drill recorded in docs/BACKUP-RECOVERY.md';
   if (!d.pass) return `latest restore drill (${d.date}) did not pass`;
-  const age = Math.floor((nowMs - Date.parse(`${d.date}T00:00:00+06:00`)) / 86400000);
+  const dateUTC = new Date(`${d.date}T00:00:00Z`);
+  if (!Number.isFinite(dateUTC.getTime()) || dateUTC.toISOString().slice(0, 10) !== d.date) {
+    return `invalid restore drill date (${d.date})`;
+  }
+  const drillMs = Date.parse(`${d.date}T00:00:00+06:00`);
+  if (!Number.isFinite(drillMs)) return `invalid restore drill date (${d.date})`;
+  if (drillMs > nowMs) return `restore drill date (${d.date}) is in the future`;
+  const age = Math.floor((nowMs - drillMs) / 86400000);
   if (age > maxDays) return `latest restore drill is ${age} days old (max ${maxDays})`;
   return null;
 }

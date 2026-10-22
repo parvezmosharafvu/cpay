@@ -122,6 +122,11 @@ jobs:
           ' >/dev/null
           echo "Solvency evidence query is read-only, parseable and non-authorizing."
 
+      - name: Restrict direct EXECUTE on payment security triggers
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/payment_trigger_exec_privileges_test.sql
+
       - name: Forward delete guard survives pinned search_path (transaction rollback)
         env:
           PGPASSWORD: postgres
@@ -227,6 +232,8 @@ jobs:
           for f in supabase/migrations/*.sql; do
             psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -q -f "$f"
           done
+          # Verify the ACL cleanup against Supabase-like function defaults.
+          psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/payment_trigger_exec_privileges_test.sql
           psql -h localhost -U postgres -d privcheck -v ON_ERROR_STOP=1 -f ci/anon_rpc_allowlist.sql
           # anon has no access to the payments table at all (20261007110000),
           # with production's default grants; the invoice page RPCs still work.

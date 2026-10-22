@@ -19,7 +19,7 @@
 | Authenticated execution of SECURITY DEFINER | WARN, 128 findings | Requires function-by-function least-privilege review. For any elevated RPC, inspect `auth.uid()`, role checks, ownership filters, reachable schemas and grants. Blanket `REVOKE` or mass switch to `SECURITY INVOKER` can break auth, checkout, triggers and RLS. |
 | Insufficient MFA options | WARN, 1 finding | The project's documented owner decision is admin passkeys with TOTP disabled. Verify actual admin/passkey access and two independent physical recovery credentials before changes to live authentication. Do not change MFA settings automatically. |
 
-The eight anonymous-executable trigger functions identified in the catalog were `gate_custodial_payment`, `gate_custodial_withdrawal`, `gate_new_custodial_link`, `guard_direct_payment_changes`, `guard_direct_settlement_switch`, `guard_link_settlement_mode`, `guard_payment_settlement_mode`, and `guard_settlement_destination_changes`. These return `trigger` and are bound to triggers; they are not normal user-callable payment RPC endpoints. Their grants may still merit least-privilege cleanup after a regression test of those triggers.
+The eight **historically** anonymous-executable trigger functions identified in the production catalog were `gate_custodial_payment`, `gate_custodial_withdrawal`, `gate_new_custodial_link`, `guard_direct_payment_changes`, `guard_direct_settlement_switch`, `guard_link_settlement_mode`, `guard_payment_settlement_mode`, and `guard_settlement_destination_changes`. These return `trigger` and are bound to triggers; they are not normal user-callable payment RPC endpoints. Their grants may still merit least-privilege cleanup after a regression test of those triggers.
 
 The inspected `is_admin()` function is `SECURITY DEFINER` with `search_path=public`, and its role check queries `auth.uid()`, the profile's admin status, and strong-session/MFA requirements. That is evidence of an intended access check, **not** a complete audit of all call paths.
 
@@ -37,3 +37,12 @@ Supabase reference documentation:
 - https://supabase.com/docs/guides/database/functions
 - https://supabase.com/docs/guides/observability/advisors
 - https://supabase.com/docs/guides/database/postgres/row-level-security
+
+## Least-privilege trigger ACL remediation — source only
+
+New append-only migration `supabase/migrations/20261022092535_restrict_payment_trigger_execute.sql` targets **only the eight bound, SECURITY DEFINER payment-protection triggers** listed above. It fail-closes if one is missing, unbound, or no longer a SECURITY DEFINER trigger, then revokes `EXECUTE` from `PUBLIC`, `anon` and `authenticated`. Trigger bodies, attached trigger entries, service-owner access, existing ledger rows, and settlement decisions are not modified.
+
+The disposable-database CI check `ci/payment_trigger_exec_privileges_test.sql` verifies all eight functions still exist, still have trigger attachments, still use SECURITY DEFINER, and are not executable by either exposed client role or inherited `PUBLIC`. It runs both after the ordinary migrations and after rebuilding migrations with production-style default grants in the strict RPC allowlist database. The existing payment/migration E2E suites provide further compatibility coverage.
+
+This source change targets **eight** warnings in each anon/authenticated Advisor category **if the migration is later applied**; it does not remove the six deliberate anonymous callable non-trigger functions or complete review of all authenticated RPCs. The live project's Security Advisor findings remain unchanged until the owner authorizes a controlled migration deployment and an independent read-only post-deploy recheck. Do not claim production remediation from CI alone.
+

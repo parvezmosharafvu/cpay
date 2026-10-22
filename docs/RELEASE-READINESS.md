@@ -99,6 +99,19 @@ Dhaka-local timestamp, not only midnight on that date, so a future same-day
 these cases. These safeguards do not waive legal publication, missing
 owner approvals, independent reserve evidence or physical recovery checks.
 
+## Payment-trigger EXECUTE least-privilege (source only)
+
+The review branch includes append-only migration
+`20261022092535_restrict_payment_trigger_execute.sql`, denying direct
+`EXECUTE` on eight bound SECURITY DEFINER payment-protection trigger
+functions to the exposed `PUBLIC`, `anon`, and `authenticated` roles.
+Disposable PostgreSQL tests with the default Supabase grants verify the
+functions and trigger bindings remain present and direct client execution
+is disabled. Normal payment/migration tests continue to run. This is
+not a production deployment: the current Security Advisor warnings
+require a separately approved migration and a live read-only recheck.
+Nothing in this change waives an owner release blocker.
+
 ## Verified locally
 
 | Area | Evidence | Limit |

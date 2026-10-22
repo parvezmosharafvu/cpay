@@ -12,6 +12,14 @@ The section-by-section implementation work and recorded local automated review a
 - Static upload bundle preparation succeeded in Batch 16. Source ZIP excludes installed dependencies, generated builds and internal screenshots.
 - No live deployment, payment, secret or operational setting was changed.
 
+## GitHub review and handoff status (22 October 2026)
+
+The source changes are staged in [Draft PR #169](https://github.com/parvezmosharafvu/cpay/pull/169), not merged into `main`. Review SHA `c1dd9752007afa064a62d8f7812a061a7b2dfcb8` passed all seven GitHub [Verify #615](https://github.com/parvezmosharafvu/cpay/actions/runs/39719417551) jobs, including disposable-database/RLS E2E, wallet browser checks, package security audit and static checks. Cloudflare's PR bot reported a successful preview build and deployment for that SHA; **preview success is not production acceptance**.
+
+Further review-branch edits prevent the release gate from treating missing owner approval, skipped legal publication checks, and invalid or later failed restore-drill records as approval. New regression tests accompany the changes. The latest PR commit must pass its own GitHub Verify run before any merge can be considered; do not cite an older commit's green check as if it covered newer edits.
+
+No live financial actions, production data changes, production secrets, `main` merge or release approval are part of this handoff. A future, separately authorized production release requires documented owner decisions and fresh evidence, not just automated checks.
+
 ## Owner acceptance still required
 
 | Item | Required evidence / action |

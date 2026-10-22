@@ -17,7 +17,7 @@ All amounts are point-in-time, from the same database query snapshot:
 - **Unsent forward claims (USD):** `payment_forwards.amount_usd` for `queued`, `sending`, `retry`, and `owed` only. Forwarded payments are **not** also counted as member balance, except when explicitly `released`, where the ordinary balance already covers them.
 - **Gross minimum of those three claims (USD):** A screening floor, not a certified total liability. Refunds, disputes, unrecorded payments, fees, FX conversion and any liabilities outside those sources require a separate review.
 - **Wallet reserve evidence (sats):** `breez_wallet.wallet_status.balance_sat` for **active mainnet wallets** with a nonnegative balance, no reported error, and a sync time within 15 minutes. Non-mainnet wallets are excluded; missing, negative, future-dated, stale or error-marked reports are counted as unverified. Standby/disabled wallets are not counted as readily spendable. Values are database-reported, not an independently verified provider/on-chain reserve.
-- **Cross-currency comparison is deliberately omitted.** A satoshi is not a dollar; treating one as the other, using a stale BTC price, assuming fees are zero or treating a wallet status row as bank-grade proof would yield a misleading green result.
+- **Cross-currency comparison is deliberately omitted.** A satoshi is not a dollar; treating one as the other, using a stale BTC price, assuming fees are zero or treating a wallet status row as independently verified reserves would yield a misleading green result.
 
 ## Owner sign-off required before marking solvency complete
 

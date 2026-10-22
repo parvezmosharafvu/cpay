@@ -35,7 +35,7 @@ export function latestDrill(md) {
     if (!best || key >= best.key) best = { key, date, pass, validTime };
   }
   if (!best) return null;
-  return best.validTime ? { date: best.date, pass: best.pass } : { date: best.date, pass: false, invalidTime: true };
+  return best.validTime ? { date: best.date, time: best.key.slice(11), pass: best.pass } : { date: best.date, time: best.key.slice(11), pass: false, invalidTime: true };
 }
 
 export function openBlockers(md) {
@@ -80,9 +80,11 @@ export function drillProblem(md, maxDays, nowMs = Date.now()) {
   if (!Number.isFinite(dateUTC.getTime()) || dateUTC.toISOString().slice(0, 10) !== d.date) {
     return `invalid restore drill date (${d.date})`;
   }
-  const drillMs = Date.parse(`${d.date}T00:00:00+06:00`);
+  // Check the actual Dhaka-local clock time, not only the date's midnight.
+  // Otherwise a future same-day Pass could accidentally approve a release.
+  const drillMs = Date.parse(`${d.date}T${d.time}:00+06:00`);
   if (!Number.isFinite(drillMs)) return `invalid restore drill date (${d.date})`;
-  if (drillMs > nowMs) return `restore drill date (${d.date}) is in the future`;
+  if (drillMs > nowMs) return `restore drill timestamp (${d.date} ${d.time} Dhaka) is in the future`;
   const age = Math.floor((nowMs - drillMs) / 86400000);
   if (age > maxDays) return `latest restore drill is ${age} days old (max ${maxDays})`;
   return null;
@@ -110,7 +112,9 @@ function main(argv) {
   const main = sh('git', ['rev-parse', 'origin/main']);
   const sha = opt('--sha', sh('git', ['rev-parse', 'HEAD']));
   if (sha !== main) fails.push(`SHA ${sha} is not origin/main (${main})`);
-  if (sh('git', ['status', '--porcelain', '--untracked-files=no'])) fails.push('worktree has uncommitted changes');
+  // Include non-ignored untracked files: otherwise unpublished source can be
+  // present even while tracked files look clean.
+  if (sh('git', ['status', '--porcelain', '--untracked-files=normal'])) fails.push('worktree contains tracked or untracked changes');
   const repo = sh('gh', ['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']);
   const runs = JSON.parse(sh('gh', ['api', `repos/${repo}/actions/runs?head_sha=${sha}&per_page=50`, '--jq', '[.workflow_runs[]|{name,conclusion,status}]']));
   if (!runs.some((r) => r.name === 'Verify' && r.conclusion === 'success')) fails.push(`no successful Verify run for ${sha}`);

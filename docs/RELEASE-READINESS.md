@@ -90,6 +90,15 @@ Until a separately approved operator rollout confirms both matching keys
 are configured, the legacy unsigned path may remain available. Public-invoice production controls
 remain an open owner blocker.
 
+## Release gate source hardening (2026-10-22)
+
+The review branch now includes non-ignored untracked source files in its
+worktree cleanliness check. Its restore-drill parser checks the actual
+Dhaka-local timestamp, not only midnight on that date, so a future same-day
+`Pass` cannot satisfy the release gate early. Regression tests cover
+these cases. These safeguards do not waive legal publication, missing
+owner approvals, independent reserve evidence or physical recovery checks.
+
 ## Verified locally
 
 | Area | Evidence | Limit |

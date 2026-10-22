@@ -14,7 +14,7 @@ The section-by-section implementation work and recorded local automated review a
 
 ## GitHub review and handoff status (22 October 2026)
 
-The source changes are staged in [Draft PR #169](https://github.com/parvezmosharafvu/cpay/pull/169), not merged into `main`. Review SHA `c1dd9752007afa064a62d8f7812a061a7b2dfcb8` passed all seven GitHub [Verify #615](https://github.com/parvezmosharafvu/cpay/actions/runs/39719417551) jobs, including disposable-database/RLS E2E, wallet browser checks, package security audit and static checks. Cloudflare's PR bot reported a successful preview build and deployment for that SHA; **preview success is not production acceptance**.
+The source changes are staged in [PR #169](https://github.com/parvezmosharafvu/cpay/pull/169), **Ready for Review**, not merged into `main`. Previous review head `90bcdffc34653ef79aa73cc2ccc01a8172cbfb95` passed all seven [Verify #656](https://github.com/parvezmosharafvu/cpay/actions/runs/39749018740) jobs, including disposable-database/RLS E2E, wallet browser checks, package security audit, invoice signing tests and Playwright. Later source changes must pass their **own** exact-SHA Verify run; older green checks never cover new edits. The review Cloudflare preview is not production acceptance.
 
 Further review-branch edits prevent the release gate from treating missing owner approval, skipped legal publication checks, and invalid or later failed restore-drill records as approval. New regression tests accompany the changes. The latest PR commit must pass its own GitHub Verify run before any merge can be considered; do not cite an older commit's green check as if it covered newer edits.
 

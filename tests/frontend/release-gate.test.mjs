@@ -11,9 +11,46 @@ const now = Date.parse('2026-10-14T00:00:00+06:00');
 
 test('latest passing drill within window is accepted', () => {
   const md = log(['| 2026-10-13 11:50 | a | b | c | **Pass.** ok |']);
-  assert.deepEqual(latestDrill(md), { date: '2026-10-13', pass: true });
+  assert.deepEqual(latestDrill(md), { date: '2026-10-13', time: '11:50', pass: true });
   assert.equal(drillProblem(md, 90, now), null);
 });
+
+test('same-day restore drill with a future time is never a valid release signoff', () => {
+  const atTen = Date.parse('2026-10-22T10:00:00+06:00');
+  const before = log(['| 2026-10-22 09:59 | owner | backup | staging | **Pass.** |']);
+  const after = log(['| 2026-10-22 10:01 | owner | backup | staging | **Pass.** |']);
+  assert.equal(drillProblem(before, 90, atTen), null);
+  assert.match(drillProblem(after, 90, atTen), /future/);
+});
+
+test('historical date-only drill entries default to midnight in Dhaka', () => {
+  const md = log(['| 2026-10-21 | owner | backup | staging | **Pass.** |']);
+  assert.deepEqual(latestDrill(md), { date: '2026-10-21', time: '00:00', pass: true });
+  assert.equal(drillProblem(md, 90, Date.parse('2026-10-22T10:00:00+06:00')), null);
+});
+
+test('release gate considers untracked source files but ignores explicitly ignored artifacts', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { rmSync } = await import('node:fs');
+  const folder = mkdtempSync(join(tmpdir(), 'cpay-release-status-'));
+  const git = (...args) => execFileSync('git', args, { cwd: folder, encoding: 'utf8' });
+  try {
+    git('init', '-q');
+    writeFileSync(join(folder, '.gitignore'), 'ignored-build\n');
+    writeFileSync(join(folder, 'unreviewed-source.mjs'), '// source');
+    writeFileSync(join(folder, 'ignored-build'), 'generated');
+    const status = git('status', '--porcelain', '--untracked-files=normal');
+    assert.match(status, /\?\? unreviewed-source\.mjs/);
+    assert.doesNotMatch(status, /ignored-build/);
+    const { readFileSync } = await import('node:fs');
+    const gate = readFileSync('scripts/release-gate.mjs', 'utf8');
+    assert.match(gate, /'status', '--porcelain', '--untracked-files=normal'/);
+    assert.doesNotMatch(gate, /'status', '--porcelain', '--untracked-files=no'/);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
 test('stale drill is refused', () => {
   assert.match(drillProblem(log(['| 2026-06-01 10:00 | a | b | c | **Pass.** |']), 90, now), /days old/);
 });
@@ -27,7 +64,7 @@ test('latest same-day failed drill refuses release even after earlier success', 
     '| 2026-10-13 09:00 | operator | backup | staging | **Pass.** |',
     '| 2026-10-13 11:00 | operator | backup | staging | Fail: incorrect totals |',
   ]);
-  assert.deepEqual(latestDrill(rows), { date: '2026-10-13', pass: false });
+  assert.deepEqual(latestDrill(rows), { date: '2026-10-13', time: '11:00', pass: false });
   assert.match(drillProblem(rows, 90, now), /did not pass/);
 });
 test('latest time wins on same day even when rows are out of order', () => {

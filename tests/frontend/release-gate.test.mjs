@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { latestDrill, drillProblem, openBlockers, pendingOwnerBlockers, isEntrypoint } from '../../scripts/release-gate.mjs';
+import { latestDrill, drillProblem, openBlockers, pendingOwnerBlockers, legalGateProblem, isEntrypoint } from '../../scripts/release-gate.mjs';
 import { mkdtempSync, writeFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -21,6 +21,39 @@ test('failed latest drill is refused even if an older one passed', () => {
   assert.match(drillProblem(log(['| 2026-09-01 | a | b | c | **Pass.** |', '| 2026-10-10 | a | b | c | Fail: rows differ |']), 90, now), /did not pass/);
 });
 test('no drill is refused', () => { assert.match(drillProblem('nothing', 90, now), /no restore drill/); });
+
+test('latest same-day failed drill refuses release even after earlier success', () => {
+  const rows = log([
+    '| 2026-10-13 09:00 | operator | backup | staging | **Pass.** |',
+    '| 2026-10-13 11:00 | operator | backup | staging | Fail: incorrect totals |',
+  ]);
+  assert.deepEqual(latestDrill(rows), { date: '2026-10-13', pass: false });
+  assert.match(drillProblem(rows, 90, now), /did not pass/);
+});
+test('latest time wins on same day even when rows are out of order', () => {
+  const rows = log([
+    '| 2026-10-13 11:00 | operator | backup | staging | Fail: differences |',
+    '| 2026-10-13 09:00 | operator | backup | staging | **Pass.** |',
+  ]);
+  assert.match(drillProblem(rows, 90, now), /did not pass/);
+});
+test('Pass in backup description does not count as a successful Result', () => {
+  const rows = log(['| 2026-10-13 11:00 | operator | **Pass.** previous export | staging | Fail |']);
+  assert.match(drillProblem(rows, 90, now), /did not pass/);
+});
+test('invalid restore drill clock is refused', () => {
+  const rows = log(['| 2026-10-13 25:61 | operator | backup | staging | **Pass.** |']);
+  assert.match(drillProblem(rows, 90, now), /invalid time/);
+});
+test('skipping legal verification is diagnostic-only and cannot yield GO', () => {
+  let called = 0;
+  assert.match(legalGateProblem(['--skip-legal'], () => { called++; }), /production release refused/);
+  assert.equal(called, 0);
+  assert.equal(legalGateProblem([], () => { called++; }), null);
+  assert.equal(called, 1);
+  assert.match(legalGateProblem([], () => { throw new Error('not published'); }), /not published/);
+});
+
 test('future-dated restore evidence is refused, even if marked Pass', () => {
   assert.match(drillProblem(log(['| 2026-10-15 12:00 | a | b | c | **Pass.** |']), 90, now), /future/);
 });

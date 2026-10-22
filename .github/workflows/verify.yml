@@ -674,7 +674,7 @@ jobs:
           npm ci --no-audit --no-fund
           cd wallet && npm ci --ignore-scripts --no-audit --no-fund
       - name: Wallet dependency audit (high and above fails)
-        run: cd wallet && npm audit --omit=dev --audit-level=high
+        run: bash ci/npm-audit-with-retry.sh wallet
       - name: Build rules (no fake engine in production, hashes, strict CSP)
         run: node --test tests/wallet/build.test.mjs tests/wallet/verify-release.test.mjs tests/wallet/passkey-origin.test.mjs tests/wallet/lnaddress.test.mjs
       - name: Browser tests (phrase never leaves the page, link is optional and revocable, offline unlock, real library under CSP)
@@ -740,8 +740,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Production dependency audit (high and above fails)
         run: |
-          npm audit --omit=dev --audit-level=high
-          cd payment-service && npm audit --omit=dev --audit-level=high
+          bash ci/npm-audit-with-retry.sh .
+          bash ci/npm-audit-with-retry.sh payment-service
       - name: Deployment artifact builds clean
         run: npm run build && npm run prepare:upload
       - name: Local Markdown links resolve

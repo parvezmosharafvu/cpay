@@ -2,6 +2,14 @@
 
 Scope: read-only GitHub metadata and local wallet verification. No deployment, real payment or production settings change.
 
+## Subsequent GitHub and Preview evidence (2026-10-22)
+
+The repository observation below predates the review PR and describes only what was available during the local ZIP review. Later, [PR #169](https://github.com/parvezmosharafvu/cpay/pull/169) was opened as a Draft and the source changes were committed. Its commit `cee66091ba537a033e7c5f3be88bd45ff4c8b63f` passed all seven jobs in [GitHub Verify #604](https://github.com/parvezmosharafvu/cpay/actions/runs/39716367388): pages/frontend, database migrations, edge functions, wallet browser/build, dependency/secrets/public smoke, ledger inventory and disposable-stack Playwright E2E (including real RLS checks).
+
+The GitHub PR bot also reported a successful [Cloudflare Preview deployment](https://review-core-design-handoff-20261022-cpay.taylorjamesbusiness0.workers.dev) for that commit. This preview is **not** the public production environment. Later review commits add stricter restore-drill date validation and tests; each new head requires its own CI verification. Never reuse #604 as evidence for a different SHA.
+
+As of this source review there is still **no owner sign-off for production release**. Legal/Contact entry, current solvency, real transfer/reconciliation acceptance, physical passkeys and devices, restore readiness, protection/schedules, and all open owner Medium blockers remain to be independently accepted. No production actions are asserted by this evidence.
+
 ## Repository observation
 
 - Repository: [parvezmosharafvu/cpay](https://github.com/parvezmosharafvu/cpay), default branch main, accessible and not archived.

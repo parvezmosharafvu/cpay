@@ -29,11 +29,17 @@ export function latestDrill(md) {
 }
 
 export function openBlockers(md) {
-  return md.split('\n').filter((l) => /^\|/.test(l) && /\|\s*(Critical|High)\s*\|/i.test(l) && /\|\s*open\s*\|/i.test(l));
+  // High and Critical can be closed, but never accepted in lieu of a fix.
+  return md.split('\n').filter((line) => {
+    if (!/^\s*\|/.test(line)) return false;
+    const cells = line.trim().split('|').slice(1, -1).map((cell) => cell.trim());
+    const severity = cells[1]?.toLowerCase();
+    return (severity === 'critical' || severity === 'high') && cells[2]?.toLowerCase() !== 'closed';
+  });
 }
 
 /** Medium issues need closure or explicit, dated owner acceptance with an evidence link. */
-export function pendingOwnerBlockers(md) {
+export function pendingOwnerBlockers(md, nowMs = Date.now()) {
   return md.split('\n').filter((line) => {
     if (!/^\s*\|/.test(line)) return false;
     const cells = line.trim().split('|').slice(1, -1).map((cell) => cell.trim());
@@ -42,8 +48,13 @@ export function pendingOwnerBlockers(md) {
     if (status === 'closed') return false;
     if (status !== 'accepted') return true;
     const evidence = cells.slice(3).join(' | ');
-    return !(/\bowner accepted(?: on)? 20\d{2}-\d{2}-\d{2}\b/i.test(evidence)
-      && /(?:https:\/\/\S+|#[1-9]\d*)/.test(evidence));
+    const signed = evidence.match(/\bowner accepted(?: on)? (20\d{2}-\d{2}-\d{2})\b/i);
+    if (!signed || !/(?:https:\/\/\S+|#[1-9]\d*)/.test(evidence) || !Number.isFinite(nowMs)) return true;
+    // Invalid or future-dated sign-offs cannot bypass an unresolved blocker.
+    const day = new Date(`${signed[1]}T00:00:00Z`);
+    const midnightDhaka = Date.parse(`${signed[1]}T00:00:00+06:00`);
+    return !Number.isFinite(day.getTime()) || day.toISOString().slice(0, 10) !== signed[1]
+      || !Number.isFinite(midnightDhaka) || midnightDhaka > nowMs;
   });
 }
 

@@ -70,8 +70,9 @@ export function replayDecision(existing: ExistingPayment, chargedCents: number, 
 
 export type TurnstileMode = "off" | "monitor" | "enforce";
 
-export function turnstileMode(secret: string, mode: string | undefined): TurnstileMode {
-  if (!secret) return "off";
+export function turnstileMode(_secret: string, mode: string | undefined): TurnstileMode {
+  // The requested enforcement mode must never silently downgrade to off
+  // when the secret is missing. checkTurnstile refuses this configuration.
   return mode === "enforce" ? "enforce" : mode === "monitor" ? "monitor" : "off";
 }
 
@@ -79,7 +80,7 @@ export function turnstileMode(secret: string, mode: string | undefined): Turnsti
  * Cloudflare Turnstile siteverify. Off unless TURNSTILE_SECRET_KEY and
  * TURNSTILE_MODE are set. "monitor" verifies and logs but never blocks;
  * "enforce" refuses a missing or failed token. A siteverify outage fails
- * closed only in enforce mode.
+ * closed in enforce mode, even when the secret was not configured.
  */
 export async function checkTurnstile(
   mode: TurnstileMode, secret: string, token: unknown, ip: string,
@@ -88,7 +89,11 @@ export async function checkTurnstile(
   if (mode === "off") return { ok: true };
   const t = typeof token === "string" ? token.trim() : "";
   let verdict: { ok: boolean; reason?: string };
-  if (!t || t.length > 2048) {
+  // Refuse *before* any outbound request if enforce was configured without
+  // a usable secret. Even a stubbed verifier must not be able to approve it.
+  if (!secret.trim()) {
+    verdict = { ok: false, reason: "configuration" };
+  } else if (!t || t.length > 2048) {
     verdict = { ok: false, reason: "missing" };
   } else {
     try {

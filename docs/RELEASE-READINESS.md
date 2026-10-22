@@ -42,6 +42,19 @@ rate, reconciliation and owner sign-off. The procedures and limitations are in
 blocker remains open. GitHub CI uses only disposable PostgreSQL to validate
 the non-authorizing query shape; a green test is not reserve evidence.
 
+## Turnstile fail-closed configuration hardening (2026-10-22)
+
+The review source now preserves an explicitly configured
+`TURNSTILE_MODE=enforce` even when `TURNSTILE_SECRET_KEY` is unset
+or blank; `checkTurnstile()` refuses invoice creation with a
+`configuration` result before contacting the verifier. Regression tests
+also ensure that `off` remains an explicit default and `monitor`
+reports the missing configuration without enforcing. The change prevents
+an operator typo from silently disabling a requested security gate.
+**It does not configure Turnstile on the live project, prove bot
+protection for deployed invoices, or authenticate the unsigned proxy IP
+header.** Production settings and approval remain owner-controlled.
+
 ## Verified locally
 
 | Area | Evidence | Limit |

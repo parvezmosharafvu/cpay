@@ -37,11 +37,19 @@ Deno.test("sha256Hex is 64 lowercase hex (raw IPs are never stored)", async () =
   eq(h, "6694f83c9f476da31f5df6bcc520034e7e57d421d247b9d34f49edbfc84a764c", "known vector");
 });
 
-Deno.test("turnstile: off without secret+mode; monitor never blocks; enforce blocks bad/missing tokens", async () => {
-  eq(turnstileMode("", "enforce"), "off", "no secret");
+Deno.test("turnstile: explicit enforce without secret never downgrades to off", async () => {
+  eq(turnstileMode("", "enforce"), "enforce", "missing secret still requires enforcement");
+  eq(turnstileMode("  ", "enforce"), "enforce", "whitespace secret still requires enforcement");
+  eq(turnstileMode("", "monitor"), "monitor", "monitor reports missing secret");
   eq(turnstileMode("s", undefined), "off", "no mode");
   eq(turnstileMode("s", "enforce"), "enforce", "enforce");
   eq(await checkTurnstile("off", "", undefined, "1.2.3.4"), { ok: true }, "off");
+  let attempts = 0;
+  const unexpected = (() => { attempts++; return Promise.resolve(new Response(JSON.stringify({ success: true }))); }) as unknown as typeof fetch;
+  eq(await checkTurnstile("enforce", "", "tok", "1.2.3.4", unexpected), { ok: false, reason: "configuration" }, "missing secret blocks despite token");
+  eq(await checkTurnstile("enforce", "  ", "tok", "1.2.3.4", unexpected), { ok: false, reason: "configuration" }, "blank secret blocks");
+  eq(await checkTurnstile("monitor", "", "tok", "1.2.3.4", unexpected), { ok: true, reason: "monitor:configuration" }, "monitor logs config failure");
+  eq(attempts, 0, "do not call remote verifier without a secret");
   const ok = (() => Promise.resolve(new Response(JSON.stringify({ success: true })))) as unknown as typeof fetch;
   const no = (() => Promise.resolve(new Response(JSON.stringify({ success: false })))) as unknown as typeof fetch;
   const down = (() => Promise.reject(new Error("down"))) as unknown as typeof fetch;

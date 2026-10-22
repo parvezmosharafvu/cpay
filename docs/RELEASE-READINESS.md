@@ -28,6 +28,20 @@ requires a separate approved migration deployment and post-deploy read-only
 verification. Existing release blockers, including Legal / Contact owner
 publication and the independent wallet/restore security checks, remain open.
 
+## Read-only solvency evidence (2026-10-22)
+
+The source now includes `ci/solvency_readonly_snapshot.sql`, a SELECT-only
+operator snapshot of non-negative per-account USD available claims, unsettled
+withdrawals, owed forwards, and separate recently synced mainnet wallet balance
+in satoshis. It was exercised read-only against the correctly connected CPAY
+project. No personal or treasury values were committed to the public
+repository. The query **always returns `UNVERIFIED`**; it cannot certify
+solvency without independent, current wallet proof and a conservative BTC/USD
+rate, reconciliation and owner sign-off. The procedures and limitations are in
+[SOLVENCY-SNAPSHOT.md](SOLVENCY-SNAPSHOT.md). The corresponding Medium owner
+blocker remains open. GitHub CI uses only disposable PostgreSQL to validate
+the non-authorizing query shape; a green test is not reserve evidence.
+
 ## Verified locally
 
 | Area | Evidence | Limit |

@@ -1,7 +1,7 @@
--- Run ONLY on the disposable CI PostgreSQL database after all migrations.
--- Rehearse the proposed search_path hardening with a complete rollback:
--- do not change the existing (already applied) migration, production grants,
--- user payment rows, or the final CI schema.
+-- Run ONLY on disposable CI PostgreSQL after every migration is applied.
+-- Verify the actual migration pins an empty search_path, then prove the
+-- delete guard survives an idempotent ALTER within a rolled-back transaction.
+-- No production connection, live payment rows or persistent CI changes.
 BEGIN;
 
 CREATE TEMP TABLE cpay_forward_guard_probe (id integer PRIMARY KEY);
@@ -11,7 +11,27 @@ CREATE TRIGGER cpay_forward_guard_probe_no_delete
 
 INSERT INTO pg_temp.cpay_forward_guard_probe(id) VALUES (1);
 
--- Positive control: the installed original trigger rejects deletion.
+-- The current source migration must already have pinned the path.
+-- Prevent a false green caused solely by the later rehearsal ALTER.
+DO $check$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    WHERE p.oid = 'public.payment_forwards_no_delete()'::regprocedure
+      AND NOT p.prosecdef
+      AND pg_get_function_result(p.oid) = 'trigger'
+      AND EXISTS (
+        SELECT 1 FROM unnest(p.proconfig) AS cfg
+        WHERE cfg LIKE 'search_path=%'
+      )
+  ) THEN
+    RAISE EXCEPTION 'forward delete guard migration did not pin search_path';
+  END IF;
+END
+$check$;
+
+-- Positive control: the migrated trigger rejects deletion.
 DO $check$
 BEGIN
   BEGIN
@@ -25,7 +45,7 @@ BEGIN
 END
 $check$;
 
--- Match the reviewed, minimal future change. No role or body is altered.
+-- Reapplying the same setting is idempotent. No role or body is altered.
 ALTER FUNCTION public.payment_forwards_no_delete() SET search_path = '';
 
 DO $check$

@@ -6,7 +6,8 @@
 //      the deployed site SHA equals the verified SHA
 //   4. the latest restore drill in docs/BACKUP-RECOVERY.md passed and is
 //      younger than --drill-max-days (default 90)
-//   5. docs/RELEASE-BLOCKERS.md lists no open Critical/High item
+//   5. docs/RELEASE-BLOCKERS.md lists no open Critical/High item AND
+//      all Medium owner blockers are closed or explicitly accepted with evidence
 //   6. legal pages published from Admin → Settings with every field filled (ci/check_legal.py --release)
 // Read-only: it never deploys anything. Usage:
 //   node scripts/release-gate.mjs [--sha <sha>] [--drill-max-days 90] [--skip-legal]
@@ -29,6 +30,21 @@ export function latestDrill(md) {
 
 export function openBlockers(md) {
   return md.split('\n').filter((l) => /^\|/.test(l) && /\|\s*(Critical|High)\s*\|/i.test(l) && /\|\s*open\s*\|/i.test(l));
+}
+
+/** Medium issues need closure or explicit, dated owner acceptance with an evidence link. */
+export function pendingOwnerBlockers(md) {
+  return md.split('\n').filter((line) => {
+    if (!/^\s*\|/.test(line)) return false;
+    const cells = line.trim().split('|').slice(1, -1).map((cell) => cell.trim());
+    if (cells[1]?.toLowerCase() !== 'medium') return false;
+    const status = (cells[2] || '').toLowerCase();
+    if (status === 'closed') return false;
+    if (status !== 'accepted') return true;
+    const evidence = cells.slice(3).join(' | ');
+    return !(/\bowner accepted(?: on)? 20\d{2}-\d{2}-\d{2}\b/i.test(evidence)
+      && /(?:https:\/\/\S+|#[1-9]\d*)/.test(evidence));
+  });
 }
 
 export function drillProblem(md, maxDays, nowMs = Date.now()) {
@@ -72,8 +88,11 @@ function main(argv) {
   if (!checks.some((c) => c.name === 'Workers Builds: cpay' && c.conclusion === 'success')) fails.push(`site deploy (Workers Builds: cpay) not successful for ${sha}: deployed SHA != verified SHA`);
   const drill = drillProblem(readFileSync('docs/BACKUP-RECOVERY.md', 'utf8'), Number(opt('--drill-max-days', 90)));
   if (drill) fails.push(drill);
-  const blockers = openBlockers(readFileSync('docs/RELEASE-BLOCKERS.md', 'utf8'));
+  const blockersDoc = readFileSync('docs/RELEASE-BLOCKERS.md', 'utf8');
+  const blockers = openBlockers(blockersDoc);
   if (blockers.length) fails.push(`${blockers.length} open Critical/High item(s) in docs/RELEASE-BLOCKERS.md`);
+  const ownerBlockers = pendingOwnerBlockers(blockersDoc);
+  if (ownerBlockers.length) fails.push(`${ownerBlockers.length} unresolved Medium owner item(s): close or record explicit owner acceptance (date + evidence link) in docs/RELEASE-BLOCKERS.md`);
   if (!argv.includes('--skip-legal')) {
     try { sh('python3', ['ci/check_legal.py', '--release']); } catch { fails.push('legal pages not published: fill every legal field and turn on Publish in Admin → Settings (ci/check_legal.py --release)'); }
   }

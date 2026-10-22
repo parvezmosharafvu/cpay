@@ -14,11 +14,14 @@ Shared client: `supabase/functions/_shared/btcpay.ts`.
 2. `create-invoice` inserts the `payments` row first, then calls the
    Greenfield API `POST /api/v1/stores/{BTCPAY_STORE_ID}/invoices` with the
    USD amount and metadata `orderId = cpay:<payment id>`, `cpayPaymentId`,
-   `cpayLinkId`. No payment-method list is sent, so **every method the
-   `cpay` store has on is offered (Lightning and on-chain bitcoin)**.
-3. The pay page shows the Lightning QR from BTCPay and a
-   **Pay with on-chain bitcoin** link to the BTCPay checkout page. A store
-   without Lightning sends the payer straight to the BTCPay checkout.
+   `cpayLinkId`. By default `btcpay_lightning_only=true` requests the
+   **BTC-LN method only**. Only if the owner explicitly turns that setting
+   off does the request omit the payment-method restriction and allow all
+   checkout methods configured on the BTCPay store.
+3. The pay page displays BTCPay's Lightning invoice when available. When
+   the owner has separately enabled unrestricted methods, the BTCPay
+   checkout may also show on-chain and plugin payment options. A store
+   without Lightning uses BTCPay's checkout page.
 4. BTCPay calls `btcpay-webhook`. The function checks the `BTCPay-Sig`
    HMAC against every configured secret, ignores other stores, **re-fetches
    the invoice and its payment methods from BTCPay** (the body is never
@@ -49,6 +52,28 @@ settled, and Auto withdraw sends from the CPAY wallet, so keep enough float
 in the CPAY wallet and move on-chain funds over yourself until an automatic
 sweep is built. Lightning payments land wherever the store's Lightning
 backend is connected.
+
+## External BTCPay plugin methods (not automatically enabled)
+
+A BTCPay plugin can add checkout methods that settle to a different
+wallet, asset, network or conversion provider. CPAY's Greenfield/webhook
+integration consumes BTCPay's normalized `Settled` invoice status; it
+does not install, configure, authenticate to or custody a plugin's assets.
+The webhook now reports four operator-facing method categories:
+`lightning`, `onchain`, `plugin`, and `unreported`. For unknown plugin
+methods it explicitly calls for independent reserve reconciliation
+instead of labeling the receipt a CPAY Lightning balance. This change
+**only affects alert text**: it does not change settled USD, fees,
+wallet balances, forward behavior or payout approvals.
+
+Before an owner ever enables more payment methods, review the target
+BTCPay version/plugin compatibility, provider webhooks and settlement
+proof, custody and asset destination, expiry/late-payment states, fees,
+reconciliation and rollback. The default Lightning-only mode stays on.
+The source-specific comparative review is in
+[research/BTCPay plugin study](../research/BTCPAY-PLUGIN-STUDY-2026-10-22.md).
+Do not treat a successful third-party exchange deposit as proof the
+CPAY payout wallet has matching liquid reserves.
 
 ## Secrets (names only)
 

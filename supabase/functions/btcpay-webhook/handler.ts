@@ -87,9 +87,16 @@ export function createHandler(d: Deps) {
     if (outcome === undefined) return json({ error: "Temporarily unavailable" }, 503);
     if (outcome === "unknown") return json({ error: "Unknown invoice" }, 404);
     if (outcome === "settled") {
-      const where = fig.onchain
+      // The BTCPay store may use a plugin whose settlement destination is
+      // neither the CPAY Lightning wallet nor BTCPay's on-chain wallet.
+      // Unknown methods must not be mislabeled as wallet-funded Lightning.
+      const where = fig.rail === "onchain"
         ? "on-chain (lands in the BTCPay on-chain wallet, not the CPAY Lightning balance)"
-        : "Lightning";
+        : fig.rail === "lightning"
+        ? "Lightning"
+        : fig.rail === "plugin"
+        ? "a BTCPay plugin/other payment method (verify the actual reserve destination separately)"
+        : "an unreported BTCPay payment method (verify receipt evidence and reserves separately)";
       void d.alert(`✅ BTCPay payment $${fig.paidUsd} settled via ${where}. Invoice ${invoiceId}, ${fig.amountSat} sats.`).catch(() => {});
     } else if (outcome === "underpaid" || outcome === "mismatch" || outcome === "not_settleable") {
       void d.alert(`⚠️ BTCPay invoice ${invoiceId} settled in BTCPay but CPAY answered "${outcome}". Check it in Admin.`).catch(() => {});

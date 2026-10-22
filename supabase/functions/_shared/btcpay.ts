@@ -172,5 +172,13 @@ export function settledFigures(inv: BtcpayInvoice, methods: BtcpayPaymentMethod[
     if (s > best.sats) best = { id: methodId(m), sats: s };
   }
   const usd = inv.currency?.toUpperCase() === "USD" && /^\d+(\.\d+)?$/.test(String(inv.amount)) ? String(inv.amount) : null;
-  return { paidUsd: usd, amountSat: sats, method: best.id || null, onchain: /^(BTC|BTC-CHAIN|BTC-OnChain)$/i.test(best.id) };
+  // A BTCPay plugin may add payment methods other than BTC Lightning or
+  // BTC on-chain. Do not describe an unknown method as Lightning or assume
+  // the funds reached the CPAY wallet. Reporting only: settlement unchanged.
+  const rail = !best.id ? "unreported"
+    : /^BTC-(LN|LightningNetwork)$/i.test(best.id) ? "lightning"
+    : /^(BTC|BTC-CHAIN|BTC-OnChain)$/i.test(best.id) ? "onchain"
+    : "plugin";
+  return { paidUsd: usd, amountSat: sats, method: best.id || null, onchain: rail === "onchain", rail };
+
 }

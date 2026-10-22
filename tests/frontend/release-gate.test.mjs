@@ -21,6 +21,18 @@ test('failed latest drill is refused even if an older one passed', () => {
   assert.match(drillProblem(log(['| 2026-09-01 | a | b | c | **Pass.** |', '| 2026-10-10 | a | b | c | Fail: rows differ |']), 90, now), /did not pass/);
 });
 test('no drill is refused', () => { assert.match(drillProblem('nothing', 90, now), /no restore drill/); });
+test('future-dated restore evidence is refused, even if marked Pass', () => {
+  assert.match(drillProblem(log(['| 2026-10-15 12:00 | a | b | c | **Pass.** |']), 90, now), /future/);
+});
+test('invalid calendar dates cannot satisfy the restore gate', () => {
+  assert.match(drillProblem(log(['| 2026-02-30 12:00 | a | b | c | **Pass.** |']), 365, now), /invalid restore drill date/);
+  assert.match(drillProblem(log(['| 2026-13-01 12:00 | a | b | c | **Pass.** |']), 365, now), /invalid restore drill date/);
+});
+test('invalid drill windows or clock inputs refuse a release', () => {
+  const md = log(['| 2026-10-13 12:00 | a | b | c | **Pass.** |']);
+  for (const days of [-1, Infinity, NaN, 0.5]) assert.match(drillProblem(md, days, now), /invalid restore drill age limit/);
+  assert.match(drillProblem(md, 90, NaN), /invalid current time/);
+});
 test('open Critical/High blockers are found, closed and Medium are not', () => {
   const md = '| A | High | open | x |\n| B | Critical | closed | y |\n| C | Medium | open | z |\n| D | critical | OPEN | w |';
   assert.equal(openBlockers(md).length, 2);

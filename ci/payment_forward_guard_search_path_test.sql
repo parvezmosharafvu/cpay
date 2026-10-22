@@ -33,7 +33,12 @@ DECLARE
   valid_function boolean;
 BEGIN
   SELECT NOT p.prosecdef
-         AND p.proconfig @> ARRAY['search_path=']::text[]
+         -- pg_proc may normalize the empty GUC as search_path="" rather
+         -- than search_path=; inspect the setting by key, not serialization.
+         AND EXISTS (
+           SELECT 1 FROM unnest(p.proconfig) AS cfg
+           WHERE cfg LIKE 'search_path=%'
+         )
          AND pg_get_function_result(p.oid) = 'trigger'
     INTO valid_function
   FROM pg_proc p

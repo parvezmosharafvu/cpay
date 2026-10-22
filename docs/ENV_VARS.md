@@ -244,3 +244,26 @@ Schedulers and the corresponding Vault secrets must be switched together,
 with live checks, under the owner's approved change window. Never give a
 cron secret to a third-party monitor. See
 [CRON-SECRET-CUTOVER.md](CRON-SECRET-CUTOVER.md).
+
+
+## Signed Worker client-IP attribution — staged (not enabled in production)
+
+The site Worker can sign its `x-cpay-client-ip` header with a fresh
+timestamp and HMAC-SHA256 using `INVOICE_IP_SIGNING_SECRET`. Set the
+**same high-entropy secret** privately in the Cloudflare Worker and the
+Supabase Edge project only during a separately approved rollout; do not
+put it in a public client or repository. The Worker adds
+`x-cpay-ip-timestamp` and `x-cpay-ip-signature` to proxied
+create-invoice requests. Once the Edge value exists, missing, forged or
+expired attribution is refused for **per-IP identification** and
+requests fall into the shared Worker egress rate-limit bucket.
+The function's other per-link/owner rate limits still apply.
+
+When the Edge secret is absent, existing unsigned forwarding remains
+temporarily accepted for backward compatibility. **That fallback is not
+proof of production protection.** Deploy the matching Worker first,
+then enable the matching Edge secret in a coordinated window, check
+that real payer invoices still rate-limit by client and forged requests
+do not impersonate payers, then rotate per policy. Do not confuse
+signed IP metadata with authentication or a completed Turnstile
+enforcement rollout.

@@ -1,3 +1,5 @@
+import { signClientIp } from "./ip-signature.mjs";
+
 /**
 * CPAY — OG Preview Worker
 *
@@ -295,6 +297,9 @@ if (env && env.INVOICE_RATE_LIMITER && clientIp) {
   }
 }
 const body = await request.text();
+// Only trust the incoming Cloudflare peer IP; never sign a caller-supplied
+// forwarding header. Scoped secret lives in Cloudflare Worker settings.
+const signedClient = await signClientIp(clientIp, env?.INVOICE_IP_SIGNING_SECRET ?? "");
 
 const res = await fetch(`${SUPABASE_URL}/functions/v1/create-invoice`, {
 method: "POST",
@@ -310,6 +315,10 @@ Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
 // The payer's address for create-invoice's per-address limit: Supabase
 // sees this Worker's egress address, shared by every proxied payer.
 ...(clientIp ? { "x-cpay-client-ip": clientIp } : {}),
+...(signedClient ? {
+  "x-cpay-ip-timestamp": signedClient.timestamp,
+  "x-cpay-ip-signature": signedClient.signature,
+} : {}),
 },
 body,
 });

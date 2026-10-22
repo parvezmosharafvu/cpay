@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { invoiceChargeCents } from "./invoice-amount.ts";
 import { formatCents, parseAmountToCents, toCents } from "../_shared/money.ts";
 import {
-  checkTurnstile, clientKey, type ExistingPayment, parseRequestId, PUBLIC_LIMITS, replayDecision, sha256Hex, turnstileMode,
+  checkTurnstile, type ExistingPayment, parseRequestId, PUBLIC_LIMITS, replayDecision, sha256Hex, turnstileMode, turnstileRemoteIp, verifiedClientKey,
 } from "./guards.ts";
 import { serviceAuthHeaders, serviceAuthMode } from "../_shared/service-auth.ts";
 import { coarseGeo } from "../_shared/geo.ts";
@@ -23,6 +23,7 @@ const SITE_URL = (Deno.env.get("SITE_URL") ?? "").replace(/\/+$/, "");
 // Optional Cloudflare Turnstile (off unless both are set; see guards.ts).
 const TURNSTILE_MODE = turnstileMode(Deno.env.get("TURNSTILE_SECRET_KEY") ?? "", Deno.env.get("TURNSTILE_MODE"));
 const TURNSTILE_SECRET = Deno.env.get("TURNSTILE_SECRET_KEY") ?? "";
+const INVOICE_IP_SIGNING_SECRET = Deno.env.get("INVOICE_IP_SIGNING_SECRET") ?? "";
 // Wildcard origin is intentional here: payment links are embedded on
 // creator-owned custom domains, so any site must be able to POST. The
 // endpoint is unauthenticated by design and defends itself with the
@@ -80,10 +81,10 @@ if (amountCents === null || amountCents < 100 || amountCents > 500000) {
 return json({ error: "Amount must be between $1 and $5000" }, 400);
 }
 const requestId = parseRequestId(body.requestId);
-const ip = clientKey(req.headers);
+const ip = await verifiedClientKey(req.headers, INVOICE_IP_SIGNING_SECRET);
 
 // Optional bot check (off by default; TURNSTILE_SECRET_KEY + TURNSTILE_MODE).
-const turnstile = await checkTurnstile(TURNSTILE_MODE, TURNSTILE_SECRET, body.turnstileToken, ip);
+const turnstile = await checkTurnstile(TURNSTILE_MODE, TURNSTILE_SECRET, body.turnstileToken, turnstileRemoteIp(ip));
 if (turnstile.reason) console.warn("turnstile:", turnstile.reason);
 if (!turnstile.ok) return json({ error: "Please complete the verification and try again." }, 403);
 

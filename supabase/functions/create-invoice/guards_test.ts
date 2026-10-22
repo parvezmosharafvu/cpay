@@ -1,4 +1,5 @@
-import { checkTurnstile, clientKey, CLOUDFLARE_WORKER_EGRESS, parseRequestId, replayDecision, sha256Hex, turnstileMode } from "./guards.ts";
+import { checkTurnstile, clientKey, CLOUDFLARE_WORKER_EGRESS, parseRequestId, replayDecision, sha256Hex, turnstileMode, turnstileRemoteIp, verifiedClientKey } from "./guards.ts";
+import { signClientIp } from "../../../worker/ip-signature.mjs";
 
 function eq(a: unknown, b: unknown, msg: string) {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg}: expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
@@ -65,4 +66,28 @@ Deno.test("client key: a Worker subrequest is keyed by the payer address our Wor
   if (clientKey(h({ "cf-connecting-ip": CLOUDFLARE_WORKER_EGRESS, "x-cpay-client-ip": "198.51.100.7" })) !== "proxied:198.51.100.7") throw new Error("proxied");
   if (clientKey(h({ "cf-connecting-ip": CLOUDFLARE_WORKER_EGRESS, "x-cpay-client-ip": "not an ip<>" })) !== `worker:${CLOUDFLARE_WORKER_EGRESS}`) throw new Error("junk header");
   if (clientKey(h({ "cf-connecting-ip": "203.0.113.9", "x-cpay-client-ip": "198.51.100.7" })) !== "203.0.113.9") throw new Error("direct ignores header");
+});
+
+
+Deno.test("Worker IP HMAC: trusted only with valid signature and fresh timestamp", async () => {
+  const now = Date.parse("2026-10-22T07:30:00Z");
+  const ip = "198.51.100.7";
+  const secret = "test-scope-key-never-use-live";
+  const mkHeaders = (ipValue: string, signature: { timestamp: string; signature: string } | null) => new Headers({
+    "cf-connecting-ip": CLOUDFLARE_WORKER_EGRESS,
+    "x-cpay-client-ip": ipValue,
+    ...(signature ? { "x-cpay-ip-timestamp": signature.timestamp, "x-cpay-ip-signature": signature.signature } : {}),
+  });
+  const signed = await signClientIp(ip, secret, now);
+  if (!signed) throw new Error("no test signature");
+  eq(await verifiedClientKey(mkHeaders(ip, signed), secret, now), `proxied:${ip}`, "valid attribution");
+  eq(await verifiedClientKey(mkHeaders("198.51.100.8", signed), secret, now), `worker:${CLOUDFLARE_WORKER_EGRESS}`, "tampered IP");
+  eq(await verifiedClientKey(mkHeaders(ip, signed), "other-secret", now), `worker:${CLOUDFLARE_WORKER_EGRESS}`, "wrong key");
+  eq(await verifiedClientKey(mkHeaders(ip, signed), secret, now + 91_000), `worker:${CLOUDFLARE_WORKER_EGRESS}`, "expired signature");
+  eq(await verifiedClientKey(mkHeaders(ip, null), secret, now), `worker:${CLOUDFLARE_WORKER_EGRESS}`, "unsigned refused once key is enabled");
+  eq(await verifiedClientKey(mkHeaders(ip, null), "", now), `proxied:${ip}`, "legacy until activated");
+  const direct = new Headers({ "cf-connecting-ip": "203.0.113.3", "x-cpay-client-ip": ip, "x-cpay-ip-timestamp": signed.timestamp, "x-cpay-ip-signature": signed.signature });
+  eq(await verifiedClientKey(direct, secret, now), "203.0.113.3", "direct client IP cannot be overridden");
+  eq(turnstileRemoteIp(`proxied:${ip}`), ip, "send bare IP to Turnstile");
+  eq(turnstileRemoteIp(`worker:${CLOUDFLARE_WORKER_EGRESS}`), "", "do not send egress bucket to Turnstile");
 });

@@ -68,6 +68,20 @@ values were not accessed or published. The controlled payout acceptance
 blocker remains open; no additional transaction is required merely to
 update the historical evidence.
 
+## Signed proxy-IP attribution (source staged 2026-10-22)
+
+The Cloudflare invoice proxy now emits an HMAC-SHA256 IP/timestamp
+signature when a private `INVOICE_IP_SIGNING_SECRET` is present. The
+create-invoice Edge function checks freshness and signature when its
+matching secret is set. Invalid/unsigned requests then use the
+non-privileged Worker-egress rate-limit bucket, not a caller-supplied
+per-IP key. Regression tests cover signature tampering, expiry,
+missing signatures, and the shared-secret transition.
+**Neither secret has been configured in production.** The legacy mode
+still accepts the old header until an operator verifies the
+coordinated Worker/Edge rollout. Public-invoice production controls
+remain an open owner blocker.
+
 ## Verified locally
 
 | Area | Evidence | Limit |

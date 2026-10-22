@@ -22,6 +22,43 @@ export function parseRequestId(value: unknown): string | null {
 export const CLOUDFLARE_WORKER_EGRESS = "2a06:98c0:3600::103";
 const IP_LIKE = /^[0-9a-fA-F:.]{2,45}$/;
 
+/**
+ * Validate a signed Worker attribution when the Edge signing key is set.
+ * Missing/invalid/expired signatures collapse to the shared Worker egress
+ * bucket instead of accepting a spoofable per-payer forwarded IP.
+ * With no key configured, retain legacy behavior for staged rollout.
+ */
+export async function verifiedClientKey(headers: Headers, secret: string, nowMs = Date.now()): Promise<string> {
+  const cf = headers.get("cf-connecting-ip")?.trim();
+  if (cf !== CLOUDFLARE_WORKER_EGRESS || !secret) return clientKey(headers);
+  const fallback = `worker:${cf}`;
+  const ip = headers.get("x-cpay-client-ip")?.trim() ?? "";
+  const timestamp = headers.get("x-cpay-ip-timestamp")?.trim() ?? "";
+  const signature = headers.get("x-cpay-ip-signature")?.trim() ?? "";
+  if (!IP_LIKE.test(ip) || !/^\\d{10}$/.test(timestamp)
+      || !/^[A-Za-z0-9_-]{43}$/.test(signature) || !Number.isFinite(nowMs)) return fallback;
+  const seconds = Number(timestamp);
+  if (!Number.isSafeInteger(seconds) || Math.abs(nowMs / 1000 - seconds) > 90) return fallback;
+  try {
+    const binary = atob(signature.replace(/-/g, "+").replace(/_/g, "/") + "=");
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    const key = await crypto.subtle.importKey(
+      "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"],
+    );
+    const payload = new TextEncoder().encode(`cpay:create-invoice:ip:v1\\n${ip}\\n${timestamp}`);
+    return await crypto.subtle.verify("HMAC", key, bytes, payload) ? `proxied:${ip}` : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Turnstile siteverify requires a bare IP, never a rate-limit bucket label. */
+export function turnstileRemoteIp(rateKey: string): string {
+  if (rateKey.startsWith("worker:")) return "";
+  if (rateKey.startsWith("proxied:")) return rateKey.slice("proxied:".length);
+  return rateKey === "unknown" ? "" : rateKey;
+}
+
 export function clientKey(headers: Headers): string {
   const cf = headers.get("cf-connecting-ip")?.trim();
   if (cf === CLOUDFLARE_WORKER_EGRESS) {

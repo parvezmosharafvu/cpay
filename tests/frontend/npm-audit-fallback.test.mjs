@@ -65,7 +65,7 @@ exit "$AUDIT_FALLBACK_EXIT"
 test('retired npm Quick Audit HTTP 400 uses pinned modern full audit', () => {
   const result = auditScenario('quick400', 0);
   assert.equal(result.status, 0);
-  assert.match(result.fallback, /npm@11\\.21\\.1 audit --omit=dev --audit-level=high/);
+  assert.ok(result.fallback.includes('npm@11.21.1 audit --omit=dev --audit-level=high'));
   assert.match(result.stderr, /Quick Audit endpoint returned 400/);
 });
 

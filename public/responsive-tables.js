@@ -15,8 +15,41 @@
         if (td.colSpan > 1) { td.dataset.label = ''; return; }
         if (heads[i] != null && td.dataset.label !== heads[i]) td.dataset.label = heads[i];
       });
+      if (keep) fold(tr);
     });
   }
+  // Tap to expand (cards only, under 640px): a row shows its first two
+  // cells, its status and its actions; a tap or Enter shows the rest. Rows
+  // that already open a details view (.row-open) are left alone.
+  const INTERACTIVE = 'a,button,input,select,textarea,summary,details,label,[contenteditable]';
+  function fold(tr) {
+    const cells = [...tr.children];
+    if (tr.classList.contains('row-open') || tr.closest('[data-nofold]') || cells.length < 4 || cells.some((td) => td.colSpan > 1)) return;
+    if (!tr.classList.contains('rt-fold')) {
+      tr.classList.add('rt-fold');
+      tr.tabIndex = 0;
+      tr.setAttribute('aria-expanded', 'false');
+    }
+    cells.forEach((td, i) => {
+      const peek = i < 2 || td.classList.contains('lead') || td.classList.contains('table-actions') || !!td.querySelector('.badge');
+      if (peek) delete td.dataset.more; else td.dataset.more = '1';
+    });
+  }
+  function toggle(tr) {
+    const open = !tr.classList.contains('open');
+    tr.classList.toggle('open', open);
+    tr.setAttribute('aria-expanded', String(open));
+  }
+  document.addEventListener('click', (e) => {
+    const tr = e.target.closest && e.target.closest('tr.rt-fold');
+    if (!tr || e.target.closest(INTERACTIVE)) return;
+    toggle(tr);
+  });
+  document.addEventListener('keydown', (e) => {
+    if ((e.key !== 'Enter' && e.key !== ' ') || !e.target.matches || !e.target.matches('tr.rt-fold')) return;
+    e.preventDefault();
+    toggle(e.target);
+  });
   function scrollFocus(region) {
     const style = getComputedStyle(region);
     const overflowing = region.clientWidth > 0 && region.scrollWidth > region.clientWidth + 1 && /auto|scroll/.test(style.overflowX);

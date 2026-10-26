@@ -66,6 +66,18 @@ Safe areas: the desk top bar, the bottom tab bar, the drawer and the payment she
   - `.balance-card` (overview hero);
   - `.stat` tiles with `.stat-ico`.
 - **Lists:** `.activity` (recent payments: status icon, title, time, amount).
+- **Admin Overview** (`.ov-summary`): one card holds the wallet value, a compact grid of totals and
+  queues (`.ov-stats`, 4 across on desktop, 2 on phones) and queue chips (`.ov-chip`).
+- **Payment cards** ([`pay-cards.js`](../public/pay-cards.js), `.pay-list`, `.pay-card`): admin Overview
+  "All payments" and the Payments section. Each payment is a card (amount, account, status); a tap opens
+  the details in place (link, method, times, location, invoice ID and Lightning invoice with Copy).
+  Search is server-side; status and time filters apply to the loaded rows; "Live" re-reads every 30 s
+  while on screen.
+- **Tap to expand** ([`responsive-tables.js`](../public/responsive-tables.js), `tr.rt-fold`): when an
+  `.rtable` shows as cards, each row shows its first two cells, status and actions; a tap or Enter shows
+  the rest. Rows that open a details view (`.row-open`) are left alone.
+- **Icons:** `favicon-site.svg` (navy tile, cyan bolt) is the source of `favicon.ico`, `favicon-32.png`,
+  `apple-touch-icon.png` and `icon-192/512.png`; the payment pages keep `favicon-payment.svg`.
 - **Tables:**
   - `.table` (sticky-column scroll on phones);
   - `.table.rtable` (cards when narrow; cells carry `data-label`, `.lead` spans the card, `.cols-3` for

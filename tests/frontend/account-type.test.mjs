@@ -33,7 +33,8 @@ test('register offers the two types, Individual first and checked, and sends the
 });
 
 test('every place that shows the type escapes it', () => {
-  for (const f of ['admin-desk.js', 'admin-home-live.js', 'daily-desk.js']) {
+  // The Overview no longer lists applications (they are in Applications).
+  for (const f of ['admin-desk.js', 'daily-desk.js']) {
     const s = pub(f);
     const uses = s.match(/accountTypeText\([^)]*\)/g) || [];
     assert.ok(uses.length >= 1, `${f} shows the type`);

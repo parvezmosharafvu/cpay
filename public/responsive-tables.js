@@ -3,10 +3,15 @@
 // (data-label) so the CSS can print "Balance  1,000 sats" on each line.
 (function () {
   'use strict';
+  // .rtable tables (cards when their box is under 640px) get the same labels,
+  // except cells whose script already wrote one.
   function label(table) {
     const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent.trim());
+    const keep = !table.classList.contains('stack-sm');
     table.querySelectorAll('tbody tr').forEach((tr) => {
       [...tr.children].forEach((td, i) => {
+        if (keep && td.hasAttribute('data-label') && td.dataset.auto !== '1') return;
+        if (keep) td.dataset.auto = '1';
         if (td.colSpan > 1) { td.dataset.label = ''; return; }
         if (heads[i] != null && td.dataset.label !== heads[i]) td.dataset.label = heads[i];
       });
@@ -34,7 +39,7 @@
     }
   }
   const run = () => {
-    document.querySelectorAll('table.stack-sm').forEach(label);
+    document.querySelectorAll('table.stack-sm, table.rtable').forEach(label);
     document.querySelectorAll('.scroll, .card.flush').forEach(region => {
       if (region.querySelector('table')) scrollFocus(region);
     });

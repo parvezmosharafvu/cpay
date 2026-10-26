@@ -279,7 +279,7 @@ Withdrawal fee revenue ${money(r.withdrawal_fee_revenue)}</title></rect>`).join(
       </tr>`).join('');
       const foot = list.length ? `<tr class="total"><td>${list.length} people</td><td class="num">${sum(list, 'link_count')}</td><td></td><td class="num">${sum(list, 'payment_count')}</td>
         <td class="num">${money(sum(list, 'settled'))}</td><td class="num">${money(sum(list, 'platform_fee'))}</td><td class="num strong">${money(sum(list, 'earnings'))}</td></tr>` : '';
-      $$('#dTable').innerHTML = `<table class="table"><thead><tr><th>Freelancer</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Earnings</th></tr></thead>
+      $$('#dTable').innerHTML = `<table class="table rtable"><thead><tr><th>Freelancer</th><th class="num">Links</th><th>Cost rates</th><th class="num">Payments</th><th class="num">Settled</th><th class="num">Platform fee</th><th class="num">Earnings</th></tr></thead>
         <tbody>${body || '<tr><td colspan="7" class="empty">Nobody had links or payments that day</td></tr>'}</tbody><tfoot>${foot}</tfoot></table>`;
       bindRows($$('#dTable'), 'user', openLinks);
       $$('#dLinks').innerHTML = '';

@@ -65,6 +65,9 @@ The payer and the freelancer see one figure: **"You receive X"**.
   again (only a fingerprint and the node key).
 - The **primary** wallet makes every new invoice and pays every forward and
   withdrawal. Other active wallets are synced receive-only each minute.
+  Withdraw on another wallet's row makes it primary while the owner sends,
+  then "Switch back" restores the previous one. Admin sends keep what is
+  owed to creators, counting other wallets' synced balances toward it.
 - `wallet_id` is recorded on payments, forwards and withdrawals (NULL =
   wallet #1). Owner-only management through the `wallet-registry` function
   (passkey session; add/remove need a fresh passkey).

@@ -185,7 +185,7 @@ async function renderPayments() {
   const scroll = document.createElement('div');
   scroll.className = 'scroll';
   const table = document.createElement('table');
-  table.className = 'table';
+  table.className = 'table rtable';
   const thead = document.createElement('thead');
   const header = document.createElement('tr');
   for (const label of ['When', 'Status', 'Amount', 'Account', 'Link', 'Invoice', '']) {
@@ -282,7 +282,7 @@ async function renderLinks() {
     <td class="num">${money(l.total_earned)}</td>
     <td>${escapeHtml(l.theme || '-')}</td>
   </tr>`).join('');
-  el.innerHTML = `<div class="card flush"><table class="table"><thead><tr><th>Slug</th><th>Name</th><th>Owner</th><th>Status</th><th class="num">Pays</th><th class="num">Earned</th><th>Theme</th></tr></thead>
+  el.innerHTML = `<div class="card flush"><table class="table rtable"><thead><tr><th>Slug</th><th>Name</th><th>Owner</th><th>Status</th><th class="num">Pays</th><th class="num">Earned</th><th>Theme</th></tr></thead>
     <tbody>${rows || '<tr><td colspan="7" class="empty">No payment links</td></tr>'}</tbody></table></div>`;
 }
 

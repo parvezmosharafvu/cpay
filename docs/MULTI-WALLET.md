@@ -34,8 +34,14 @@ Status: in PR (feature/multi-wallet). Migration `20261021040000_multi_wallet.sql
 3. `standby` and `disabled` wallets are never opened.
 4. If the primary cannot pay (for example its balance is low), forwards stay
    held/owed and retry as before; the owner moves funds or changes the
-   primary. Funds on a non-primary wallet are moved by making it primary
-   for a while (Admin → Wallet send), or with the wallet's own app.
+   primary. Funds on a non-primary wallet are moved with its **Withdraw**
+   button (Admin → Wallet → Wallets): it becomes primary while the owner
+   uses Send / Withdraw stablecoin, and "Switch back" restores the previous
+   primary (remembered while the page stays open). Or with the wallet's own app.
+5. Admin sends keep money owed to creators: the reserve is what is owed
+   minus the last synced balance of every other active wallet (synced in
+   the last 15 minutes), so a small wallet can be emptied while the others
+   still cover what is owed (`otherWalletsSat` in `core/wallet.mjs`).
 
 `wallet_id` is recorded on `payments` (when the invoice is attached),
 `payment_forwards` and `withdrawals` (when they start sending), by a

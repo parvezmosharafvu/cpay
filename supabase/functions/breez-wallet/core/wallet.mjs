@@ -58,6 +58,26 @@ export async function owedToCreatorsUsd(db) {
   return rows[0].owed;
 }
 
+// Multi-wallet: what is owed to creators is backed by every platform wallet,
+// not only the one sending. The last synced balance of each other active
+// wallet (synced in the last 15 minutes) counts toward that reserve. No
+// registry (single wallet, payment-service) = 0, the earlier rule.
+const MISSING_SCHEMA = new Set(['42P01', '3F000', '42883']);
+export async function otherWalletsSat(db) {
+  try {
+    const { rows } = await db.query(
+      `select coalesce(sum(s.balance_sat), 0)::text as sat
+         from breez_wallet.wallets w join breez_wallet.wallet_status s on s.wallet_id = w.id
+        where w.status = 'active' and s.synced_at > now() - interval '15 minutes'
+          and w.id <> breez_wallet.acting_wallet_id()`,
+    );
+    return Math.max(0, Number(rows[0]?.sat ?? 0) || 0);
+  } catch (e) {
+    if (MISSING_SCHEMA.has(String(e?.code ?? ''))) return 0;
+    throw e;
+  }
+}
+
 export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => Date.now(), sleep = wait, log = () => {}, track = (p) => p }) {
   const prepared = new Map();
   const inflight = new Map();
@@ -78,14 +98,17 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     const rate = await btcUsdRate();
     const owedUsd = await owedToCreatorsUsd(db);
     const owedSat = usdToSats(owedUsd, rate);
-    return { balanceSats: Number(balanceSats), rate, owedUsd, owedSat, spendableSat: Math.max(0, Number(balanceSats) - owedSat) };
+    const otherSat = await otherWalletsSat(db);
+    const reserveSat = Math.max(0, owedSat - otherSat);
+    return { balanceSats: Number(balanceSats), rate, owedUsd, owedSat, otherSat, reserveSat, spendableSat: Math.max(0, Number(balanceSats) - reserveSat) };
   }
 
   async function guard(totalSat) {
     const s = await spendable();
     if (totalSat > s.spendableSat) {
       throw new UserError(422, `This send needs ${totalSat} sats but only ${s.spendableSat} are spendable. `
-        + `The wallet holds ${s.balanceSats} sats and ${s.owedSat} of them back $${formatCents(decimalToCents(s.owedUsd))} owed to creators.`);
+        + `The wallet holds ${s.balanceSats} sats and ${s.reserveSat} of them back $${formatCents(decimalToCents(s.owedUsd))} owed to creators`
+        + (s.otherSat ? ` (other wallets hold ${s.otherSat} sats toward it).` : '.'));
     }
     return s;
   }
@@ -111,6 +134,7 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
     try { rate = await btcUsdRate(); } catch (e) { rateError = String(e?.message ?? e); }
     const owedUsd = await owedToCreatorsUsd(db);
     const owedSat = rate ? usdToSats(owedUsd, rate) : null;
+    const otherSat = await otherWalletsSat(db);
     const bal = Number(balanceSats);
     return {
       balanceSats: bal,
@@ -118,7 +142,8 @@ export function createWallet({ breez, db, btcUsdRate, withdrawals, now = () => D
       balanceUsd: rate ? formatCents(satsToUsdCents(bal, rate)) : null,
       owedToCreatorsUsd: formatCents(decimalToCents(owedUsd)),
       owedToCreatorsSat: owedSat,
-      spendableSat: owedSat === null ? null : Math.max(0, bal - owedSat),
+      otherWalletsSat: otherSat,
+      spendableSat: owedSat === null ? null : Math.max(0, bal - Math.max(0, owedSat - otherSat)),
       rateError,
     };
   }

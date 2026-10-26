@@ -25,30 +25,34 @@
   function fold(tr) {
     const cells = [...tr.children];
     if (tr.classList.contains('row-open') || tr.closest('[data-nofold]') || cells.length < 4 || cells.some((td) => td.colSpan > 1)) return;
-    if (!tr.classList.contains('rt-fold')) {
-      tr.classList.add('rt-fold');
-      tr.tabIndex = 0;
-      tr.setAttribute('aria-expanded', 'false');
-    }
+    tr.classList.add('rt-fold');
     cells.forEach((td, i) => {
       const peek = i < 2 || td.classList.contains('lead') || td.classList.contains('table-actions') || !!td.querySelector('.badge');
       if (peek) delete td.dataset.more; else td.dataset.more = '1';
     });
+    // The keyboard/screen-reader control: a real button in the first cell
+    // (hidden while the table shows as a table).
+    if (!cells[0].querySelector(':scope > .rt-toggle')) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'rt-toggle';
+      b.setAttribute('aria-expanded', String(tr.classList.contains('open')));
+      b.textContent = document.documentElement.lang === 'bn' ? 'বিস্তারিত' : 'Details';
+      cells[0].append(b);
+    }
   }
   function toggle(tr) {
     const open = !tr.classList.contains('open');
     tr.classList.toggle('open', open);
-    tr.setAttribute('aria-expanded', String(open));
+    const b = tr.querySelector('.rt-toggle');
+    if (b) b.setAttribute('aria-expanded', String(open));
   }
   document.addEventListener('click', (e) => {
     const tr = e.target.closest && e.target.closest('tr.rt-fold');
-    if (!tr || e.target.closest(INTERACTIVE)) return;
+    if (!tr) return;
+    if (e.target.closest('.rt-toggle')) { toggle(tr); return; }
+    if (e.target.closest(INTERACTIVE)) return;
     toggle(tr);
-  });
-  document.addEventListener('keydown', (e) => {
-    if ((e.key !== 'Enter' && e.key !== ' ') || !e.target.matches || !e.target.matches('tr.rt-fold')) return;
-    e.preventDefault();
-    toggle(e.target);
   });
   function scrollFocus(region) {
     const style = getComputedStyle(region);

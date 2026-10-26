@@ -1769,3 +1769,9 @@ body.legal .draft strong{color:var(--warn,#78350f)}
   #homeSummary .summary-grid > div:not(.summary-available) .kpi{font-size:18px}
   #homeSummary .summary-grid > div:not(.summary-available) .faint{font-size:12px}
 }
+/* Tap-to-expand button: only while the table shows as cards. */
+.rt-toggle{display:none}
+@container (max-width:640px){
+  .rtable tr.rt-fold .rt-toggle{display:inline-flex;align-items:center;margin-top:6px;min-height:32px;padding:4px 10px;border:1px solid var(--line-strong);border-radius:999px;background:transparent;color:var(--accent);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+  .rtable tr.rt-fold.open .rt-toggle{border-color:var(--accent)}
+}

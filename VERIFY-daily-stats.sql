@@ -1,10 +1,14 @@
 -- ============================================================
 -- Verify the daily_stats archive against the live ledger
 -- ============================================================
--- Replaces the earlier version of this file, which bucketed by MIDNIGHT
--- Dhaka. Since migration 0043, daily_stats is written on the 5pm–5pm
--- Dhaka cycle — the same one the site displays — so the old query
--- reported "STALE" on every row even when nothing was wrong.
+-- A day is the Bangladesh calendar day, midnight to midnight Asia/Dhaka
+-- (20261021030000_dhaka_calendar_day.sql). Before that it ran 5pm–5pm;
+-- this query computed the 5pm edge itself and so reported every recent
+-- row wrong after the change. It now asks current_business_day().
+--
+-- Rows stored before 2026-10-21 keep the 5pm window they were computed
+-- with, so older rows may read 'STALE' until daily-report is re-run for
+-- them (?days=30 below).
 --
 -- This uses daily_totals_for_cycle(), the single function that now
 -- defines a day for the whole system, so what it checks against is by
@@ -17,8 +21,8 @@
 
 with cycles as (
   select generate_series(
-    ((now() at time zone 'Asia/Dhaka') - interval '17 hours')::date - 29,
-    ((now() at time zone 'Asia/Dhaka') - interval '17 hours')::date,
+    current_business_day() - 29,
+    current_business_day(),
     interval '1 day'
   )::date as cycle_date
 ),
@@ -47,9 +51,9 @@ order by e.cycle_date desc;
 -- ============================================================
 -- Backfill (replace <CRON_SECRET>):
 --   curl -H "x-cron-secret: <CRON_SECRET>" \
---     "https://ohwzmxwsphsfzudmlins.supabase.co/functions/v1/daily-report?days=30"
+--     "https://riumaeihemgznvgattoc.supabase.co/functions/v1/daily-report?days=30"
 --
 -- Then re-run the query above. Every row should read 'ok'.
 --
--- The newest row is the cycle currently in progress, so it reads low
--- until 5pm Dhaka passes. That is expected, not a fault.
+-- The newest row is today (Dhaka), still in progress, so it reads low
+-- until midnight Dhaka passes. That is expected, not a fault.

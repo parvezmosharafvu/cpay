@@ -229,6 +229,23 @@ test('wallet info preserves exact liabilities and rounds monetary values half-up
   assert.equal(info.owedToCreatorsSat, 2675);
 });
 
+test('other wallets\' synced balances back what is owed, so a small wallet can send', async () => {
+  // 1000 sats owed; this wallet holds 600, the other wallets 700.
+  const db = { query: async (sql) => ({ rows: [/wallet_status/.test(sql) ? { sat: '700' } : { owed: '1.00000000' }] }) };
+  const wallet = createWallet({ breez: fakeBreez({ balanceSats: 600 }), db, btcUsdRate: async () => RATE, withdrawals: {} });
+  const s = await wallet.spendable();
+  assert.equal(s.owedSat, 1000);
+  assert.equal(s.reserveSat, 300);
+  assert.equal(s.spendableSat, 300);
+  const info = await wallet.info();
+  assert.equal(info.otherWalletsSat, 700);
+  assert.equal(info.spendableSat, 300);
+  // No registry yet (single wallet): the earlier rule, the whole debt on this wallet.
+  const missing = { query: async (sql) => { if (/wallet_status/.test(sql)) throw Object.assign(new Error('no table'), { code: '42P01' }); return { rows: [{ owed: '1.00000000' }] }; } };
+  const single = createWallet({ breez: fakeBreez({ balanceSats: 600 }), db: missing, btcUsdRate: async () => RATE, withdrawals: {} });
+  assert.equal((await single.spendable()).spendableSat, 0);
+});
+
 test('send quote rounds the total to cents using exact half-up arithmetic', async () => {
   const wallet = createWallet({
     breez: fakeBreez(), db: { query: async () => ({ rows: [{ owed: '0' }] }) },

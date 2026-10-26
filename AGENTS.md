@@ -45,7 +45,8 @@ Withdraw page (passkey confirm). One "You receive X" figure.
   wallet id; wallet #1 keeps the original key); deploy only via the wallet
   deploy script in `scripts/`; never edit its lease logic casually.
   `RECEIPT_RECORDING` stays off. Only the primary wallet sends; other
-  wallets are receive-only ([docs/MULTI-WALLET.md](docs/MULTI-WALLET.md)).
+  wallets are receive-only; Admin → Wallet → Withdraw on a wallet makes it
+  primary for the send ([docs/MULTI-WALLET.md](docs/MULTI-WALLET.md)).
 - Wallet seeds: wallet #1 in the Edge secret, all others in Supabase Vault
   (registry keeps only the secret id). Never return, log, echo or audit a
   seed; wallet registry RPCs are service_role only, called by the

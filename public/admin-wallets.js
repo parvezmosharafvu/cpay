@@ -110,18 +110,24 @@
     tr.append(id);
     const act = el('td', 'wallet-actions');
     const bar = el('div', 'wallet-actions-bar'); act.append(bar);
-    const btn = (label, fn, cls = 'btn ghost sm') => { const b = el('button', cls, label); b.type = 'button'; b.onclick = fn; bar.append(b); return b; };
+    // Main actions stay in view; the rarer ones sit under "More" so the row
+    // fits on every screen size.
+    const more = el('details', 'wallet-more'); more.append(el('summary', 'btn ghost sm', 'More'));
+    const menu = el('div', 'wallet-more-menu'); more.append(menu);
+    const btn = (label, fn, cls = 'btn ghost sm', into = bar) => { const b = el('button', cls, label); b.type = 'button'; b.onclick = fn; into.append(b); return b; };
+    if (!w.is_primary && w.status === 'active') btn('Withdraw', () => withdrawFrom(w), 'btn primary sm');
     if (!w.is_primary && w.status === 'active') btn('Make primary', () => act1({ action: 'set_primary', id: w.id }, `Make "${w.label}" the primary wallet? New invoices, forwards and withdrawals will use it.`));
+    if (!w.is_primary && w.status !== 'active') btn('Activate', () => act1({ action: 'set_status', id: w.id, status: 'active' }));
     btn('Rename', async () => {
       const label = window.prompt('New name', w.label);
       if (label && label.trim() && label.trim() !== w.label) act1({ action: 'rename', id: w.id, label: label.trim() });
-    });
+    }, 'btn ghost sm', menu);
     if (!w.is_primary) {
-      if (w.status !== 'active') btn('Activate', () => act1({ action: 'set_status', id: w.id, status: 'active' }));
-      if (w.status === 'active') btn('Standby', () => act1({ action: 'set_status', id: w.id, status: 'standby' }, 'Standby: the wallet is not synced and not used. Payments to its old invoices settle only after you activate it again.'));
-      if (w.status !== 'disabled') btn('Disable', () => act1({ action: 'set_status', id: w.id, status: 'disabled' }, `Disable "${w.label}"? It will not be opened until you activate it.`));
-      if (!w.is_legacy) btn('Remove', () => remove(w), 'btn ghost sm danger');
+      if (w.status === 'active') btn('Standby', () => act1({ action: 'set_status', id: w.id, status: 'standby' }, 'Standby: the wallet is not synced and not used. Payments to its old invoices settle only after you activate it again.'), 'btn ghost sm', menu);
+      if (w.status !== 'disabled') btn('Disable', () => act1({ action: 'set_status', id: w.id, status: 'disabled' }, `Disable "${w.label}"? It will not be opened until you activate it.`), 'btn ghost sm', menu);
+      if (!w.is_legacy) btn('Remove', () => remove(w), 'btn ghost sm danger', menu);
     }
+    bar.append(more);
     tr.append(act);
     return tr;
   }
@@ -135,6 +141,68 @@
       if (!r.ok) { say(msgOf(r.code)); return; }
       say('Saved', true); await load();
     } finally { busy(false); }
+  }
+
+  // Withdraw from a non-primary wallet: only the primary sends, so it is made
+  // primary for a while (new invoices, forwards and withdrawals use it too),
+  // then the send form below sends from it. The previous primary
+  // is remembered on this page so one click switches back.
+  // In memory only: this file keeps nothing in browser storage.
+  let returnTo = null;
+  const readReturn = () => returnTo;
+  const writeReturn = (v) => { returnTo = v || null; };
+
+  function goToSend() {
+    if (typeof window.refreshWallet === 'function') window.refreshWallet();
+    const dest = document.getElementById('wqAddr') || document.getElementById('wsDest');
+    if (dest) { dest.scrollIntoView({ behavior: 'smooth', block: 'center' }); dest.focus({ preventScroll: true }); }
+  }
+
+  async function withdrawFrom(w) {
+    if (registryBusy) return;
+    const prev = (state.data?.wallets || []).find((x) => x.is_primary);
+    if (!window.confirm(`Withdraw from "${w.label}"?\n\nIt becomes the primary wallet while you send, so new invoices, forwards and withdrawals also use it. Switch back when you are done.`)) return;
+    busy(true);
+    try {
+      const r = await call({ action: 'set_primary', id: w.id });
+      if (!r.ok) { say(msgOf(r.code)); return; }
+      if (prev && !readReturn()) writeReturn({ id: prev.id, label: prev.label });
+      say(`Sending from ${w.label}`, true);
+      await load();
+      goToSend();
+    } finally { busy(false); }
+  }
+
+  async function switchBack(back) {
+    if (registryBusy) return;
+    busy(true);
+    try {
+      const r = await call({ action: 'set_primary', id: back.id });
+      if (!r.ok) { say(msgOf(r.code)); return; }
+      writeReturn(null);
+      say(`${back.label} is primary again`, true);
+      await load();
+      if (typeof window.refreshWallet === 'function') window.refreshWallet();
+    } finally { busy(false); }
+  }
+
+  // Which wallet Send / Withdraw use now, and the way back.
+  function sendingFrom(d) {
+    const primary = (d.wallets || []).find((x) => x.is_primary);
+    if (!primary || (d.wallets || []).filter((x) => x.status !== 'removed').length < 2) return null;
+    const box = el('div', 'notice wallet-sending');
+    box.setAttribute('role', 'status');
+    const line = el('p');
+    line.append(el('span', null, 'Send and withdraw use:'), document.createTextNode(' '), el('strong', null, primary.label), document.createTextNode(` · ${fmtSats(primary.balance_sat)}`));
+    box.append(line);
+    const back = readReturn();
+    const row = el('div', 'wallet-actions-bar');
+    if (back && back.id !== primary.id && (d.wallets || []).some((x) => x.id === back.id && x.status === 'active')) {
+      const b = el('button', 'btn ghost sm', `Switch back to ${back.label}`); b.type = 'button'; b.onclick = () => switchBack(back); row.append(b);
+    } else if (back) writeReturn(null);
+    const go = el('button', 'btn ghost sm', 'Go to withdraw'); go.type = 'button'; go.onclick = goToSend; row.append(go);
+    box.append(row);
+    return box;
   }
 
   async function remove(w) {
@@ -214,10 +282,13 @@
     const h = el('div');
     h.append(el('h3', null, 'Wallets'));
     h.append(el('p', 'faint', 'The primary wallet makes new invoices and pays forwards and withdrawals. Other active wallets are checked every minute, so payments to their earlier invoices still arrive.'));
+    h.append(el('p', 'faint', 'To take money out of another wallet, press Withdraw on its row: it becomes primary while you send, then switch back.'));
     head.append(h);
     head.append(el('div', 'kpi', `Total ${fmtSats(d.total_balance_sat)}`));
     const refresh = el('button', 'btn ghost', 'Refresh wallets'); refresh.type = 'button'; refresh.onclick = load; refresh.disabled = registryBusy; head.append(refresh);
     card.append(head);
+    const from = sendingFrom(d);
+    if (from) card.append(from);
     const table = el('table', 'table stack-sm');
     const thead = el('thead'); const hr = el('tr');
     for (const t of ['Wallet', 'Status', 'Balance', 'Health', 'Fingerprint', '']) hr.append(el('th', null, t));

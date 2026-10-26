@@ -108,7 +108,7 @@
     const { data, error } = await adminPanelRead(() => client.rpc('admin_audit_log', { p_limit: 30, p_offset: 0, p_action: 'settings.platform' }));
     if (error) { adminPanelError(el, error.message, render); return; }
     const rows = (data || []).map((a) => `<tr><td>${esc(new Date(a.occurred_at).toLocaleString())}</td><td>${esc(a.actor_email)}</td><td class="mono">${esc(a.subject_id)}</td><td class="mono">${esc(JSON.stringify(a.old_value?.value ?? null))}</td><td class="mono">${esc(JSON.stringify(a.new_value?.value ?? null))}</td></tr>`).join('');
-    el.innerHTML = `<h3>Settings changes</h3><div class="card flush"><table class="table"><thead><tr><th>When</th><th>Who</th><th>Setting</th><th>From</th><th>To</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="empty">No changes yet</td></tr>'}</tbody></table></div>`;
+    el.innerHTML = `<h3>Settings changes</h3><div class="card flush"><table class="table rtable"><thead><tr><th>When</th><th>Who</th><th>Setting</th><th>From</th><th>To</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="empty">No changes yet</td></tr>'}</tbody></table></div>`;
   }
 
   function rowHtml(r) {

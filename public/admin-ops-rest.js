@@ -131,7 +131,7 @@ async function renderAudit() {
     ${toolbar}
     <div class="card-head"><h3>Audit log</h3><span class="meta-count">${filtered.length} shown</span></div>
     <p class="section-note">Read-only server audit trail. Search covers the latest 120 rows, including full subject references.</p>
-    <div class="scroll"><table class="table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Type</th><th>Id</th><th>Note</th></tr></thead>
+    <div class="scroll"><table class="table rtable"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Type</th><th>Id</th><th>Note</th></tr></thead>
     <tbody>${rows || `<tr><td colspan="6">${typeof deskEmpty === 'function' ? deskEmpty('No audit rows', 'Admin actions will appear here.') : '<span class="empty">No audit rows</span>'}</td></tr>`}</tbody></table></div>
   </div>`;
   document.getElementById('auditRefresh')?.addEventListener('click', renderAudit);

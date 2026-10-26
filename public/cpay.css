@@ -1632,3 +1632,47 @@ body.legal .draft strong{color:var(--warn,#78350f)}
 @container(max-width:640px){.rtable td.table-actions>details{white-space:normal;min-width:0;overflow-wrap:anywhere}}
 @container(max-width:640px){.card.flush .table.rtable td.mono{max-width:none;white-space:normal;overflow:visible;text-overflow:clip}}
 #qrcode:has(.qr-fallback)+.qr-logo{display:none}
+
+/* ---- Responsive pass (all devices) ---------------------------------------
+   Card headers wrap instead of squeezing their title; phone table cards
+   wrap a cell's value under its label when both do not fit. */
+.card-title{flex-wrap:wrap;align-items:flex-start}
+.card-title>:first-child{flex:1 1 260px;min-width:0}
+.card-title>:not(:first-child){flex:0 1 auto;min-width:0}
+@media (max-width:640px){
+  .table.stack-sm td{flex-wrap:wrap;justify-content:flex-end;column-gap:8px;row-gap:4px;overflow-wrap:anywhere}
+  .table.stack-sm td::before{margin-right:auto;max-width:none}
+  .table.stack-sm td>*{max-width:100%;min-width:0}
+  .table.stack-sm td details{width:100%;text-align:left}
+}
+/* Sending-from notice in Admin → Wallet → Wallets. */
+.wallet-sending{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin:0 0 14px}
+.wallet-sending p{margin:0;flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+/* Wide data tables in a scroll box keep readable columns and scroll
+   sideways (tablets, small laptops) instead of breaking words. */
+@container (min-width:641px){
+  .scroll .table.rtable td{min-width:7.5em}
+  .scroll .table.rtable td:first-child{min-width:14em}
+  .scroll .table.rtable td.num{min-width:0;white-space:nowrap}
+}
+/* Admin → Wallet → Wallets: cards up to tablet width (six columns plus
+   actions do not fit beside each other below ~1100px). */
+@media (min-width:641px) and (max-width:1100px){
+  #walletRegistry .table.stack-sm thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  #walletRegistry .table.stack-sm tbody{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+  #walletRegistry .table.stack-sm tr{display:block;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface-2)}
+  #walletRegistry .table.stack-sm td{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:flex-start;column-gap:8px;row-gap:4px;padding:6px 0;border:0;text-align:right;overflow-wrap:anywhere}
+  #walletRegistry .table.stack-sm td::before{content:attr(data-label);margin-right:auto;text-align:left;color:var(--faint);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  #walletRegistry .table.stack-sm td[data-label=""]::before{content:none}
+  #walletRegistry .table.stack-sm td details{width:100%;text-align:left}
+}
+/* Wallet row: "More" holds rename / standby / disable / remove. */
+.wallet-more{display:inline-block}
+.wallet-more>summary{list-style:none;cursor:pointer}
+.wallet-more>summary::-webkit-details-marker{display:none}
+.wallet-more>summary::after{content:" ▾"}
+.wallet-more[open]>summary::after{content:" ▴"}
+.wallet-more-menu{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;margin-top:6px}
+#walletRegistry td.num{white-space:nowrap}
+#walletRegistry td.wallet-actions{min-width:200px}
+@media (max-width:1100px){#walletRegistry td.wallet-actions{min-width:0}}

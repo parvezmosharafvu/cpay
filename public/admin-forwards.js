@@ -131,7 +131,7 @@
       <div class="desk-toolbar"><div class="field short"><label for="fwFilter">Show</label><select id="fwFilter">
         ${[['', 'All'], ['owed', 'Held'], ['retry', 'Will retry'], ['queued', 'Waiting'], ['sending', 'Sending'], ['forwarded', 'Sent'], ['released', 'Moved to balance']].map(([v, l]) => `<option value="${v}" ${v === filter ? 'selected' : ''}>${l}</option>`).join('')}
       </select></div><div class="field grow"><label for="fwSearch">Search loaded forwards</label><input id="fwSearch" type="search" placeholder="Account, address, reference or error" value="${esc(search)}"></div></div><p id="fwCount" class="faint" role="status">${visible.length} / ${loaded.length}</p>
-      <div class="scroll"><div class="card flush"><table class="table"><thead><tr><th>When</th><th>User</th><th>Address</th><th>Paid</th><th>Fee</th><th>Sent / planned</th><th>Status</th><th>Tries</th><th></th></tr></thead>
+      <div class="scroll"><div class="card flush"><table class="table rtable"><thead><tr><th>When</th><th>User</th><th>Address</th><th>Paid</th><th>Fee</th><th>Sent / planned</th><th>Status</th><th>Tries</th><th></th></tr></thead>
       <tbody id="fwRows">${rows}<tr id="fwNoMatch" ${visible.length ? 'hidden' : ''}><td colspan="9" class="empty">No forwards match these filters.</td></tr></tbody></table></div></div>`;
     document.getElementById('fwRefresh').onclick = render;
     document.getElementById('fwSearch').oninput = e => {

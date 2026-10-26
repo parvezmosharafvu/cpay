@@ -197,9 +197,12 @@ Deno.serve(async (req) => {
                     p_withdrawal_id: withdrawalId, p_next_status: "paid",
                 });
                 if (claimed !== true) return json({ error: "Already processed" }, 409, cors);
-                await supabaseAdmin.from("withdrawals").update({
+                // Best effort, like the audit write: the claim above already
+                // made it paid, so a failed note is logged, not undone.
+                const { error: noteError } = await supabaseAdmin.from("withdrawals").update({
                     admin_note: `Manually paid via ${withdrawal.method}`,
                 }).eq("id", withdrawalId);
+                if (noteError) console.error("admin withdrawal note write failed:", noteError.message);
                 await audit("withdrawal.marked_paid_manual");
                 return json({ status: "paid" }, 200, cors);
             }

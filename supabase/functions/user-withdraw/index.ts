@@ -227,7 +227,7 @@ Deno.serve(async (req) => {
         // Early answer for the common mistake. The payment service checks
         // again, and reserve_stablecoin_withdrawal() decides at confirm.
         const { data: bal, error: balErr } = await callerClient.rpc("get_my_balance");
-        if (balErr) { console.error("get_my_balance failed:", balErr.message); return json({ error: "Could not read your balance. Try again." }, 400, cors); }
+        if (balErr) { console.error("get_my_balance failed:", balErr.message); return json({ error: "Could not read your balance. Try again." }, 503, cors); }
         const availableCents = toCents((Array.isArray(bal) ? bal[0] : bal)?.available ?? 0, "floor") ?? 0;
         if (amountCents !== null && amountCents > availableCents) {
           return json({ error: `Insufficient balance. Available: $${formatCents(Math.max(0, availableCents))}` }, 400, cors);

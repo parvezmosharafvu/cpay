@@ -132,8 +132,9 @@
     return `<tr><td>${r.dangerous ? '⚠ ' : ''}${esc(r.label)}<div class="faint">Now: ${esc(show(r))}${r.updated_at ? ` · changed ${esc(new Date(r.updated_at).toLocaleString())} by ${esc(r.updated_by_email || '?')}` : ' · default'}</div><div class="faint" data-ps-status="${r.key}" role="status"></div></td>
       <td class="setting-controls"><div class="setting-editor">${editor(r)}</div></td></tr>`;
   }
-  function groupsHtml(groups, byKey) {
-    return groups.map(([title, keys]) => `<h3>${esc(title)}</h3><div class="card flush"><table class="table"><tbody>${keys.filter((k) => byKey[k]).map((k) => rowHtml(byKey[k])).join('')}</tbody></table></div>`).join('');
+  // `after`: extra markup placed right after a group, by its title.
+  function groupsHtml(groups, byKey, after = {}) {
+    return groups.map(([title, keys]) => `<h3>${esc(title)}</h3><div class="card flush"><table class="table"><tbody>${keys.filter((k) => byKey[k]).map((k) => rowHtml(byKey[k])).join('')}</tbody></table></div>${after[title] || ''}`).join('');
   }
   // Auto withdraw (20261021010000): the plain switch for payment_mode.
   // On = instant forward to the user's saved address; Off = the amount is
@@ -212,8 +213,7 @@
       <p class="muted">Changes need two-step sign-in and are recorded below. Settings marked ⚠ ask for confirmation.</p>
       ${modeHtml(byKey.payment_mode)}
       ${fee}
-      ${groupsHtml(MAIN, byKey)}
-      ${byKey.blink_sweep_enabled ? '<div id="blinkSweepLog"></div>' : ''}
+      ${groupsHtml(MAIN, byKey, { 'Blink sweep': byKey.blink_sweep_enabled ? '<div id="blinkSweepLog"></div>' : '' })}
       <div id="platformSettingsAudit"></div>`;
     wire(el, byKey);
     wireMode(el);

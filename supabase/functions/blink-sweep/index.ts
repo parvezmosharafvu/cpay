@@ -14,10 +14,10 @@
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY            (set by Supabase)
 // verify_jwt = false (pg_cron sends x-cron-secret instead).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
-import { blinkAccounts, payInvoice, usdToSats, usdWallet } from "../_shared/blink.ts";
+import { blinkAccounts, payInvoice, sendToBlinkWallet, usdToSats, usdWallet } from "../_shared/blink.ts";
 import { denoResolver, fetchPayRequest, guardedFetch, parseLightningAddress, requestInvoice } from "../_shared/lnurl.ts";
 import { configuredCronSecret } from "../_shared/scoped-cron-secret.mjs";
-import { createHandler, type SweepStatus } from "./handler.ts";
+import { createHandler, type SweepStatus, type TransferStatus } from "./handler.ts";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const blink = new Map(blinkAccounts(Deno.env).map((a) => [a.label, a]));
@@ -44,6 +44,7 @@ Deno.serve(createHandler({
     const cents = (v: unknown, dflt: number) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 100) : dflt);
     return {
       enabled: c.enabled === true,
+      overflow: c.overflow === true,
       keepCents: cents(c.keep_usd, 0),
       minCents: cents(c.min_usd, 500),
       maxCents: cents(c.max_usd, 20000),
@@ -81,6 +82,15 @@ Deno.serve(createHandler({
       p_account: label, p_balance_cents: n.balanceCents, p_can_send: n.canSend,
       p_withdraw_remaining_cents: n.withdrawRemainingCents, p_result: n.result,
     });
+  },
+  transfer: (label, walletId, recipientWalletId, cents) =>
+    sendToBlinkWallet(fetch, account(label), walletId, recipientWalletId, cents, `CPAY: Blink #${label} daily limit overflow`),
+  async overflowBegin(t) {
+    const id = await rpc("system_blink_overflow_begin", { p_from: t.from, p_to: t.to, p_amount_cents: t.cents });
+    return typeof id === "string" ? id : null;
+  },
+  async overflowFinish(id: string, status: TransferStatus, error: string | null) {
+    await rpc("system_blink_overflow_finish", { p_id: id, p_status: status, p_error: error });
   },
   async alert(text) {
     if (!tgToken || !tgChat) return;

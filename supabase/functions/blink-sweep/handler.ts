@@ -19,12 +19,21 @@
 //      (network, exact amount, description hash, expiry), recorded, then
 //      paid from that account's USD wallet.
 // One account failing never stops the others.
+//
+// Overflow (blink_sweep_overflow_enabled, needs two or more accounts): an
+// account that has hit Blink's 24-hour withdrawal limit sends its USD to
+// another of the owner's Blink accounts that still has withdrawal limit
+// left (Blink-to-Blink, intraLedgerUsdPaymentSend, a separate Blink limit).
+// That account moves it to CPAY on its next run. At most one transfer per
+// account per run, to the account with the most room; recorded in
+// blink_overflows before sending. A transfer has no invoice, so it is never
+// retried: the next run reads the balances again.
 import { parseLightningAddress } from "../_shared/lnurl.ts";
 import type { Bolt11 } from "../_shared/bolt11.ts";
 import type { PayStatus, UsdWallet } from "../_shared/blink.ts";
 import { secretMatches } from "../_shared/secret-compare.ts";
 
-export type SweepConfig = { enabled: boolean; keepCents: number; minCents: number; maxCents: number; destination: string | null };
+export type SweepConfig = { enabled: boolean; overflow: boolean; keepCents: number; minCents: number; maxCents: number; destination: string | null };
 export type OpenSweep = { id: string; account: string; walletId: string; bolt11: string; expiresAtMs: number; amountCents: number; destination: string };
 export type SweepStatus = "sent" | "pending" | "failed" | "unknown";
 export type Begin = {
@@ -32,6 +41,10 @@ export type Begin = {
   bolt11: string; paymentHash: string; expiresAtMs: number;
 };
 export type AccountNote = { balanceCents: number | null; canSend: boolean | null; withdrawRemainingCents: number | null; result: string };
+export type Transfer = { from: string; to: string; cents: number };
+export type TransferStatus = "sent" | "failed" | "unknown";
+/** What a run read for each account; limited = Blink's withdrawal limit stopped its move. */
+export type Seen = Map<string, { wallet: UsdWallet; limited: boolean }>;
 
 export type Deps = {
   cronSecret: string;
@@ -46,6 +59,11 @@ export type Deps = {
   finish(id: string, status: SweepStatus, error: string | null): Promise<void>;
   pay(account: string, walletId: string, bolt11: string): Promise<{ status: PayStatus; error: string | null }>;
   note(account: string, n: AccountNote): Promise<void>;
+  /** Blink-to-Blink USD transfer from the account's own USD wallet. */
+  transfer(account: string, walletId: string, recipientWalletId: string, cents: number): Promise<{ status: PayStatus; error: string | null }>;
+  /** Records a transfer; null = one from that account was recorded in the last few minutes. */
+  overflowBegin(t: Transfer): Promise<string | null>;
+  overflowFinish(id: string, status: TransferStatus, error: string | null): Promise<void>;
   alert(text: string): Promise<void>;
   now(): number;
 };
@@ -104,7 +122,7 @@ async function resolveOpen(d: Deps, row: OpenSweep) {
   return { resolved: row.id, status: s };
 }
 
-export async function runAccount(d: Deps, cfg: SweepConfig, account: string, open: OpenSweep | undefined): Promise<Record<string, unknown>> {
+export async function runAccount(d: Deps, cfg: SweepConfig, account: string, open: OpenSweep | undefined, seen: Seen = new Map()): Promise<Record<string, unknown>> {
   if (open) {
     // Switched off while one was in flight: leave it for the next run after
     // it is switched back on, or for the owner to check in Blink.
@@ -114,6 +132,7 @@ export async function runAccount(d: Deps, cfg: SweepConfig, account: string, ope
   // Read-only even while off, so Admin → Settings shows each account's
   // balance, send permission and limit before the sweep is turned on.
   const wallet = await d.usdWallet(account);
+  seen.set(account, { wallet, limited: false });
   const base = { balanceCents: wallet.balanceCents, canSend: wallet.canSend, withdrawRemainingCents: wallet.withdrawRemainingCents };
   if (!cfg.enabled) {
     await safeNote(d, account, { ...base, result: "off" });
@@ -132,6 +151,7 @@ export async function runAccount(d: Deps, cfg: SweepConfig, account: string, ope
   if (!cents) {
     const limited = wallet.withdrawRemainingCents !== null && moveCents(wallet.balanceCents, cfg) > 0;
     const result = limited ? "daily_limit" : "below_minimum";
+    if (limited) seen.set(account, { wallet, limited: true });
     await safeNote(d, account, { ...base, result });
     return { skipped: result, balanceCents: wallet.balanceCents };
   }
@@ -162,13 +182,64 @@ export async function runAccount(d: Deps, cfg: SweepConfig, account: string, ope
   return { id, status: s, amountCents: cents, amountSat: sats };
 }
 
+/**
+ * Overflow transfers for this run: each account stopped by Blink's withdrawal
+ * limit sends what it holds (less "keep", capped at "largest move" and at its
+ * Blink-to-Blink limit) to the account with the most withdrawal room left
+ * (its limit left minus what it already holds and has been given this run).
+ */
+export function overflowPlan(c: Pick<SweepConfig, "keepCents" | "minCents" | "maxCents">, seen: Seen): Transfer[] {
+  const min = Math.max(c.minCents, 1);
+  const room = new Map<string, number>();
+  for (const [a, s] of seen) {
+    if (!s.limited && s.wallet.canSend) {
+      room.set(a, (s.wallet.withdrawRemainingCents ?? Infinity) - Math.max(0, s.wallet.balanceCents - c.keepCents));
+    }
+  }
+  const out: Transfer[] = [];
+  for (const [from, s] of seen) {
+    if (!s.limited) continue;
+    let to: string | null = null;
+    for (const [a, r] of room) if (to === null || r > room.get(to)!) to = a;
+    if (to === null) break;
+    const cents = Math.min(s.wallet.balanceCents - c.keepCents, s.wallet.internalSendRemainingCents ?? Infinity, c.maxCents, room.get(to)!);
+    if (!Number.isFinite(cents) || cents < min) continue;
+    out.push({ from, to, cents });
+    room.set(to, room.get(to)! - cents);
+  }
+  return out;
+}
+
+async function runTransfer(d: Deps, t: Transfer, seen: Seen): Promise<Record<string, unknown>> {
+  const what = `${name(t.from)} → ${name(t.to)} transfer of ${usd(t.cents)}`;
+  const id = await d.overflowBegin(t);
+  if (!id) return { ...t, skipped: "busy" };
+  let r: { status: PayStatus; error: string | null };
+  try {
+    r = await d.transfer(t.from, seen.get(t.from)!.wallet.id, seen.get(t.to)!.wallet.id, t.cents);
+  } catch (e) {
+    // Never retried: the next run reads both balances again.
+    const msg = errText(e);
+    await d.overflowFinish(id, "unknown", msg);
+    await safeAlert(d, `⚠ ${what} could not be confirmed (${msg}). Check both accounts in Blink.`);
+    return { ...t, id, status: "unknown", error: msg };
+  }
+  const s: TransferStatus = r.status === "SUCCESS" || r.status === "ALREADY_PAID" ? "sent" : r.status === "PENDING" ? "unknown" : "failed";
+  await d.overflowFinish(id, s, r.error);
+  await safeAlert(d, s === "sent"
+    ? `↪ ${what}: ${name(t.from)} reached Blink's daily withdrawal limit. ${name(t.to)} moves it to CPAY next.`
+    : `⚠ ${what} ${s === "failed" ? `failed: ${r.error}` : "is still pending. Check both accounts in Blink."}`);
+  return { ...t, id, status: s };
+}
+
 export async function run(d: Deps): Promise<Record<string, unknown>> {
   const cfg = await d.config();
   const open = await d.open();
   const accounts: Record<string, unknown> = {};
+  const seen: Seen = new Map();
   for (const account of d.accounts) {
     try {
-      accounts[account] = await runAccount(d, cfg, account, open.find((o) => o.account === account));
+      accounts[account] = await runAccount(d, cfg, account, open.find((o) => o.account === account), seen);
     } catch (e) {
       const msg = errText(e);
       console.error(`blink sweep ${name(account)} failed:`, msg);
@@ -176,9 +247,24 @@ export async function run(d: Deps): Promise<Record<string, unknown>> {
       accounts[account] = { error: msg };
     }
   }
+  const out: Record<string, unknown> = { accounts };
+  if (cfg.enabled && cfg.overflow) {
+    const transfers: Record<string, unknown>[] = [];
+    for (const t of overflowPlan(cfg, seen)) {
+      try {
+        transfers.push(await runTransfer(d, t, seen));
+      } catch (e) {
+        const msg = errText(e);
+        console.error(`blink overflow ${name(t.from)} failed:`, msg);
+        transfers.push({ ...t, error: msg });
+      }
+    }
+    if (transfers.length) out.overflow = transfers;
+  }
   // An open sweep of an account whose key was removed is left alone.
   const orphaned = open.filter((o) => !d.accounts.includes(o.account)).map((o) => o.id);
-  return orphaned.length ? { accounts, orphaned } : { accounts };
+  if (orphaned.length) out.orphaned = orphaned;
+  return out;
 }
 
 export function createHandler(d: Deps) {

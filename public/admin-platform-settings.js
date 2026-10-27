@@ -9,6 +9,7 @@
   'use strict';
   const client = window.supabaseClient;
   const host = () => document.getElementById('platformSettings');
+  const tr = (s) => (window.cpayI18n && typeof window.cpayI18n.t === 'function' ? window.cpayI18n.t(s) : s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const MAIN = [
     // The on/off switches (legal_published, wallet_link_enabled) are in
@@ -104,19 +105,36 @@
     }
   }
 
-  // Blink sweep log (admin_blink_sweeps): where the next move goes and the
-  // last moves. Read-only; invoices and Blink wallet ids never reach the page.
+  // Blink sweep (admin_blink_sweeps): where the next move goes, each Blink
+  // account as the last run saw it, and the last moves. Read-only; keys,
+  // invoices and Blink wallet ids never reach the page.
   const SWEEP_STATUS = { sending: 'Sending', pending: 'Pending', sent: 'Sent', failed: 'Failed', unknown: 'Check in Blink' };
+  const ACCOUNT_RESULT = {
+    off: 'Sweep is off', no_write: 'Key cannot send: needs Write', daily_limit: 'Blink daily limit reached',
+    below_minimum: 'Below the smallest move', no_destination: 'No CPAY address', sent: 'Moved', failed: 'Move failed',
+    pending: 'Move pending', sending: 'Sending',
+  };
+  const cents = (v) => (v === null || v === undefined ? '—' : `$${(Number(v) / 100).toFixed(2)}`);
+  const keyName = (a) => (a === '1' ? 'BLINK_API_KEY' : `BLINK_API_KEY_${a}`);
   async function renderBlinkLog() {
     const el = document.getElementById('blinkSweepLog');
     if (!el) return;
     const { data, error } = await adminPanelRead(() => client.rpc('admin_blink_sweeps', { p_limit: 20 }));
     if (error) { adminPanelError(el, error.message, renderBlinkLog); return; }
     const dest = data?.destination;
-    const rows = (data?.rows || []).map((r) => `<tr><td>${esc(new Date(r.created_at).toLocaleString())}</td><td>$${esc((Number(r.amount_cents) / 100).toFixed(2))}</td><td>${esc(Number(r.amount_sat).toLocaleString('en-US'))} sats</td><td><span class="badge ${r.status === 'sent' ? 'settled' : r.status === 'failed' || r.status === 'unknown' ? 'expired' : 'pending'}">${esc(SWEEP_STATUS[r.status] || r.status)}</span></td><td class="mono">${esc(r.destination)}</td><td>${esc(r.error || '')}</td></tr>`).join('');
+    const accounts = (data?.accounts || []).map((a) => {
+      const res = String(a.result || '');
+      const shown = ACCOUNT_RESULT[res] || (res.startsWith('error: ') ? res.slice(7) : res);
+      const bad = a.can_send === false || res === 'daily_limit' || res === 'failed' || res.startsWith('error');
+      return `<tr><td class="mono">${esc(keyName(a.account))}</td><td>${esc(cents(a.balance_cents))}</td><td>${a.can_send === true ? esc(tr('Yes')) : a.can_send === false ? `<span class="err">${esc(tr('No'))}</span>` : '—'}</td><td>${esc(a.withdraw_remaining_cents === null || a.withdraw_remaining_cents === undefined ? tr('No limit reported') : cents(a.withdraw_remaining_cents))}</td><td>${esc(cents(a.sent_24h_cents))}</td><td>${bad ? `<span class="err">${esc(tr(shown))}</span>` : esc(tr(shown))}<div class="faint">${esc(new Date(a.checked_at).toLocaleString())}</div></td></tr>`;
+    }).join('');
+    const rows = (data?.rows || []).map((r) => `<tr><td>${esc(new Date(r.created_at).toLocaleString())}</td><td class="mono">#${esc(r.account || '1')}</td><td>$${esc((Number(r.amount_cents) / 100).toFixed(2))}</td><td>${esc(Number(r.amount_sat).toLocaleString('en-US'))} sats</td><td><span class="badge ${r.status === 'sent' ? 'settled' : r.status === 'failed' || r.status === 'unknown' ? 'expired' : 'pending'}">${esc(tr(SWEEP_STATUS[r.status] || r.status))}</span></td><td class="mono">${esc(r.destination)}</td><td>${esc(r.error || '')}</td></tr>`).join('');
     el.innerHTML = `<div class="card"><p>${dest ? `Moves go to <strong class="mono">${esc(dest)}</strong>, the primary CPAY wallet’s Lightning address.` : '<span class="err">The primary CPAY wallet has no Lightning address, so nothing is moved.</span>'}</p>
-        <p class="faint">Needs the BLINK_API_KEY secret (Blink API key with Read and Write) in Secrets &amp; keys. Runs every 10 minutes.</p></div>
-      <div class="card flush"><table class="table rtable"><thead><tr><th>When</th><th>USD</th><th>Sats</th><th>Status</th><th>To</th><th>Note</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="empty">No moves yet</td></tr>'}</tbody></table></div>`;
+        <p class="faint">Add one Blink API key (Read and Write) per Blink account in Secrets &amp; keys: BLINK_API_KEY, then BLINK_API_KEY_2 up to BLINK_API_KEY_10. Each account is moved separately, up to its own Blink daily withdrawal limit. Runs every 10 minutes.</p></div>
+      <h4>Blink accounts</h4>
+      <div class="card flush"><table class="table rtable"><thead><tr><th>Key</th><th>USD balance</th><th>Can send</th><th>Blink limit left (24 h)</th><th>Moved (24 h)</th><th>Last check</th></tr></thead><tbody>${accounts || '<tr><td colspan="6" class="empty">No Blink key seen yet. Add BLINK_API_KEY and wait up to 10 minutes.</td></tr>'}</tbody></table></div>
+      <h4>Moves</h4>
+      <div class="card flush"><table class="table rtable"><thead><tr><th>When</th><th>Account</th><th>USD</th><th>Sats</th><th>Status</th><th>To</th><th>Note</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="empty">No moves yet</td></tr>'}</tbody></table></div>`;
   }
 
   async function renderAudit() {

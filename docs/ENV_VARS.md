@@ -169,6 +169,8 @@ Only used while Admin → Settings → Blink sweep (`blink_sweep_enabled`) is on
 
 - [ ] `BLINK_API_KEY` — Blink API key with Read and Write, used only by this
       function. A separate key from the BTCPay Blink plugin's.
+- `BLINK_API_KEY_2` … `BLINK_API_KEY_10` *(optional)* — one more Blink account
+  each (each account has its own daily withdrawal limit).
 - `BLINK_SWEEP_CRON_SECRET` *(optional)* — else `CRON_SECRET`.
 - `BLINK_API_URL` *(optional)* — Blink's production or staging GraphQL URL only.
 

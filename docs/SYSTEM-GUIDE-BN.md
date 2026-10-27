@@ -402,15 +402,16 @@ BTCPay-এর Lightning যদি Blink plugin (USD wallet) দিয়ে চ�
 
 - টাকা যায় শুধু primary CPAY wallet-এর নিজের Lightning address-এ। এই ঠিকানা database থেকে নেওয়া হয়, কেউ হাতে লিখে বদলাতে পারে না।
 - কত সরাবে: Blink USD balance থেকে "Blink-এ কত USD রেখে দেবে" বাদ দিয়ে, "একবারে সবচেয়ে বেশি" পর্যন্ত। "সবচেয়ে কম" থেকে কম হলে কিছু সরায় না। Blink-এর দামে sats হিসাব করে তার ৯৮% চায় (দাম ওঠানামা আর Blink-এর fee-এর জন্য)।
-- একবারে একটাই move চলে। আগেরটা শেষ না হলে নতুনটা শুরু হয় না। একই invoice আবার পাঠালে Blink "ALREADY_PAID" বলে, তাই দুবার টাকা যায় না।
+- একাধিক Blink account ব্যবহার করা যায় (সর্বোচ্চ ১০টা)। প্রতিটা account-এর নিজের দৈনিক withdraw limit থাকে (যেমন ২৪ ঘণ্টায় $999), তাই প্রতিটা account আলাদাভাবে সরানো হয়, আর Blink যতটুকু limit বাকি বলে তার বেশি চাওয়া হয় না।
+- একেক account-এ একবারে একটাই move চলে। আগেরটা শেষ না হলে নতুনটা শুরু হয় না। একই invoice আবার পাঠালে Blink "ALREADY_PAID" বলে, তাই দুবার টাকা যায় না।
 - প্রতিটা move-এর খবর Telegram-এ আসে। Admin → Settings → **Blink sweep**-এ কোথায় যাচ্ছে আর শেষ ২০টা move দেখা যায়।
 
 চালু করার ধাপ:
 
 1. Blink dashboard (dashboard.blink.sv) → API Keys-এ **Read আর Write** অনুমতিসহ নতুন একটা key বানান। BTCPay plugin-এর key-টা যেমন আছে তেমন রাখুন।
-2. Admin → Secrets & keys-এ `BLINK_API_KEY` নামে সেটা বসান।
+2. Admin → Secrets & keys-এ `BLINK_API_KEY` নামে সেটা বসান। আরও account থাকলে `BLINK_API_KEY_2`, `BLINK_API_KEY_3` … `BLINK_API_KEY_10` নামে বসান। শুধু Read আর Receive অনুমতির key দিয়ে টাকা পাঠানো যায় না; সেখানে "Key cannot send: needs Write" দেখাবে।
 3. Migration `20261027010000_blink_sweep.sql` আর `blink-sweep` function deploy হতে হবে।
-4. Admin → Settings → Blink sweep-এ দেখুন ঠিকানাটা আপনার primary CPAY wallet-এর Lightning address কিনা।
+4. ১০ মিনিটের মধ্যে Admin → Settings → Blink sweep-এ প্রতিটা account দেখা যাবে: USD balance, পাঠাতে পারে কিনা, Blink limit কত বাকি। দেখুন "Can send" Yes কিনা, আর ঠিকানাটা আপনার primary CPAY wallet-এর Lightning address কিনা।
 5. প্রথমে "সবচেয়ে কম" ১ USD রেখে **On** করুন। পরের run-এর পর log, Blink আর CPAY wallet balance মিলিয়ে দেখুন। তারপর নিজের মতো limit ঠিক করুন।
 
 On-chain BTCPay payment এতে আসে না। সেটা আগের মতো নিজে সরাতে হবে। বিস্তারিত: [BLINK-SWEEP.md](BLINK-SWEEP.md)।

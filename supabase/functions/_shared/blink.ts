@@ -1,8 +1,9 @@
 // Blink (blink.sv) GraphQL client for the Blink sweep (docs/BLINK-SWEEP.md).
 // Only what the sweep needs: read the USD wallet, estimate USD → sats, pay
-// one Lightning invoice from the USD wallet, and send USD to another Blink
-// USD wallet (overflow). The API key is sent only to the fixed Blink host
-// below.
+// one Lightning invoice from the USD wallet, send USD to another Blink
+// USD wallet (overflow), check whether an invoice was paid, and build or read
+// BTCPay's Blink connection string (receive switch). API keys are sent only
+// to the fixed Blink host below (and, in a connection string, to BTCPay).
 export type Fetch = typeof fetch;
 export type BlinkConfig = { url: string; apiKey: string };
 export type PayStatus = "SUCCESS" | "ALREADY_PAID" | "PENDING" | "FAILURE";
@@ -20,7 +21,8 @@ type Env = { get(name: string): string | undefined };
 
 /** Up to 10 Blink accounts: BLINK_API_KEY is "1", BLINK_API_KEY_2 … _10 are "2" … "10". */
 export const MAX_ACCOUNTS = 10;
-export type BlinkAccount = BlinkConfig & { label: string };
+/** receiveKey: optional BLINK_RECEIVE_KEY / _N (Read + Receive) of the same account, for BTCPay. */
+export type BlinkAccount = BlinkConfig & { label: string; receiveKey: string | null };
 
 function blinkUrl(env: Env): string | null {
   const raw = (env.get("BLINK_API_URL") ?? "").trim() || BLINK_URL;
@@ -46,7 +48,8 @@ export function blinkAccounts(env: Env): BlinkAccount[] {
   const out: BlinkAccount[] = [];
   for (let i = 1; i <= MAX_ACCOUNTS; i++) {
     const apiKey = (env.get(i === 1 ? "BLINK_API_KEY" : `BLINK_API_KEY_${i}`) ?? "").trim();
-    if (apiKey) out.push({ label: String(i), url, apiKey });
+    const receiveKey = (env.get(i === 1 ? "BLINK_RECEIVE_KEY" : `BLINK_RECEIVE_KEY_${i}`) ?? "").trim() || null;
+    if (apiKey) out.push({ label: String(i), url, apiKey, receiveKey });
   }
   return out;
 }
@@ -134,6 +137,60 @@ export async function payInvoice(f: Fetch, cfg: BlinkConfig, walletId: string, b
   const error = Array.isArray(out?.errors) && out.errors.length ? String(out.errors[0]?.message ?? "Blink error").slice(0, 200) : null;
   const status: PayStatus = ["SUCCESS", "ALREADY_PAID", "PENDING", "FAILURE"].includes(out?.status) ? out.status : "FAILURE";
   return { status, error: status === "FAILURE" ? (error ?? "Blink did not confirm the payment") : error };
+}
+
+/** True when one of this account's wallets received this payment hash (account-scoped, not a public lookup). */
+export async function invoicePaid(f: Fetch, cfg: BlinkConfig, paymentHash: string): Promise<boolean> {
+  const data = await gql(
+    f, cfg,
+    "query Paid($h: PaymentHash!) { me { defaultAccount { wallets { transactionsByPaymentHash(paymentHash: $h) { direction status } } } } }",
+    { h: paymentHash },
+  );
+  // deno-lint-ignore no-explicit-any
+  const wallets = (data as any)?.me?.defaultAccount?.wallets;
+  if (!Array.isArray(wallets)) throw new BlinkError("no_wallets", "Blink sent no wallets (check the API key has Read)");
+  return wallets.some((w) =>
+    (Array.isArray(w?.transactionsByPaymentHash) ? w.transactionsByPaymentHash : [])
+      .some((t: { direction?: unknown; status?: unknown }) => t?.direction === "RECEIVE" && t?.status === "SUCCESS")
+  );
+}
+
+/** "type=blink;server=…;api-key=…" → lower-case keys and their values. */
+export function parseConnectionString(s: string | null): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const part of String(s ?? "").split(";")) {
+    const i = part.indexOf("=");
+    if (i > 0) out.set(part.slice(0, i).trim().toLowerCase(), part.slice(i + 1).trim());
+  }
+  return out;
+}
+
+/**
+ * BTCPay's Blink connection for this account's USD wallet. Uses the
+ * account's receive-only key when set ('receive'), else its API key ('api',
+ * which can also spend).
+ */
+export function connectionString(a: BlinkAccount, usdWalletId: string): { value: string; keyKind: "receive" | "api" } {
+  const key = a.receiveKey ?? a.apiKey;
+  return { value: `type=blink;server=${a.url};api-key=${key};wallet-id=${usdWalletId}`, keyKind: a.receiveKey ? "receive" : "api" };
+}
+
+/**
+ * Which configured Blink account a BTCPay connection string pays into: by its
+ * wallet-id (each account's USD wallet id) first, else by its api-key.
+ * null = not a Blink connection, or not one of CPAY's accounts.
+ */
+export function receivingAccount(conn: string | null, accounts: BlinkAccount[], usdWalletIds: Map<string, string>): { account: string; keyKind: "receive" | "api" | null } | null {
+  const kv = parseConnectionString(conn);
+  if (kv.get("type")?.toLowerCase() !== "blink") return null;
+  const key = kv.get("api-key") ?? "";
+  const kind = (a: BlinkAccount) => (key && a.receiveKey === key ? "receive" : key && a.apiKey === key ? "api" : null);
+  const wallet = kv.get("wallet-id");
+  if (wallet) {
+    for (const a of accounts) if (usdWalletIds.get(a.label) === wallet) return { account: a.label, keyKind: kind(a) };
+  }
+  for (const a of accounts) if (kind(a)) return { account: a.label, keyKind: kind(a) };
+  return null;
 }
 
 /** Send USD (cents) from one Blink USD wallet to another Blink USD wallet. No idempotency: never retried blindly. */

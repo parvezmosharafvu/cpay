@@ -1,5 +1,7 @@
 import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { BlinkError, payInvoice, sendToBlinkWallet, usdToSats, usdWallet } from "./blink.ts";
+import {
+  type BlinkAccount, BlinkError, connectionString, invoicePaid, parseConnectionString, payInvoice, receivingAccount, sendToBlinkWallet, usdToSats, usdWallet,
+} from "./blink.ts";
 
 const cfg = { url: "https://api.blink.sv/graphql", apiKey: "secret-key" };
 function fake(answer: unknown, status = 200) {
@@ -60,4 +62,34 @@ Deno.test("sendToBlinkWallet: USD cents to another Blink wallet; failure keeps t
   assertEquals(await sendToBlinkWallet(bad.f, cfg, "usd1", "usd2", 1, "m"), { status: "FAILURE", error: "Limit exceeded" });
   const odd = fake({ data: {} });
   assertEquals(await sendToBlinkWallet(odd.f, cfg, "usd1", "usd2", 1, "m"), { status: "FAILURE", error: "Blink did not confirm the transfer" });
+});
+
+Deno.test("invoicePaid: only a successful RECEIVE on one of this account's wallets counts", async () => {
+  const tx = (direction: string, status: string) => ({ direction, status });
+  const paid = fake({ data: { me: { defaultAccount: { wallets: [{ transactionsByPaymentHash: [] }, { transactionsByPaymentHash: [tx("RECEIVE", "SUCCESS")] }] } } } });
+  assertEquals(await invoicePaid(paid.f, cfg, "ab"), true);
+  assertEquals(paid.seen[0].body.variables, { h: "ab" });
+  const pending = fake({ data: { me: { defaultAccount: { wallets: [{ transactionsByPaymentHash: [tx("RECEIVE", "PENDING"), tx("SEND", "SUCCESS")] }] } } } });
+  assertEquals(await invoicePaid(pending.f, cfg, "ab"), false);
+  await assertRejects(() => invoicePaid(fake({ data: { me: null } }).f, cfg, "ab"), BlinkError, "Read");
+});
+
+const acct = (label: string, apiKey: string, receiveKey: string | null = null): BlinkAccount => ({ label, url: "https://api.blink.sv/graphql", apiKey, receiveKey });
+
+Deno.test("connection string: the receive key when set, else the API key; wallet id of the USD wallet", () => {
+  assertEquals(connectionString(acct("2", "w2", "r2"), "usd-2"), { value: "type=blink;server=https://api.blink.sv/graphql;api-key=r2;wallet-id=usd-2", keyKind: "receive" });
+  assertEquals(connectionString(acct("2", "w2"), "usd-2").keyKind, "api");
+  const kv = parseConnectionString("type=Blink; Server=https://api.blink.sv/graphql ;api-key=a=b;junk");
+  assertEquals([...kv], [["type", "Blink"], ["server", "https://api.blink.sv/graphql"], ["api-key", "a=b"]]);
+});
+
+Deno.test("receivingAccount: by wallet id first, else by key; other node types or keys are not ours", () => {
+  const accounts = [acct("1", "w1", "r1"), acct("2", "w2")];
+  const ids = new Map([["1", "usd-1"], ["2", "usd-2"]]);
+  assertEquals(receivingAccount("type=blink;api-key=other;wallet-id=usd-2", accounts, ids), { account: "2", keyKind: null });
+  assertEquals(receivingAccount("type=blink;api-key=r1", accounts, ids), { account: "1", keyKind: "receive" });
+  assertEquals(receivingAccount("type=blink;api-key=w2;wallet-id=btc-2", accounts, ids), { account: "2", keyKind: "api" });
+  assertEquals(receivingAccount("type=blink;api-key=nope", accounts, ids), null);
+  assertEquals(receivingAccount("type=lnd-rest;server=https://x;macaroon=w1", accounts, ids), null);
+  assertEquals(receivingAccount(null, accounts, ids), null);
 });

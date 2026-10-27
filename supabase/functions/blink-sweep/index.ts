@@ -8,19 +8,27 @@
 // Secrets / env (names only):
 //   BLINK_API_KEY, BLINK_API_KEY_2 … _10   Blink API keys with Read + Write,
 //                                          one per Blink account
+//   BLINK_RECEIVE_KEY, _2 … _10   optional, Read + Receive key of the same
+//                                 account: what BTCPay gets on a receive switch
+//   BTCPAY_URL, BTCPAY_STORE_ID, BTCPAY_SWITCH_API_KEY   optional, receive
+//                                 switch (Modify store settings on 'cpay')
 //   BLINK_API_URL                 optional, Blink hosts only (staging)
 //   BLINK_SWEEP_CRON_SECRET       optional, else CRON_SECRET (x-cron-secret)
 //   ALERT_TELEGRAM_BOT_TOKEN, ALERT_TELEGRAM_CHAT_ID   optional alerts
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY            (set by Supabase)
 // verify_jwt = false (pg_cron sends x-cron-secret instead).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
-import { blinkAccounts, payInvoice, sendToBlinkWallet, usdToSats, usdWallet } from "../_shared/blink.ts";
+import {
+  blinkAccounts, connectionString, invoicePaid, payInvoice, receivingAccount, sendToBlinkWallet, usdToSats, usdWallet,
+} from "../_shared/blink.ts";
+import { btcpaySwitchConfig, getLightningConnection, setLightningConnection } from "../_shared/btcpay-store.ts";
 import { denoResolver, fetchPayRequest, guardedFetch, parseLightningAddress, requestInvoice } from "../_shared/lnurl.ts";
 import { configuredCronSecret } from "../_shared/scoped-cron-secret.mjs";
-import { createHandler, type SweepStatus, type TransferStatus } from "./handler.ts";
+import { createHandler, type SweepStatus, type SwitchStatus, type TransferStatus } from "./handler.ts";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const blink = new Map(blinkAccounts(Deno.env).map((a) => [a.label, a]));
+const btcpay = btcpaySwitchConfig(Deno.env);
 const tgToken = (Deno.env.get("ALERT_TELEGRAM_BOT_TOKEN") ?? "").trim();
 const tgChat = (Deno.env.get("ALERT_TELEGRAM_CHAT_ID") ?? "").trim();
 const lnurlFetch = guardedFetch(fetch, denoResolver());
@@ -45,6 +53,8 @@ Deno.serve(createHandler({
     return {
       enabled: c.enabled === true,
       overflow: c.overflow === true,
+      receiveSwitch: c.receive_switch === true,
+      switchBelowCents: cents(c.switch_below_usd, 5000),
       keepCents: cents(c.keep_usd, 0),
       minCents: cents(c.min_usd, 500),
       maxCents: cents(c.max_usd, 20000),
@@ -91,6 +101,36 @@ Deno.serve(createHandler({
   },
   async overflowFinish(id: string, status: TransferStatus, error: string | null) {
     await rpc("system_blink_overflow_finish", { p_id: id, p_status: status, p_error: error });
+  },
+  canSwitch: btcpay !== null,
+  async receiving(usdWalletIds) {
+    const conn = await getLightningConnection(fetch, btcpay!);
+    return receivingAccount(conn, [...blink.values()], usdWalletIds) ?? { account: null, keyKind: null };
+  },
+  async switchTo(label, usdWalletId) {
+    const c = connectionString(account(label), usdWalletId);
+    await setLightningConnection(fetch, btcpay!, c.value);
+    return c.keyKind;
+  },
+  async receiveNote(r, result) {
+    await rpc("system_blink_receive_note", { p_account: r.account, p_key_kind: r.keyKind, p_result: result });
+  },
+  async switchBegin(from, to) {
+    const id = await rpc("system_blink_switch_begin", { p_from: from, p_to: to });
+    return typeof id === "string" ? id : null;
+  },
+  async switchFinish(id: string, status: SwitchStatus, error: string | null) {
+    await rpc("system_blink_switch_finish", { p_id: id, p_status: status, p_error: error });
+  },
+  async rescueCandidates() {
+    const rows = await rpc("system_blink_rescue_candidates");
+    return (Array.isArray(rows) ? rows : []).map((r) => ({
+      paymentId: String(r.payment_id), bolt11: String(r.bolt11), amountUsd: String(r.amount_usd), account: String(r.account),
+    }));
+  },
+  invoicePaid: (label, paymentHash) => invoicePaid(fetch, account(label), paymentHash),
+  async rescueSettle(paymentId, label, amountSat) {
+    return String(await rpc("system_blink_rescue_settle", { p_payment_id: paymentId, p_account: label, p_amount_sat: amountSat }));
   },
   async alert(text) {
     if (!tgToken || !tgChat) return;

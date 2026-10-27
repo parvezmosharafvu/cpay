@@ -1,4 +1,4 @@
--- 20261027010000 + 20261027020000 + 20261027030000: Blink sweep and overflow. Off by default with safe limits; the
+-- 20261027010000 … 20261027040000: Blink sweep, overflow and the BTCPay receive switch. Off by default with safe limits; the
 -- destination comes only from the primary active CPAY wallet's own Lightning
 -- address; at most one sweep in flight; only service_role runs the system
 -- functions; admins read the log, nobody else. BEGIN/ROLLBACK.
@@ -132,6 +132,62 @@ do $$ declare a uuid; b uuid; begin
   if system_blink_overflow_begin('1', '2', 100) is null then raise exception 'overflow from #1 still blocked after 5 minutes'; end if;
 end $$;
 
+-- 3c. Receive switch: off by default; one switch per 30 minutes; finished once;
+-- the rescue finds open BTCPay payments made before a switch, with the account
+-- they were paid into, and records a paid one exactly once.
+insert into payment_links(id, user_id, slug) values
+  ('e7000000-0000-0000-0000-0000000001a1', 'e7000000-0000-0000-0000-0000000000a1', 'bs-link');
+insert into payments(id, user_id, payment_link_id, amount_requested, method, status, expires_at, created_at) values
+  ('e7000000-0000-0000-0000-0000000002a1', 'e7000000-0000-0000-0000-0000000000a1', 'e7000000-0000-0000-0000-0000000001a1', 20, 'lightning', 'new', now(), now() - interval '2 hours'),
+  ('e7000000-0000-0000-0000-0000000002a2', 'e7000000-0000-0000-0000-0000000000a1', 'e7000000-0000-0000-0000-0000000001a1', 20, 'lightning', 'new', now(), now() - interval '10 minutes'),
+  ('e7000000-0000-0000-0000-0000000002a3', 'e7000000-0000-0000-0000-0000000000a1', 'e7000000-0000-0000-0000-0000000001a1', 20, 'lightning', 'new', now(), now() - interval '3 days'),
+  ('e7000000-0000-0000-0000-0000000002a4', 'e7000000-0000-0000-0000-0000000000a1', 'e7000000-0000-0000-0000-0000000001a1', 20, 'lightning', 'new', now(), now() - interval '2 hours');
+do $$ begin
+  perform system_attach_gateway_invoice('e7000000-0000-0000-0000-0000000002a1', 'btcpay', 'INV-bs-1', 'lnbc200u1pblinkrescuetestinvoice01');
+  perform system_attach_gateway_invoice('e7000000-0000-0000-0000-0000000002a2', 'btcpay', 'INV-bs-2', 'lnbc200u1pblinkrescuetestinvoice02');
+  perform system_attach_gateway_invoice('e7000000-0000-0000-0000-0000000002a3', 'btcpay', 'INV-bs-3', 'lnbc200u1pblinkrescuetestinvoice03');
+end $$;
+do $$ declare c jsonb := system_blink_sweep_config(); a uuid; r jsonb; begin
+  if c->>'receive_switch' <> 'false' or (c->>'switch_below_usd')::numeric <> 50 then raise exception 'switch defaults: %', c; end if;
+  if (select dangerous from platform_setting_defaults() where key = 'blink_receive_switch_enabled') is not true then
+    raise exception 'blink_receive_switch_enabled must be a dangerous (confirmed) setting';
+  end if;
+  if jsonb_array_length(system_blink_rescue_candidates()) <> 0 then raise exception 'candidates without a switch'; end if;
+  a := system_blink_switch_begin('1', '2');
+  if a is null then raise exception 'first switch refused'; end if;
+  if system_blink_switch_begin('2', '1') is not null then raise exception 'second switch within 30 minutes'; end if;
+  perform system_blink_switch_finish(a, 'done', null);
+  perform system_blink_switch_finish(a, 'failed', 'late');
+  if (select status from blink_receive_switches where id = a) <> 'done' then raise exception 'a finished switch changed'; end if;
+  begin
+    perform system_blink_switch_finish(a, 'switching', null);
+    raise exception 'switch finish accepted switching';
+  exception when raise_exception then if sqlerrm not like 'bad status%' then raise; end if;
+  end;
+  update blink_receive_switches set created_at = now() - interval '1 hour' where id = a;
+  begin
+    perform system_blink_switch_begin('3', '3');
+    raise exception 'switch to itself accepted';
+  exception when check_violation then null;
+  end;
+  perform system_blink_receive_note('1', 'api', 'ok');
+  perform system_blink_receive_note('2', 'receive', 'switched');
+  if (select count(*) from blink_receive_state) <> 1 or (select account from blink_receive_state) <> '2' then raise exception 'receive note did not upsert'; end if;
+
+  -- Only the open one made before the switch (not after, not older than two days, not without an invoice).
+  r := system_blink_rescue_candidates();
+  if jsonb_array_length(r) <> 1 or r->0->>'payment_id' <> 'e7000000-0000-0000-0000-0000000002a1' or r->0->>'account' <> '1'
+     or r->0->>'bolt11' <> 'lnbc200u1pblinkrescuetestinvoice01' then
+    raise exception 'candidates: %', r;
+  end if;
+  if system_blink_rescue_settle('e7000000-0000-0000-0000-0000000002a1', '1', 20000) <> 'settled' then raise exception 'rescue did not settle'; end if;
+  if (select status from payments where id = 'e7000000-0000-0000-0000-0000000002a1') <> 'settled' then raise exception 'payment not settled'; end if;
+  if system_blink_rescue_settle('e7000000-0000-0000-0000-0000000002a1', '1', 20000) <> 'already_settled' then raise exception 'rescue settled twice'; end if;
+  if (select count(*) from blink_rescues) <> 1 then raise exception 'rescue log: %', (select count(*) from blink_rescues); end if;
+  if system_blink_rescue_settle('e7000000-0000-0000-0000-0000000002a4', '1', 1) <> 'unknown' then raise exception 'non-BTCPay payment rescued'; end if;
+  if jsonb_array_length(system_blink_rescue_candidates()) <> 0 then raise exception 'settled payment still a candidate'; end if;
+end $$;
+
 -- 4. Grants: anon and authenticated cannot run the system functions or read the table.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'e7000000-0000-0000-0000-0000000000f1', true);
@@ -151,6 +207,26 @@ exception when insufficient_privilege then null; end $$;
 do $$ begin
   perform system_blink_overflow_begin('1', '2', 1);
   raise exception 'authenticated ran system_blink_overflow_begin';
+exception when insufficient_privilege then null; end $$;
+do $$ begin
+  perform system_blink_switch_begin('1', '2');
+  raise exception 'authenticated ran system_blink_switch_begin';
+exception when insufficient_privilege then null; end $$;
+do $$ begin
+  perform system_blink_rescue_settle('e7000000-0000-0000-0000-0000000002a2', '1', 1);
+  raise exception 'authenticated ran system_blink_rescue_settle';
+exception when insufficient_privilege then null; end $$;
+do $$ begin
+  perform system_blink_rescue_candidates();
+  raise exception 'authenticated ran system_blink_rescue_candidates';
+exception when insufficient_privilege then null; end $$;
+do $$ begin
+  perform 1 from blink_receive_switches;
+  raise exception 'authenticated read blink_receive_switches';
+exception when insufficient_privilege then null; end $$;
+do $$ begin
+  perform 1 from blink_rescues;
+  raise exception 'authenticated read blink_rescues';
 exception when insufficient_privilege then null; end $$;
 do $$ begin
   perform 1 from blink_overflows;
@@ -184,6 +260,9 @@ do $$ declare r jsonb := admin_blink_sweeps(10); begin
   if jsonb_array_length(r->'accounts') <> 1 or (r->'accounts'->0->>'sent_24h_cents')::int <> 1000 then raise exception 'accounts: %', r->'accounts'; end if;
   if r->'rows'->0 ? 'bolt11' or r->'rows'->0 ? 'blink_wallet_id' then raise exception 'log leaks invoice or wallet id'; end if;
   if r ? 'destination' is not true then raise exception 'no destination field'; end if;
+  if r->'receiving'->>'account' <> '2' or jsonb_array_length(r->'switches') <> 1 or jsonb_array_length(r->'rescues') <> 1 then
+    raise exception 'receive switch admin view: %', r;
+  end if;
   if jsonb_array_length(r->'overflows') <> 3 or r->'overflows'->0->>'from_account' is null then raise exception 'overflows: %', r->'overflows'; end if;
 end $$;
 reset role;

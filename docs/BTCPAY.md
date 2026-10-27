@@ -98,8 +98,8 @@ Optional, already used by other functions: `ALERT_TELEGRAM_BOT_TOKEN`,
    **View invoices** (`btcpay.store.canviewinvoices`), and choose **only the
    `cpay` store** for both. Nothing else: no payouts, pull payments,
    wallet, or store-settings permissions. (The optional Blink receive
-   switch uses its own key, `BTCPAY_SWITCH_API_KEY`, with Modify store
-   settings: see [BLINK-SWEEP.md](BLINK-SWEEP.md).)
+   switch needs Modify store settings: on this key, or on a separate
+   `BTCPAY_SWITCH_API_KEY`. See [BLINK-SWEEP.md](BLINK-SWEEP.md).)
 2. **Webhook:** `cpay` store → Settings → Webhooks → Create webhook.
    - Payload URL: `https://riumaeihemgznvgattoc.supabase.co/functions/v1/btcpay-webhook`
    - Events: **An invoice has been settled**, **An invoice has expired**,

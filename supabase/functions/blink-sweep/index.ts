@@ -10,8 +10,9 @@
 //                                          one per Blink account
 //   BLINK_RECEIVE_KEY, _2 … _10   optional, Read + Receive key of the same
 //                                 account: what BTCPay gets on a receive switch
-//   BTCPAY_URL, BTCPAY_STORE_ID, BTCPAY_SWITCH_API_KEY   optional, receive
-//                                 switch (Modify store settings on 'cpay')
+//   BTCPAY_URL, BTCPAY_STORE_ID, BTCPAY_API_KEY   receive switch (the key
+//                                 needs Modify store settings on 'cpay');
+//                                 BTCPAY_SWITCH_API_KEY, optional, used instead
 //   BLINK_API_URL                 optional, Blink hosts only (staging)
 //   BLINK_SWEEP_CRON_SECRET       optional, else CRON_SECRET (x-cron-secret)
 //   ALERT_TELEGRAM_BOT_TOKEN, ALERT_TELEGRAM_CHAT_ID   optional alerts

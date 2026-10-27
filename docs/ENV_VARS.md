@@ -173,8 +173,9 @@ Only used while Admin → Settings → Blink sweep (`blink_sweep_enabled`) is on
   each (each account has its own daily withdrawal limit).
 - `BLINK_RECEIVE_KEY`, `BLINK_RECEIVE_KEY_2` … `_10` *(optional)* — Read +
   Receive key of the same Blink account; what BTCPay gets on a receive switch.
-- `BTCPAY_SWITCH_API_KEY` *(optional)* — receive switch: BTCPay API key with
-  Modify store settings on the `cpay` store. Never the invoice key.
+- `BTCPAY_SWITCH_API_KEY` *(optional)* — receive switch: a separate BTCPay
+  API key with Modify store settings on the `cpay` store; otherwise
+  `BTCPAY_API_KEY` is used and needs that permission.
 - `BLINK_SWEEP_CRON_SECRET` *(optional)* — else `CRON_SECRET`.
 - `BLINK_API_URL` *(optional)* — Blink's production or staging GraphQL URL only.
 

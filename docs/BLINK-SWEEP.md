@@ -89,9 +89,10 @@ amount in Admin → Settings → Blink sweep.
 Overflow moves money after it has landed. The receive switch changes where
 it lands: BTCPay's Lightning connection (the store's `BTC-LN` payment
 method) is pointed at another Blink account, so new invoices are paid
-straight into it. It needs `BTCPAY_SWITCH_API_KEY` (a BTCPay API key with
-**Modify store settings** on the `cpay` store); the invoice key
-`BTCPAY_API_KEY` stays create + view invoices only.
+straight into it. The BTCPay API key needs **Modify store settings** on
+the `cpay` store: `BTCPAY_API_KEY` itself, or `BTCPAY_SWITCH_API_KEY` when
+set (then `BTCPAY_API_KEY` can stay create + view invoices only). Without
+that permission BTCPay answers 403 and Admin shows it.
 
 Each run, after the moves and overflow:
 
@@ -165,7 +166,7 @@ invoices and Blink wallet ids are never sent to the page.
 | `BLINK_API_KEY` | Blink API key with **Read** and **Write** (dashboard.blink.sv → API Keys). Make a separate key for this; keep the BTCPay plugin's own key as it is. A Read + Receive key cannot send: the account shows "Key cannot send: needs Write". |
 | `BLINK_API_KEY_2` … `BLINK_API_KEY_10` | optional, one more Blink account each, same permissions |
 | `BLINK_RECEIVE_KEY`, `BLINK_RECEIVE_KEY_2` … `_10` | optional, a **Read + Receive** key of the same account; what BTCPay gets on a receive switch (else the Write key) |
-| `BTCPAY_SWITCH_API_KEY` | optional, receive switch: BTCPay API key with **Modify store settings** on the `cpay` store (uses `BTCPAY_URL` and `BTCPAY_STORE_ID`) |
+| `BTCPAY_SWITCH_API_KEY` | optional, receive switch: a separate BTCPay API key with **Modify store settings** on the `cpay` store; otherwise `BTCPAY_API_KEY` is used and needs that permission |
 | `BLINK_SWEEP_CRON_SECRET` | optional; otherwise `CRON_SECRET`, which pg_cron sends from Vault (`cpay_cron_secret`) |
 | `BLINK_API_URL` | optional, only `https://api.blink.sv/graphql` or `https://api.staging.blink.sv/graphql` |
 
@@ -187,7 +188,8 @@ CPAY wallet's own address.
    wallet balance. Then set the limits you want.
 
 For the receive switch: add a Read + Receive key for each account as
-`BLINK_RECEIVE_KEY` / `_2` …, add `BTCPAY_SWITCH_API_KEY`, check the
+`BLINK_RECEIVE_KEY` / `_2` …, make sure the BTCPay API key has Modify
+store settings, check the
 *BTCPay receiving account* line shows the account BTCPay uses now, then
 turn the switch **On**.
 

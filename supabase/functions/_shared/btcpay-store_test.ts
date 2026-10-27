@@ -14,9 +14,10 @@ function fake(answer: unknown, status = 200) {
   return { f, seen };
 }
 
-Deno.test("btcpaySwitchConfig: its own key, never the invoice key; needs URL and store", () => {
-  assertEquals(btcpaySwitchConfig(env(base)), null);
+Deno.test("btcpaySwitchConfig: BTCPAY_SWITCH_API_KEY when set, else BTCPAY_API_KEY; needs URL and store", () => {
+  assertEquals(btcpaySwitchConfig(env(base)), { url: "https://pay.example.com", storeId: "Store1234", apiKey: "invoice-key" });
   assertEquals(btcpaySwitchConfig(env({ ...base, BTCPAY_SWITCH_API_KEY: " sk " })), { url: "https://pay.example.com", storeId: "Store1234", apiKey: "sk" });
+  assertEquals(btcpaySwitchConfig(env({ ...base, BTCPAY_API_KEY: "" })), null);
   assertEquals(btcpaySwitchConfig(env({ BTCPAY_SWITCH_API_KEY: "sk" })), null);
   assertEquals(btcpaySwitchConfig(env({ ...base, BTCPAY_URL: "http://pay.example.com", BTCPAY_SWITCH_API_KEY: "sk" })), null);
 });

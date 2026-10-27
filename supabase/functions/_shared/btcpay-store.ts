@@ -2,20 +2,19 @@
 // connection, for the BTCPay receive switch (docs/BLINK-SWEEP.md). Only
 // blink-sweep uses this file.
 //
-// A separate key on purpose: BTCPAY_API_KEY (_shared/btcpay.ts) stays
-// create + view invoices only. BTCPAY_SWITCH_API_KEY needs
-// btcpay.store.canmodifystoresettings on the 'cpay' store; it is sent only to
-// BTCPAY_URL and never logged.
+// The key needs btcpay.store.canmodifystoresettings on the 'cpay' store:
+// BTCPAY_SWITCH_API_KEY when set (so BTCPAY_API_KEY can stay invoices
+// only), else BTCPAY_API_KEY itself. Without that permission BTCPay answers
+// 403 and Admin says so. Sent only to BTCPAY_URL, never logged.
 import { type BtcpayConfig, btcpayConfig } from "./btcpay.ts";
 
 type Env = { get(name: string): string | undefined };
 type Fetch = typeof fetch;
 
-/** BTCPAY_URL + BTCPAY_STORE_ID with BTCPAY_SWITCH_API_KEY; null when any is missing or bad. */
+/** BTCPAY_URL + BTCPAY_STORE_ID with BTCPAY_SWITCH_API_KEY, else BTCPAY_API_KEY; null when any is missing or bad. */
 export function btcpaySwitchConfig(env: Env): BtcpayConfig | null {
   const key = (env.get("BTCPAY_SWITCH_API_KEY") ?? "").trim();
-  if (!key) return null;
-  return btcpayConfig({ get: (n) => (n === "BTCPAY_API_KEY" ? key : env.get(n)) });
+  return btcpayConfig(key ? { get: (n) => (n === "BTCPAY_API_KEY" ? key : env.get(n)) } : env);
 }
 
 /** BTCPay 2.x id of the store's Lightning payment method. */
@@ -31,7 +30,7 @@ async function call(f: Fetch, cfg: BtcpayConfig, method: "GET" | "PUT", path: st
   });
   if (!res.ok) {
     await res.body?.cancel();
-    throw new Error(`BTCPay ${method} Lightning settings: HTTP ${res.status}${res.status === 403 ? " (BTCPAY_SWITCH_API_KEY needs Modify store settings)" : ""}`);
+    throw new Error(`BTCPay ${method} Lightning settings: HTTP ${res.status}${res.status === 403 ? " (the BTCPay API key needs Modify store settings)" : ""}`);
   }
   return await res.json().catch(() => null);
 }

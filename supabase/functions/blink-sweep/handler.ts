@@ -29,7 +29,8 @@
 // blink_overflows before sending. A transfer has no invoice, so it is never
 // retried: the next run reads the balances again.
 //
-// Receive switch (blink_receive_switch_enabled, needs BTCPAY_SWITCH_API_KEY):
+// Receive switch (blink_receive_switch_enabled; the BTCPay key needs Modify
+// store settings):
 // BTCPay pays every invoice into one Blink account. When that account has
 // less than "switch below" of Blink's 24-hour withdrawal limit left (less
 // what it already holds), BTCPay's Lightning connection is pointed at the
@@ -83,7 +84,7 @@ export type Deps = {
   /** Records a transfer; null = one from that account was recorded in the last few minutes. */
   overflowBegin(t: Transfer): Promise<string | null>;
   overflowFinish(id: string, status: TransferStatus, error: string | null): Promise<void>;
-  /** BTCPay can be switched (BTCPAY_SWITCH_API_KEY set). */
+  /** BTCPay is configured (BTCPAY_URL, BTCPAY_STORE_ID and a key). */
   canSwitch: boolean;
   /** Reads BTCPay's Lightning connection; usdWalletIds = each account's USD wallet id seen this run. */
   receiving(usdWalletIds: Map<string, string>): Promise<Receiving>;

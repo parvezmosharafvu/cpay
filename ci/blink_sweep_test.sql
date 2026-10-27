@@ -1,4 +1,4 @@
--- 20261027010000: Blink sweep. Off by default with safe limits; the
+-- 20261027010000 + 20261027020000: Blink sweep. Off by default with safe limits; the
 -- destination comes only from the primary active CPAY wallet's own Lightning
 -- address; at most one sweep in flight; only service_role runs the system
 -- functions; admins read the log, nobody else. BEGIN/ROLLBACK.
@@ -66,6 +66,24 @@ do $$ declare a uuid; b uuid; begin
   if a is null then raise exception 'first begin refused'; end if;
   b := system_blink_sweep_begin(1000, 10000, 'x@breez.tips', 'w', 'lnbc1b', 'h2', now() + interval '10 minutes');
   if b is not null then raise exception 'second sweep started while one is open'; end if;
+  -- 20261027020000: one in flight per Blink account, not in total.
+  b := system_blink_sweep_begin(700, 7000, 'x@breez.tips', 'w2', 'lnbc1c', 'h3', now() + interval '10 minutes', '2');
+  if b is null then raise exception 'account 2 blocked by account 1'; end if;
+  if jsonb_array_length(system_blink_sweep_open_all()) <> 2 then raise exception 'open_all: %', system_blink_sweep_open_all(); end if;
+  if system_blink_sweep_begin(700, 7000, 'x@breez.tips', 'w2', 'lnbc1d', 'h4', now(), '2') is not null then
+    raise exception 'second sweep on account 2';
+  end if;
+  perform system_blink_sweep_finish(b, 'failed', 'no route');
+  begin
+    perform system_blink_sweep_begin(1, 1, 'x', 'w', 'b', 'h5', now(), 'abc');
+    raise exception 'bad account label accepted';
+  exception when check_violation then null;
+  end;
+  perform system_blink_sweep_note_account('1', 12345, false, null, 'no_write');
+  perform system_blink_sweep_note_account('1', 2345, true, 99900, 'sent');
+  if (select count(*) from blink_sweep_accounts) <> 1 or (select balance_cents from blink_sweep_accounts where account = '1') <> 2345 then
+    raise exception 'note_account did not upsert';
+  end if;
   if (system_blink_sweep_open()->>'id')::uuid <> a then raise exception 'open sweep not returned'; end if;
   perform system_blink_sweep_finish(a, 'pending', null);
   if system_blink_sweep_open()->>'status' <> 'pending' then raise exception 'pending not kept open'; end if;
@@ -96,6 +114,14 @@ do $$ begin
   raise exception 'authenticated ran system_blink_sweep_begin';
 exception when insufficient_privilege then null; end $$;
 do $$ begin
+  perform system_blink_sweep_note_account('1', 1, true, null, 'x');
+  raise exception 'authenticated ran system_blink_sweep_note_account';
+exception when insufficient_privilege then null; end $$;
+do $$ begin
+  perform 1 from blink_sweep_accounts;
+  raise exception 'authenticated read blink_sweep_accounts';
+exception when insufficient_privilege then null; end $$;
+do $$ begin
   perform 1 from blink_sweeps;
   raise exception 'authenticated read blink_sweeps';
 exception when insufficient_privilege then null; end $$;
@@ -115,7 +141,8 @@ reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'e7000000-0000-0000-0000-0000000000a1', true);
 do $$ declare r jsonb := admin_blink_sweeps(10); begin
-  if jsonb_array_length(r->'rows') <> 1 then raise exception 'log rows: %', r; end if;
+  if jsonb_array_length(r->'rows') <> 2 then raise exception 'log rows: %', r; end if;
+  if jsonb_array_length(r->'accounts') <> 1 or (r->'accounts'->0->>'sent_24h_cents')::int <> 1000 then raise exception 'accounts: %', r->'accounts'; end if;
   if r->'rows'->0 ? 'bolt11' or r->'rows'->0 ? 'blink_wallet_id' then raise exception 'log leaks invoice or wallet id'; end if;
   if r ? 'destination' is not true then raise exception 'no destination field'; end if;
 end $$;

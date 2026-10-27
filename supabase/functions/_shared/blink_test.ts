@@ -11,14 +11,21 @@ function fake(answer: unknown, status = 200) {
   return { f, seen };
 }
 
-Deno.test("usdWallet: picks the USD wallet; key goes only to the configured Blink URL", async () => {
-  const { f, seen } = fake({ data: { me: { defaultAccount: { wallets: [
-    { id: "btc1", walletCurrency: "BTC", balance: 5000 },
-    { id: "usd1", walletCurrency: "USD", balance: 1234 },
-  ] } } } });
-  assertEquals(await usdWallet(f, cfg), { id: "usd1", balanceCents: 1234 });
+Deno.test("usdWallet: picks the USD wallet, reads WRITE and Blink's withdrawal limit; key goes only to the configured URL", async () => {
+  const { f, seen } = fake({ data: { authorization: { scopes: ["READ", "RECEIVE", "WRITE"] }, me: { defaultAccount: {
+    wallets: [{ id: "btc1", walletCurrency: "BTC", balance: 5000 }, { id: "usd1", walletCurrency: "USD", balance: 1234 }],
+    limits: { withdrawal: [{ remainingLimit: 50000, totalLimit: 99900 }] },
+  } } } });
+  assertEquals(await usdWallet(f, cfg), { id: "usd1", balanceCents: 1234, canSend: true, withdrawRemainingCents: 50000 });
   assertEquals(seen[0].url, cfg.url);
   assertEquals(seen[0].key, "secret-key");
+});
+
+Deno.test("usdWallet: Read + Receive key cannot send; no limit reported is null", async () => {
+  const { f } = fake({ data: { authorization: { scopes: ["READ", "RECEIVE"] }, me: { defaultAccount: {
+    wallets: [{ id: "usd1", walletCurrency: "USD", balance: 0 }], limits: { withdrawal: [{ remainingLimit: null, totalLimit: 0 }] },
+  } } } });
+  assertEquals(await usdWallet(f, cfg), { id: "usd1", balanceCents: 0, canSend: false, withdrawRemainingCents: null });
 });
 
 Deno.test("usdWallet: no USD wallet, GraphQL errors and HTTP errors throw", async () => {

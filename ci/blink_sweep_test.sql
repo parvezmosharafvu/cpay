@@ -1,4 +1,4 @@
--- 20261027010000 + 20261027020000: Blink sweep. Off by default with safe limits; the
+-- 20261027010000 + 20261027020000 + 20261027030000: Blink sweep and overflow. Off by default with safe limits; the
 -- destination comes only from the primary active CPAY wallet's own Lightning
 -- address; at most one sweep in flight; only service_role runs the system
 -- functions; admins read the log, nobody else. BEGIN/ROLLBACK.
@@ -27,6 +27,13 @@ do $$ declare c jsonb := system_blink_sweep_config(); begin
   if (select dangerous from platform_setting_defaults() where key = 'blink_sweep_enabled') is not true then
     raise exception 'blink_sweep_enabled must be a dangerous (confirmed) setting';
   end if;
+  if c->>'overflow' <> 'false' then raise exception 'overflow on by default: %', c; end if;
+  if (select dangerous from platform_setting_defaults() where key = 'blink_sweep_overflow_enabled') is not true then
+    raise exception 'blink_sweep_overflow_enabled must be a dangerous (confirmed) setting';
+  end if;
+  insert into platform_settings (key, value) values ('blink_sweep_overflow_enabled', 'true');
+  if system_blink_sweep_config()->>'overflow' <> 'true' then raise exception 'overflow setting not read'; end if;
+  delete from platform_settings where key = 'blink_sweep_overflow_enabled';
 end $$;
 
 -- 2. Destination: the primary active wallet's Lightning address only.
@@ -101,6 +108,30 @@ do $$ declare a uuid; b uuid; begin
   end;
 end $$;
 
+-- 3b. Overflow: recorded, one per source account per 5 minutes, finished once.
+do $$ declare a uuid; b uuid; begin
+  a := system_blink_overflow_begin('1', '2', 5000);
+  if a is null then raise exception 'first overflow refused'; end if;
+  if system_blink_overflow_begin('1', '3', 100) is not null then raise exception 'second overflow from #1 within 5 minutes'; end if;
+  b := system_blink_overflow_begin('2', '1', 100);
+  if b is null then raise exception 'overflow from #2 blocked by #1'; end if;
+  perform system_blink_overflow_finish(a, 'sent', null);
+  perform system_blink_overflow_finish(a, 'failed', 'late');
+  if (select status from blink_overflows where id = a) <> 'sent' then raise exception 'a finished overflow changed'; end if;
+  begin
+    perform system_blink_overflow_finish(b, 'sending', null);
+    raise exception 'overflow finish accepted sending';
+  exception when raise_exception then if sqlerrm not like 'bad status%' then raise; end if;
+  end;
+  begin
+    perform system_blink_overflow_begin('3', '3', 100);
+    raise exception 'overflow to itself accepted';
+  exception when check_violation then null;
+  end;
+  update blink_overflows set created_at = now() - interval '6 minutes' where id = a;
+  if system_blink_overflow_begin('1', '2', 100) is null then raise exception 'overflow from #1 still blocked after 5 minutes'; end if;
+end $$;
+
 -- 4. Grants: anon and authenticated cannot run the system functions or read the table.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'e7000000-0000-0000-0000-0000000000f1', true);
@@ -116,6 +147,14 @@ exception when insufficient_privilege then null; end $$;
 do $$ begin
   perform system_blink_sweep_note_account('1', 1, true, null, 'x');
   raise exception 'authenticated ran system_blink_sweep_note_account';
+exception when insufficient_privilege then null; end $$;
+do $$ begin
+  perform system_blink_overflow_begin('1', '2', 1);
+  raise exception 'authenticated ran system_blink_overflow_begin';
+exception when insufficient_privilege then null; end $$;
+do $$ begin
+  perform 1 from blink_overflows;
+  raise exception 'authenticated read blink_overflows';
 exception when insufficient_privilege then null; end $$;
 do $$ begin
   perform 1 from blink_sweep_accounts;
@@ -145,6 +184,7 @@ do $$ declare r jsonb := admin_blink_sweeps(10); begin
   if jsonb_array_length(r->'accounts') <> 1 or (r->'accounts'->0->>'sent_24h_cents')::int <> 1000 then raise exception 'accounts: %', r->'accounts'; end if;
   if r->'rows'->0 ? 'bolt11' or r->'rows'->0 ? 'blink_wallet_id' then raise exception 'log leaks invoice or wallet id'; end if;
   if r ? 'destination' is not true then raise exception 'no destination field'; end if;
+  if jsonb_array_length(r->'overflows') <> 3 or r->'overflows'->0->>'from_account' is null then raise exception 'overflows: %', r->'overflows'; end if;
 end $$;
 reset role;
 

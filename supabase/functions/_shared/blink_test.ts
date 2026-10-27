@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { BlinkError, payInvoice, usdToSats, usdWallet } from "./blink.ts";
+import { BlinkError, payInvoice, sendToBlinkWallet, usdToSats, usdWallet } from "./blink.ts";
 
 const cfg = { url: "https://api.blink.sv/graphql", apiKey: "secret-key" };
 function fake(answer: unknown, status = 200) {
@@ -11,12 +11,12 @@ function fake(answer: unknown, status = 200) {
   return { f, seen };
 }
 
-Deno.test("usdWallet: picks the USD wallet, reads WRITE and Blink's withdrawal limit; key goes only to the configured URL", async () => {
+Deno.test("usdWallet: picks the USD wallet, reads WRITE and Blink's withdrawal and Blink-to-Blink limits; key goes only to the configured URL", async () => {
   const { f, seen } = fake({ data: { authorization: { scopes: ["READ", "RECEIVE", "WRITE"] }, me: { defaultAccount: {
     wallets: [{ id: "btc1", walletCurrency: "BTC", balance: 5000 }, { id: "usd1", walletCurrency: "USD", balance: 1234 }],
-    limits: { withdrawal: [{ remainingLimit: 50000, totalLimit: 99900 }] },
+    limits: { withdrawal: [{ remainingLimit: 50000, totalLimit: 99900 }], internalSend: [{ remainingLimit: 400000 }, { remainingLimit: 250000.5 }] },
   } } } });
-  assertEquals(await usdWallet(f, cfg), { id: "usd1", balanceCents: 1234, canSend: true, withdrawRemainingCents: 50000 });
+  assertEquals(await usdWallet(f, cfg), { id: "usd1", balanceCents: 1234, canSend: true, withdrawRemainingCents: 50000, internalSendRemainingCents: 250000 });
   assertEquals(seen[0].url, cfg.url);
   assertEquals(seen[0].key, "secret-key");
 });
@@ -25,7 +25,7 @@ Deno.test("usdWallet: Read + Receive key cannot send; no limit reported is null"
   const { f } = fake({ data: { authorization: { scopes: ["READ", "RECEIVE"] }, me: { defaultAccount: {
     wallets: [{ id: "usd1", walletCurrency: "USD", balance: 0 }], limits: { withdrawal: [{ remainingLimit: null, totalLimit: 0 }] },
   } } } });
-  assertEquals(await usdWallet(f, cfg), { id: "usd1", balanceCents: 0, canSend: false, withdrawRemainingCents: null });
+  assertEquals(await usdWallet(f, cfg), { id: "usd1", balanceCents: 0, canSend: false, withdrawRemainingCents: null, internalSendRemainingCents: null });
 });
 
 Deno.test("usdWallet: no USD wallet, GraphQL errors and HTTP errors throw", async () => {
@@ -50,4 +50,14 @@ Deno.test("payInvoice: statuses pass through; unknown or missing status is a fai
   assertEquals(await payInvoice(bad.f, cfg, "usd1", "lnbc1x", "m"), { status: "FAILURE", error: "Insufficient balance" });
   const odd = fake({ data: { lnInvoicePaymentSend: { status: "WHAT" } } });
   assertEquals(await payInvoice(odd.f, cfg, "usd1", "lnbc1x", "m"), { status: "FAILURE", error: "Blink did not confirm the payment" });
+});
+
+Deno.test("sendToBlinkWallet: USD cents to another Blink wallet; failure keeps the reason", async () => {
+  const ok = fake({ data: { intraLedgerUsdPaymentSend: { status: "SUCCESS", errors: [] } } });
+  assertEquals(await sendToBlinkWallet(ok.f, cfg, "usd1", "usd2", 2500, "memo"), { status: "SUCCESS", error: null });
+  assertEquals(ok.seen[0].body.variables, { input: { walletId: "usd1", recipientWalletId: "usd2", amount: 2500, memo: "memo" } });
+  const bad = fake({ data: { intraLedgerUsdPaymentSend: { status: "FAILURE", errors: [{ message: "Limit exceeded" }] } } });
+  assertEquals(await sendToBlinkWallet(bad.f, cfg, "usd1", "usd2", 1, "m"), { status: "FAILURE", error: "Limit exceeded" });
+  const odd = fake({ data: {} });
+  assertEquals(await sendToBlinkWallet(odd.f, cfg, "usd1", "usd2", 1, "m"), { status: "FAILURE", error: "Blink did not confirm the transfer" });
 });

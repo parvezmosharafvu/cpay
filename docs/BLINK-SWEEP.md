@@ -9,10 +9,12 @@ automatically. It is **off by default**.
 
 Each Blink account has its own daily withdrawal limit (for example $999 in
 24 hours), so the sweep can use **up to 10 Blink accounts**, one API key
-each, and moves each account separately.
+each, and moves each account separately. With **overflow** on, an account
+that reaches its limit hands its USD to another of the accounts, so
+BTCPay can keep paying into one account.
 
 Migrations: `20261027010000_blink_sweep.sql`,
-`20261027020000_blink_sweep_accounts.sql`. Function: `blink-sweep`
+`20261027020000_blink_sweep_accounts.sql`, `20261027030000_blink_overflow.sql`. Function: `blink-sweep`
 (rules in `handler.ts`, tested by `handler_test.ts`). Blink client:
 `supabase/functions/_shared/blink.ts`.
 
@@ -47,6 +49,37 @@ others. For each account:
 6. Telegram gets an alert for each move that arrives, fails or needs a
    check.
 
+## Overflow (one BTCPay account, several Blink limits)
+
+BTCPay pays into one Blink account only. When that account hits Blink's
+withdrawal limit, its balance would wait for the next day. With
+`blink_sweep_overflow_enabled` **On** (and two or more keys), each run
+after the moves above:
+
+1. Takes every account whose move was stopped by Blink's withdrawal limit
+   ("Blink daily limit reached").
+2. Picks the account with the most **room**: Blink withdrawal limit left
+   minus the USD it already holds (and minus what this run already gave
+   it). It must have a Write key and not be limited itself.
+3. Sends USD → USD inside Blink (`intraLedgerUsdPaymentSend`): the
+   account's balance less *USD to leave*, capped at *largest move*, the
+   room, and Blink's own Blink-to-Blink limit (`internalSend`, separate
+   from the withdrawal limit). Below *smallest move* nothing is sent.
+4. The receiving account moves it to the CPAY wallet on its next run (10
+   minutes later), within its own limit.
+
+At most one transfer per account per run, and the database refuses a
+second transfer from the same account within 5 minutes, so overlapping
+runs cannot both send. Each transfer is recorded in `blink_overflows`
+before it is sent. A transfer has no invoice, so a timeout is **never
+retried**: it is closed as `unknown` with a Telegram alert, and the next
+run reads the balances again. Money only moves between the owner's own
+Blink accounts.
+
+Blink sets its limits per account. Using several accounts to get past
+them may be against Blink's terms; raising the account level (KYC) is the
+first option.
+
 The payment shows up in the CPAY wallet as a receive with no CPAY payment
 attached, so the receipt review may list it. Match it by the time and
 amount in Admin → Settings → Blink sweep.
@@ -59,12 +92,14 @@ amount in Admin → Settings → Blink sweep.
 | `blink_sweep_keep_usd` | 0 | USD left in Blink |
 | `blink_sweep_min_usd` | 5 | smaller balances wait |
 | `blink_sweep_max_usd` | 200 | ⚠ the most moved in one run |
+| `blink_sweep_overflow_enabled` | Off | ⚠ overflow between Blink accounts, audited |
 
 *USD to leave*, *smallest* and *largest move* apply to each account.
 
 The same page shows where the next move goes, each Blink account (USD
 balance, can send, Blink limit left, moved in the last 24 hours, last
-result) and the last 20 moves (`admin_blink_sweeps`, admins only). Keys,
+result), the last 20 moves and the last 20 overflow transfers
+(`admin_blink_sweeps`, admins only). Keys,
 invoices and Blink wallet ids are never sent to the page.
 
 ## Secrets (names only)

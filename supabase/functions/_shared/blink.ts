@@ -1,7 +1,8 @@
 // Blink (blink.sv) GraphQL client for the Blink sweep (docs/BLINK-SWEEP.md).
-// Only what the sweep needs: read the USD wallet, estimate USD → sats, and
-// pay one Lightning invoice from the USD wallet. The API key is sent only to
-// the fixed Blink host below.
+// Only what the sweep needs: read the USD wallet, estimate USD → sats, pay
+// one Lightning invoice from the USD wallet, and send USD to another Blink
+// USD wallet (overflow). The API key is sent only to the fixed Blink host
+// below.
 export type Fetch = typeof fetch;
 export type BlinkConfig = { url: string; apiKey: string };
 export type PayStatus = "SUCCESS" | "ALREADY_PAID" | "PENDING" | "FAILURE";
@@ -73,13 +74,23 @@ export type UsdWallet = {
   canSend: boolean;
   /** Cents Blink still lets this account withdraw in the rolling 24 hours; null = no limit reported. */
   withdrawRemainingCents: number | null;
+  /** Cents Blink still lets this account send to other Blink wallets in 24 hours; null = no limit reported. */
+  internalSendRemainingCents: number | null;
 };
 
-/** The account's USD wallet, the key's send permission and Blink's withdrawal limit left. */
+// deno-lint-ignore no-explicit-any
+function remaining(list: any): number | null {
+  const values = (Array.isArray(list) ? list : []).map((l: { remainingLimit?: unknown }) => l?.remainingLimit)
+    .filter((v: unknown) => v !== null && v !== undefined && Number.isFinite(Number(v)))
+    .map((v: unknown) => Math.max(0, Math.floor(Number(v))));
+  return values.length ? Math.min(...values) : null;
+}
+
+/** The account's USD wallet, the key's send permission and Blink's limits left. */
 export async function usdWallet(f: Fetch, cfg: BlinkConfig): Promise<UsdWallet> {
   const data = await gql(
     f, cfg,
-    "query { authorization { scopes } me { defaultAccount { wallets { id walletCurrency balance } limits { withdrawal { remainingLimit } } } } }",
+    "query { authorization { scopes } me { defaultAccount { wallets { id walletCurrency balance } limits { withdrawal { remainingLimit } internalSend { remainingLimit } } } } }",
   );
   // deno-lint-ignore no-explicit-any
   const d = data as any;
@@ -90,13 +101,11 @@ export async function usdWallet(f: Fetch, cfg: BlinkConfig): Promise<UsdWallet> 
   const cents = Number(usd.balance);
   if (!Number.isSafeInteger(cents)) throw new BlinkError("bad_balance", "Blink sent an invalid USD balance");
   const scopes = Array.isArray(d?.authorization?.scopes) ? d.authorization.scopes : [];
-  const limits = Array.isArray(d?.me?.defaultAccount?.limits?.withdrawal) ? d.me.defaultAccount.limits.withdrawal : [];
-  const remaining = limits.map((l: { remainingLimit?: unknown }) => l?.remainingLimit)
-    .filter((v: unknown) => v !== null && v !== undefined && Number.isFinite(Number(v)))
-    .map((v: unknown) => Math.max(0, Math.floor(Number(v))));
+  const limits = d?.me?.defaultAccount?.limits;
   return {
     id: usd.id, balanceCents: cents, canSend: scopes.includes("WRITE"),
-    withdrawRemainingCents: remaining.length ? Math.min(...remaining) : null,
+    withdrawRemainingCents: remaining(limits?.withdrawal),
+    internalSendRemainingCents: remaining(limits?.internalSend),
   };
 }
 
@@ -125,4 +134,18 @@ export async function payInvoice(f: Fetch, cfg: BlinkConfig, walletId: string, b
   const error = Array.isArray(out?.errors) && out.errors.length ? String(out.errors[0]?.message ?? "Blink error").slice(0, 200) : null;
   const status: PayStatus = ["SUCCESS", "ALREADY_PAID", "PENDING", "FAILURE"].includes(out?.status) ? out.status : "FAILURE";
   return { status, error: status === "FAILURE" ? (error ?? "Blink did not confirm the payment") : error };
+}
+
+/** Send USD (cents) from one Blink USD wallet to another Blink USD wallet. No idempotency: never retried blindly. */
+export async function sendToBlinkWallet(f: Fetch, cfg: BlinkConfig, walletId: string, recipientWalletId: string, cents: number, memo: string): Promise<{ status: PayStatus; error: string | null }> {
+  const data = await gql(
+    f, cfg,
+    "mutation Send($input: IntraLedgerUsdPaymentSendInput!) { intraLedgerUsdPaymentSend(input: $input) { status errors { message } } }",
+    { input: { walletId, recipientWalletId, amount: cents, memo } },
+  );
+  // deno-lint-ignore no-explicit-any
+  const out = (data as any)?.intraLedgerUsdPaymentSend;
+  const error = Array.isArray(out?.errors) && out.errors.length ? String(out.errors[0]?.message ?? "Blink error").slice(0, 200) : null;
+  const status: PayStatus = ["SUCCESS", "ALREADY_PAID", "PENDING", "FAILURE"].includes(out?.status) ? out.status : "FAILURE";
+  return { status, error: status === "FAILURE" ? (error ?? "Blink did not confirm the transfer") : error };
 }

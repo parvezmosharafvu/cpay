@@ -20,12 +20,12 @@
 // verify_jwt = false (pg_cron sends x-cron-secret instead).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import {
-  blinkAccounts, connectionString, invoicePaid, payInvoice, receivingAccount, sendToBlinkWallet, usdToSats, usdWallet,
+  blinkAccounts, connectionString, invoicePaid, payInvoice, receivingAccount, usdToSats, usdWallet,
 } from "../_shared/blink.ts";
 import { btcpaySwitchConfig, getLightningConnection, setLightningConnection } from "../_shared/btcpay-store.ts";
 import { denoResolver, fetchPayRequest, guardedFetch, parseLightningAddress, requestInvoice } from "../_shared/lnurl.ts";
 import { configuredCronSecret } from "../_shared/scoped-cron-secret.mjs";
-import { createHandler, type SweepStatus, type SwitchStatus, type TransferStatus } from "./handler.ts";
+import { createHandler, type SweepStatus, type SwitchStatus } from "./handler.ts";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const blink = new Map(blinkAccounts(Deno.env).map((a) => [a.label, a]));
@@ -53,7 +53,6 @@ Deno.serve(createHandler({
     const cents = (v: unknown, dflt: number) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 100) : dflt);
     return {
       enabled: c.enabled === true,
-      overflow: c.overflow === true,
       receiveSwitch: c.receive_switch === true,
       switchBelowCents: cents(c.switch_below_usd, 5000),
       keepCents: cents(c.keep_usd, 0),
@@ -93,15 +92,6 @@ Deno.serve(createHandler({
       p_account: label, p_balance_cents: n.balanceCents, p_can_send: n.canSend,
       p_withdraw_remaining_cents: n.withdrawRemainingCents, p_result: n.result,
     });
-  },
-  transfer: (label, walletId, recipientWalletId, cents) =>
-    sendToBlinkWallet(fetch, account(label), walletId, recipientWalletId, cents, `CPAY: Blink #${label} daily limit overflow`),
-  async overflowBegin(t) {
-    const id = await rpc("system_blink_overflow_begin", { p_from: t.from, p_to: t.to, p_amount_cents: t.cents });
-    return typeof id === "string" ? id : null;
-  },
-  async overflowFinish(id: string, status: TransferStatus, error: string | null) {
-    await rpc("system_blink_overflow_finish", { p_id: id, p_status: status, p_error: error });
   },
   canSwitch: btcpay !== null,
   async receiving(usdWalletIds) {

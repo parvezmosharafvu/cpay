@@ -396,6 +396,25 @@ Admin → **Settings** → **BTCPay Server** চালু করলে নতু
 
 বিস্তারিত: [BTCPAY.md](BTCPAY.md)।
 
+### Blink sweep: Blink USD থেকে CPAY wallet-এ নিজে নিজে টাকা আনা
+
+BTCPay-এর Lightning যদি Blink plugin (USD wallet) দিয়ে চলে, তাহলে Lightning payment জমা হয় আপনার **Blink USD wallet**-এ, CPAY wallet-এ না। কিন্তু Auto withdraw আর withdraw CPAY wallet থেকে যায়। **Blink sweep** চালু থাকলে প্রতি ১০ মিনিটে Blink USD balance থেকে টাকা **primary CPAY wallet**-এ চলে আসে। শুরুতে এটা বন্ধ থাকে।
+
+- টাকা যায় শুধু primary CPAY wallet-এর নিজের Lightning address-এ (যেমন `cpay@breez.tips`)। এই ঠিকানা database থেকে নেওয়া হয়, কেউ হাতে লিখে বদলাতে পারে না।
+- কত সরাবে: Blink USD balance থেকে "Blink-এ কত USD রেখে দেবে" বাদ দিয়ে, "একবারে সবচেয়ে বেশি" পর্যন্ত। "সবচেয়ে কম" থেকে কম হলে কিছু সরায় না। Blink-এর দামে sats হিসাব করে তার ৯৮% চায় (দাম ওঠানামা আর Blink-এর fee-এর জন্য)।
+- একবারে একটাই move চলে। আগেরটা শেষ না হলে নতুনটা শুরু হয় না। একই invoice আবার পাঠালে Blink "ALREADY_PAID" বলে, তাই দুবার টাকা যায় না।
+- প্রতিটা move-এর খবর Telegram-এ আসে। Admin → Settings → **Blink sweep**-এ কোথায় যাচ্ছে আর শেষ ২০টা move দেখা যায়।
+
+চালু করার ধাপ:
+
+1. Blink dashboard (dashboard.blink.sv) → API Keys-এ **Read আর Write** অনুমতিসহ নতুন একটা key বানান। BTCPay plugin-এর key-টা যেমন আছে তেমন রাখুন।
+2. Admin → Secrets & keys-এ `BLINK_API_KEY` নামে সেটা বসান।
+3. Migration `20261027010000_blink_sweep.sql` আর `blink-sweep` function deploy হতে হবে।
+4. Admin → Settings → Blink sweep-এ দেখুন ঠিকানাটা আপনার primary CPAY wallet-এর Lightning address কিনা।
+5. প্রথমে "সবচেয়ে কম" ১ USD রেখে **On** করুন। পরের run-এর পর log, Blink আর CPAY wallet balance মিলিয়ে দেখুন। তারপর নিজের মতো limit ঠিক করুন।
+
+On-chain BTCPay payment এতে আসে না। সেটা আগের মতো নিজে সরাতে হবে। বিস্তারিত: [BLINK-SWEEP.md](BLINK-SWEEP.md)।
+
 
 <a id="review-workflow"></a>
 ## ১২. Settings ও যাচাইয়ের দ্রুত নির্দেশনা

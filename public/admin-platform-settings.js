@@ -15,6 +15,8 @@
     // Features (admin-owner-settings.js).
     // BTCPay Server checkout (docs/BTCPAY.md): off until the owner turns it on.
     ['BTCPay Server', ['btcpay_enabled', 'btcpay_lightning_only']],
+    // Blink sweep (docs/BLINK-SWEEP.md): Blink USD balance → primary CPAY wallet.
+    ['Blink sweep', ['blink_sweep_enabled', 'blink_sweep_keep_usd', 'blink_sweep_min_usd', 'blink_sweep_max_usd']],
     ['Legal pages', ['legal_entity_name', 'legal_address', 'legal_effective_date', 'legal_jurisdiction', 'legal_courts', 'legal_privacy_email', 'legal_support_email']],
   ];
   const ADVANCED = [
@@ -100,6 +102,21 @@
       if (drafts.get(row.key) === before) drafts.delete(row.key);
       render();
     }
+  }
+
+  // Blink sweep log (admin_blink_sweeps): where the next move goes and the
+  // last moves. Read-only; invoices and Blink wallet ids never reach the page.
+  const SWEEP_STATUS = { sending: 'Sending', pending: 'Pending', sent: 'Sent', failed: 'Failed', unknown: 'Check in Blink' };
+  async function renderBlinkLog() {
+    const el = document.getElementById('blinkSweepLog');
+    if (!el) return;
+    const { data, error } = await adminPanelRead(() => client.rpc('admin_blink_sweeps', { p_limit: 20 }));
+    if (error) { adminPanelError(el, error.message, renderBlinkLog); return; }
+    const dest = data?.destination;
+    const rows = (data?.rows || []).map((r) => `<tr><td>${esc(new Date(r.created_at).toLocaleString())}</td><td>$${esc((Number(r.amount_cents) / 100).toFixed(2))}</td><td>${esc(Number(r.amount_sat).toLocaleString('en-US'))} sats</td><td><span class="badge ${r.status === 'sent' ? 'settled' : r.status === 'failed' || r.status === 'unknown' ? 'expired' : 'pending'}">${esc(SWEEP_STATUS[r.status] || r.status)}</span></td><td class="mono">${esc(r.destination)}</td><td>${esc(r.error || '')}</td></tr>`).join('');
+    el.innerHTML = `<div class="card"><p>${dest ? `Moves go to <strong class="mono">${esc(dest)}</strong>, the primary CPAY wallet’s Lightning address.` : '<span class="err">The primary CPAY wallet has no Lightning address, so nothing is moved.</span>'}</p>
+        <p class="faint">Needs the BLINK_API_KEY secret (Blink API key with Read and Write) in Secrets &amp; keys. Runs every 10 minutes.</p></div>
+      <div class="card flush"><table class="table rtable"><thead><tr><th>When</th><th>USD</th><th>Sats</th><th>Status</th><th>To</th><th>Note</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="empty">No moves yet</td></tr>'}</tbody></table></div>`;
   }
 
   async function renderAudit() {
@@ -196,6 +213,7 @@
       ${modeHtml(byKey.payment_mode)}
       ${fee}
       ${groupsHtml(MAIN, byKey)}
+      ${byKey.blink_sweep_enabled ? '<div id="blinkSweepLog"></div>' : ''}
       <div id="platformSettingsAudit"></div>`;
     wire(el, byKey);
     wireMode(el);
@@ -213,6 +231,7 @@
     };
     const adv = document.getElementById('platformSettingsAdvanced');
     if (adv) { adv.innerHTML = groupsHtml(ADVANCED, byKey); wire(adv, byKey); }
+    renderBlinkLog();
     renderAudit();
   }
 

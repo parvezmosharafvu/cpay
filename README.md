@@ -57,7 +57,7 @@ supabase/
   functions/                     → Deno Edge Functions, incl. the wallet function,
                                    wallet-registry (owner: add/primary/disable wallets),
                                    owner-guide (serves the Bangla guide to the owner only),
-                                   user-withdraw, create-invoice, health, btcpay-webhook
+                                   user-withdraw, create-invoice, health, btcpay-webhook, blink-sweep
 worker/                          → Cloudflare link-preview Worker
 wallet/                          → CPay Wallet PWA (optional phone wallet)
 payment-service/                 → self-hosted Node 22 fallback (not deployed, tested in CI)

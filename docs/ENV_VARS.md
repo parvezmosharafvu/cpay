@@ -163,6 +163,15 @@ Only used while Admin → Settings → BTCPay Server (`btcpay_enabled`) is on.
       … `_5` are also accepted while rotating.
 - `SITE_URL` *(optional)* — return link shown on the BTCPay checkout page.
 
+### Blink sweep (`blink-sweep`; [BLINK-SWEEP.md](BLINK-SWEEP.md))
+
+Only used while Admin → Settings → Blink sweep (`blink_sweep_enabled`) is on.
+
+- [ ] `BLINK_API_KEY` — Blink API key with Read and Write, used only by this
+      function. A separate key from the BTCPay Blink plugin's.
+- `BLINK_SWEEP_CRON_SECRET` *(optional)* — else `CRON_SECRET`.
+- `BLINK_API_URL` *(optional)* — Blink's production or staging GraphQL URL only.
+
 ## Payment service
 
 Set on the host that runs `payment-service/` (see

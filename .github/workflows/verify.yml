@@ -419,6 +419,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/platform_settings_test.sql
+      - name: Blink sweep (20261027010000) off by default, own-wallet destination only, one in flight
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/blink_sweep_test.sql
       - name: Platform settings enforced in the money paths (20261020020000)
         env:
           PGPASSWORD: postgres
@@ -611,6 +615,9 @@ jobs:
 
       - name: btcpay-webhook (signature, re-fetch, settle) and BTCPay client
         run: deno test --allow-read=supabase/functions supabase/functions/btcpay-webhook/
+
+      - name: blink-sweep (cron secret, one sweep in flight, re-pay is ALREADY_PAID, limits)
+        run: deno test supabase/functions/blink-sweep/
 
       - name: admin-actions admin gate against a mock Supabase
         # Local mock server only. Active admin allowed; suspended, pending

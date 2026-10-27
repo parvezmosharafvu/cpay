@@ -1,4 +1,4 @@
--- 20261027010000 … 20261027040000: Blink sweep, overflow and the BTCPay receive switch. Off by default with safe limits; the
+-- 20261027010000 … 20261027050000: Blink sweep and the BTCPay receive switch (overflow removed). Off by default with safe limits; the
 -- destination comes only from the primary active CPAY wallet's own Lightning
 -- address; at most one sweep in flight; only service_role runs the system
 -- functions; admins read the log, nobody else. BEGIN/ROLLBACK.
@@ -27,13 +27,14 @@ do $$ declare c jsonb := system_blink_sweep_config(); begin
   if (select dangerous from platform_setting_defaults() where key = 'blink_sweep_enabled') is not true then
     raise exception 'blink_sweep_enabled must be a dangerous (confirmed) setting';
   end if;
-  if c->>'overflow' <> 'false' then raise exception 'overflow on by default: %', c; end if;
-  if (select dangerous from platform_setting_defaults() where key = 'blink_sweep_overflow_enabled') is not true then
-    raise exception 'blink_sweep_overflow_enabled must be a dangerous (confirmed) setting';
+  -- 20261027050000: overflow is gone.
+  if c ? 'overflow' or exists (select 1 from platform_setting_defaults() where key = 'blink_sweep_overflow_enabled')
+     or to_regclass('public.blink_overflows') is not null then
+    raise exception 'overflow still present: %', c;
   end if;
-  insert into platform_settings (key, value) values ('blink_sweep_overflow_enabled', 'true');
-  if system_blink_sweep_config()->>'overflow' <> 'true' then raise exception 'overflow setting not read'; end if;
-  delete from platform_settings where key = 'blink_sweep_overflow_enabled';
+  if not exists (select 1 from platform_setting_defaults() where key = 'blink_receive_switch_enabled') then
+    raise exception 'receive switch row lost with the overflow row';
+  end if;
 end $$;
 
 -- 2. Destination: the primary active wallet's Lightning address only.
@@ -106,30 +107,6 @@ do $$ declare a uuid; b uuid; begin
     raise exception 'finish accepted sending';
   exception when raise_exception then if sqlerrm not like 'bad status%' then raise; end if;
   end;
-end $$;
-
--- 3b. Overflow: recorded, one per source account per 5 minutes, finished once.
-do $$ declare a uuid; b uuid; begin
-  a := system_blink_overflow_begin('1', '2', 5000);
-  if a is null then raise exception 'first overflow refused'; end if;
-  if system_blink_overflow_begin('1', '3', 100) is not null then raise exception 'second overflow from #1 within 5 minutes'; end if;
-  b := system_blink_overflow_begin('2', '1', 100);
-  if b is null then raise exception 'overflow from #2 blocked by #1'; end if;
-  perform system_blink_overflow_finish(a, 'sent', null);
-  perform system_blink_overflow_finish(a, 'failed', 'late');
-  if (select status from blink_overflows where id = a) <> 'sent' then raise exception 'a finished overflow changed'; end if;
-  begin
-    perform system_blink_overflow_finish(b, 'sending', null);
-    raise exception 'overflow finish accepted sending';
-  exception when raise_exception then if sqlerrm not like 'bad status%' then raise; end if;
-  end;
-  begin
-    perform system_blink_overflow_begin('3', '3', 100);
-    raise exception 'overflow to itself accepted';
-  exception when check_violation then null;
-  end;
-  update blink_overflows set created_at = now() - interval '6 minutes' where id = a;
-  if system_blink_overflow_begin('1', '2', 100) is null then raise exception 'overflow from #1 still blocked after 5 minutes'; end if;
 end $$;
 
 -- 3c. Receive switch: off by default; one switch per 30 minutes; finished once;
@@ -205,10 +182,6 @@ do $$ begin
   raise exception 'authenticated ran system_blink_sweep_note_account';
 exception when insufficient_privilege then null; end $$;
 do $$ begin
-  perform system_blink_overflow_begin('1', '2', 1);
-  raise exception 'authenticated ran system_blink_overflow_begin';
-exception when insufficient_privilege then null; end $$;
-do $$ begin
   perform system_blink_switch_begin('1', '2');
   raise exception 'authenticated ran system_blink_switch_begin';
 exception when insufficient_privilege then null; end $$;
@@ -227,10 +200,6 @@ exception when insufficient_privilege then null; end $$;
 do $$ begin
   perform 1 from blink_rescues;
   raise exception 'authenticated read blink_rescues';
-exception when insufficient_privilege then null; end $$;
-do $$ begin
-  perform 1 from blink_overflows;
-  raise exception 'authenticated read blink_overflows';
 exception when insufficient_privilege then null; end $$;
 do $$ begin
   perform 1 from blink_sweep_accounts;
@@ -263,7 +232,7 @@ do $$ declare r jsonb := admin_blink_sweeps(10); begin
   if r->'receiving'->>'account' <> '2' or jsonb_array_length(r->'switches') <> 1 or jsonb_array_length(r->'rescues') <> 1 then
     raise exception 'receive switch admin view: %', r;
   end if;
-  if jsonb_array_length(r->'overflows') <> 3 or r->'overflows'->0->>'from_account' is null then raise exception 'overflows: %', r->'overflows'; end if;
+  if r ? 'overflows' then raise exception 'overflows still in the admin view'; end if;
 end $$;
 reset role;
 

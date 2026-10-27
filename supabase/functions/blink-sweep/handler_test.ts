@@ -1,21 +1,21 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  createHandler, type Deps, moveCents, outcome, type OpenSweep, overflowPlan, type Receiving, roomCents, run, type Seen, STALE_AFTER_MS, switchTarget,
+  createHandler, type Deps, moveCents, outcome, type OpenSweep, type Receiving, roomCents, run, type Seen, STALE_AFTER_MS, switchTarget,
 } from "./handler.ts";
 import { blinkAccounts, blinkConfig, type UsdWallet } from "../_shared/blink.ts";
 import type { Bolt11 } from "../_shared/bolt11.ts";
 import { buildInvoice } from "../_shared/bolt11_testkit.ts";
 
 const NOW = 1_800_000_000_000;
-const cfg = { enabled: true, overflow: false, receiveSwitch: false, switchBelowCents: 5_000, keepCents: 0, minCents: 500, maxCents: 20_000, destination: "cpay@breez.tips" };
+const cfg = { enabled: true, receiveSwitch: false, switchBelowCents: 5_000, keepCents: 0, minCents: 500, maxCents: 20_000, destination: "cpay@breez.tips" };
 const bolt = (msat: bigint, n = 1): Bolt11 => ({
   network: "bitcoin", amountMsat: msat, timestamp: NOW / 1000, expirySeconds: 600, expiresAtMs: NOW + 600_000,
   paymentHash: String(n).repeat(64).slice(0, 64), paymentSecret: null, description: null, descriptionHash: "cd".repeat(32), payeePubkey: null, invoice: `lnbc1test${n}`,
 });
-const wallet = (over: Partial<UsdWallet> = {}): UsdWallet => ({ id: "usd-wallet", balanceCents: 10_000, canSend: true, withdrawRemainingCents: null, internalSendRemainingCents: null, ...over });
+const wallet = (over: Partial<UsdWallet> = {}): UsdWallet => ({ id: "usd-wallet", balanceCents: 10_000, canSend: true, withdrawRemainingCents: null, ...over });
 
 function deps(over: Partial<Deps> = {}, state: { open?: OpenSweep[]; wallets?: Record<string, Partial<UsdWallet>> } = {}) {
-  const calls = { transfers: [] as unknown[], overflowBegin: [] as unknown[], overflowFinish: [] as unknown[], begin: [] as unknown[], finish: [] as unknown[], pay: [] as unknown[], invoice: [] as unknown[], notes: [] as unknown[], alerts: [] as string[],
+  const calls = { begin: [] as unknown[], finish: [] as unknown[], pay: [] as unknown[], invoice: [] as unknown[], notes: [] as unknown[], alerts: [] as string[],
     switches: [] as unknown[], receiveNotes: [] as unknown[], switchBegin: [] as unknown[], switchFinish: [] as unknown[], rescues: [] as unknown[] };
   let n = 0;
   const d: Deps = {
@@ -29,9 +29,6 @@ function deps(over: Partial<Deps> = {}, state: { open?: OpenSweep[]; wallets?: R
     finish: (id, s, e) => { calls.finish.push([id, s, e]); return Promise.resolve(); },
     pay: (a, w, b) => { calls.pay.push([a, w, b]); return Promise.resolve({ status: "SUCCESS", error: null }); },
     note: (a, x) => { calls.notes.push([a, x.result]); return Promise.resolve(); },
-    transfer: (a, w, r, c) => { calls.transfers.push([a, w, r, c]); return Promise.resolve({ status: "SUCCESS", error: null }); },
-    overflowBegin: (t) => { calls.overflowBegin.push(t); return Promise.resolve(`ovf-${t.from}`); },
-    overflowFinish: (id, st, e) => { calls.overflowFinish.push([id, st, e]); return Promise.resolve(); },
     canSwitch: false,
     receiving: () => Promise.resolve({ account: null, keyKind: null }),
     switchTo: (a, w) => { calls.switches.push([a, w]); return Promise.resolve("receive"); },
@@ -221,81 +218,6 @@ Deno.test("blinkConfig / blinkAccounts: keys 1…10 in order; only Blink hosts o
   assertEquals(blinkAccounts(env({ BLINK_API_KEY_2: "b", BLINK_API_URL: "https://evil.example/graphql" })), []);
 });
 
-// Overflow: #1 (where BTCPay pays) has hit Blink's withdrawal limit; #2 has room.
-const overflowOn = { config: () => Promise.resolve({ ...cfg, overflow: true }), accounts: ["1", "2"] };
-const limitedOne = { wallets: { "1": { balanceCents: 50_000, withdrawRemainingCents: 0 }, "2": { balanceCents: 0, withdrawRemainingCents: 99_900 } } };
-
-Deno.test("overflow: a limited account sends to the account with room, recorded before sending, capped at largest move", async () => {
-  const order: string[] = [];
-  const { d, calls } = deps(overflowOn, limitedOne);
-  const base = { ...d };
-  d.overflowBegin = (t) => { order.push("begin"); return base.overflowBegin(t); };
-  d.transfer = (a, w, r, c) => { order.push("transfer"); return base.transfer(a, w, r, c); };
-  const out = await run(d);
-  assertEquals((out.accounts as Record<string, Record<string, unknown>>)["1"].skipped, "daily_limit");
-  assertEquals(out.overflow, [{ from: "1", to: "2", cents: 20_000, id: "ovf-1", status: "sent" }]);
-  assertEquals(order, ["begin", "transfer"]);
-  assertEquals(calls.transfers, [["1", "usd-1", "usd-2", 20_000]]);
-  assertEquals(calls.overflowFinish, [["ovf-1", "sent", null]]);
-  assert(calls.alerts.some((a) => a.includes("Blink #1 → Blink #2") && a.includes("$200.00")));
-});
-
-Deno.test("overflow off, sweep off, or one account: no transfer", async () => {
-  for (const over of [
-    { accounts: ["1", "2"] },
-    { ...overflowOn, config: () => Promise.resolve({ ...cfg, overflow: true, enabled: false }) },
-    { ...overflowOn, accounts: ["1"] },
-  ]) {
-    const { d, calls } = deps(over, limitedOne);
-    const out = await run(d);
-    assertEquals(out.overflow, undefined);
-    assertEquals(calls.transfers.length + calls.overflowBegin.length, 0);
-  }
-});
-
-Deno.test("overflow plan: room = limit left minus what it holds; Blink-to-Blink limit; no helper that cannot send or is limited", () => {
-  const c = { keepCents: 0, minCents: 500, maxCents: 20_000 };
-  const seen = (m: Record<string, [Partial<UsdWallet>, boolean]>): Seen =>
-    new Map(Object.entries(m).map(([a, [w, limited]]) => [a, { wallet: wallet({ id: `usd-${a}`, ...w }), limited }]));
-  // #2 holds $900 of its $1,000 room: only $100 fits.
-  assertEquals(overflowPlan(c, seen({ "1": [{ balanceCents: 50_000 }, true], "2": [{ balanceCents: 90_000, withdrawRemainingCents: 100_000 }, false] })),
-    [{ from: "1", to: "2", cents: 10_000 }]);
-  // The account with the most room wins; the Blink-to-Blink limit caps it.
-  assertEquals(overflowPlan(c, seen({
-    "1": [{ balanceCents: 50_000, internalSendRemainingCents: 7_000 }, true],
-    "2": [{ balanceCents: 0, withdrawRemainingCents: 30_000 }, false],
-    "3": [{ balanceCents: 0, withdrawRemainingCents: 90_000 }, false],
-  })), [{ from: "1", to: "3", cents: 7_000 }]);
-  // No helper: cannot send, limited too, or too little room.
-  assertEquals(overflowPlan(c, seen({ "1": [{ balanceCents: 50_000 }, true], "2": [{ canSend: false }, false] })), []);
-  assertEquals(overflowPlan(c, seen({ "1": [{ balanceCents: 50_000 }, true], "2": [{ balanceCents: 50_000 }, true] })), []);
-  assertEquals(overflowPlan(c, seen({ "1": [{ balanceCents: 50_000 }, true], "2": [{ balanceCents: 0, withdrawRemainingCents: 300 }, false] })), []);
-  // Two limited accounts share one helper's room.
-  assertEquals(overflowPlan(c, seen({
-    "1": [{ balanceCents: 15_000 }, true], "2": [{ balanceCents: 15_000 }, true],
-    "3": [{ balanceCents: 0, withdrawRemainingCents: 20_000 }, false],
-  })), [{ from: "1", to: "3", cents: 15_000 }, { from: "2", to: "3", cents: 5_000 }]);
-});
-
-Deno.test("overflow: network error is closed as unknown with an alert and never retried; busy is skipped", async () => {
-  let { d, calls } = deps({ ...overflowOn, transfer: () => Promise.reject(new Error("timeout")) }, limitedOne);
-  let out = await run(d);
-  assertEquals((out.overflow as Record<string, unknown>[])[0].status, "unknown");
-  assertEquals(calls.overflowFinish, [["ovf-1", "unknown", "timeout"]]);
-  assert(calls.alerts.some((a) => a.includes("could not be confirmed")));
-  ({ d, calls } = deps({ ...overflowOn, overflowBegin: () => Promise.resolve(null) }, limitedOne));
-  out = await run(d);
-  assertEquals((out.overflow as Record<string, unknown>[])[0].skipped, "busy");
-  assertEquals(calls.transfers.length, 0);
-});
-
-Deno.test("overflow: Blink refuses the transfer: failed with the reason", async () => {
-  const { d, calls } = deps({ ...overflowOn, transfer: () => Promise.resolve({ status: "FAILURE" as const, error: "Limit exceeded" }) }, limitedOne);
-  await run(d);
-  assertEquals(calls.overflowFinish, [["ovf-1", "failed", "Limit exceeded"]]);
-  assert(calls.alerts.some((a) => a.includes("Limit exceeded")));
-});
-
 // Receive switch: BTCPay pays into #1, which has little withdrawal limit left; #2 has room.
 const switchOn = { config: () => Promise.resolve({ ...cfg, receiveSwitch: true }), accounts: ["1", "2"], canSwitch: true };
 const lowOne = { wallets: { "1": { balanceCents: 0, withdrawRemainingCents: 2_000 }, "2": { balanceCents: 0, withdrawRemainingCents: 99_900 } } };
@@ -371,10 +293,10 @@ Deno.test("receive switch: BTCPay refuses: failed with an alert; not read back: 
 
 Deno.test("switch target: can send, not current, at least twice the threshold, most room; room counts what it holds", () => {
   const seen: Seen = new Map([
-    ["1", { wallet: wallet({ balanceCents: 0, withdrawRemainingCents: 1_000 }), limited: false }],
-    ["2", { wallet: wallet({ balanceCents: 50_000, withdrawRemainingCents: 60_000 }), limited: false }],
-    ["3", { wallet: wallet({ balanceCents: 0, withdrawRemainingCents: 40_000 }), limited: false }],
-    ["4", { wallet: wallet({ balanceCents: 0, withdrawRemainingCents: 99_000, canSend: false }), limited: false }],
+    ["1", { wallet: wallet({ balanceCents: 0, withdrawRemainingCents: 1_000 }) }],
+    ["2", { wallet: wallet({ balanceCents: 50_000, withdrawRemainingCents: 60_000 }) }],
+    ["3", { wallet: wallet({ balanceCents: 0, withdrawRemainingCents: 40_000 }) }],
+    ["4", { wallet: wallet({ balanceCents: 0, withdrawRemainingCents: 99_000, canSend: false }) }],
   ]);
   assertEquals(roomCents(seen.get("2")!.wallet, 0), 10_000);
   assertEquals(roomCents(wallet({ withdrawRemainingCents: null }), 0), Infinity);

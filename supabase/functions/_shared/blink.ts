@@ -1,7 +1,6 @@
 // Blink (blink.sv) GraphQL client for the Blink sweep (docs/BLINK-SWEEP.md).
 // Only what the sweep needs: read the USD wallet, estimate USD → sats, pay
-// one Lightning invoice from the USD wallet, send USD to another Blink
-// USD wallet (overflow), check whether an invoice was paid, and build or read
+// one Lightning invoice from the USD wallet, check whether an invoice was paid, and build or read
 // BTCPay's Blink connection string (receive switch). API keys are sent only
 // to the fixed Blink host below (and, in a connection string, to BTCPay).
 export type Fetch = typeof fetch;
@@ -77,8 +76,6 @@ export type UsdWallet = {
   canSend: boolean;
   /** Cents Blink still lets this account withdraw in the rolling 24 hours; null = no limit reported. */
   withdrawRemainingCents: number | null;
-  /** Cents Blink still lets this account send to other Blink wallets in 24 hours; null = no limit reported. */
-  internalSendRemainingCents: number | null;
 };
 
 // deno-lint-ignore no-explicit-any
@@ -93,7 +90,7 @@ function remaining(list: any): number | null {
 export async function usdWallet(f: Fetch, cfg: BlinkConfig): Promise<UsdWallet> {
   const data = await gql(
     f, cfg,
-    "query { authorization { scopes } me { defaultAccount { wallets { id walletCurrency balance } limits { withdrawal { remainingLimit } internalSend { remainingLimit } } } } }",
+    "query { authorization { scopes } me { defaultAccount { wallets { id walletCurrency balance } limits { withdrawal { remainingLimit } } } } }",
   );
   // deno-lint-ignore no-explicit-any
   const d = data as any;
@@ -108,7 +105,6 @@ export async function usdWallet(f: Fetch, cfg: BlinkConfig): Promise<UsdWallet> 
   return {
     id: usd.id, balanceCents: cents, canSend: scopes.includes("WRITE"),
     withdrawRemainingCents: remaining(limits?.withdrawal),
-    internalSendRemainingCents: remaining(limits?.internalSend),
   };
 }
 
@@ -191,18 +187,4 @@ export function receivingAccount(conn: string | null, accounts: BlinkAccount[], 
   }
   for (const a of accounts) if (kind(a)) return { account: a.label, keyKind: kind(a) };
   return null;
-}
-
-/** Send USD (cents) from one Blink USD wallet to another Blink USD wallet. No idempotency: never retried blindly. */
-export async function sendToBlinkWallet(f: Fetch, cfg: BlinkConfig, walletId: string, recipientWalletId: string, cents: number, memo: string): Promise<{ status: PayStatus; error: string | null }> {
-  const data = await gql(
-    f, cfg,
-    "mutation Send($input: IntraLedgerUsdPaymentSendInput!) { intraLedgerUsdPaymentSend(input: $input) { status errors { message } } }",
-    { input: { walletId, recipientWalletId, amount: cents, memo } },
-  );
-  // deno-lint-ignore no-explicit-any
-  const out = (data as any)?.intraLedgerUsdPaymentSend;
-  const error = Array.isArray(out?.errors) && out.errors.length ? String(out.errors[0]?.message ?? "Blink error").slice(0, 200) : null;
-  const status: PayStatus = ["SUCCESS", "ALREADY_PAID", "PENDING", "FAILURE"].includes(out?.status) ? out.status : "FAILURE";
-  return { status, error: status === "FAILURE" ? (error ?? "Blink did not confirm the transfer") : error };
 }

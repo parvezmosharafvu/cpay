@@ -405,7 +405,6 @@ BTCPay-এর Lightning যদি Blink plugin (USD wallet) দিয়ে চ�
 - একাধিক Blink account ব্যবহার করা যায় (সর্বোচ্চ ১০টা)। প্রতিটা account-এর নিজের দৈনিক withdraw limit থাকে (যেমন ২৪ ঘণ্টায় $999), তাই প্রতিটা account আলাদাভাবে সরানো হয়, আর Blink যতটুকু limit বাকি বলে তার বেশি চাওয়া হয় না।
 - একেক account-এ একবারে একটাই move চলে। আগেরটা শেষ না হলে নতুনটা শুরু হয় না। একই invoice আবার পাঠালে Blink "ALREADY_PAID" বলে, তাই দুবার টাকা যায় না।
 - প্রতিটা move-এর খবর Telegram-এ আসে। Admin → Settings → **Blink sweep**-এ কোথায় যাচ্ছে আর শেষ ২০টা move দেখা যায়।
-- **Overflow** (শুরুতে বন্ধ): BTCPay সব payment একটা Blink account-এ জমা করে। সেই account-এর দৈনিক withdraw limit শেষ হলে, overflow চালু থাকলে CPAY নিজেই তার USD Blink-এর ভেতরেই অন্য একটা Blink account-এ পাঠিয়ে দেয়। যে account-এর limit সবচেয়ে বেশি বাকি, সেটাই বেছে নেওয়া হয়। পরের run-এ সেই account টাকাটা CPAY wallet-এ সরায়। এর জন্য কমপক্ষে দুটো key লাগবে, দুটোতেই Write অনুমতি থাকতে হবে। প্রতিটা পাঠানো আগে database-এ লেখা হয়, আর একই account থেকে ৫ মিনিটের মধ্যে দ্বিতীয়বার পাঠানো হয় না। কোনো পাঠানো নিশ্চিত না হলে আবার চেষ্টা করা হয় না, Telegram-এ জানানো হয়। মনে রাখবেন: একাধিক account দিয়ে Blink-এর limit পার হওয়া Blink-এর নিয়মে সমস্যা হতে পারে, তাই আগে KYC করে limit বাড়ানোটাই ভালো।
 
 চালু করার ধাপ:
 
@@ -414,8 +413,7 @@ BTCPay-এর Lightning যদি Blink plugin (USD wallet) দিয়ে চ�
 3. Migration `20261027010000_blink_sweep.sql` আর `blink-sweep` function deploy হতে হবে।
 4. ১০ মিনিটের মধ্যে Admin → Settings → Blink sweep-এ প্রতিটা account দেখা যাবে: USD balance, পাঠাতে পারে কিনা, Blink limit কত বাকি। দেখুন "Can send" Yes কিনা, আর ঠিকানাটা আপনার primary CPAY wallet-এর Lightning address কিনা।
 5. প্রথমে "সবচেয়ে কম" ১ USD রেখে **On** করুন। পরের run-এর পর log, Blink আর CPAY wallet balance মিলিয়ে দেখুন। তারপর নিজের মতো limit ঠিক করুন।
-6. দ্বিতীয় account-এর key বসানোর পর overflow চাইলে Admin → Settings → Blink sweep-এ শেষ setting-টা (দৈনিক limit শেষ হলে অন্য account-এ পাঠানো) **On** করুন। "এক account থেকে অন্য account-এ পাঠানো" টেবিলে প্রতিটা পাঠানো দেখা যাবে।
-7. **BTCPay receive switch** (শুরুতে বন্ধ): BTCPay সব invoice একটা Blink account-এ নেয়। সেই account-এর withdraw limit "switch below" (শুরুতে $50)-এর চেয়ে কম বাকি থাকলে, switch চালু থাকলে CPAY নিজেই BTCPay-এর Lightning সংযোগ সবচেয়ে বেশি limit বাকি থাকা account-এ বদলে দেয়। তখন নতুন invoice-এর টাকা সরাসরি সেই account-এ জমা হয়। ৩০ মিনিটে একবারের বেশি বদলায় না। এর জন্য লাগবে:
+6. **BTCPay receive switch** (শুরুতে বন্ধ): BTCPay সব invoice একটা Blink account-এ নেয়। সেই account-এর withdraw limit "switch below" (শুরুতে $50)-এর চেয়ে কম বাকি থাকলে, switch চালু থাকলে CPAY নিজেই BTCPay-এর Lightning সংযোগ সবচেয়ে বেশি limit বাকি থাকা account-এ বদলে দেয়। তখন নতুন invoice-এর টাকা সরাসরি সেই account-এ জমা হয়। ৩০ মিনিটে একবারের বেশি বদলায় না। এর জন্য লাগবে:
    - BTCPay API key (BTCPAY_API_KEY)-এ cpay store-এর **Modify store settings** অনুমতি থাকতে হবে। চাইলে আলাদা একটা key **BTCPAY_SWITCH_API_KEY** নামে দিতে পারেন, তখন সেটাই ব্যবহার হবে।
    - প্রতিটা Blink account-এর জন্য **Read + Receive** key, **BLINK_RECEIVE_KEY**, **BLINK_RECEIVE_KEY_2** … নামে। এটাই BTCPay-তে বসানো হয়। না দিলে Write key বসে, আর Admin-এ সতর্কবার্তা দেখায়।
    - Admin → Settings → Blink sweep-এ "BTCPay যে Blink account-এ টাকা নেয়" লাইনে এখনকার account ঠিক দেখাচ্ছে কিনা দেখে switch **On** করুন।

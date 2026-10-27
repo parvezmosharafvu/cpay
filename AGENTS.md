@@ -17,6 +17,7 @@ it run `node scripts/build-admin-guide.mjs` (CI checks the generated
 - `supabase/functions/` Deno Edge Functions; `_shared/` common code.
   Wallets: `wallet-registry` (owner) + `admin-wallets.js` (Admin → Wallet).
   BTCPay checkout (receive only): `btcpay-webhook` + `_shared/btcpay.ts` ([docs/BTCPAY.md](docs/BTCPAY.md)).
+  Blink sweep (Blink USD → primary CPAY wallet's own Lightning address, cron): `blink-sweep` + `_shared/blink.ts` ([docs/BLINK-SWEEP.md](docs/BLINK-SWEEP.md)).
   Owner guide: `owner-guide` serves `guide.ts`, generated from
   `docs/SYSTEM-GUIDE-BN.md` by `node scripts/build-admin-guide.mjs`
   (CI: `node scripts/build-admin-guide.mjs --check`).

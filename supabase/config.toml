@@ -126,3 +126,8 @@ verify_enabled = false
 # invoice is re-fetched from BTCPay before anything is recorded.
 [functions.btcpay-webhook]
 verify_jwt = false
+
+# Blink sweep (docs/BLINK-SWEEP.md). Called by pg_cron with x-cron-secret,
+# which cannot carry a Supabase JWT.
+[functions.blink-sweep]
+verify_jwt = false

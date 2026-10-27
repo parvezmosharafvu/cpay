@@ -51,7 +51,9 @@ balance.** CPAY still credits the user when BTCPay marks the invoice
 settled, and Auto withdraw sends from the CPAY wallet, so keep enough float
 in the CPAY wallet and move on-chain funds over yourself until an automatic
 sweep is built. Lightning payments land wherever the store's Lightning
-backend is connected.
+backend is connected. With the Blink plugin that is the owner's Blink USD
+wallet; the [Blink sweep](BLINK-SWEEP.md) can move it into the CPAY wallet
+automatically.
 
 ## External BTCPay plugin methods (not automatically enabled)
 

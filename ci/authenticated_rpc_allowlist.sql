@@ -34,6 +34,7 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('lookup_payment_status(text)',                                             'public',        'public status lookup by full invoice ref or Lightning invoice'),
   ('request_withdrawal(numeric, text, text)',                                 'public',        'retired: always raises'),
   ('admin_platform_settings()',                                               'admin',         'admin: platform settings; refuses without an active admin'),
+  ('admin_blink_sweeps(integer)',                                             'admin',         'admin: Blink sweep log and destination, no invoices or wallet ids; refuses without an active admin (20261027010000)'),
   ('admin_set_platform_setting(text, jsonb)',                                 'admin',         'admin: write a platform setting; refuses without an active admin at aal2; audited'),
   ('admin_save_domain(text, text, boolean)',                                  'admin',         'admin: add or turn a site domain on/off; refuses without an active admin at aal2; hostname validated; audited'),
   ('admin_remove_domain(text)',                                               'admin',         'admin: remove a site domain (never the main one); refuses without an active admin at aal2; audited'),

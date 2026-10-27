@@ -417,6 +417,13 @@
     'Save payment mode': 'পেমেন্ট মোড সংরক্ষণ করুন', 'Balance': 'ব্যালেন্স', 'Instant forward': 'তাৎক্ষণিক ফরোয়ার্ড',
     'Direct (no fee)': 'সরাসরি (ফি নেই)', 'Legal pages': 'আইনি পাতা', 'Wallet link': 'ওয়ালেট লিংক',
     'Settings changes': 'সেটিংস পরিবর্তনের ইতিহাস', 'No changes yet': 'এখনো কোনো পরিবর্তন নেই',
+    // Blink sweep (Admin → Settings)
+    'Blink sweep': 'Blink সুইপ', 'No moves yet': 'এখনো কিছু সরানো হয়নি', 'Note': 'নোট',
+    'Sending': 'পাঠানো হচ্ছে', 'Sent': 'পাঠানো হয়েছে', 'Failed': 'ব্যর্থ', 'Check in Blink': 'Blink-এ দেখে নিন',
+    'Blink sweep: USD to leave in Blink': 'Blink সুইপ: Blink-এ কত USD রেখে দেবে',
+    'Blink sweep: smallest move (USD)': 'Blink সুইপ: সবচেয়ে কম কত সরাবে (USD)',
+    'The primary CPAY wallet has no Lightning address, so nothing is moved.': 'Primary CPAY wallet-এর কোনো Lightning address নেই, তাই কিছু সরানো হবে না।',
+    'Needs the BLINK_API_KEY secret (Blink API key with Read and Write) in Secrets & keys. Runs every 10 minutes.': 'Secrets & keys-এ BLINK_API_KEY সিক্রেট লাগবে (Read ও Write অনুমতিসহ Blink API key)। প্রতি ১০ মিনিটে চলে।',
     'Features': 'ফিচার চালু/বন্ধ', 'Domains': 'ডোমেইন', 'Secrets & keys': 'গোপন কী ও টোকেন', 'Cloudflare': 'Cloudflare',
     'Domain': 'ডোমেইন', 'Purpose': 'কাজ', 'Add domain': 'ডোমেইন যোগ করুন', 'Turn on': 'চালু করুন', 'Turn off': 'বন্ধ করুন',
     'Main site': 'মূল সাইট', 'Payment links and site': 'পেমেন্ট লিংক ও সাইট', 'Payment links only': 'শুধু পেমেন্ট লিংক',

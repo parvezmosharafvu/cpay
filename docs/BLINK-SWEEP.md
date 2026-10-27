@@ -27,7 +27,7 @@ pg_cron calls `blink-sweep` every 10 minutes (`x-cron-secret`). Each run:
 4. Blink's own price turns the USD into sats; CPAY asks for **98%** of that
    (room for price moves and Blink's fee).
 5. The invoice comes from the **primary CPAY wallet's own Lightning
-   address** (for example `cpay@breez.tips`), read from the wallet's data
+   address** (for example `cpay@your-wallet-provider`), read from the wallet's data
    in the database. Nobody can type a destination. The invoice is checked
    (Bitcoin network, exact amount, description hash, enough time left),
    recorded in `blink_sweeps`, then paid from the Blink USD wallet with

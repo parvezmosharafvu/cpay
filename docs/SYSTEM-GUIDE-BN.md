@@ -400,7 +400,7 @@ Admin → **Settings** → **BTCPay Server** চালু করলে নতু
 
 BTCPay-এর Lightning যদি Blink plugin (USD wallet) দিয়ে চলে, তাহলে Lightning payment জমা হয় আপনার **Blink USD wallet**-এ, CPAY wallet-এ না। কিন্তু Auto withdraw আর withdraw CPAY wallet থেকে যায়। **Blink sweep** চালু থাকলে প্রতি ১০ মিনিটে Blink USD balance থেকে টাকা **primary CPAY wallet**-এ চলে আসে। শুরুতে এটা বন্ধ থাকে।
 
-- টাকা যায় শুধু primary CPAY wallet-এর নিজের Lightning address-এ (যেমন `cpay@breez.tips`)। এই ঠিকানা database থেকে নেওয়া হয়, কেউ হাতে লিখে বদলাতে পারে না।
+- টাকা যায় শুধু primary CPAY wallet-এর নিজের Lightning address-এ। এই ঠিকানা database থেকে নেওয়া হয়, কেউ হাতে লিখে বদলাতে পারে না।
 - কত সরাবে: Blink USD balance থেকে "Blink-এ কত USD রেখে দেবে" বাদ দিয়ে, "একবারে সবচেয়ে বেশি" পর্যন্ত। "সবচেয়ে কম" থেকে কম হলে কিছু সরায় না। Blink-এর দামে sats হিসাব করে তার ৯৮% চায় (দাম ওঠানামা আর Blink-এর fee-এর জন্য)।
 - একবারে একটাই move চলে। আগেরটা শেষ না হলে নতুনটা শুরু হয় না। একই invoice আবার পাঠালে Blink "ALREADY_PAID" বলে, তাই দুবার টাকা যায় না।
 - প্রতিটা move-এর খবর Telegram-এ আসে। Admin → Settings → **Blink sweep**-এ কোথায় যাচ্ছে আর শেষ ২০টা move দেখা যায়।

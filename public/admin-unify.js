@@ -98,6 +98,25 @@ let paymentFilter = { search: '', status: '' };
 async function renderPayments() {
   const el = document.getElementById('payments');
   if (!el) return;
+  // Payment cards (pay-cards.js): tap a payment for its full details. The
+  // table below stays as the fallback when that script is not loaded.
+  if (window.cpayPayCards) {
+    window.cpayPayCards.mount(el, {
+      mode: 'admin', title: 'All payments', pageSize: 50,
+      fetch: async ({ offset, limit, search }) => {
+        const { data, error } = await sb.rpc('admin_list_payments', { p_limit: limit, p_offset: offset, p_search: search });
+        return { rows: data || [], error };
+      },
+      actions: (p) => (p.status !== 'settled' && p.status !== 'expired') ? [{
+        label: 'Mark settled', cls: 'btn ghost sm',
+        run: async () => {
+          try { await adminFn('admin-mark-settled', { paymentId: p.id }); toast('Marked settled', true); renderPayments(); renderHome(); renderPayouts(); }
+          catch (e) { toast(e.message); }
+        },
+      }] : [],
+    });
+    return;
+  }
   // Loading: text only (no innerHTML) so XSS unit tests stay green.
   const loading = document.createElement('p');
   loading.className = 'muted';

@@ -1744,6 +1744,17 @@ body.legal .draft strong{color:var(--warn,#78350f)}
   .rtable tbody tr.rt-fold.open::after{transform:rotate(225deg);top:24px}
   .rtable tbody tr.rt-fold:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
   .rtable tbody tr.rt-fold.open{background:var(--surface-2)}
+  /* Closed: a compact card so a phone screen shows many rows. First cell,
+     the second below it, status on the right; labels, <details> and the
+     Details button (still reachable by keyboard) only once opened. */
+  .rtable tbody tr.rt-fold:not(.open){grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:10px 44px 10px 16px;align-items:center}
+  .rtable tbody tr.rt-fold:not(.open) td{grid-column:1}
+  .rtable tbody tr.rt-fold:not(.open) td::before{display:none}
+  .rtable tbody tr.rt-fold:not(.open) td.rt-badge{grid-column:2;grid-row:1/span 2;justify-self:end}
+  .rtable tbody tr.rt-fold:not(.open) td.table-actions{grid-column:1/-1;padding-top:6px}
+  .rtable tbody tr.rt-fold:not(.open) td:nth-child(2):not(.rt-badge){color:var(--muted);font-size:13px}
+  .rtable tbody tr.rt-fold:not(.open) td:not(.table-actions) details{display:none}
+  .rtable tbody tr.rt-fold:not(.open)::after{top:50%;margin-top:-6px}
 }
 /* Freelancer payment history on phones: amount, status, link and time;
    the whole card opens the details (invoice and the rest are in there). */
@@ -1774,4 +1785,5 @@ body.legal .draft strong{color:var(--warn,#78350f)}
 @container (max-width:640px){
   .rtable tr.rt-fold .rt-toggle{display:inline-flex;align-items:center;margin-top:6px;min-height:32px;padding:4px 10px;border:1px solid var(--line-strong);border-radius:999px;background:transparent;color:var(--accent);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
   .rtable tr.rt-fold.open .rt-toggle{border-color:var(--accent)}
+  .rtable tr.rt-fold:not(.open) .rt-toggle:not(:focus-visible){position:absolute;width:1px;height:1px;min-height:0;padding:0;margin:0;overflow:hidden;clip:rect(0 0 0 0);border:0}
 }

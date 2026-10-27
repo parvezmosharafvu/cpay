@@ -165,7 +165,14 @@
         node('td', { class: 'num' }, locked ? node('span', { class: 'faint', text: L('Protected', 'সুরক্ষিত') }) : node('span', null,
           node('button', { class: 'btn ghost sm', type: 'button', text: L('Replace', 'বদলান'), on: { click: () => { form.name.value = name; form.value.focus(); } } }), ' ',
           node('button', { class: 'btn ghost sm', type: 'button', text: L('Delete', 'মুছে ফেলুন'), on: { click: async () => {
-            if (window.prompt(L(`Type ${name} to delete it. Functions that use it stop working.`, `মুছতে ${name} লিখুন। যে ফাংশন এটি ব্যবহার করে সেগুলো কাজ করবে না।`)) !== name) return;
+            // Phone keyboards change case and add spaces: compare loosely, and
+            // say so when it still does not match instead of closing silently.
+            const typed = window.prompt(L(`Type ${name} to delete it. Functions that use it stop working.`, `মুছতে ${name} লিখুন। যে ফাংশন এটি ব্যবহার করে সেগুলো কাজ করবে না।`));
+            if (typed === null) return;
+            if (typed.replace(/\s+/g, '').toUpperCase() !== name.toUpperCase()) {
+              say(st, L(`Not deleted: the name typed was not ${name}.`, `মোছা হয়নি: লেখা নামটা ${name} নয়।`), false);
+              return;
+            }
             say(st, L('Saving…', 'সংরক্ষণ হচ্ছে…'));
             const r = await change({ target, action: 'delete', name });
             if (r.ok) reload(); else say(st, r.message, false);

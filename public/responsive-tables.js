@@ -18,8 +18,9 @@
       if (keep) fold(tr);
     });
   }
-  // Tap to expand (cards only, under 640px): a row shows its first two
-  // cells, its status and its actions; a tap or Enter shows the rest. Rows
+  // Tap to expand (cards only, under 640px): a closed row is a compact card
+  // (first cell, second cell below it, status on the right, actions; no
+  // labels or <details>); a tap or Enter shows everything. Rows
   // that already open a details view (.row-open) are left alone.
   const INTERACTIVE = 'a,button,input,select,textarea,summary,details,label,[contenteditable]';
   function fold(tr) {
@@ -27,8 +28,11 @@
     if (tr.classList.contains('row-open') || tr.closest('[data-nofold]') || cells.length < 4 || cells.some((td) => td.colSpan > 1)) return;
     tr.classList.add('rt-fold');
     cells.forEach((td, i) => {
-      const peek = i < 2 || td.classList.contains('lead') || td.classList.contains('table-actions') || !!td.querySelector('.badge');
+      const badge = i > 0 && !!td.querySelector('.badge');
+      const peek = i < 2 || badge || td.classList.contains('lead') || td.classList.contains('table-actions');
       if (peek) delete td.dataset.more; else td.dataset.more = '1';
+      // The status cell sits on the right of a closed card.
+      td.classList.toggle('rt-badge', badge);
     });
     // The keyboard/screen-reader control: a real button in the first cell
     // (hidden while the table shows as a table).

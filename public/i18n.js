@@ -418,7 +418,7 @@
     'Direct (no fee)': 'সরাসরি (ফি নেই)', 'Legal pages': 'আইনি পাতা', 'Wallet link': 'ওয়ালেট লিংক',
     'Settings changes': 'সেটিংস পরিবর্তনের ইতিহাস', 'No changes yet': 'এখনো কোনো পরিবর্তন নেই',
     // Blink sweep (Admin → Settings)
-    'Blink sweep': 'Blink সুইপ', 'No moves yet': 'এখনো কিছু সরানো হয়নি', 'USD': 'USD', 'Sats': 'Sats', 'Note': 'নোট',
+    'Blink sweep': 'Blink সুইপ', 'No moves yet': 'এখনো কিছু সরানো হয়নি', 'Note': 'নোট',
     'Sending': 'পাঠানো হচ্ছে', 'Sent': 'পাঠানো হয়েছে', 'Failed': 'ব্যর্থ', 'Check in Blink': 'Blink-এ দেখে নিন',
     'Blink sweep: USD to leave in Blink': 'Blink সুইপ: Blink-এ কত USD রেখে দেবে',
     'Blink sweep: smallest move (USD)': 'Blink সুইপ: সবচেয়ে কম কত সরাবে (USD)',

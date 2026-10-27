@@ -28,12 +28,32 @@
 // account per run, to the account with the most room; recorded in
 // blink_overflows before sending. A transfer has no invoice, so it is never
 // retried: the next run reads the balances again.
+//
+// Receive switch (blink_receive_switch_enabled; the BTCPay key needs Modify
+// store settings):
+// BTCPay pays every invoice into one Blink account. When that account has
+// less than "switch below" of Blink's 24-hour withdrawal limit left (less
+// what it already holds), BTCPay's Lightning connection is pointed at the
+// account that can send with the most limit left. At most one switch per 30
+// minutes (recorded in blink_receive_switches first), then read back.
+//
+// Rescue (always, after a switch): BTCPay can miss payments to invoices that
+// were open on the old account. For two days the old account is asked
+// whether each such invoice was paid; when Blink shows it received, the
+// payment is recorded exactly like the BTCPay webhook would.
 import { parseLightningAddress } from "../_shared/lnurl.ts";
-import type { Bolt11 } from "../_shared/bolt11.ts";
+import { type Bolt11, decodeBolt11 } from "../_shared/bolt11.ts";
 import type { PayStatus, UsdWallet } from "../_shared/blink.ts";
 import { secretMatches } from "../_shared/secret-compare.ts";
 
-export type SweepConfig = { enabled: boolean; overflow: boolean; keepCents: number; minCents: number; maxCents: number; destination: string | null };
+export type SweepConfig = {
+  enabled: boolean; overflow: boolean; receiveSwitch: boolean; switchBelowCents: number;
+  keepCents: number; minCents: number; maxCents: number; destination: string | null;
+};
+/** Which account BTCPay pays into; account null = not one of CPAY's Blink accounts. */
+export type Receiving = { account: string | null; keyKind: "receive" | "api" | null };
+export type SwitchStatus = "done" | "failed" | "unknown";
+export type RescueCandidate = { paymentId: string; bolt11: string; amountUsd: string; account: string };
 export type OpenSweep = { id: string; account: string; walletId: string; bolt11: string; expiresAtMs: number; amountCents: number; destination: string };
 export type SweepStatus = "sent" | "pending" | "failed" | "unknown";
 export type Begin = {
@@ -64,6 +84,19 @@ export type Deps = {
   /** Records a transfer; null = one from that account was recorded in the last few minutes. */
   overflowBegin(t: Transfer): Promise<string | null>;
   overflowFinish(id: string, status: TransferStatus, error: string | null): Promise<void>;
+  /** BTCPay is configured (BTCPAY_URL, BTCPAY_STORE_ID and a key). */
+  canSwitch: boolean;
+  /** Reads BTCPay's Lightning connection; usdWalletIds = each account's USD wallet id seen this run. */
+  receiving(usdWalletIds: Map<string, string>): Promise<Receiving>;
+  /** Points BTCPay at this account's USD wallet; returns the key kind it used. */
+  switchTo(account: string, usdWalletId: string): Promise<"receive" | "api">;
+  receiveNote(r: Receiving, result: string): Promise<void>;
+  /** Records a switch; null = one was recorded in the last 30 minutes. */
+  switchBegin(from: string | null, to: string): Promise<string | null>;
+  switchFinish(id: string, status: SwitchStatus, error: string | null): Promise<void>;
+  rescueCandidates(): Promise<RescueCandidate[]>;
+  invoicePaid(account: string, paymentHash: string): Promise<boolean>;
+  rescueSettle(paymentId: string, account: string, amountSat: number): Promise<string>;
   alert(text: string): Promise<void>;
   now(): number;
 };
@@ -232,6 +265,108 @@ async function runTransfer(d: Deps, t: Transfer, seen: Seen): Promise<Record<str
   return { ...t, id, status: s };
 }
 
+/** Withdrawal limit left once what the account already holds is moved (Infinity = no limit reported). */
+export function roomCents(w: UsdWallet, keepCents: number): number {
+  return (w.withdrawRemainingCents ?? Infinity) - Math.max(0, w.balanceCents - keepCents);
+}
+
+/** The account to switch BTCPay to: can send, not the current one, at least twice "switch below" of room, the most room. */
+export function switchTarget(c: Pick<SweepConfig, "keepCents" | "switchBelowCents">, seen: Seen, current: string): string | null {
+  let best: string | null = null;
+  let bestRoom = -Infinity;
+  for (const [a, s] of seen) {
+    if (a === current || !s.wallet.canSend) continue;
+    const r = roomCents(s.wallet, c.keepCents);
+    if (r >= 2 * c.switchBelowCents && r > bestRoom) { best = a; bestRoom = r; }
+  }
+  return best;
+}
+
+async function safeReceiveNote(d: Deps, r: Receiving, result: string) {
+  try { await d.receiveNote(r, result); } catch (e) { console.error("receive note failed:", errText(e)); }
+}
+
+async function runSwitch(d: Deps, cfg: SweepConfig, seen: Seen): Promise<Record<string, unknown>> {
+  const walletIds = new Map([...seen].map(([a, s]) => [a, s.wallet.id]));
+  const none: Receiving = { account: null, keyKind: null };
+  let r: Receiving;
+  try {
+    r = await d.receiving(walletIds);
+  } catch (e) {
+    const msg = errText(e);
+    await safeReceiveNote(d, none, `error: ${msg}`);
+    return { error: msg };
+  }
+  if (!r.account) {
+    await safeReceiveNote(d, r, "unknown_account");
+    return { skipped: "unknown_account" };
+  }
+  const cur = seen.get(r.account);
+  if (!cur) {
+    await safeReceiveNote(d, r, "not_read");
+    return { account: r.account, skipped: "not_read" };
+  }
+  if (roomCents(cur.wallet, cfg.keepCents) >= cfg.switchBelowCents) {
+    await safeReceiveNote(d, r, "ok");
+    return { account: r.account };
+  }
+  if (!cfg.enabled || !cfg.receiveSwitch) {
+    await safeReceiveNote(d, r, "low_limit");
+    return { account: r.account, skipped: "off" };
+  }
+  const to = switchTarget(cfg, seen, r.account);
+  if (!to) {
+    await safeReceiveNote(d, r, "no_target");
+    return { account: r.account, skipped: "no_target" };
+  }
+  const id = await d.switchBegin(r.account, to);
+  if (!id) {
+    await safeReceiveNote(d, r, "busy");
+    return { account: r.account, skipped: "busy" };
+  }
+  const what = `BTCPay receive switch ${name(r.account)} → ${name(to)}`;
+  try {
+    await d.switchTo(to, seen.get(to)!.wallet.id);
+  } catch (e) {
+    const msg = errText(e);
+    await d.switchFinish(id, "failed", msg);
+    await safeReceiveNote(d, r, "switch_failed");
+    await safeAlert(d, `⚠ ${what} failed: ${msg}. BTCPay still pays into ${name(r.account)}.`);
+    return { account: r.account, to, id, status: "failed", error: msg };
+  }
+  // Read back: only a confirmed switch is "done". Either way the rescue
+  // checks invoices made before it.
+  let after: Receiving | null = null;
+  try { after = await d.receiving(walletIds); } catch { after = null; }
+  const ok = after?.account === to;
+  await d.switchFinish(id, ok ? "done" : "unknown", ok ? null : "BTCPay did not read back the new account");
+  await safeReceiveNote(d, ok ? after! : r, ok ? "switched" : "check_btcpay");
+  await safeAlert(d, ok
+    ? `🔀 ${what}: ${name(r.account)} had ${usd(Math.max(0, roomCents(cur.wallet, cfg.keepCents)))} of Blink's daily withdrawal limit left. New invoices are paid into ${name(to)}${after!.keyKind === "api" ? " (BTCPay holds a key that can spend: add BLINK_RECEIVE_KEY for it)" : ""}. CPAY checks invoices still open on ${name(r.account)}.`
+    : `⚠ ${what} sent, but BTCPay did not read back ${name(to)}. Check BTCPay → Lightning settings.`);
+  return { account: r.account, to, id, status: ok ? "done" : "unknown" };
+}
+
+async function runRescue(d: Deps): Promise<Record<string, unknown>[]> {
+  const out: Record<string, unknown>[] = [];
+  for (const c of await d.rescueCandidates()) {
+    if (!d.accounts.includes(c.account)) continue;
+    try {
+      const inv = decodeBolt11(c.bolt11);
+      if (!(await d.invoicePaid(c.account, inv.paymentHash))) continue;
+      const sats = inv.amountMsat ? Number(inv.amountMsat / 1000n) : 0;
+      const r = await d.rescueSettle(c.paymentId, c.account, sats);
+      out.push({ paymentId: c.paymentId, account: c.account, outcome: r });
+      if (r === "settled") {
+        await safeAlert(d, `🛟 A $${c.amountUsd} payment was paid into ${name(c.account)} after BTCPay switched away from it. CPAY recorded it (BTCPay may still show the invoice unpaid).`);
+      }
+    } catch (e) {
+      out.push({ paymentId: c.paymentId, account: c.account, error: errText(e) });
+    }
+  }
+  return out;
+}
+
 export async function run(d: Deps): Promise<Record<string, unknown>> {
   const cfg = await d.config();
   const open = await d.open();
@@ -260,6 +395,19 @@ export async function run(d: Deps): Promise<Record<string, unknown>> {
       }
     }
     if (transfers.length) out.overflow = transfers;
+  }
+  if (d.canSwitch) {
+    try {
+      out.receive = await runSwitch(d, cfg, seen);
+    } catch (e) {
+      out.receive = { error: errText(e) };
+    }
+  }
+  try {
+    const rescued = await runRescue(d);
+    if (rescued.length) out.rescued = rescued;
+  } catch (e) {
+    out.rescued = { error: errText(e) };
   }
   // An open sweep of an account whose key was removed is left alone.
   const orphaned = open.filter((o) => !d.accounts.includes(o.account)).map((o) => o.id);

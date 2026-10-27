@@ -1,10 +1,13 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { createHandler, type Deps, moveCents, outcome, type OpenSweep, overflowPlan, run, type Seen, STALE_AFTER_MS } from "./handler.ts";
+import {
+  createHandler, type Deps, moveCents, outcome, type OpenSweep, overflowPlan, type Receiving, roomCents, run, type Seen, STALE_AFTER_MS, switchTarget,
+} from "./handler.ts";
 import { blinkAccounts, blinkConfig, type UsdWallet } from "../_shared/blink.ts";
 import type { Bolt11 } from "../_shared/bolt11.ts";
+import { buildInvoice } from "../_shared/bolt11_testkit.ts";
 
 const NOW = 1_800_000_000_000;
-const cfg = { enabled: true, overflow: false, keepCents: 0, minCents: 500, maxCents: 20_000, destination: "cpay@breez.tips" };
+const cfg = { enabled: true, overflow: false, receiveSwitch: false, switchBelowCents: 5_000, keepCents: 0, minCents: 500, maxCents: 20_000, destination: "cpay@breez.tips" };
 const bolt = (msat: bigint, n = 1): Bolt11 => ({
   network: "bitcoin", amountMsat: msat, timestamp: NOW / 1000, expirySeconds: 600, expiresAtMs: NOW + 600_000,
   paymentHash: String(n).repeat(64).slice(0, 64), paymentSecret: null, description: null, descriptionHash: "cd".repeat(32), payeePubkey: null, invoice: `lnbc1test${n}`,
@@ -12,7 +15,8 @@ const bolt = (msat: bigint, n = 1): Bolt11 => ({
 const wallet = (over: Partial<UsdWallet> = {}): UsdWallet => ({ id: "usd-wallet", balanceCents: 10_000, canSend: true, withdrawRemainingCents: null, internalSendRemainingCents: null, ...over });
 
 function deps(over: Partial<Deps> = {}, state: { open?: OpenSweep[]; wallets?: Record<string, Partial<UsdWallet>> } = {}) {
-  const calls = { transfers: [] as unknown[], overflowBegin: [] as unknown[], overflowFinish: [] as unknown[], begin: [] as unknown[], finish: [] as unknown[], pay: [] as unknown[], invoice: [] as unknown[], notes: [] as unknown[], alerts: [] as string[] };
+  const calls = { transfers: [] as unknown[], overflowBegin: [] as unknown[], overflowFinish: [] as unknown[], begin: [] as unknown[], finish: [] as unknown[], pay: [] as unknown[], invoice: [] as unknown[], notes: [] as unknown[], alerts: [] as string[],
+    switches: [] as unknown[], receiveNotes: [] as unknown[], switchBegin: [] as unknown[], switchFinish: [] as unknown[], rescues: [] as unknown[] };
   let n = 0;
   const d: Deps = {
     cronSecret: "cron", accounts: ["1"],
@@ -28,6 +32,15 @@ function deps(over: Partial<Deps> = {}, state: { open?: OpenSweep[]; wallets?: R
     transfer: (a, w, r, c) => { calls.transfers.push([a, w, r, c]); return Promise.resolve({ status: "SUCCESS", error: null }); },
     overflowBegin: (t) => { calls.overflowBegin.push(t); return Promise.resolve(`ovf-${t.from}`); },
     overflowFinish: (id, st, e) => { calls.overflowFinish.push([id, st, e]); return Promise.resolve(); },
+    canSwitch: false,
+    receiving: () => Promise.resolve({ account: null, keyKind: null }),
+    switchTo: (a, w) => { calls.switches.push([a, w]); return Promise.resolve("receive"); },
+    receiveNote: (r, x) => { calls.receiveNotes.push([r.account, x]); return Promise.resolve(); },
+    switchBegin: (f, t) => { calls.switchBegin.push([f, t]); return Promise.resolve(`sw-${t}`); },
+    switchFinish: (id, st, e) => { calls.switchFinish.push([id, st, e]); return Promise.resolve(); },
+    rescueCandidates: () => Promise.resolve([]),
+    invoicePaid: () => Promise.resolve(false),
+    rescueSettle: (p, a, sats) => { calls.rescues.push([p, a, sats]); return Promise.resolve("settled"); },
     alert: (t) => { calls.alerts.push(t); return Promise.resolve(); },
     now: () => NOW,
     ...over,
@@ -281,4 +294,124 @@ Deno.test("overflow: Blink refuses the transfer: failed with the reason", async 
   await run(d);
   assertEquals(calls.overflowFinish, [["ovf-1", "failed", "Limit exceeded"]]);
   assert(calls.alerts.some((a) => a.includes("Limit exceeded")));
+});
+
+// Receive switch: BTCPay pays into #1, which has little withdrawal limit left; #2 has room.
+const switchOn = { config: () => Promise.resolve({ ...cfg, receiveSwitch: true }), accounts: ["1", "2"], canSwitch: true };
+const lowOne = { wallets: { "1": { balanceCents: 0, withdrawRemainingCents: 2_000 }, "2": { balanceCents: 0, withdrawRemainingCents: 99_900 } } };
+const at = (account: string | null, keyKind: Receiving["keyKind"] = "receive"): Receiving => ({ account, keyKind });
+
+Deno.test("receive switch: low limit on the receiving account points BTCPay at the account with room, recorded first, read back", async () => {
+  const order: string[] = [];
+  let current = "1";
+  const { d, calls } = deps({
+    ...switchOn,
+    receiving: (ids) => {
+      assertEquals(ids.get("2"), "usd-2");
+      return Promise.resolve(at(current));
+    },
+    switchBegin: (f, t) => {
+      order.push("begin");
+      calls.switchBegin.push([f, t]);
+      return Promise.resolve("sw-1");
+    },
+    switchTo: (a, w) => {
+      order.push("switch");
+      calls.switches.push([a, w]);
+      current = a;
+      return Promise.resolve("receive");
+    },
+  }, lowOne);
+  const r = await run(d);
+  assertEquals(r.receive, { account: "1", to: "2", id: "sw-1", status: "done" });
+  assertEquals(order, ["begin", "switch"]);
+  assertEquals(calls.switches, [["2", "usd-2"]]);
+  assertEquals(calls.switchFinish, [["sw-1", "done", null]]);
+  assertEquals(calls.receiveNotes, [["2", "switched"]]);
+  assert(calls.alerts.some((a) => a.includes("Blink #1 → Blink #2") && a.includes("$20.00")));
+});
+
+Deno.test("receive switch: enough room, switch off, sweep off, no target or busy: BTCPay is left alone", async () => {
+  const on1 = () => Promise.resolve(at("1"));
+  const room = deps({ ...switchOn, receiving: on1 }, { wallets: { "1": { balanceCents: 0, withdrawRemainingCents: 90_000 } } });
+  assertEquals((await run(room.d)).receive, { account: "1" });
+  const off = deps({ ...switchOn, config: () => Promise.resolve({ ...cfg }), receiving: on1 }, lowOne);
+  assertEquals((await run(off.d)).receive, { account: "1", skipped: "off" });
+  assertEquals(off.calls.receiveNotes, [["1", "low_limit"]]);
+  const sweepOff = deps({ ...switchOn, config: () => Promise.resolve({ ...cfg, enabled: false, receiveSwitch: true }), receiving: on1 }, lowOne);
+  assertEquals((await run(sweepOff.d)).receive, { account: "1", skipped: "off" });
+  const noTarget = deps({ ...switchOn, receiving: on1 }, { wallets: { ...lowOne.wallets, "2": { withdrawRemainingCents: 9_000, balanceCents: 0 } } });
+  assertEquals((await run(noTarget.d)).receive, { account: "1", skipped: "no_target" });
+  const busy = deps({ ...switchOn, receiving: on1, switchBegin: () => Promise.resolve(null) }, lowOne);
+  assertEquals((await run(busy.d)).receive, { account: "1", skipped: "busy" });
+  for (const x of [room, off, sweepOff, noTarget, busy]) assertEquals(x.calls.switches.length, 0);
+  const noKey = deps({ accounts: ["1", "2"], config: () => Promise.resolve({ ...cfg, receiveSwitch: true }) }, lowOne);
+  assertEquals((await run(noKey.d)).receive, undefined);
+});
+
+Deno.test("receive switch: BTCPay on an unknown account or unreadable is noted, never switched", async () => {
+  const unknown = deps({ ...switchOn, receiving: () => Promise.resolve(at(null, null)) }, lowOne);
+  assertEquals((await run(unknown.d)).receive, { skipped: "unknown_account" });
+  const broken = deps({ ...switchOn, receiving: () => Promise.reject(new Error("BTCPay GET Lightning settings: HTTP 403")) }, lowOne);
+  assertEquals((await run(broken.d)).receive, { error: "BTCPay GET Lightning settings: HTTP 403" });
+  assertEquals(broken.calls.receiveNotes, [[null, "error: BTCPay GET Lightning settings: HTTP 403"]]);
+  assertEquals(unknown.calls.switches.length + broken.calls.switches.length, 0);
+});
+
+Deno.test("receive switch: BTCPay refuses: failed with an alert; not read back: unknown", async () => {
+  const on1 = () => Promise.resolve(at("1"));
+  const refused = deps({ ...switchOn, receiving: on1, switchTo: () => Promise.reject(new Error("HTTP 422")) }, lowOne);
+  assertEquals((await run(refused.d)).receive, { account: "1", to: "2", id: "sw-2", status: "failed", error: "HTTP 422" });
+  assertEquals(refused.calls.switchFinish, [["sw-2", "failed", "HTTP 422"]]);
+  assert(refused.calls.alerts.some((a) => a.includes("still pays into Blink #1")));
+  const unread = deps({ ...switchOn, receiving: on1 }, lowOne);
+  assertEquals(((await run(unread.d)).receive as Record<string, unknown>).status, "unknown");
+  assertEquals(unread.calls.switchFinish, [["sw-2", "unknown", "BTCPay did not read back the new account"]]);
+});
+
+Deno.test("switch target: can send, not current, at least twice the threshold, most room; room counts what it holds", () => {
+  const seen: Seen = new Map([
+    ["1", { wallet: wallet({ balanceCents: 0, withdrawRemainingCents: 1_000 }), limited: false }],
+    ["2", { wallet: wallet({ balanceCents: 50_000, withdrawRemainingCents: 60_000 }), limited: false }],
+    ["3", { wallet: wallet({ balanceCents: 0, withdrawRemainingCents: 40_000 }), limited: false }],
+    ["4", { wallet: wallet({ balanceCents: 0, withdrawRemainingCents: 99_000, canSend: false }), limited: false }],
+  ]);
+  assertEquals(roomCents(seen.get("2")!.wallet, 0), 10_000);
+  assertEquals(roomCents(wallet({ withdrawRemainingCents: null }), 0), Infinity);
+  assertEquals(switchTarget({ keepCents: 0, switchBelowCents: 5_000 }, seen, "1"), "3");
+  assertEquals(switchTarget({ keepCents: 0, switchBelowCents: 25_000 }, seen, "1"), null);
+  assertEquals(switchTarget({ keepCents: 0, switchBelowCents: 5_000 }, seen, "3"), "2");
+});
+
+const HASH = "ab".repeat(32);
+const candidate = { paymentId: "p-1", bolt11: buildInvoice({ amountMsat: 25_000_000n, paymentHash: HASH }), amountUsd: "25.00", account: "1" };
+
+Deno.test("rescue: an invoice open on the old account that Blink shows paid is recorded once, with an alert", async () => {
+  const asked: unknown[] = [];
+  const { d, calls } = deps({
+    rescueCandidates: () => Promise.resolve([candidate, { ...candidate, paymentId: "p-2", account: "9" }]),
+    invoicePaid: (a, h) => {
+      asked.push([a, h]);
+      return Promise.resolve(true);
+    },
+  });
+  const r = await run(d);
+  assertEquals(asked, [["1", HASH]]);
+  assertEquals(calls.rescues, [["p-1", "1", 25_000]]);
+  assertEquals(r.rescued, [{ paymentId: "p-1", account: "1", outcome: "settled" }]);
+  assert(calls.alerts.some((a) => a.includes("$25.00") && a.includes("Blink #1")));
+});
+
+Deno.test("rescue: unpaid, already settled, bad invoice or Blink error: nothing recorded, no alert", async () => {
+  const unpaid = deps({ rescueCandidates: () => Promise.resolve([candidate]) });
+  assertEquals((await run(unpaid.d)).rescued, undefined);
+  assertEquals(unpaid.calls.rescues.length, 0);
+  const done = deps({ rescueCandidates: () => Promise.resolve([candidate]), invoicePaid: () => Promise.resolve(true), rescueSettle: () => Promise.resolve("already_settled") });
+  assertEquals((await run(done.d)).rescued, [{ paymentId: "p-1", account: "1", outcome: "already_settled" }]);
+  assertEquals(done.calls.alerts.filter((a) => a.includes("🛟")).length, 0);
+  const bad = deps({ rescueCandidates: () => Promise.resolve([{ ...candidate, bolt11: "lnbc1nonsense" }]), invoicePaid: () => Promise.resolve(true) });
+  assertEquals(((await run(bad.d)).rescued as Record<string, unknown>[])[0].outcome, undefined);
+  assertEquals(bad.calls.rescues.length, 0);
+  const err = deps({ rescueCandidates: () => Promise.resolve([candidate]), invoicePaid: () => Promise.reject(new Error("Blink answered 500")) });
+  assertEquals((await run(err.d)).rescued, [{ paymentId: "p-1", account: "1", error: "Blink answered 500" }]);
 });

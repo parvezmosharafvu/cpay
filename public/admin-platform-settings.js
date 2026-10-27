@@ -17,8 +17,10 @@
     // BTCPay Server checkout (docs/BTCPAY.md): off until the owner turns it on.
     ['BTCPay Server', ['btcpay_enabled', 'btcpay_lightning_only']],
     // Blink sweep (docs/BLINK-SWEEP.md): Blink USD balance → primary CPAY wallet;
-    // overflow: a Blink account at its daily limit → another Blink account.
-    ['Blink sweep', ['blink_sweep_enabled', 'blink_sweep_keep_usd', 'blink_sweep_min_usd', 'blink_sweep_max_usd', 'blink_sweep_overflow_enabled']],
+    // overflow: a Blink account at its daily limit → another Blink account;
+    // receive switch: BTCPay is pointed at the Blink account with most limit left.
+    ['Blink sweep', ['blink_sweep_enabled', 'blink_sweep_keep_usd', 'blink_sweep_min_usd', 'blink_sweep_max_usd', 'blink_sweep_overflow_enabled',
+      'blink_receive_switch_enabled', 'blink_receive_switch_below_usd']],
     ['Legal pages', ['legal_entity_name', 'legal_address', 'legal_effective_date', 'legal_jurisdiction', 'legal_courts', 'legal_privacy_email', 'legal_support_email']],
   ];
   const ADVANCED = [
@@ -107,15 +109,22 @@
   }
 
   // Blink sweep (admin_blink_sweeps): where the next move goes, each Blink
-  // account as the last run saw it, the last moves and the last overflow
-  // transfers between Blink accounts. Read-only; keys,
-  // invoices and Blink wallet ids never reach the page.
+  // account as the last run saw it, the last moves, the last overflow
+  // transfers between Blink accounts, which account BTCPay pays into, the
+  // last BTCPay switches and payments CPAY recorded after a switch.
+  // Read-only; keys, invoices and Blink wallet ids never reach the page.
   const SWEEP_STATUS = { sending: 'Sending', pending: 'Pending', sent: 'Sent', failed: 'Failed', unknown: 'Check in Blink' };
   const ACCOUNT_RESULT = {
     off: 'Sweep is off', no_write: 'Key cannot send: needs Write', daily_limit: 'Blink daily limit reached',
     below_minimum: 'Below the smallest move', no_destination: 'No CPAY address', sent: 'Moved', failed: 'Move failed',
     pending: 'Move pending', sending: 'Sending',
   };
+  const RECEIVE_RESULT = {
+    ok: 'Enough limit left', low_limit: 'Limit low: the switch is off', no_target: 'Limit low: no other account has enough limit left',
+    busy: 'Switched less than 30 minutes ago', switched: 'Switched', switch_failed: 'Switch failed', check_btcpay: 'Check BTCPay Lightning settings',
+    unknown_account: 'BTCPay pays into a Blink account CPAY has no key for', not_read: 'Not read this run',
+  };
+  const SWITCH_STATUS = { switching: 'Switching', done: 'Switched', failed: 'Failed', unknown: 'Check BTCPay Lightning settings' };
   const cents = (v) => (v === null || v === undefined ? '—' : `$${(Number(v) / 100).toFixed(2)}`);
   const keyName = (a) => (a === '1' ? 'BLINK_API_KEY' : `BLINK_API_KEY_${a}`);
   async function renderBlinkLog() {
@@ -132,6 +141,14 @@
     }).join('');
     const rows = (data?.rows || []).map((r) => `<tr><td>${esc(new Date(r.created_at).toLocaleString())}</td><td class="mono">#${esc(r.account || '1')}</td><td>$${esc((Number(r.amount_cents) / 100).toFixed(2))}</td><td>${esc(Number(r.amount_sat).toLocaleString('en-US'))} sats</td><td><span class="badge ${r.status === 'sent' ? 'settled' : r.status === 'failed' || r.status === 'unknown' ? 'expired' : 'pending'}">${esc(tr(SWEEP_STATUS[r.status] || r.status))}</span></td><td class="mono">${esc(r.destination)}</td><td>${esc(r.error || '')}</td></tr>`).join('');
     const overflows = (data?.overflows || []).map((o) => `<tr><td>${esc(new Date(o.created_at).toLocaleString())}</td><td class="mono">#${esc(o.from_account)} → #${esc(o.to_account)}</td><td>${esc(cents(o.amount_cents))}</td><td><span class="badge ${o.status === 'sent' ? 'settled' : o.status === 'sending' ? 'pending' : 'expired'}">${esc(tr(SWEEP_STATUS[o.status] || o.status))}</span></td><td>${esc(o.error || '')}</td></tr>`).join('');
+    const rcv = data?.receiving;
+    const rres = String(rcv?.result || '');
+    const rshown = RECEIVE_RESULT[rres] || (rres.startsWith('error: ') ? rres.slice(7) : rres);
+    const receiving = rcv
+      ? `<p>${esc(tr('BTCPay pays into'))}: <strong class="mono">${rcv.account ? esc(keyName(rcv.account)) : '—'}</strong> · ${['ok', 'switched'].includes(rres) ? esc(tr(rshown)) : `<span class="err">${esc(tr(rshown))}</span>`} <span class="faint">${esc(new Date(rcv.checked_at).toLocaleString())}</span></p>${rcv.key_kind === 'api' ? `<p class="err">${esc(tr('BTCPay holds a Blink key that can spend. Add a Read + Receive key as BLINK_RECEIVE_KEY (or _2 …) for that account.'))}</p>` : ''}`
+      : `<p class="faint">${esc(tr('Not read yet. The BTCPay API key (BTCPAY_API_KEY) needs Modify store settings on the cpay store to see and switch which Blink account BTCPay pays into.'))}</p>`;
+    const switches = (data?.switches || []).map((x) => `<tr><td>${esc(new Date(x.created_at).toLocaleString())}</td><td class="mono">${x.from_account ? `#${esc(x.from_account)}` : '—'} → #${esc(x.to_account)}</td><td><span class="badge ${x.status === 'done' ? 'settled' : x.status === 'switching' ? 'pending' : 'expired'}">${esc(tr(SWITCH_STATUS[x.status] || x.status))}</span></td><td>${esc(x.error || '')}</td></tr>`).join('');
+    const rescues = (data?.rescues || []).map((x) => `<tr><td>${esc(new Date(x.created_at).toLocaleString())}</td><td class="mono">#${esc(x.account)}</td><td>$${esc(Number(x.amount_usd).toFixed(2))}</td><td class="mono">${esc(String(x.payment_id).slice(0, 8))}</td></tr>`).join('');
     el.innerHTML = `<div class="card"><p>${dest ? `Moves go to <strong class="mono">${esc(dest)}</strong>, the primary CPAY wallet’s Lightning address.` : '<span class="err">The primary CPAY wallet has no Lightning address, so nothing is moved.</span>'}</p>
         <p class="faint">Add one Blink API key (Read and Write) per Blink account in Secrets &amp; keys: BLINK_API_KEY, then BLINK_API_KEY_2 up to BLINK_API_KEY_10. Each account is moved separately, up to its own Blink daily withdrawal limit. Runs every 10 minutes.</p>
         <p class="faint">${esc(tr('With overflow on, an account that reaches its Blink daily withdrawal limit sends its USD to the Blink account with the most limit left, which moves it to CPAY on its next run.'))}</p></div>
@@ -140,7 +157,13 @@
       <h4>Moves</h4>
       <div class="card flush"><table class="table rtable"><thead><tr><th>When</th><th>Account</th><th>USD</th><th>Sats</th><th>Status</th><th>To</th><th>Note</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="empty">No moves yet</td></tr>'}</tbody></table></div>
       <h4>${esc(tr('Overflow transfers'))}</h4>
-      <div class="card flush"><table class="table rtable"><thead><tr><th>When</th><th>${esc(tr('Blink accounts'))}</th><th>USD</th><th>Status</th><th>Note</th></tr></thead><tbody>${overflows || `<tr><td colspan="5" class="empty">${esc(tr('No overflow transfers yet'))}</td></tr>`}</tbody></table></div>`;
+      <div class="card flush"><table class="table rtable"><thead><tr><th>When</th><th>${esc(tr('Blink accounts'))}</th><th>USD</th><th>Status</th><th>Note</th></tr></thead><tbody>${overflows || `<tr><td colspan="5" class="empty">${esc(tr('No overflow transfers yet'))}</td></tr>`}</tbody></table></div>
+      <h4>${esc(tr('BTCPay receiving account'))}</h4>
+      <div class="card">${receiving}
+        <p class="faint">${esc(tr('With the switch on, when the Blink account BTCPay pays into has less withdrawal limit left than the amount set above, CPAY points BTCPay at the Blink account with the most limit left (at most once every 30 minutes). Invoices still open on the old account are checked by CPAY for two days, so none are missed.'))}</p></div>
+      <div class="card flush"><table class="table rtable"><thead><tr><th>When</th><th>${esc(tr('Blink accounts'))}</th><th>Status</th><th>Note</th></tr></thead><tbody>${switches || `<tr><td colspan="4" class="empty">${esc(tr('No BTCPay switches yet'))}</td></tr>`}</tbody></table></div>
+      <h4>${esc(tr('Payments recorded after a switch'))}</h4>
+      <div class="card flush"><table class="table rtable"><thead><tr><th>When</th><th>${esc(tr('Blink accounts'))}</th><th>USD</th><th>Payment</th></tr></thead><tbody>${rescues || `<tr><td colspan="4" class="empty">${esc(tr('None yet'))}</td></tr>`}</tbody></table></div>`;
   }
 
   async function renderAudit() {

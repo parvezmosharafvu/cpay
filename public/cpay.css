@@ -1400,10 +1400,10 @@ dialog.pay-details::backdrop{background:rgba(16,24,40,.5)}
 .owner-setup ul{margin:6px 0 0;padding-left:18px}
 @media (max-width:640px){
   .owner-card .table,.owner-card .table tbody,.owner-card .table tr,.owner-card .table td,
-  #platformSettings .table,#platformSettings .table tbody,#platformSettings .table tr,#platformSettings .table td{display:block;width:100%}
+  #platformSettings .table:not(.rtable),#platformSettings .table:not(.rtable) tbody,#platformSettings .table:not(.rtable) tr,#platformSettings .table:not(.rtable) td{display:block;width:100%}
   .owner-card .table thead{display:none}
   .owner-card .table td{white-space:normal;overflow-wrap:anywhere}
-  .owner-card .table td.num,#platformSettings .table td.num{text-align:left;white-space:normal!important;padding-top:0}
+  .owner-card .table td.num,#platformSettings .table:not(.rtable) td.num{text-align:left;white-space:normal!important;padding-top:0}
   #platformSettings .table td.num .input{width:100%;margin-bottom:6px}
 }
 

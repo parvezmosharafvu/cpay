@@ -127,6 +127,28 @@ test('walletCall surfaces an error without retrying another path', async () => {
   assert.equal(calls.length, 1);
 });
 
+// Reads go out one at a time (each starts a wallet function with its own
+// database connections) and a read already queued is shared, not resent.
+test('walletCall: reads go out one at a time and a repeated read is shared', async () => {
+  const gates = [];
+  let running = 0, most = 0;
+  const { ctx, calls } = await loadWalletRoute(() => {
+    running++; most = Math.max(most, running);
+    return new Promise((resolve) => gates.push(() => { running--; resolve({ ok: true, status: 200, json: async () => ({}) }); }));
+  });
+  const reads = [ctx.walletCall('info'), ctx.walletCall('fiat'), ctx.walletCall('info'), ctx.walletCall('payments', { offset: 0 })];
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  for (let i = 0; i < 3; i++) { await tick(); assert.equal(gates.length, i + 1); gates[i](); }
+  await Promise.all(reads);
+  assert.equal(most, 1);
+  assert.deepEqual(calls.map((c) => JSON.parse(c.init.body).action), ['info', 'fiat', 'payments']);
+  // A failed read does not block the next one.
+  const failing = await loadWalletRoute(() => ({ ok: false, status: 500, json: async () => ({ error: 'boom' }) }));
+  await assert.rejects(failing.ctx.walletCall('info'), /boom/);
+  await assert.rejects(failing.ctx.walletCall('info'), /boom/);
+  assert.equal(failing.calls.length, 2);
+});
+
 // A send the browser stops waiting for may already have gone out, so it is
 // never reported as "try again"; sends also outwait admin-actions' 45 s.
 test('walletCall: sends wait longer than reads and never invite a blind retry', async () => {

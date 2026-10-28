@@ -46,7 +46,28 @@ async function walletFetch(path, payload) {
 // straight to the route (no root probe and fallback).
 const WALLET_ROUTE = 'admin-actions/admin-wallet';
 
+// Reads go out one at a time, and a read already waiting or running is
+// shared rather than sent twice. Each request starts its own wallet
+// function, which opens several database connections, and the wallet serves
+// one request at a time anyway: the four reads of a page load (plus a
+// refresh or a second tab) at once filled the database's connection pool
+// (2026-10-28 13:11, EMAXCONNSESSION), which also failed the cron sync.
+const WALLET_READS = new Set(['info', 'fiat', 'addresses', 'payments', 'stable-routes']);
+let walletReadChain = Promise.resolve();
+const walletReadsInFlight = new Map();
+function walletRead(payload) {
+  const key = JSON.stringify(payload);
+  const shared = walletReadsInFlight.get(key);
+  if (shared) return shared;
+  const turn = walletReadChain.then(() => walletFetch(WALLET_ROUTE, payload));
+  walletReadChain = turn.catch(() => {});
+  const done = turn.finally(() => walletReadsInFlight.delete(key));
+  walletReadsInFlight.set(key, done);
+  return done;
+}
+
 async function walletCall(action, body = {}) {
+  if (WALLET_READS.has(action)) return walletRead({ action, ...body });
   const run = () => walletFetch(WALLET_ROUTE, { action, ...body });
   // Sends ask for the password again when the last sign-in is not recent.
   if ((action === 'send-confirm' || action === 'stable-confirm') && window.cpayWithStepUp) return window.cpayWithStepUp(run);

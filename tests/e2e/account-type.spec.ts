@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { makeUser, login, db, uniq, PASSWORD, expectCleanCopy, loginAdmin, openAuthForm } from './helpers';
 
 // Account type (CPAY design artifacts): Individual or Business / Organization,

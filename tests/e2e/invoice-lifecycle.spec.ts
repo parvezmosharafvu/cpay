@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { makeUser, makeLink, paymentsFor, simulatePayment, db } from './helpers';
 
 async function startInvoice(page: Page, amount = '10') {

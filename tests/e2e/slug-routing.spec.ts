@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { makeUser, makeLink, expectCleanCopy, db } from './helpers';
 
 test('an active slug opens the payment card with the link name', async ({ page }) => {

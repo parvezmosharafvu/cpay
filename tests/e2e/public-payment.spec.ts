@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { makeUser, makeLink, paymentsFor, db, expectCleanCopy } from './helpers';
 
 test('customer-entered amount creates one invoice through the real Edge Function and payment service', async ({ page }) => {

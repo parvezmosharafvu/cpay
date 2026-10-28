@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { makeUser, login, db, uniq, ORIGIN, SITE, PASSWORD, expectCleanCopy, openAuthForm } from './helpers';
 
 const SENT = /^If an account uses that email, a reset link is on its way/;

@@ -118,6 +118,10 @@ invoice paid. So every run (switch on or off), for two days after a switch:
 
 *USD to leave*, *smallest* and *largest move* apply to each account.
 
+The on/off switch is also a card of its own near the top of Settings,
+below Payouts and Auto withdraw (*Blink sweep (Blink → CPAY)*, Turn on /
+Turn off). It writes the same `blink_sweep_enabled` setting.
+
 The same page shows where the next move goes, each Blink account (USD
 balance, can send, Blink limit left, moved in the last 24 hours, last
 result), the last 20 moves, which account

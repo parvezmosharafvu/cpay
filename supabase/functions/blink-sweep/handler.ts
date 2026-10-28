@@ -20,8 +20,9 @@
 //      paid from that account's USD wallet.
 // One account failing never stops the others.
 //
-// Receive switch (blink_receive_switch_enabled; the BTCPay key needs Modify
-// store settings):
+// Receive switch (blink_receive_switch_enabled, on or off by itself: the
+// sweep being off does not stop it; the BTCPay key needs Modify store
+// settings):
 // BTCPay pays every invoice into one Blink account. When that account has
 // less than "switch below" of Blink's 24-hour withdrawal limit left (less
 // what it already holds), BTCPay's Lightning connection is pointed at the
@@ -243,7 +244,9 @@ async function runSwitch(d: Deps, cfg: SweepConfig, seen: Seen): Promise<Record<
     await safeReceiveNote(d, r, "ok");
     return { account: r.account };
   }
-  if (!cfg.enabled || !cfg.receiveSwitch) {
+  // Its own switch: runs with the sweep off too (money then stays in Blink,
+  // and BTCPay still moves on before an account's limit runs out).
+  if (!cfg.receiveSwitch) {
     await safeReceiveNote(d, r, "low_limit");
     return { account: r.account, skipped: "off" };
   }

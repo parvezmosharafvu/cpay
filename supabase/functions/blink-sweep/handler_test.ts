@@ -253,20 +253,18 @@ Deno.test("receive switch: low limit on the receiving account points BTCPay at t
   assert(calls.alerts.some((a) => a.includes("Blink #1 → Blink #2") && a.includes("$20.00")));
 });
 
-Deno.test("receive switch: enough room, switch off, sweep off, no target or busy: BTCPay is left alone", async () => {
+Deno.test("receive switch: enough room, switch off, no target or busy: BTCPay is left alone", async () => {
   const on1 = () => Promise.resolve(at("1"));
   const room = deps({ ...switchOn, receiving: on1 }, { wallets: { "1": { balanceCents: 0, withdrawRemainingCents: 90_000 } } });
   assertEquals((await run(room.d)).receive, { account: "1" });
   const off = deps({ ...switchOn, config: () => Promise.resolve({ ...cfg }), receiving: on1 }, lowOne);
   assertEquals((await run(off.d)).receive, { account: "1", skipped: "off" });
   assertEquals(off.calls.receiveNotes, [["1", "low_limit"]]);
-  const sweepOff = deps({ ...switchOn, config: () => Promise.resolve({ ...cfg, enabled: false, receiveSwitch: true }), receiving: on1 }, lowOne);
-  assertEquals((await run(sweepOff.d)).receive, { account: "1", skipped: "off" });
   const noTarget = deps({ ...switchOn, receiving: on1 }, { wallets: { ...lowOne.wallets, "2": { withdrawRemainingCents: 9_000, balanceCents: 0 } } });
   assertEquals((await run(noTarget.d)).receive, { account: "1", skipped: "no_target" });
   const busy = deps({ ...switchOn, receiving: on1, switchBegin: () => Promise.resolve(null) }, lowOne);
   assertEquals((await run(busy.d)).receive, { account: "1", skipped: "busy" });
-  for (const x of [room, off, sweepOff, noTarget, busy]) assertEquals(x.calls.switches.length, 0);
+  for (const x of [room, off, noTarget, busy]) assertEquals(x.calls.switches.length, 0);
   const noKey = deps({ accounts: ["1", "2"], config: () => Promise.resolve({ ...cfg, receiveSwitch: true }) }, lowOne);
   assertEquals((await run(noKey.d)).receive, undefined);
 });
@@ -336,4 +334,13 @@ Deno.test("rescue: unpaid, already settled, bad invoice or Blink error: nothing 
   assertEquals(bad.calls.rescues.length, 0);
   const err = deps({ rescueCandidates: () => Promise.resolve([candidate]), invoicePaid: () => Promise.reject(new Error("Blink answered 500")) });
   assertEquals((await run(err.d)).rescued, [{ paymentId: "p-1", account: "1", error: "Blink answered 500" }]);
+});
+
+Deno.test("receive switch: works by itself while the sweep is off", async () => {
+  let n = 0;
+  const sweepOff = deps({ ...switchOn, config: () => Promise.resolve({ ...cfg, enabled: false, receiveSwitch: true }), receiving: () => Promise.resolve(at(n++ === 0 ? "1" : "2")) }, lowOne);
+  const out = await run(sweepOff.d);
+  assertEquals((out.receive as Record<string, unknown>).to, "2");
+  assertEquals(sweepOff.calls.switches.length, 1);
+  assertEquals(sweepOff.calls.pay.length, 0);
 });

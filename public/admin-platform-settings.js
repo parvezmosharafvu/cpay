@@ -209,7 +209,28 @@
   // included, and nothing can turn it on until it is unlocked.
   // lockState: true, false, or null when it could not be read (render()).
   let lockState = false;
+  // manualState: manual payouts only (20261028050000); null when unreadable.
+  let manualState = false;
   function modeHtml(row) {
+    return manualHtml() + autoHtml(row);
+  }
+  function manualHtml() {
+    if (manualState === null) return `<h3>Payouts</h3>
+      <div class="card" id="manualPayoutsCard"><p class="err" role="alert">Payout mode unavailable. Refresh settings to try again.</p></div>`;
+    // Static markup; wireMode() fills in the state.
+    return `<h3>Payouts</h3>
+      <div class="card" id="manualPayoutsCard">
+        <p><span>Manual payouts only is</span> <strong id="mpState"></strong></p>
+        <p class="muted">On: nothing is sent by itself. Auto withdraw is locked off and instant withdrawals stop. Users send a withdrawal request; you pay it yourself and press Mark paid (or Reject) in Payouts.</p>
+        <p class="muted">Off: users withdraw instantly from the Withdraw page as before.</p>
+        <div class="row" role="group" aria-label="Manual payouts only">
+          <button type="button" class="btn ghost" id="mpOn">Turn on</button>
+          <button type="button" class="btn ghost" id="mpOff">Turn off</button>
+        </div>
+        <p class="faint">While this is on, auto withdraw stays locked off. Turning it off does not unlock auto withdraw; use Unlock below for that.</p>
+        <div class="faint" id="mpStatus" role="status"></div></div>`;
+  }
+  function autoHtml(row) {
     if (!row) return '';
     if (lockState === null) return `<h3>Auto withdraw</h3>
       <div class="card" id="autoWithdrawCard"><p class="err" role="alert">Auto withdraw lock unavailable. Refresh settings to try again.</p></div>`;
@@ -258,6 +279,21 @@
     const on = el.querySelector('#awOn'); const off = el.querySelector('#awOff');
     if (on) on.onclick = () => go(true);
     if (off) off.onclick = () => go(false);
+    const manual = async (on) => {
+      const st = el.querySelector('#mpStatus');
+      const msg = on
+        ? 'Turn on manual payouts only? Auto withdraw is locked off, instant withdrawals stop, and users send withdrawal requests that you pay by hand.'
+        : 'Turn off manual payouts only? Users can withdraw instantly again. Requests already sent stay in Payouts.';
+      if (!window.confirm(tr(msg))) return;
+      if (await commit(() => client.rpc('admin_set_manual_payouts', { p_on: on }), st)) render();
+    };
+    const mpOn = el.querySelector('#mpOn'); const mpOff = el.querySelector('#mpOff');
+    const mpState = el.querySelector('#mpState');
+    if (mpState) mpState.textContent = tr(manualState ? 'On' : 'Off');
+    if (mpOn) { mpOn.disabled = manualState === true; mpOn.classList.toggle('primary', manualState === true); mpOn.classList.toggle('ghost', manualState !== true); }
+    if (mpOff) { mpOff.disabled = manualState !== true; mpOff.classList.toggle('primary', manualState !== true); mpOff.classList.toggle('ghost', manualState === true); }
+    if (mpOn) mpOn.onclick = () => manual(true);
+    if (mpOff) mpOff.onclick = () => manual(false);
     const lockBtn = el.querySelector('#awLock'); const unlockBtn = el.querySelector('#awUnlock');
     if (lockBtn) lockBtn.onclick = () => lock(true);
     if (unlockBtn) unlockBtn.onclick = () => lock(false);
@@ -302,6 +338,9 @@
     const lockRead = error ? null : await adminPanelRead(() => client.from('app_settings').select('value').eq('key', 'auto_withdraw_locked_off').maybeSingle());
     if (mine !== seq) return;
     lockState = !lockRead || lockRead.error ? null : lockRead.data?.value === true;
+    const manualRead = error ? null : await adminPanelRead(() => client.from('app_settings').select('value').eq('key', 'manual_payouts_only').maybeSingle());
+    if (mine !== seq) return;
+    manualState = !manualRead || manualRead.error ? null : manualRead.data?.value === true;
     if (mine !== seq) return;  // a newer render is under way
     if (error) { adminPanelError(el, error.message, render); return; }
     const byKey = Object.fromEntries((data || []).map((r) => [r.key, r]));

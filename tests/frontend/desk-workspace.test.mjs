@@ -192,6 +192,24 @@ test('withdrawal renders with funds and unavailable receiving settings without t
   assert.doesNotMatch(f.node('cash').innerHTML,/Auto withdraw is off/);
 });
 
+test('manual payouts: the Withdraw page sends a request instead of an instant withdrawal', async () => {
+  const f=await fixture({rpc:(name,fallback)=>name==='manual_payouts_only'?{data:true}:name==='request_manual_withdrawal'?{data:{id:'w1',status:'pending'}}:fallback});
+  await f.context.renderCash();await tick();
+  assert.match(f.node('cash').innerHTML,/Withdrawal request/);
+  assert.doesNotMatch(f.node('cash').innerHTML,/\$\{/);
+  assert.equal(f.withdrawBindings.length,0);
+  assert.deepEqual(f.node('mrMethod').children.map((o)=>o.value),['lightning','usdt_bep20']);
+  f.node('mrMethod').value='usdt_bep20';f.node('mrDest').value=' 0xabc ';f.node('mrAmt').value='10';
+  await f.node('mrSend').onclick();
+  const call=f.reads.find((r)=>r.name==='request_manual_withdrawal');
+  assert.equal(JSON.stringify(call.params),JSON.stringify({p_amount:10,p_method:'usdt_bep20',p_destination:'0xabc'}));
+  assert.match(f.node('mrStatus').textContent,/Request sent/);
+  f.node('mrAmt').value='4';await f.node('mrSend').onclick();
+  assert.equal(f.reads.filter((r)=>r.name==='request_manual_withdrawal').length,1);
+  assert.match(f.node('mrStatus').textContent,/Minimum withdrawal is \$5/);
+  assert.equal(f.node('mrFee').textContent,'0%');
+});
+
 test('zero balance keeps history and address management available without binding a send action', async () => {
   const f=await fixture({responses:{get_my_balance:{data:{available:0}}}});
   await f.context.renderCash();await tick();

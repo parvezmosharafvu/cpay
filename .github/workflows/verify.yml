@@ -471,6 +471,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/auto_withdraw_lock_test.sql
+      - name: Manual payouts only - requests held in the balance, no instant sends (20261028050000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/manual_payouts_test.sql
       - name: Forwards record their saved wallet, payment id and audit rows (20261021070000)
         env:
           PGPASSWORD: postgres

@@ -37,9 +37,12 @@ others. For each account:
    24 hours. This is shown in Admin → Settings → Blink sweep, also while the
    sweep is off. Nothing more happens when the sweep is off, the primary
    CPAY wallet has no Lightning address, or the key has no `WRITE`.
-3. **Amount** = Blink USD balance − *USD to leave in Blink*, capped at
-   *largest move each time* and at Blink's withdrawal limit left for that
-   account. Below *smallest move* nothing happens.
+3. **Amount** = Blink USD balance − *USD to leave in Blink* (and at most
+   Blink's withdrawal limit left for that account), less a reserve for
+   Blink's own send fee and price (the larger of 3 cents and 1%), capped at
+   *largest move each time*. Below *smallest move* nothing happens. Without
+   the reserve a small balance never moved: Blink charged one cent more
+   than the balance and refused every run.
 4. Blink's own price turns the USD into sats; CPAY asks for **98%** of that
    (room for price moves and Blink's fee).
 5. The invoice comes from the **primary CPAY wallet's own Lightning

@@ -31,10 +31,17 @@
     'No BTCPay switches yet': 'এখনো BTCPay বদলানো হয়নি',
     'Blink sweep (Blink → CPAY) is': 'Blink সুইপ (Blink → CPAY) এখন',
     'On: every 10 minutes the Blink USD balance is moved into the primary CPAY wallet.': 'চালু: প্রতি ১০ মিনিটে Blink-এর USD balance প্রধান CPAY wallet-এ সরানো হয়।',
-    'Off: nothing is moved and the money stays in Blink. A move already in flight is left as it is. The BTCPay receive switch also stops while this is off.': 'বন্ধ: কিছুই সরানো হয় না, টাকা Blink-এই থাকে। যে move আগেই শুরু হয়েছে সেটা যেমন আছে তেমন থাকে। এটা বন্ধ থাকলে BTCPay receive switch-ও থেমে থাকে।',
+    'Off: nothing is moved and the money stays in Blink. A move already in flight is left as it is. The BTCPay receive switch is separate and keeps working.': 'বন্ধ: কিছুই সরানো হয় না, টাকা Blink-এই থাকে। যে move আগেই শুরু হয়েছে সেটা যেমন আছে তেমন থাকে। BTCPay receive switch আলাদা, সেটা চলতেই থাকে।',
     'Amounts, accounts and the move log are under Blink sweep further down.': 'অঙ্ক, account-গুলো আর move-এর তালিকা নিচে Blink সুইপ অংশে আছে।',
     'Turn on the Blink sweep? Every 10 minutes the Blink USD balance is moved into the primary CPAY wallet.': 'Blink সুইপ চালু করবেন? প্রতি ১০ মিনিটে Blink-এর USD balance প্রধান CPAY wallet-এ সরানো হবে।',
-    'Turn off the Blink sweep? Nothing more is moved from Blink to CPAY until you turn it on again, and the BTCPay receive switch stops too.': 'Blink সুইপ বন্ধ করবেন? আবার চালু না করা পর্যন্ত Blink থেকে CPAY-তে আর কিছু সরানো হবে না, আর BTCPay receive switch-ও থেমে যাবে।',
+    'Turn off the Blink sweep? Nothing more is moved from Blink to CPAY until you turn it on again. The BTCPay receive switch keeps working.': 'Blink সুইপ বন্ধ করবেন? আবার চালু না করা পর্যন্ত Blink থেকে CPAY-তে আর কিছু সরানো হবে না। BTCPay receive switch চলতেই থাকবে।',
+    'BTCPay receive switch': 'BTCPay receive switch',
+    'BTCPay receive switch is': 'BTCPay receive switch এখন',
+    'On: when the Blink account BTCPay pays into has little daily withdrawal limit left, BTCPay is pointed at the Blink account with the most limit left (checked every 10 minutes, at most once every 30 minutes). Works whether the Blink sweep is on or off.': 'চালু: BTCPay যে Blink account-এ টাকা নেয় তার দৈনিক withdraw limit কমে এলে, BTCPay-কে সবচেয়ে বেশি limit বাকি থাকা Blink account-এ বদলে দেওয়া হয় (প্রতি ১০ মিনিটে দেখা হয়, ৩০ মিনিটে একবারের বেশি নয়)। Blink সুইপ চালু বা বন্ধ, দুই অবস্থাতেই কাজ করে।',
+    'Off: BTCPay keeps paying into the same Blink account.': 'বন্ধ: BTCPay একই Blink account-এ টাকা নিতে থাকে।',
+    'The “switch below” amount and the switch log are under Blink sweep further down.': '“switch below” অঙ্ক আর switch-এর তালিকা নিচে Blink সুইপ অংশে আছে।',
+    'Turn on the BTCPay receive switch? When the Blink account BTCPay pays into runs low on daily withdrawal limit, CPAY points BTCPay at the Blink account with the most limit left.': 'BTCPay receive switch চালু করবেন? BTCPay যে Blink account-এ টাকা নেয় তার দৈনিক withdraw limit কমে এলে CPAY BTCPay-কে সবচেয়ে বেশি limit বাকি থাকা Blink account-এ বদলে দেবে।',
+    'Turn off the BTCPay receive switch? BTCPay keeps paying into the Blink account it uses now.': 'BTCPay receive switch বন্ধ করবেন? BTCPay এখন যে Blink account-এ টাকা নেয় সেখানেই নিতে থাকবে।',
   });
   const client = window.supabaseClient;
   const host = () => document.getElementById('platformSettings');
@@ -217,28 +224,54 @@
   let lockState = false;
   // manualState: manual payouts only (20261028050000); null when unreadable.
   let manualState = false;
-  // sweepRow: the blink_sweep_enabled setting row (docs/BLINK-SWEEP.md), or
-  // undefined when the setting is not there.
+  // sweepRow / switchRow: the blink_sweep_enabled and
+  // blink_receive_switch_enabled setting rows (docs/BLINK-SWEEP.md), or
+  // undefined when the setting is not there. Each is on or off by itself.
   let sweepRow;
+  let switchRow;
   function modeHtml(row) {
-    return manualHtml() + autoHtml(row) + sweepHtml();
+    return manualHtml() + autoHtml(row) + sweepHtml() + switchHtml();
   }
-  // Blink sweep on/off, the same switch as Blink sweep → blink_sweep_enabled
-  // further down (admin_set_platform_setting, aal2, audited). Static
+  // On/off cards for the two Blink switches, the same settings as in Blink
+  // sweep further down (admin_set_platform_setting, aal2, audited). Static
   // markup; wireMode() fills in the state.
-  function sweepHtml() {
-    if (!sweepRow) return '';
-    return `<h3>${esc(tr('Blink sweep'))}</h3>
-      <div class="card" id="blinkSweepCard">
-        <p><span>${esc(tr('Blink sweep (Blink → CPAY) is'))}</span> <strong id="bsState"></strong></p>
-        <p class="muted">${esc(tr('On: every 10 minutes the Blink USD balance is moved into the primary CPAY wallet.'))}</p>
-        <p class="muted">${esc(tr('Off: nothing is moved and the money stays in Blink. A move already in flight is left as it is. The BTCPay receive switch also stops while this is off.'))}</p>
-        <div class="row" role="group" aria-label="Blink sweep">
-          <button type="button" class="btn ghost" id="bsOn">Turn on</button>
-          <button type="button" class="btn ghost" id="bsOff">Turn off</button>
+  function toggleCard(id, row, title, label, on, off, foot) {
+    if (!row) return '';
+    return `<h3>${esc(tr(title))}</h3>
+      <div class="card" id="${id}Card">
+        <p><span>${esc(tr(label))}</span> <strong id="${id}State"></strong></p>
+        <p class="muted">${esc(tr(on))}</p>
+        <p class="muted">${esc(tr(off))}</p>
+        <div class="row" role="group" aria-label="${esc(title)}">
+          <button type="button" class="btn ghost" id="${id}On">Turn on</button>
+          <button type="button" class="btn ghost" id="${id}Off">Turn off</button>
         </div>
-        <p class="faint">${esc(tr('Amounts, accounts and the move log are under Blink sweep further down.'))}</p>
-        <div class="faint" id="bsStatus" role="status"></div></div>`;
+        <p class="faint">${esc(tr(foot))}</p>
+        <div class="faint" id="${id}Status" role="status"></div></div>`;
+  }
+  function sweepHtml() {
+    return toggleCard('bs', sweepRow, 'Blink sweep', 'Blink sweep (Blink → CPAY) is',
+      'On: every 10 minutes the Blink USD balance is moved into the primary CPAY wallet.',
+      'Off: nothing is moved and the money stays in Blink. A move already in flight is left as it is. The BTCPay receive switch is separate and keeps working.',
+      'Amounts, accounts and the move log are under Blink sweep further down.');
+  }
+  function switchHtml() {
+    return toggleCard('rs', switchRow, 'BTCPay receive switch', 'BTCPay receive switch is',
+      'On: when the Blink account BTCPay pays into has little daily withdrawal limit left, BTCPay is pointed at the Blink account with the most limit left (checked every 10 minutes, at most once every 30 minutes). Works whether the Blink sweep is on or off.',
+      'Off: BTCPay keeps paying into the same Blink account.',
+      'The “switch below” amount and the switch log are under Blink sweep further down.');
+  }
+  function wireToggle(el, id, row, key, onMsg, offMsg) {
+    const isOn = row?.value === true;
+    const go = async (on) => {
+      if (!window.confirm(tr(on ? onMsg : offMsg))) return;
+      if (await commit(() => client.rpc('admin_set_platform_setting', { p_key: key, p_value: on }), el.querySelector(`#${id}Status`))) render();
+    };
+    const onBtn = el.querySelector(`#${id}On`); const offBtn = el.querySelector(`#${id}Off`);
+    const state = el.querySelector(`#${id}State`);
+    if (state) state.textContent = tr(isOn ? 'On' : 'Off');
+    if (onBtn) { onBtn.disabled = isOn; onBtn.classList.toggle('primary', isOn); onBtn.classList.toggle('ghost', !isOn); onBtn.onclick = () => go(true); }
+    if (offBtn) { offBtn.disabled = !isOn; offBtn.classList.toggle('primary', !isOn); offBtn.classList.toggle('ghost', isOn); offBtn.onclick = () => go(false); }
   }
   function manualHtml() {
     if (manualState === null) return `<h3>Payouts</h3>
@@ -323,20 +356,12 @@
     const lockBtn = el.querySelector('#awLock'); const unlockBtn = el.querySelector('#awUnlock');
     if (lockBtn) lockBtn.onclick = () => lock(true);
     if (unlockBtn) unlockBtn.onclick = () => lock(false);
-    const sweepOn = sweepRow?.value === true;
-    const sweep = async (on) => {
-      const st = el.querySelector('#bsStatus');
-      const msg = on
-        ? 'Turn on the Blink sweep? Every 10 minutes the Blink USD balance is moved into the primary CPAY wallet.'
-        : 'Turn off the Blink sweep? Nothing more is moved from Blink to CPAY until you turn it on again, and the BTCPay receive switch stops too.';
-      if (!window.confirm(tr(msg))) return;
-      if (await commit(() => client.rpc('admin_set_platform_setting', { p_key: 'blink_sweep_enabled', p_value: on }), st)) render();
-    };
-    const bsOn = el.querySelector('#bsOn'); const bsOff = el.querySelector('#bsOff');
-    const bsState = el.querySelector('#bsState');
-    if (bsState) bsState.textContent = tr(sweepOn ? 'On' : 'Off');
-    if (bsOn) { bsOn.disabled = sweepOn; bsOn.classList.toggle('primary', sweepOn); bsOn.classList.toggle('ghost', !sweepOn); bsOn.onclick = () => sweep(true); }
-    if (bsOff) { bsOff.disabled = !sweepOn; bsOff.classList.toggle('primary', !sweepOn); bsOff.classList.toggle('ghost', sweepOn); bsOff.onclick = () => sweep(false); }
+    wireToggle(el, 'bs', sweepRow, 'blink_sweep_enabled',
+      'Turn on the Blink sweep? Every 10 minutes the Blink USD balance is moved into the primary CPAY wallet.',
+      'Turn off the Blink sweep? Nothing more is moved from Blink to CPAY until you turn it on again. The BTCPay receive switch keeps working.');
+    wireToggle(el, 'rs', switchRow, 'blink_receive_switch_enabled',
+      'Turn on the BTCPay receive switch? When the Blink account BTCPay pays into runs low on daily withdrawal limit, CPAY points BTCPay at the Blink account with the most limit left.',
+      'Turn off the BTCPay receive switch? BTCPay keeps paying into the Blink account it uses now.');
   }
   async function feeHtml() {
     const { data, error } = await adminPanelRead(() => client.from('app_settings').select('value').eq('key', 'default_platform_fee_percent').maybeSingle());
@@ -385,6 +410,7 @@
     if (error) { adminPanelError(el, error.message, render); return; }
     const byKey = Object.fromEntries((data || []).map((r) => [r.key, r]));
     sweepRow = byKey.blink_sweep_enabled;
+    switchRow = byKey.blink_receive_switch_enabled;
     el.innerHTML = `<div class="card-head"><h2>Settings</h2><button id="psRefresh" type="button" class="btn ghost">Refresh settings</button></div><p class="faint">Edits stay in this page until saved. Each Save changes only its own setting.</p>
       <p class="muted">Changes need two-step sign-in and are recorded below. Settings marked ⚠ ask for confirmation.</p>
       ${modeHtml(byKey.payment_mode)}

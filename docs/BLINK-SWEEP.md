@@ -70,7 +70,8 @@ Each run, after the moves:
 2. That account's **room** is its Blink withdrawal limit left minus the
    USD it already holds. At or above *switch below* (default $50) nothing
    happens.
-3. Below it, with `blink_receive_switch_enabled` **On** (and the sweep on),
+3. Below it, with `blink_receive_switch_enabled` **On** (the sweep can be on
+   or off: the switch is its own system),
    picks the account that can send (Write key) with the most room, at least
    twice *switch below*. None: nothing happens ("no other account has
    enough limit left").
@@ -118,9 +119,12 @@ invoice paid. So every run (switch on or off), for two days after a switch:
 
 *USD to leave*, *smallest* and *largest move* apply to each account.
 
-The on/off switch is also a card of its own near the top of Settings,
-below Payouts and Auto withdraw (*Blink sweep (Blink → CPAY)*, Turn on /
-Turn off). It writes the same `blink_sweep_enabled` setting.
+Both switches also have a card of their own near the top of Settings,
+below Payouts and Auto withdraw, each with Turn on / Turn off:
+*Blink sweep (Blink → CPAY)* (`blink_sweep_enabled`) and *BTCPay receive
+switch* (`blink_receive_switch_enabled`). They are independent: with the
+sweep off, the money stays in Blink and the receive switch still moves
+BTCPay to the account with the most limit left.
 
 The same page shows where the next move goes, each Blink account (USD
 balance, can send, Blink limit left, moved in the last 24 hours, last
@@ -163,8 +167,9 @@ store settings, check the
 *BTCPay receiving account* line shows the account BTCPay uses now, then
 turn the switch **On**.
 
-Turning it **Off** stops new moves. A move already in flight is left as
-it is until it is turned back on.
+Turning the sweep **Off** stops new moves. A move already in flight is left as
+it is until it is turned back on. It does not stop the receive switch; turn
+that off with its own switch.
 
 ## Not covered
 

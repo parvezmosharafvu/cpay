@@ -83,7 +83,7 @@ begin
   if p_amount < 5 then raise exception 'Minimum withdrawal is $5'; end if;
   if p_destination is null or length(trim(p_destination)) < 3 then raise exception 'Enter where to send the money'; end if;
   -- A Lightning invoice can be long (reserve_lightning_withdrawal allows 2000).
-  if length(trim(p_destination)) > case when p_method = 'lightning' then 2000 else 200 end then
+  if length(trim(p_destination)) > (case when p_method = 'lightning' then 2000 else 200 end) then
     raise exception 'Destination is too long';
   end if;
 

@@ -102,6 +102,7 @@ insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('admin_set_auto_withdraw(uuid, text)',                                    'admin',         'Auto withdraw per profile: default/on/off; admin with a passkey session only; audited (20261021010000)'),
   ('admin_set_auto_withdraw_global(boolean)',                                 'admin',         'Auto withdraw global switch (payment_mode); admin with a passkey session only; audited (20261021010000)'),
   ('admin_auto_withdraw_overview()',                                          'admin',         'Auto withdraw state of every profile; admin with a passkey session only (20261021010000)'),
+  ('admin_lock_auto_withdraw(boolean)',                                      'admin',         'Auto withdraw Lock off / unlock; admin with a passkey session only; audited (20261028040000)'),
   ('strong_session()',                                                       'public',         'reads only the caller''s own JWT (aal / amr passkey) (20261021020000)'),
   ('admin_passkey_status()',                                                  'admin',         'how many active admins lack a passkey; is_admin() only (20261021020000)'),
   ('my_receive_settings()',                                                   'self',          'own receive choice and addresses (20261020050000)'),

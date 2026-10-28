@@ -205,10 +205,20 @@
   // On = instant forward to the user's saved address; Off = the amount is
   // added to the user's balance and they withdraw by hand. Each profile can
   // override it in Manage users. Writes admin_set_auto_withdraw_global().
-  function modeHtml(row) {
+  // Lock off (20261028040000): off for everyone, a profile's own "on"
+  // included, and nothing can turn it on until it is unlocked.
+  function modeHtml(row, locked) {
     if (!row) return '';
-    const on = row.value === 'instant_forward';
+    const on = row.value === 'instant_forward' && !locked;
     const direct = row.value === 'direct';
+    if (locked) return `<h3>Auto withdraw</h3>
+      <div class="card" id="autoWithdrawCard">
+        <p>Auto withdraw is <strong id="awState">Locked off</strong> for everyone.</p>
+        <p class="muted">Every payment is added to the user’s balance, including users set to On in Manage users. Nobody can turn auto withdraw on until it is unlocked.</p>
+        <div class="row" role="group" aria-label="Auto withdraw lock">
+          <button type="button" class="btn ghost" id="awUnlock">Unlock</button>
+        </div>
+        <div class="faint" id="awStatus" role="status"></div></div>`;
     return `<h3>Auto withdraw</h3>
       <div class="card" id="autoWithdrawCard">
         <p>Auto withdraw is <strong id="awState">${direct ? 'Direct payments' : (on ? 'On' : 'Off')}</strong> for everyone who has no setting of their own.</p>
@@ -217,7 +227,9 @@
         <div class="row" role="group" aria-label="Auto withdraw">
           <button type="button" class="btn ${on ? 'primary' : 'ghost'}" id="awOn" ${on ? 'disabled' : ''}>Turn on</button>
           <button type="button" class="btn ${!on && !direct ? 'primary' : 'ghost'}" id="awOff" ${!on && !direct ? 'disabled' : ''}>Turn off</button>
+          <button type="button" class="btn danger" id="awLock">Lock off</button>
         </div>
+        <p class="faint">Lock off: off for everyone, users set to On included, until you unlock it.</p>
         <p class="faint">To set one user differently, open Manage users and use Auto withdraw on that row.</p>
         <div class="faint" id="awStatus" role="status"></div></div>`;
   }
@@ -230,9 +242,20 @@
       if (!window.confirm(msg)) return;
       if (await commit(() => client.rpc('admin_set_auto_withdraw_global', { p_on: on }), st)) render();
     };
+    const lock = async (locked) => {
+      const st = el.querySelector('#awStatus');
+      const msg = locked
+        ? 'Lock auto withdraw off for everyone? All new payments will be added to balances, users set to On included, and waiting sends go back to balances. It stays off until you unlock it.'
+        : 'Unlock auto withdraw? It stays off; after this you can turn it on again, and users set to On in Manage users get auto withdraw back.';
+      if (!window.confirm(msg)) return;
+      if (await commit(() => client.rpc('admin_lock_auto_withdraw', { p_locked: locked }), st)) render();
+    };
     const on = el.querySelector('#awOn'); const off = el.querySelector('#awOff');
     if (on) on.onclick = () => go(true);
     if (off) off.onclick = () => go(false);
+    const lockBtn = el.querySelector('#awLock'); const unlockBtn = el.querySelector('#awUnlock');
+    if (lockBtn) lockBtn.onclick = () => lock(true);
+    if (unlockBtn) unlockBtn.onclick = () => lock(false);
   }
   async function feeHtml() {
     const { data, error } = await adminPanelRead(() => client.from('app_settings').select('value').eq('key', 'default_platform_fee_percent').maybeSingle());
@@ -271,12 +294,14 @@
     const mine = ++seq;
     const { data, error } = await adminPanelRead(() => client.rpc('admin_platform_settings'));
     const fee = error ? '' : await feeHtml();
+    const lockRead = error ? null : await client.from('app_settings').select('value').eq('key', 'auto_withdraw_locked_off').maybeSingle();
+    const locked = lockRead?.data?.value === true;
     if (mine !== seq) return;  // a newer render is under way
     if (error) { adminPanelError(el, error.message, render); return; }
     const byKey = Object.fromEntries((data || []).map((r) => [r.key, r]));
     el.innerHTML = `<div class="card-head"><h2>Settings</h2><button id="psRefresh" type="button" class="btn ghost">Refresh settings</button></div><p class="faint">Edits stay in this page until saved. Each Save changes only its own setting.</p>
       <p class="muted">Changes need two-step sign-in and are recorded below. Settings marked ⚠ ask for confirmation.</p>
-      ${modeHtml(byKey.payment_mode)}
+      ${modeHtml(byKey.payment_mode, locked)}
       ${fee}
       ${groupsHtml(MAIN, byKey, { 'Blink sweep': byKey.blink_sweep_enabled ? '<div id="blinkSweepLog"></div>' : '' })}
       <div id="platformSettingsAudit"></div>`;

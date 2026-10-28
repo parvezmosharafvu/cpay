@@ -423,6 +423,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/blink_sweep_test.sql
+      - name: audit_log takes the admin Edge Functions' own rows, nothing else (20261028020000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/audit_log_admin_writes_test.sql
       - name: Platform settings enforced in the money paths (20261020020000)
         env:
           PGPASSWORD: postgres

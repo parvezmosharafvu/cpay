@@ -72,6 +72,28 @@ do $$ begin
                  and new_value->>'locked_off' = 'true') then raise exception 'lock not audited'; end if;
 end $$;
 
+-- 3b. A signed-in admin cannot change or delete the rows directly.
+set local role authenticated;
+do $$ begin
+  perform pg_temp.as_claims('eb100000-0000-0000-0000-0000000000ad', '{"aal":"aal2"}');
+  begin
+    delete from app_settings where key = 'auto_withdraw_locked_off';
+    if found then raise exception 'direct delete of the lock allowed'; end if;
+  exception when raise_exception or insufficient_privilege then
+    if sqlerrm = 'direct delete of the lock allowed' then raise; end if;
+  end;
+  begin
+    update app_settings set value = 'true' where key = 'auto_approve_freelancer';
+    if found then raise exception 'direct update of auto approve allowed'; end if;
+  exception when raise_exception or insufficient_privilege then
+    if sqlerrm = 'direct update of auto approve allowed' then raise; end if;
+  end;
+end $$;
+reset role;
+do $$ begin
+  if not auto_withdraw_locked() then raise exception 'lock row gone'; end if;
+end $$;
+
 -- 4. Unlock: A's own "on" counts again; the global switch stays off.
 set local role authenticated;
 do $$ begin

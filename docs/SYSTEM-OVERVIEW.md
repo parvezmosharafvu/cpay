@@ -52,6 +52,14 @@ The payer and the freelancer see one figure: **"You receive X"**.
    Admin → Manage users (`admin_set_auto_withdraw`, table
    `auto_withdraw_overrides`). Switching a user OFF releases their waiting
    forwards into their balance (`auto_withdraw_release_waiting`).
+   **Lock off** (`admin_lock_auto_withdraw`, app_settings
+   `auto_withdraw_locked_off`, 20261028040000): turns the global switch off
+   and makes `payment_mode_for` answer `balance` for everyone, a profile's own
+   On included; while locked the global switch and a profile cannot be turned
+   on. Unlocking leaves the global switch off and gives profiles their own
+   setting back. Lock/unlock and the sign-up auto-approve switch
+   (`admin_set_auto_approval`) need a passkey session and are audited; a
+   trigger refuses direct writes to those app_settings rows.
 5. **Only an admin may reverse a settled payment**
    (`20261013090000_payment_state_transitions.sql`).
 6. Direct payment links (merchant's own wallet, no fee) exist in

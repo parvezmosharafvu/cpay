@@ -207,8 +207,13 @@
   // override it in Manage users. Writes admin_set_auto_withdraw_global().
   // Lock off (20261028040000): off for everyone, a profile's own "on"
   // included, and nothing can turn it on until it is unlocked.
-  function modeHtml(row, locked) {
+  // lockState: true, false, or null when it could not be read (render()).
+  let lockState = false;
+  function modeHtml(row) {
     if (!row) return '';
+    if (lockState === null) return `<h3>Auto withdraw</h3>
+      <div class="card" id="autoWithdrawCard"><p class="err" role="alert">Auto withdraw lock unavailable. Refresh settings to try again.</p></div>`;
+    const locked = lockState === true;
     const on = row.value === 'instant_forward' && !locked;
     const direct = row.value === 'direct';
     if (locked) return `<h3>Auto withdraw</h3>
@@ -247,7 +252,7 @@
       const msg = locked
         ? 'Lock auto withdraw off for everyone? All new payments will be added to balances, users set to On included, and waiting sends go back to balances. It stays off until you unlock it.'
         : 'Unlock auto withdraw? It stays off; after this you can turn it on again, and users set to On in Manage users get auto withdraw back.';
-      if (!window.confirm(msg)) return;
+      if (!window.confirm(tr(msg))) return;
       if (await commit(() => client.rpc('admin_lock_auto_withdraw', { p_locked: locked }), st)) render();
     };
     const on = el.querySelector('#awOn'); const off = el.querySelector('#awOff');
@@ -294,14 +299,15 @@
     const mine = ++seq;
     const { data, error } = await adminPanelRead(() => client.rpc('admin_platform_settings'));
     const fee = error ? '' : await feeHtml();
-    const lockRead = error ? null : await client.from('app_settings').select('value').eq('key', 'auto_withdraw_locked_off').maybeSingle();
-    const locked = lockRead?.data?.value === true;
+    const lockRead = error ? null : await adminPanelRead(() => client.from('app_settings').select('value').eq('key', 'auto_withdraw_locked_off').maybeSingle());
+    if (mine !== seq) return;
+    lockState = !lockRead || lockRead.error ? null : lockRead.data?.value === true;
     if (mine !== seq) return;  // a newer render is under way
     if (error) { adminPanelError(el, error.message, render); return; }
     const byKey = Object.fromEntries((data || []).map((r) => [r.key, r]));
     el.innerHTML = `<div class="card-head"><h2>Settings</h2><button id="psRefresh" type="button" class="btn ghost">Refresh settings</button></div><p class="faint">Edits stay in this page until saved. Each Save changes only its own setting.</p>
       <p class="muted">Changes need two-step sign-in and are recorded below. Settings marked ⚠ ask for confirmation.</p>
-      ${modeHtml(byKey.payment_mode, locked)}
+      ${modeHtml(byKey.payment_mode)}
       ${fee}
       ${groupsHtml(MAIN, byKey, { 'Blink sweep': byKey.blink_sweep_enabled ? '<div id="blinkSweepLog"></div>' : '' })}
       <div id="platformSettingsAudit"></div>`;

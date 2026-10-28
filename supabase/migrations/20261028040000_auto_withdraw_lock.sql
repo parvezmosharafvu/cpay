@@ -156,3 +156,30 @@ end;
 $$;
 revoke all on function public.admin_lock_auto_withdraw(boolean) from public, anon;
 grant execute on function public.admin_lock_auto_withdraw(boolean) to authenticated;
+
+-- The lock and the sign-up auto-approve switch change only through their
+-- RPCs above (passkey session, audit row). An admin's own write policy on
+-- app_settings would otherwise let a signed-in admin insert, update or
+-- delete these rows directly. Not SECURITY DEFINER on purpose: current_user
+-- is the caller's role, 'authenticated' for a direct write and the function
+-- owner inside the RPCs.
+create or replace function public.guard_switch_settings()
+returns trigger
+language plpgsql
+set search_path to 'public'
+as $$
+begin
+  if coalesce(new.key, old.key) in ('auto_withdraw_locked_off', 'auto_approve_freelancer')
+     or (tg_op = 'UPDATE' and old.key in ('auto_withdraw_locked_off', 'auto_approve_freelancer')) then
+    if current_user in ('authenticated', 'anon') then
+      raise exception 'Change this in Admin (passkey sign-in needed)';
+    end if;
+  end if;
+  return coalesce(new, old);
+end;
+$$;
+revoke all on function public.guard_switch_settings() from public, anon, authenticated;
+drop trigger if exists trg_guard_switch_settings on public.app_settings;
+create trigger trg_guard_switch_settings
+  before insert or update or delete on public.app_settings
+  for each row execute function public.guard_switch_settings();

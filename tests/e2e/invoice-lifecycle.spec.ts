@@ -16,7 +16,7 @@ async function startInvoice(page: Page, amount = '10') {
 
 test('waiting → paid: a simulated incoming payment settles once and the page shows the receipt', async ({ page }) => {
   const { u, id } = await startInvoice(page, '10');
-  await expect(page.locator('#statusChip')).toHaveText(/Waiting/);
+  await expect(page.locator('#statusChip')).toHaveText(/Awaiting payment/);
   expect(await simulatePayment(id)).toBe('settled');
   await expect(page.locator('#step3')).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('#successTitle')).toHaveText('Payment received');

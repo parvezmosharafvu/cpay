@@ -1824,9 +1824,9 @@ body.legal .draft strong{color:var(--warn,#78350f)}
 :is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) .checkout-head{display:none}
 :is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2:not([hidden]){display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-auto-flow:row dense;gap:14px 12px;align-items:center;padding:12px 16px 20px;background:transparent;border:0;box-shadow:none}
 :is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 :is(.invoice-top,.amount-due,.status-row,.pay-actions,.action-footer,.quick-actions){display:contents}
-:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 :is(.merchant,.divider,.kicker,#refChip,#statusTimeline,#statusSync,.checkout-review-note,#payBtn,#otherWalletsBtn,.or-rule,.qr-actions,#rawRequest,#payHint,#shareInvoiceBtn,#copyLinkBtn){display:none}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 :is(.merchant,.divider,.kicker,#refChip,#statusTimeline,#statusSync,.checkout-review-note,#payBtn,.or-rule,.qr-actions,#rawRequest,#payHint,#shareInvoiceBtn,#copyLinkBtn){display:none}
 :is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 > *,
-:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 :is(.amount-value,#statusChip,.direct-note,#copyBtn,#cashAppBtn){grid-column:1/-1;margin:0}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 :is(.amount-value,#statusChip,.direct-note,#copyBtn,#cashAppBtn,#otherWalletsBtn){grid-column:1/-1;margin:0}
 :is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #closeBtn{grid-column:1/3;grid-row:1;justify-self:start;width:56px;height:40px;border:0;border-radius:999px;background:#161616;color:#fff}
 :is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #timerPill{grid-column:3/5;grid-row:1;justify-self:center;padding:9px 16px;font-size:16px;font-weight:800;color:#fff;background:#161616;border:0}
 :is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #timerPill.urgent{background:rgba(255,69,58,.2);color:#ff6b60}
@@ -1846,3 +1846,4 @@ body.legal .draft strong{color:var(--warn,#78350f)}
 :is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 #cashAppBtn{order:7;grid-column:4/7;padding:16px 10px;border:0;background:#fff;color:#000;font-size:17px}
 :is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #cashAppBtn .ico-cash{display:none}
 :is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) .checkout-foot{display:none}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 #otherWalletsBtn{order:8;justify-self:center;width:auto;min-height:40px;padding:8px 16px;border:0;background:transparent;color:#3ddc6f;font-size:15px;font-weight:700}

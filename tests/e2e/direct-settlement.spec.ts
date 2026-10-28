@@ -116,7 +116,7 @@ test.describe.serial('direct payments to the Freelancer\'s own wallet', () => {
 
     const { payer, id } = await payerOpens(page, slug, '10');
     await expect(payer.locator('#directNote')).toContainText("Goes straight to Direct Owner's own wallet (alice@pay.example.com)");
-    await expect(payer.locator('#statusChip')).toHaveText(/Waiting/);
+    await expect(payer.locator('#statusChip')).toHaveText(/Awaiting payment/);
     const { rows: [row] } = await db.query('select status, bolt11, amount_msat::text, amount_usd::text from direct_payments where id = $1', [id]);
     expect(row).toMatchObject({ status: 'pending', amount_msat: '10000000', amount_usd: '10.00' }); // $10 at $100k
     expect(row.bolt11).toMatch(/^lnbcrt100000n1/);
@@ -147,7 +147,7 @@ test.describe.serial('direct payments to the Freelancer\'s own wallet', () => {
     await hook('direct-pay', { paymentId: id, forge: true });
     await payer.waitForTimeout(7_000); // two status polls past the check interval
     await expect(payer.locator('#step3')).toBeHidden();
-    await expect(payer.locator('#statusChip')).toHaveText(/Waiting/);
+    await expect(payer.locator('#statusChip')).toHaveText(/Awaiting payment/);
     expect((await db.query('select status from direct_payments where id = $1', [id])).rows[0].status).toBe('pending');
   });
 

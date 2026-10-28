@@ -60,6 +60,12 @@ The payer and the freelancer see one figure: **"You receive X"**.
    setting back. Lock/unlock and the sign-up auto-approve switch
    (`admin_set_auto_approval`) need a passkey session and are audited; a
    trigger refuses direct writes to those app_settings rows.
+   **Manual payouts only** (`admin_set_manual_payouts`, app_settings
+   `manual_payouts_only`, 20261028050000): locks auto withdraw off and makes
+   the Withdraw page send a request (`request_manual_withdrawal`, a `pending`
+   row that holds the amount) instead of an instant withdrawal; a trigger
+   refuses any other new withdrawal row. The admin pays it outside CPAY and
+   presses Mark paid or Reject in Admin → Payouts.
 5. **Only an admin may reverse a settled payment**
    (`20261013090000_payment_state_transitions.sql`).
 6. Direct payment links (merchant's own wallet, no fee) exist in

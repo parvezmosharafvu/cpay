@@ -464,6 +464,7 @@ async function renderCashContent() {
     sb.rpc('my_payout_book'),
     sb.rpc('my_receive_settings'),
   ]);
+  const manualOnly = (await sb.rpc('manual_payouts_only'))?.data === true;
   if (balErr || wsErr || bookErr) {
     deskReadFailure(el, balErr || wsErr || bookErr, renderCash);
     return;
@@ -483,6 +484,11 @@ async function renderCashContent() {
     : 'Auto withdraw is off: payments are added to your balance. Withdraw here whenever you like.'}</p>`;
   const journey = `<div class="section-intro"><div><h2>Withdraw your balance</h2><p>Choose a destination, review the quote and confirm with your passkey.</p></div></div>
     <ol class="withdraw-journey" aria-label="Withdrawal steps"><li><strong>1</strong><span>Choose destination and amount</span></li><li><strong>2</strong><span>Review what you receive</span></li><li><strong>3</strong><span>Confirm with your passkey</span></li></ol>`;
+  if (manualOnly) {
+    renderManualRequest(el, availNow, fee, lnSaved);
+    renderWithdrawHistory();
+    return;
+  }
   if (!(availNow > 0)) {
     el.innerHTML = journey + `<div class="card" id="wNone"><h3>Withdraw</h3><p class="muted">Available balance <strong id="wAvail">${money(0)}</strong></p>${autoNote}
       <p class="faint">Nothing to withdraw right now.</p>${savedNote}<button type="button" class="btn ghost" data-jump="profile">Manage saved addresses</button></div><div id="wHist"></div>`;
@@ -509,6 +515,67 @@ async function renderCashContent() {
     },
   });
   renderWithdrawHistory();
+}
+
+// Manual payouts (20261028050000): instead of an instant withdrawal the
+// user sends a request; the admin pays it by hand and marks it paid in
+// Admin → Payouts. The request holds the amount in the balance.
+const MANUAL_METHODS = [
+  ['lightning', 'Lightning', 'Lightning address or invoice'],
+  ['usdt_bep20', 'USDT (BEP20)', 'USDT (BEP20) address'],
+  ['binance', 'Binance Pay', 'Binance Pay ID or email'],
+  ['bkash', 'bKash', 'bKash number'],
+  ['nagad', 'Nagad', 'Nagad number'],
+  ['bank', 'Bank', 'Bank name, account name and number'],
+];
+function renderManualRequest(el, available, fee, lnSaved) {
+  el.innerHTML = `<div class="section-intro"><div><h2>Withdraw your balance</h2><p>Send a withdrawal request. The admin pays it and marks it paid; you see the status in Withdrawal history.</p></div></div>
+    <div class="card" id="wManual"><h3>Withdrawal request</h3>
+      <p class="muted">Available balance <strong id="wAvail">${money(available)}</strong></p>
+      <div class="field"><label for="mrMethod">Pay me by</label><select id="mrMethod">${MANUAL_METHODS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></div>
+      <div class="field"><label for="mrDest" id="mrDestLabel">Lightning address or invoice</label><input id="mrDest" autocomplete="off" spellcheck="false"></div>
+      <div class="field"><label for="mrAmt">Amount (USD)</label><input id="mrAmt" type="number" min="5" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+      <p class="hint" id="mrGet"></p>
+      <button type="button" class="btn primary" id="mrSend">Send request</button>
+      <p class="faint" id="mrStatus" role="status"></p></div><div id="wHist"></div>`;
+  let avail = Number(available || 0);
+  const method = document.getElementById('mrMethod');
+  const dest = document.getElementById('mrDest');
+  const amt = document.getElementById('mrAmt');
+  const get = document.getElementById('mrGet');
+  const send = document.getElementById('mrSend');
+  const status = document.getElementById('mrStatus');
+  const pct = Number(fee) || 0;
+  const sync = () => {
+    const m = MANUAL_METHODS.find(([v]) => v === method.value) || MANUAL_METHODS[0];
+    document.getElementById('mrDestLabel').textContent = m[2];
+    if (method.value === 'lightning' && !dest.value && lnSaved) dest.value = lnSaved;
+    const a = Number(amt.value);
+    get.textContent = a >= 5
+      ? `You receive ${money(Math.round(a * (100 - pct)) / 100)} after the ${pct}% withdrawal fee.`
+      : `Minimum $5. Withdrawal fee ${pct}%.`;
+  };
+  method.onchange = sync; amt.oninput = sync; sync();
+  send.onclick = async () => {
+    const a = Number(amt.value);
+    if (!(a >= 5)) { status.textContent = 'Minimum withdrawal is $5'; return; }
+    if (a > avail) { status.textContent = `Insufficient balance. Available: ${money(avail)}`; return; }
+    if (!dest.value.trim()) { status.textContent = 'Enter where to send the money'; return; }
+    send.disabled = true; status.textContent = 'Sending request…';
+    try {
+      const { error } = await sb.rpc('request_manual_withdrawal', { p_amount: Math.round(a * 100) / 100, p_method: method.value, p_destination: dest.value.trim() });
+      if (error) throw error;
+      status.textContent = 'Request sent. The admin will pay it and mark it paid.';
+      toast('Withdrawal request sent', true);
+      amt.value = ''; sync();
+      renderHome(); renderWithdrawHistory();
+      const { data: now } = await sb.rpc('get_my_balance');
+      avail = Number((Array.isArray(now) ? now[0] : now || {}).available || 0);
+      document.getElementById('wAvail').textContent = money(avail);
+    } catch (error) {
+      status.textContent = error.message || 'The request could not be confirmed. Check Withdrawal history before trying again.';
+    } finally { send.disabled = false; }
+  };
 }
 
 async function renderChat() {

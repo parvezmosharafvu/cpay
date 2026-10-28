@@ -34,6 +34,8 @@ Lightning/USDT address (held/owed retried); OFF = custodial balance + manual
 Withdraw page (passkey confirm). One "You receive X" figure.
 Admin "Lock off" (`auto_withdraw_locked_off`) forces OFF for everyone, profile
 overrides included, until unlocked.
+"Manual payouts only" (`manual_payouts_only`): no instant withdrawals; users
+send requests, the admin pays by hand and marks them paid in Payouts.
 
 ## Invariants — never break these
 

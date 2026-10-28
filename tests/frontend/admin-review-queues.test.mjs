@@ -21,9 +21,15 @@ function fixture(rpc=async()=>({data:[]})) {
 
 test('applications reads all statuses, renders history, and offers actions only on waiting rows',async()=>{
  const f=fixture(async name=>({data:name==='admin_list_account_applications'?[{id:'waiting',status:'pending',email:'new@example.test'},{id:'done',status:'approved',review_note:'<script>note</script>',reviewed_at:'2026-01-01'}]:[]}));
- await f.context.renderApps();assert.equal(f.calls[0].params.p_status,null);
+ await f.context.renderApps();assert.equal(f.calls.find(c=>c.name==='admin_list_account_applications').params.p_status,null);
  f.get('applicationClear').onclick();await tick();const html=f.get('apps').innerHTML;
  assert.match(html,/data-approve="waiting"/);assert.doesNotMatch(html,/data-approve="done"/);assert.match(html,/&lt;script&gt;note/);assert.match(html,/Review details/);
+});
+test('auto-approve switch shows the saved value, saves a change, and reverts on refusal',async()=>{
+ let refuse=false;const f=fixture(async name=>name==='cpay_auto_approval_enabled'?{data:true}:name==='admin_set_auto_approval'?(refuse?{error:{message:'Sign in again with your passkey first, then change settings'}}:{data:null}):{data:[]});
+ await f.context.renderApps();const sw=f.get('autoApprove');assert.match(f.get('apps').innerHTML,/id="autoApprove" checked/);
+ sw.checked=false;await f.context.setAutoApproval(sw);assert.equal(JSON.stringify(f.calls.at(-1)),JSON.stringify({name:'admin_set_auto_approval',params:{p_role:'freelancer',p_enabled:false}}));assert.equal(sw.checked,false);
+ refuse=true;sw.checked=true;await f.context.setAutoApproval(sw);assert.equal(sw.checked,false);assert.equal(sw.disabled,false);
 });
 test('application stale reads cannot replace a newer list',async()=>{
  const old=later();let n=0;const f=fixture(async()=>++n===1?old.promise:{data:[{id:'new',display_name:'New response',status:'pending'}]});

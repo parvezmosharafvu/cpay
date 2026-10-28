@@ -131,11 +131,6 @@ window.CPAY_WALLETS = Object.freeze([
   },
   // Checked and not offered. Kept so the next person does not re-research.
   {
-    id: 'blink', displayName: 'Blink', icon: null, protocol: 'lightning', platforms: ['ios', 'android'], handoff: 'lightning',
-    deepLink: null, universalLink: null, lightning: true, invoiceTypes: ['bolt11'], group: 'other', enabled: false, regions: 'Unclear for the US',
-    verification: { status: 'unverified', date: '2026-10-03', source: 'https://www.blink.sv/en/features', note: 'Pays BOLT11, but US availability is unclear.' },
-  },
-  {
     id: 'ndax', displayName: 'NDAX', icon: null, protocol: 'lightning', platforms: ['ios', 'android', 'web'], handoff: 'copy',
     deepLink: null, universalLink: null, lightning: true, invoiceTypes: ['bolt11'], group: 'other', enabled: false, regions: 'Canada',
     verification: { status: 'unverified', date: '2026-10-03', source: 'https://ndax.io/en/blog/article/what-is-btc-lightning-a-beginners-guide', note: 'Lightning withdrawals exist, but NDAX is a Canadian exchange, not a US option.' },

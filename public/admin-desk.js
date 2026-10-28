@@ -275,7 +275,10 @@ async function renderApps() {
   if (!el) return;
   const version = ++applicationReadVersion;
   el.innerHTML = typeof deskSkeleton === 'function' ? deskSkeleton(3) : '<p>Loading…</p>';
-  const { data, error } = await adminPanelRead(() => sb.rpc('admin_list_account_applications', { p_status: null }));
+  const [{ data, error }, autoRead] = await Promise.all([
+    adminPanelRead(() => sb.rpc('admin_list_account_applications', { p_status: null })),
+    sb.rpc('cpay_auto_approval_enabled', { p_role: 'freelancer' }),
+  ]);
   if (version !== applicationReadVersion) return;
   if (error) { adminPanelError(el, error.message, renderApps); return; }
   const all = data || [];
@@ -286,15 +289,31 @@ async function renderApps() {
     return `<tr><td>${escapeHtml(a.display_name || a.email)}<div class="faint">${escapeHtml(a.email || '')}</div><details><summary>Review details</summary><dl class="review-details"><dt>Application reference</dt><dd class="mono">${escapeHtml(a.id)}</dd><dt>Submitted</dt><dd>${escapeHtml(when(a.created_at))}</dd><dt>Reviewed</dt><dd>${a.reviewed_at ? escapeHtml(when(a.reviewed_at)) : '—'}</dd><dt>Review note</dt><dd>${escapeHtml(a.review_note || '—')}</dd></dl></details></td>
     <td>${escapeHtml(a.requested_role)}</td><td>${escapeHtml(accountTypeText(a))}</td><td>${badge(a.status)}</td><td class="table-actions">${open ? `<button type="button" class="btn primary sm" data-approve="${escapeHtml(a.id)}" ${applicationBusy.has(a.id) ? 'disabled' : ''}>Approve</button> <button type="button" class="btn danger sm" data-reject="${escapeHtml(a.id)}" ${applicationBusy.has(a.id) ? 'disabled' : ''}>Reject</button>` : ''}</td></tr>`;
   }).join('');
-  el.innerHTML = `<div class="card flush"><div class="desk-toolbar" role="search"><div class="field short"><label for="applicationStatus">Status</label><select id="applicationStatus">${[['pending','Pending'],['','All'],['approved','Approved'],['rejected','Rejected'],['suspended','Suspended']].map(([value,label]) => `<option value="${value}" ${value === applicationFilter.status ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div class="field grow"><label for="applicationSearch">Search applications</label><input id="applicationSearch" type="search" placeholder="Name, email or reference" value="${escapeHtml(applicationFilter.search)}"></div><button type="button" class="btn primary" id="applicationApply">Apply</button><button type="button" class="btn ghost" id="applicationClear">Clear</button><button type="button" class="btn ghost" id="applicationRefresh">Refresh applications</button></div><div class="card-head"><h3>Applications</h3><span class="meta-count">${filtered.length} / ${all.length}</span></div><p class="section-note">Only waiting applications have review actions. Open review details for the reference and decision history.</p><div class="scroll"><table class="table rtable"><thead><tr><th>Applicant</th><th>Role</th><th>Account type</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="empty">No applications match these filters.</td></tr>'}</tbody></table></div></div>`;
+  const autoOn = autoRead.data === true;
+  const autoSwitch = autoRead.error ? '' : `<div class="card"><label class="switch"><input type="checkbox" id="autoApprove" ${autoOn ? 'checked' : ''}> Approve new sign-ups automatically</label><p class="section-note">On: a new account is active as soon as it signs up. Off: it waits here for Approve. Accounts already waiting are not changed.</p></div>`;
+  el.innerHTML = `${autoSwitch}<div class="card flush"><div class="desk-toolbar" role="search"><div class="field short"><label for="applicationStatus">Status</label><select id="applicationStatus">${[['pending','Pending'],['','All'],['approved','Approved'],['rejected','Rejected'],['suspended','Suspended']].map(([value,label]) => `<option value="${value}" ${value === applicationFilter.status ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div class="field grow"><label for="applicationSearch">Search applications</label><input id="applicationSearch" type="search" placeholder="Name, email or reference" value="${escapeHtml(applicationFilter.search)}"></div><button type="button" class="btn primary" id="applicationApply">Apply</button><button type="button" class="btn ghost" id="applicationClear">Clear</button><button type="button" class="btn ghost" id="applicationRefresh">Refresh applications</button></div><div class="card-head"><h3>Applications</h3><span class="meta-count">${filtered.length} / ${all.length}</span></div><p class="section-note">Only waiting applications have review actions. Open review details for the reference and decision history.</p><div class="scroll"><table class="table rtable"><thead><tr><th>Applicant</th><th>Role</th><th>Account type</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="empty">No applications match these filters.</td></tr>'}</tbody></table></div></div>`;
   document.getElementById('applicationSearch').oninput = e => { applicationFilter.search = e.target.value; };
   document.getElementById('applicationSearch').onkeydown = e => { if (e.key === 'Enter') renderApps(); };
   document.getElementById('applicationStatus').onchange = e => { applicationFilter.status = e.target.value; renderApps(); };
   document.getElementById('applicationApply').onclick = renderApps;
   document.getElementById('applicationRefresh').onclick = renderApps;
   document.getElementById('applicationClear').onclick = () => { applicationFilter = { status: '', search: '' }; renderApps(); };
+  const auto = document.getElementById('autoApprove');
+  if (auto) auto.onchange = () => setAutoApproval(auto);
   el.querySelectorAll('[data-approve]').forEach(b => { b.onclick = () => review(b.dataset.approve, 'approved'); });
   el.querySelectorAll('[data-reject]').forEach(b => { b.onclick = () => review(b.dataset.reject, 'rejected'); });
+}
+async function setAutoApproval(input) {
+  const on = input.checked;
+  input.disabled = true;
+  try {
+    const { error } = await sb.rpc('admin_set_auto_approval', { p_role: 'freelancer', p_enabled: on });
+    if (error) throw error;
+    toast(on ? 'New sign-ups are approved automatically' : 'New sign-ups wait for approval', true);
+  } catch (error) {
+    input.checked = !on;
+    toast(error.message || 'The change could not be confirmed. Refresh before trying again.');
+  } finally { input.disabled = false; }
 }
 async function review(id, status) {
   if (applicationBusy.has(id)) return;

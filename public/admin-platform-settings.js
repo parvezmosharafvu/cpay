@@ -7,6 +7,29 @@
 // check in tests/frontend).
 (function () {
   'use strict';
+  // Bangla for this section's provider phrases. Kept here, not in i18n.js,
+  // because i18n.js also loads on public pages; i18n.js merges this in.
+  window.CPAY_BN_EXTRA = Object.assign(window.CPAY_BN_EXTRA || {}, {
+    'Blink sweep': 'Blink সুইপ',
+    'Check in Blink': 'Blink-এ দেখে নিন',
+    'Blink sweep: USD to leave in Blink': 'Blink সুইপ: Blink-এ কত USD রেখে দেবে',
+    'Blink sweep: smallest move (USD)': 'Blink সুইপ: সবচেয়ে কম কত সরাবে (USD)',
+    'Add one Blink API key (Read and Write) per Blink account in Secrets & keys: BLINK_API_KEY, then BLINK_API_KEY_2 up to BLINK_API_KEY_10. Each account is moved separately, up to its own Blink daily withdrawal limit. Runs every 10 minutes.': 'প্রতিটা Blink account-এর জন্য একটা করে API key (Read ও Write) Secrets & keys-এ বসান: BLINK_API_KEY, তারপর BLINK_API_KEY_2 থেকে BLINK_API_KEY_10। প্রতিটা account আলাদাভাবে, তার নিজের Blink দৈনিক withdraw limit পর্যন্ত সরানো হয়। প্রতি ১০ মিনিটে চলে।',
+    'Blink accounts': 'Blink account-গুলো',
+    'Blink limit left (24 h)': 'Blink limit বাকি (২৪ ঘণ্টা)',
+    'Blink daily limit reached': 'Blink-এর দৈনিক limit শেষ',
+    'No Blink key seen yet. Add BLINK_API_KEY and wait up to 10 minutes.': 'এখনো কোনো Blink key দেখা যায়নি। BLINK_API_KEY বসিয়ে ১০ মিনিট পর্যন্ত অপেক্ষা করুন।',
+    'BTCPay receive switch: when the Blink account BTCPay pays into has little daily withdrawal limit left, point BTCPay at the Blink account with the most limit left': 'BTCPay receive switch: BTCPay যে Blink account-এ টাকা নেয় তার দৈনিক withdraw limit কমে এলে, BTCPay-কে সবচেয়ে বেশি limit বাকি থাকা Blink account-এ বদলে দেবে',
+    'BTCPay receive switch: switch when the receiving account has less than this withdrawal limit left (USD)': 'BTCPay receive switch: টাকা নেওয়া account-এর withdraw limit এর চেয়ে কম বাকি থাকলে বদলাবে (USD)',
+    'BTCPay receiving account': 'BTCPay যে Blink account-এ টাকা নেয়',
+    'BTCPay pays into': 'BTCPay এখন টাকা নিচ্ছে',
+    'Check BTCPay Lightning settings': 'BTCPay-এর Lightning settings দেখুন',
+    'BTCPay pays into a Blink account CPAY has no key for': 'BTCPay এমন একটা Blink account-এ টাকা নিচ্ছে যার key CPAY-তে নেই',
+    'BTCPay holds a Blink key that can spend. Add a Read + Receive key as BLINK_RECEIVE_KEY (or _2 …) for that account.': 'BTCPay-তে এমন Blink key আছে যেটা দিয়ে টাকা পাঠানো যায়। ওই account-এর জন্য Read + Receive key BLINK_RECEIVE_KEY (বা _2 …) নামে যোগ করুন।',
+    'Not read yet. The BTCPay API key (BTCPAY_API_KEY) needs Modify store settings on the cpay store to see and switch which Blink account BTCPay pays into.': 'এখনো পড়া হয়নি। BTCPay কোন Blink account-এ টাকা নেয় তা দেখতে ও বদলাতে BTCPay API key (BTCPAY_API_KEY)-এ cpay store-এর Modify store settings অনুমতি লাগবে।',
+    'With the switch on, when the Blink account BTCPay pays into has less withdrawal limit left than the amount set above, CPAY points BTCPay at the Blink account with the most limit left (at most once every 30 minutes). Invoices still open on the old account are checked by CPAY for two days, so none are missed.': 'Switch চালু থাকলে, BTCPay যে Blink account-এ টাকা নেয় তার withdraw limit ওপরের অঙ্কের চেয়ে কম বাকি থাকলে CPAY BTCPay-কে সবচেয়ে বেশি limit বাকি থাকা Blink account-এ বদলে দেয় (৩০ মিনিটে একবারের বেশি নয়)। পুরনো account-এ খোলা invoice-গুলো CPAY দুই দিন ধরে নিজে দেখে, তাই কোনো পেমেন্ট বাদ পড়ে না।',
+    'No BTCPay switches yet': 'এখনো BTCPay বদলানো হয়নি',
+  });
   const client = window.supabaseClient;
   const host = () => document.getElementById('platformSettings');
   const tr = (s) => (window.cpayI18n && typeof window.cpayI18n.t === 'function' ? window.cpayI18n.t(s) : s);

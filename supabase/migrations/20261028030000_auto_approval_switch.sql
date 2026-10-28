@@ -13,10 +13,10 @@ as $$
 declare old jsonb;
 begin
   if not is_admin() then raise exception 'Not authorized'; end if;
+  if p_role is distinct from 'freelancer' then raise exception 'Invalid application role'; end if;
   if not public.strong_session() then
     raise exception 'Sign in again with your passkey first, then change settings';
   end if;
-  if p_role is distinct from 'freelancer' then raise exception 'Invalid application role'; end if;
   select value into old from app_settings where key = 'auto_approve_freelancer';
   insert into app_settings(key, value)
   values ('auto_approve_freelancer', to_jsonb(coalesce(p_enabled, false)))

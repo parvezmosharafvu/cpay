@@ -8,10 +8,10 @@ const tick=()=>new Promise(r=>setImmediate(r));
 function fixture(rpc=async()=>({data:[]})) {
  const nodes=new Map(),calls=[];
  const camel=s=>s.replace(/-([a-z])/g,(_,c)=>c.toUpperCase());
- function node(id='') {return {id,value:'',dataset:{},disabled:false,hidden:false,textContent:'',_html:'',children:[],set innerHTML(value){this._html=value;this.children=[];for(const tag of value.matchAll(/<(button|input|select|tr|p)\b([^>]*)>/g)){const n=node();for(const attr of tag[2].matchAll(/([\w-]+)="([^"]*)"/g)){const [_,key,val]=attr;if(key.startsWith('data-'))n.dataset[camel(key.slice(5))]=val;else n[key]=val}if(/\bdisabled\b/.test(tag[2]))n.disabled=true;if(n.id)nodes.set(n.id,n);this.children.push(n)}},get innerHTML(){return this._html},querySelectorAll(selector){const attrs=[...selector.matchAll(/\[data-([\w-]+)\]/g)].map(m=>camel(m[1]));return this.children.filter(c=>attrs.some(a=>a in c.dataset));},querySelector(selector){return this.querySelectorAll(selector)[0]||node()},setAttribute(){},addEventListener(event,fn){this['on'+event]=fn},click(){return this.onclick?.()},insertBefore(){}};}
+ function node(id='') {return {id,value:'',dataset:{},disabled:false,hidden:false,textContent:'',_html:'',children:[],set innerHTML(value){this._html=value;this.children=[];for(const tag of value.matchAll(/<(button|input|select|tr|p)\b([^>]*)>/g)){const n=node();for(const attr of tag[2].matchAll(/([\w-]+)="([^"]*)"/g)){const [_,key,val]=attr;if(key.startsWith('data-'))n.dataset[camel(key.slice(5))]=val;else n[key]=val}if(/\bdisabled\b/.test(tag[2]))n.disabled=true;if(n.id)nodes.set(n.id,n);this.children.push(n)}},get innerHTML(){return this._html},querySelectorAll(selector){const attrs=[...selector.matchAll(/\[data-([\w-]+)\]/g)].map(m=>camel(m[1]));return this.children.filter(c=>attrs.some(a=>a in c.dataset));},querySelector(selector){return this.querySelectorAll(selector)[0]||node()},setAttribute(){},addEventListener(event,fn){this['on'+event]=fn},click(){return this.onclick?.()},insertBefore(){},prepend(c){this.children.unshift(c)}};}
  const get=id=>{if(!nodes.has(id))nodes.set(id,node(id));return nodes.get(id)};
  const sb={rpc:async(name,params)=>{calls.push({name,params});return rpc(name,params)},from(){const q={select(){return q},order(){return q},limit(){return rpc('withdrawals')}};return q}};
- const document={getElementById:get,querySelectorAll:selector=>[...nodes.values()].flatMap(n=>n.querySelectorAll(selector)),addEventListener(){}};
+ const document={createElement:tag=>({tag,dataset:{},kids:[],append(...k){this.kids.push(...k)}}),getElementById:get,querySelectorAll:selector=>[...nodes.values()].flatMap(n=>n.querySelectorAll(selector)),addEventListener(){}};
  const context=vm.createContext({window:{supabaseClient:sb,confirm:()=>true,prompt:()=>null},sb,document,setTimeout,clearTimeout,location:{hash:''},people:[],toast:()=>{},confirm:()=>true,prompt:()=>null});
  vm.runInContext(read('app.js'),context);context.toast=()=>{};
  const desk=read('admin-desk.js');vm.runInContext(desk.slice(desk.indexOf('let peopleFilter'),desk.indexOf('const FEE_SOURCE'))+'\nconst FEE_SOURCE={};',context);
@@ -27,9 +27,14 @@ test('applications reads all statuses, renders history, and offers actions only 
 });
 test('auto-approve switch shows the saved value, saves a change, and reverts on refusal',async()=>{
  let refuse=false;const f=fixture(async name=>name==='cpay_auto_approval_enabled'?{data:true}:name==='admin_set_auto_approval'?(refuse?{error:{message:'Sign in again with your passkey first, then change settings'}}:{data:null}):{data:[]});
- await f.context.renderApps();const sw=f.get('autoApprove');assert.match(f.get('apps').innerHTML,/id="autoApprove" checked/);
- sw.checked=false;await f.context.setAutoApproval(sw);assert.equal(JSON.stringify(f.calls.at(-1)),JSON.stringify({name:'admin_set_auto_approval',params:{p_role:'freelancer',p_enabled:false}}));assert.equal(sw.checked,false);
- refuse=true;sw.checked=true;await f.context.setAutoApproval(sw);assert.equal(sw.checked,false);assert.equal(sw.disabled,false);
+ await f.context.renderApps();const card=f.get('apps').children[0];const sw=card.kids[0].kids[0];
+ assert.equal(sw.id,'autoApprove');assert.equal(sw.checked,true);assert.match(card.kids[0].kids[1],/Approve new sign-ups automatically/);
+ sw.checked=false;await sw.onchange();assert.equal(JSON.stringify(f.calls.at(-1)),JSON.stringify({name:'admin_set_auto_approval',params:{p_role:'freelancer',p_enabled:false}}));assert.equal(sw.checked,false);
+ refuse=true;sw.checked=true;await sw.onchange();assert.equal(sw.checked,false);assert.equal(sw.disabled,false);
+});
+test('auto-approve switch is left out when its value cannot be read',async()=>{
+ const f=fixture(async name=>name==='cpay_auto_approval_enabled'?{error:{message:'offline'}}:{data:[]});
+ await f.context.renderApps();assert.ok(!f.get('apps').children.some(c=>c.tag==='div'&&c.className==='card'));
 });
 test('application stale reads cannot replace a newer list',async()=>{
  const old=later();let n=0;const f=fixture(async()=>++n===1?old.promise:{data:[{id:'new',display_name:'New response',status:'pending'}]});

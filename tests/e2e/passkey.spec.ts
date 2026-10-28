@@ -1,4 +1,4 @@
-import { test, expect, type Page, type CDPSession } from '@playwright/test';
+import { test, expect, type Page, type CDPSession } from './fixtures';
 import { makeUser, login, db, ORIGIN, TRON, readyAddress, type User, openAuthForm } from './helpers';
 
 // Passkeys (Supabase Auth, WebAuthn) with Chromium's virtual authenticator:

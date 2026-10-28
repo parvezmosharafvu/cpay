@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { makeUser, makeLink, login, db, simulatePayment, expectCleanCopy } from './helpers';
 
 // 20261020: one-page checkout in the default (express) design, the new

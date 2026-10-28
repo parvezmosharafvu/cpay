@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { makeUser, makeLink, login, db, simulatePayment } from './helpers';
 
 test('the desk shows the real balance, and a settled payment appears in Payments', async ({ page }) => {

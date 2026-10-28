@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { makeUser, makeLink, paymentsFor } from './helpers';
 
 // #72 follow-up: while the resume check holds the pay button, the keypad and

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { makeUser, makeLink, login, loginAdmin, db, ORIGIN, type User } from './helpers';
 
 let ANON_KEY = '';

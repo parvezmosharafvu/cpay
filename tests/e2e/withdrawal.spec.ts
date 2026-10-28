@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { makeUser, login, readyAddress, db, TRON, ORIGIN, SITE } from './helpers';
 
 async function openWithdraw(page: Page, earned = 50, fee = 0, ready = true) {

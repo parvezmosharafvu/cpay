@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { makeUser, makeLink, login, db, uniq, ORIGIN, SITE, PASSWORD, TRON, paymentsFor, readyAddress, openAuthForm } from './helpers';
 
 // Supabase Auth CAPTCHA protection (production since 2026-10-15): sign-in,

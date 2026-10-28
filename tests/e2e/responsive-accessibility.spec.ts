@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { makeUser, makeLink, login, readyAddress } from './helpers';
 
 async function noHorizontalOverflow(page: Page, label: string) {

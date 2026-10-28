@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Classic <script> files share one global scope: a top-level const/let/class
 // declared in two files is a SyntaxError that stops the second file entirely

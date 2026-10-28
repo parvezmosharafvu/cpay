@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { makeUser, login, loginAdmin, withPasskeys, readyAddress, db, ORIGIN, TRON, type User, openAuthForm } from './helpers';
 // @ts-ignore -- plain ESM helper shared with the fake Supabase Auth
 import { totp } from '../../e2e/totp.mjs';

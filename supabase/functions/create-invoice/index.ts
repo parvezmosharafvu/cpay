@@ -6,7 +6,7 @@ import {
 } from "./guards.ts";
 import { serviceAuthHeaders, serviceAuthMode } from "../_shared/service-auth.ts";
 import { coarseGeo } from "../_shared/geo.ts";
-import { btcpayConfig, createInvoice as btcpayCreate, getPaymentMethods as btcpayMethods, invoiceRequest, payDetails } from "../_shared/btcpay.ts";
+import { btcpayConfig, createInvoice as btcpayCreate, getPaymentMethods as btcpayMethods, getPaymentDetailsWithRetry, invoiceRequest, payDetails } from "../_shared/btcpay.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -331,8 +331,8 @@ async function btcpayInvoice(paymentId: string, linkId: string, slug: string, ce
       paymentId, linkId, slug, amountCents: cents, expiresMinutes: INVOICE_MINUTES, lightningOnly,
       redirectUrl: SITE_URL ? `${SITE_URL}/invoice-cpay-v2.html?id=${paymentId}` : undefined,
     }));
-    const methods = await btcpayMethods(fetch, BTCPAY!, inv.id).catch(() => []);
-    const pd = payDetails(methods);
+    // Match Boltpay's three GET attempts, without creating another invoice.
+    const pd = await getPaymentDetailsWithRetry(fetch, BTCPAY!, inv.id);
     const { data: attached, error } = await supabaseAdmin.rpc("system_attach_gateway_invoice", {
       p_payment_id: paymentId, p_gateway: "btcpay", p_invoice_id: inv.id, p_bolt11: pd.bolt11,
     });

@@ -41,7 +41,7 @@ grant execute on function pg_temp.refused(text, text) to authenticated;
 -- 1. Off: no requests. Turning it on needs a strong admin session.
 set local role authenticated;
 do $$ begin
-  perform pg_temp.as_claims('ec100000-0000-0000-0000-0000000000a1', '{"aal":"aal1"}');
+  perform pg_temp.as_claims('ec100000-0000-0000-0000-0000000000a1', '{"aal":"aal2"}');
   perform pg_temp.refused($q$select request_manual_withdrawal(10, 'lightning', 'me@ln.test')$q$, '%only used while payouts are paid by hand%');
   perform pg_temp.refused($q$select admin_set_manual_payouts(true)$q$, 'Not authorized');
   perform pg_temp.as_claims('ec100000-0000-0000-0000-0000000000ad', '{"aal":"aal1"}');

@@ -7,8 +7,11 @@
 -- outside CPAY and marks it paid, or rejects it (the amount goes back to
 -- the balance), in Admin → Payouts (admin-actions /process-withdrawal).
 -- Stored in app_settings 'manual_payouts_only'; turning it on or off needs
--- a passkey/aal2 admin session and is audited. Turning it off leaves the
--- auto withdraw lock as it is (unlock it separately).
+-- a passkey/aal2 admin session and is audited. While it is on, auto
+-- withdraw cannot be unlocked and payment_mode_for answers 'balance' even
+-- if it were. Turning it off leaves the auto withdraw lock as it is (unlock
+-- it separately). Requests are paid by Lightning or USDT only (no
+-- traditional payment methods, AGENTS.md) and need a passkey session.
 
 create or replace function public.manual_payouts_only()
 returns boolean
@@ -60,6 +63,9 @@ declare v_uid uuid := auth.uid(); v_profile profiles; v_limit profile_limits; v_
         v_available numeric; v_fee numeric; v_row withdrawals;
 begin
   if v_uid is null then raise exception 'Sign in first'; end if;
+  if not public.strong_session() then
+    raise exception 'Confirm with your passkey to send a withdrawal request';
+  end if;
   if not manual_payouts_only() then
     raise exception 'Withdraw from the Withdraw page; requests are only used while payouts are paid by hand.';
   end if;
@@ -70,13 +76,16 @@ begin
   end if;
   if v_profile.account_status <> 'active' then raise exception 'Account approval is required before requesting withdrawals'; end if;
   if not cpay_feature_enabled(v_uid, 'can_request_withdrawals') then raise exception 'Withdrawal requests are disabled for this account'; end if;
-  if p_method is null or p_method not in ('lightning', 'usdt_bep20', 'binance', 'bkash', 'nagad', 'bank') then
+  if p_method is null or p_method not in ('lightning', 'usdt_bep20') then
     raise exception 'Choose how you want to be paid';
   end if;
   if p_amount is null or p_amount <> round(p_amount, 2) then raise exception 'Enter the amount in dollars and cents'; end if;
   if p_amount < 5 then raise exception 'Minimum withdrawal is $5'; end if;
   if p_destination is null or length(trim(p_destination)) < 3 then raise exception 'Enter where to send the money'; end if;
-  if length(trim(p_destination)) > 200 then raise exception 'Destination is too long'; end if;
+  -- A Lightning invoice can be long (reserve_lightning_withdrawal allows 2000).
+  if length(trim(p_destination)) > case when p_method = 'lightning' then 2000 else 200 end then
+    raise exception 'Destination is too long';
+  end if;
 
   select * into v_limit from profile_limits where user_id = v_uid;
   if v_limit.single_withdrawal_limit is not null and p_amount > v_limit.single_withdrawal_limit then
@@ -92,8 +101,9 @@ begin
   if p_amount > v_available then raise exception 'Insufficient balance. Available: $%', round(v_available, 2); end if;
 
   v_fee := resolve_withdrawal_fee(v_uid);
-  insert into withdrawals(user_id, amount_requested, fee_percent, amount_after_fee, method, destination, status)
-  values (v_uid, p_amount, v_fee, round(p_amount * (1 - v_fee / 100), 2), p_method, trim(p_destination), 'pending')
+  insert into withdrawals(user_id, amount_requested, fee_percent, amount_after_fee, method, destination, status, coin, chain)
+  values (v_uid, p_amount, v_fee, round(p_amount * (1 - v_fee / 100), 2), p_method, trim(p_destination), 'pending',
+          case when p_method = 'usdt_bep20' then 'USDT' end, case when p_method = 'usdt_bep20' then 'BEP20' end)
   returning * into v_row;
   return v_row;
 end;
@@ -138,3 +148,51 @@ begin
   return coalesce(new, old);
 end;
 $$;
+
+-- While manual payouts are on, auto withdraw stays locked and nothing is
+-- forwarded, whatever a profile's own setting says.
+create or replace function public.payment_mode_for(p_user uuid)
+returns text
+language sql
+stable security definer
+set search_path to 'public'
+as $$
+  select case
+    when payment_mode() = 'direct' then 'direct'
+    when auto_withdraw_locked() or manual_payouts_only() then 'balance'
+    when o.mode = 'on' then 'instant_forward'
+    when o.mode = 'off' then 'balance'
+    else payment_mode() end
+  from (select 1) one left join auto_withdraw_overrides o on o.user_id = p_user
+$$;
+revoke all on function public.payment_mode_for(uuid) from public, anon, authenticated;
+grant execute on function public.payment_mode_for(uuid) to service_role;
+
+create or replace function public.admin_lock_auto_withdraw(p_locked boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare v_old boolean := auto_withdraw_locked(); r jsonb := '{}'::jsonb;
+begin
+  if not is_admin() then raise exception 'Not authorized'; end if;
+  if not public.strong_session() then
+    raise exception 'Sign in again with your passkey first';
+  end if;
+  if p_locked is null then raise exception 'Choose lock or unlock'; end if;
+  if not p_locked and manual_payouts_only() then
+    raise exception 'Manual payouts only is on. Turn it off first.';
+  end if;
+  insert into app_settings(key, value) values ('auto_withdraw_locked_off', to_jsonb(p_locked))
+  on conflict (key) do update set value = excluded.value, updated_at = now();
+  if p_locked then r := admin_set_auto_withdraw_global(false); end if;
+  perform record_audit('auto_withdraw.lock', 'setting', 'auto_withdraw_locked_off',
+    jsonb_build_object('locked_off', v_old),
+    jsonb_build_object('locked_off', p_locked, 'released_forwards', coalesce((r->>'released_forwards')::int, 0)));
+  return jsonb_build_object('locked_off', p_locked, 'payment_mode', payment_mode(),
+    'released_forwards', coalesce((r->>'released_forwards')::int, 0));
+end;
+$$;
+revoke all on function public.admin_lock_auto_withdraw(boolean) from public, anon;
+grant execute on function public.admin_lock_auto_withdraw(boolean) to authenticated;

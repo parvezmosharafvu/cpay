@@ -79,12 +79,15 @@ values ('ec100000-0000-0000-0000-0000000002a1', 'ec100000-0000-0000-0000-0000000
 update payments set status = 'settled', amount_settled = 20, amount_sat = 30000, settled_at = now()
  where id = 'ec100000-0000-0000-0000-0000000002a1';
 
--- 4. A request holds the amount; bad requests and instant withdrawals are refused.
+-- 4. A request needs a passkey session and holds the amount; bad requests
+--    and instant withdrawals are refused.
 set local role authenticated;
 do $$ declare w withdrawals; before numeric; after numeric; begin
   perform pg_temp.as_claims('ec100000-0000-0000-0000-0000000000a1', '{"aal":"aal1"}');
+  perform pg_temp.refused($q$select request_manual_withdrawal(10, 'lightning', 'me@ln.test')$q$, 'Confirm with your passkey%');
+  perform pg_temp.as_claims('ec100000-0000-0000-0000-0000000000a1', '{"aal":"aal2"}');
   select available into before from get_my_balance();
-  perform pg_temp.refused($q$select request_manual_withdrawal(10, 'paypal', 'x@y.test')$q$, 'Choose how you want to be paid');
+  perform pg_temp.refused($q$select request_manual_withdrawal(10, 'bank', 'x@y.test')$q$, 'Choose how you want to be paid');
   perform pg_temp.refused($q$select request_manual_withdrawal(4, 'lightning', 'me@ln.test')$q$, 'Minimum withdrawal is $5');
   perform pg_temp.refused($q$select request_manual_withdrawal(10, 'lightning', '')$q$, 'Enter where to send the money');
   perform pg_temp.refused($q$select request_manual_withdrawal(9999, 'lightning', 'me@ln.test')$q$, 'Insufficient balance%');
@@ -94,6 +97,13 @@ do $$ declare w withdrawals; before numeric; after numeric; begin
   end if;
   select available into after from get_my_balance();
   if after <> before - 10 then raise exception 'not held: % -> %', before, after; end if;
+  w := request_manual_withdrawal(5, 'lightning', 'lnbc' || repeat('x', 400));
+  if w.status <> 'pending' then raise exception 'long invoice refused'; end if;
+end $$;
+-- 4b. Auto withdraw cannot be unlocked while manual payouts are on.
+do $$ begin
+  perform pg_temp.as_claims('ec100000-0000-0000-0000-0000000000ad', '{"aal":"aal2"}');
+  perform pg_temp.refused($q$select admin_lock_auto_withdraw(false)$q$, 'Manual payouts only is on%');
 end $$;
 reset role;
 do $$ begin
@@ -105,7 +115,7 @@ exception when raise_exception then
 end $$;
 
 -- 5. The admin pays it by hand and closes it as paid.
-do $$ declare v_id uuid := (select w.id from withdrawals w where w.user_id = 'ec100000-0000-0000-0000-0000000000a1' and w.status = 'pending'); begin
+do $$ declare v_id uuid := (select w.id from withdrawals w where w.user_id = 'ec100000-0000-0000-0000-0000000000a1' and w.status = 'pending' and w.amount_requested = 10); begin
   if not system_claim_withdrawal(v_id, 'paid') then raise exception 'claim failed'; end if;
   if (select status from withdrawals where withdrawals.id = v_id) <> 'paid' then raise exception 'not paid'; end if;
 end $$;

@@ -217,17 +217,17 @@
   function manualHtml() {
     if (manualState === null) return `<h3>Payouts</h3>
       <div class="card" id="manualPayoutsCard"><p class="err" role="alert">Payout mode unavailable. Refresh settings to try again.</p></div>`;
-    const on = manualState === true;
+    // Static markup; wireMode() fills in the state.
     return `<h3>Payouts</h3>
       <div class="card" id="manualPayoutsCard">
-        <p>Manual payouts only is <strong id="mpState">${on ? 'On' : 'Off'}</strong>.</p>
+        <p><span>Manual payouts only is</span> <strong id="mpState"></strong></p>
         <p class="muted">On: nothing is sent by itself. Auto withdraw is locked off and instant withdrawals stop. Users send a withdrawal request; you pay it yourself and press Mark paid (or Reject) in Payouts.</p>
         <p class="muted">Off: users withdraw instantly from the Withdraw page as before.</p>
         <div class="row" role="group" aria-label="Manual payouts only">
-          <button type="button" class="btn ${on ? 'primary' : 'ghost'}" id="mpOn" ${on ? 'disabled' : ''}>Turn on</button>
-          <button type="button" class="btn ${on ? 'ghost' : 'primary'}" id="mpOff" ${on ? '' : 'disabled'}>Turn off</button>
+          <button type="button" class="btn ghost" id="mpOn">Turn on</button>
+          <button type="button" class="btn ghost" id="mpOff">Turn off</button>
         </div>
-        <p class="faint">Turning it off does not unlock auto withdraw; use Unlock below for that.</p>
+        <p class="faint">While this is on, auto withdraw stays locked off. Turning it off does not unlock auto withdraw; use Unlock below for that.</p>
         <div class="faint" id="mpStatus" role="status"></div></div>`;
   }
   function autoHtml(row) {
@@ -288,6 +288,10 @@
       if (await commit(() => client.rpc('admin_set_manual_payouts', { p_on: on }), st)) render();
     };
     const mpOn = el.querySelector('#mpOn'); const mpOff = el.querySelector('#mpOff');
+    const mpState = el.querySelector('#mpState');
+    if (mpState) mpState.textContent = tr(manualState ? 'On' : 'Off');
+    if (mpOn) { mpOn.disabled = manualState === true; mpOn.classList.toggle('primary', manualState === true); mpOn.classList.toggle('ghost', manualState !== true); }
+    if (mpOff) { mpOff.disabled = manualState !== true; mpOff.classList.toggle('primary', manualState !== true); mpOff.classList.toggle('ghost', manualState === true); }
     if (mpOn) mpOn.onclick = () => manual(true);
     if (mpOff) mpOff.onclick = () => manual(false);
     const lockBtn = el.querySelector('#awLock'); const unlockBtn = el.querySelector('#awUnlock');

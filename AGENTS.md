@@ -32,6 +32,8 @@ Pay link (USD) → BOLT11 → settle → platform fee first →
 `payment_mode_for(user)`: Auto withdraw ON = instant forward to saved
 Lightning/USDT address (held/owed retried); OFF = custodial balance + manual
 Withdraw page (passkey confirm). One "You receive X" figure.
+Admin "Lock off" (`auto_withdraw_locked_off`) forces OFF for everyone, profile
+overrides included, until unlocked.
 
 ## Invariants — never break these
 

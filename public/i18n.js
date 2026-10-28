@@ -911,7 +911,17 @@
     "Approve new sign-ups automatically": "নতুন সাইন-আপ নিজে থেকেই অনুমোদন করুন",
     "On: a new account is active as soon as it signs up. Off: it waits here for Approve. Accounts already waiting are not changed.": "চালু: নতুন account সাইন-আপ করার সাথে সাথেই চালু হয়। বন্ধ: এখানে Approve-এর জন্য অপেক্ষা করে। যারা আগে থেকে অপেক্ষায় আছে তাদের কিছু বদলায় না।",
     "New sign-ups are approved automatically": "নতুন সাইন-আপ এখন নিজে থেকেই অনুমোদিত হবে",
-    "New sign-ups wait for approval": "নতুন সাইন-আপ এখন অনুমোদনের অপেক্ষায় থাকবে"
+    "New sign-ups wait for approval": "নতুন সাইন-আপ এখন অনুমোদনের অপেক্ষায় থাকবে",
+    "Lock off": "স্থায়ীভাবে বন্ধ",
+    "Auto withdraw lock": "স্বয়ংক্রিয় উত্তোলনের লক",
+    "Auto withdraw lock unavailable. Refresh settings to try again.": "স্বয়ংক্রিয় উত্তোলনের লক পড়া যায়নি। আবার সেটিংস রিফ্রেশ করুন।",
+    "Lock auto withdraw off for everyone? All new payments will be added to balances, users set to On included, and waiting sends go back to balances. It stays off until you unlock it.": "সবার জন্য স্বয়ংক্রিয় উত্তোলন স্থায়ীভাবে বন্ধ করবেন? সব নতুন পেমেন্ট ব্যালেন্সে যোগ হবে, যাদের On করা আছে তাদেরও, আর অপেক্ষায় থাকা পাঠানো টাকা ব্যালেন্সে ফিরে যাবে। লক না খোলা পর্যন্ত বন্ধ থাকবে।",
+    "Unlock auto withdraw? It stays off; after this you can turn it on again, and users set to On in Manage users get auto withdraw back.": "স্বয়ংক্রিয় উত্তোলনের লক খুলবেন? এটা বন্ধই থাকবে; এরপর আবার চালু করতে পারবেন, আর Manage users-এ যাদের On করা আছে তারা স্বয়ংক্রিয় উত্তোলন ফিরে পাবে।",
+    "Unlock": "লক খুলুন",
+    "Locked off": "স্থায়ীভাবে বন্ধ",
+    "for everyone.": "সবার জন্য।",
+    "Lock off: off for everyone, users set to On included, until you unlock it.": "স্থায়ীভাবে বন্ধ: সবার জন্য বন্ধ, Manage users-এ যাদের On করা আছে তাদের জন্যও, যতক্ষণ না লক খোলেন।",
+    "Every payment is added to the user’s balance, including users set to On in Manage users. Nobody can turn auto withdraw on until it is unlocked.": "প্রতিটা পেমেন্ট ইউজারের ব্যালেন্সে যোগ হয়, Manage users-এ যাদের On করা আছে তাদেরও। লক না খোলা পর্যন্ত কেউ স্বয়ংক্রিয় উত্তোলন চালু করতে পারবে না।"
   };
   // Admin-only phrases a page script registered before this file loaded.
   Object.assign(BN, window.CPAY_BN_EXTRA || {});

@@ -18,7 +18,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin="anonymous"></script>
     <script src="/wallets-config.js"></script>
     <script>window.CPAY_INVOICE_EMBEDDED = true;</script>
-    <script src="/invoice-view.js?v=2"></script>
+    <script src="/invoice-view.js?v=3"></script>
   </head>
   <body class="checkout">
     <a class="skip-link" href="#paymentCard">Skip to payment</a>
@@ -64,8 +64,16 @@
           <div class="merchant-name" id="merchantName">&nbsp;</div>
         </div>
       </div>
+      <!-- Default (keypad) design only: title, secure badge and payment method card. -->
+      <h1 class="pay-title">Pay <span id="payTitleName"></span></h1>
+      <div class="secure-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>Secure Payment</div>
+      <div class="method-card" aria-hidden="true">
+        <span class="method-icon">$</span>
+        <span class="method-name" id="methodName">Cash App · Lightning</span>
+        <span class="method-sub">Instant</span>
+      </div>
       <div class="amount-display" role="status" aria-live="polite" aria-atomic="true">
-        <div class="checkout-currency-note">Amount in US dollars</div><div class="amount-text" id="amountDisplay">$0</div>
+        <div class="checkout-currency-note">Amount in US dollars</div><div class="amount-text" id="amountDisplay">$0</div><div class="amount-usd" aria-hidden="true">USD</div>
         <div class="charge-summary" id="chargeSummary" aria-live="polite"></div>
       </div>
       <div class="keypad" id="keypad">
@@ -125,7 +133,7 @@
         <div class="direct-note" id="directNote" hidden>Paid straight to the merchant's own wallet. CPAY does not hold this payment.</div>
         <button class="pay-btn" id="payBtn" type="button">
           <div class="btn-spinner" aria-hidden="true"></div>
-          <span id="payBtnText">Continue to payment</span>
+          <span id="payBtnText">Pay</span>
         </button>
       </div>
     </main>
@@ -155,6 +163,7 @@
     <button class="icon-btn" id="closeBtn" type="button" aria-label="Close and go back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M6 6l12 12"/></svg></button>
   </div>
   <div class="divider"></div>
+  <h1 class="inv-title">Scan a Bitcoin or Lightning QR code</h1>
 
   <div class="amount-due">
     <div class="kicker">Amount due</div>
@@ -177,7 +186,7 @@
 
   <div class="pay-actions" id="payActions">
     <button id="payBtn" class="pill-btn btn-pay" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg><span id="payBtnLabel">Pay with Lightning</span></button>
-    <button id="cashAppBtn" class="pill-btn btn-alt" type="button"><span class="btn-ico ico-cash" aria-hidden="true">$</span>Pay with Cash App</button>
+    <button id="cashAppBtn" class="pill-btn btn-alt" type="button"><span class="btn-ico ico-cash" aria-hidden="true">$</span>Open Cash App</button>
     <button id="otherWalletsBtn" class="pill-btn btn-copy" type="button" aria-haspopup="dialog" aria-controls="walletSheet">Other wallets</button>
   </div>
 
@@ -190,11 +199,14 @@
     </div>
   </button>
 
+  <div class="inv-tip"><span aria-hidden="true">★</span> Tap the QR code to open Cash App or your Lightning wallet with this payment already loaded. If nothing opens, tap <b>Copy address</b> and paste it instead.</div>
+  <div class="inv-tip"><b>Pay from your Cash App balance</b> <span class="faint">(no need to buy BTC first)</span><br>Open Cash App → Money ($) tab → Bitcoin → Send → Scan or paste this address → Confirm</div>
+
   <div class="qr-actions">
     <button class="link-btn" id="downloadQrBtn" type="button">Download QR</button>
   </div>
   <div class="action-footer single">
-    <button id="copyBtn" class="pill-btn btn-copy" type="button">Copy payment request</button>
+    <button id="copyBtn" class="pill-btn btn-copy" type="button">Copy address</button>
   </div>
   <details class="raw-request" id="rawRequest">
     <summary>Show payment request</summary>
@@ -202,7 +214,7 @@
   </details>
   <p class="pay-hint" id="payHint">The amount is already in the request. Pay before the timer runs out.</p>
   <div class="quick-actions">
-    <button class="link-btn" id="helpBtn" type="button">How to pay</button>
+    <button class="link-btn" id="helpBtn" type="button">Help</button>
     <button class="link-btn" id="shareInvoiceBtn" type="button">Share</button>
     <button class="link-btn" id="copyLinkBtn" type="button">Copy page link</button>
   </div>
@@ -256,19 +268,20 @@
 <div id="howToPayModal" hidden aria-hidden="true">
   <div class="modal-inner" role="dialog" aria-modal="true" aria-labelledby="howToPayTitle">
     <div class="modal-head">
-      <h2 id="howToPayTitle">How to pay</h2>
+      <h2 id="howToPayTitle">How to pay with Cash App</h2>
       <button id="modalCloseBtn" type="button" aria-label="Close payment help" class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M6 6l12 12"/></svg></button>
     </div>
-    <p class="muted"><b>On this phone:</b> tap <b>Pay with Lightning</b> or <b>Pay with Cash App</b>. Your wallet opens with the payment loaded and you confirm it.</p>
-    <p class="muted"><b>On a computer:</b> scan the QR code with your phone's wallet app.</p>
+    <p class="muted"><b>Fastest:</b> tap the QR code or <b>Open Cash App</b>. Cash App opens with this payment already loaded — just confirm.</p>
+    <p class="muted"><b>Other Lightning wallet:</b> scan the QR code with your wallet. On a computer, scan it with your phone.</p>
     <p class="payment-help-label">If nothing opens:</p>
     <ol>
-      <li>Tap <b>Copy payment request</b>.</li>
-      <li>Open your wallet and choose <b>Send</b> or <b>Scan</b>.</li>
-      <li>Paste the request, or scan the QR code.</li>
-      <li>Check the amount and confirm.</li>
+      <li>Tap <b>Copy address</b>.</li>
+      <li>Open Cash App and tap the <b>Money ($)</b> tab.</li>
+      <li>Tap <b>Bitcoin</b>, then <b>Send</b>.</li>
+      <li>Tap the <b>scan icon</b> and scan the QR, or <b>Paste</b> the address.</li>
+      <li>Confirm with your PIN or Face ID.</li>
     </ol>
-    <p class="faint">You don't need to type the amount. The request expires when the timer runs out; you can generate a new one after that.</p>
+    <p class="faint">The amount is already inside the payment — you don't need to type it. It expires when the timer runs out; you can make a new one after that.</p>
     <button class="pill-btn btn-pay" id="modalGotItBtn" type="button">Got it</button>
   </div>
 </div>
@@ -449,7 +462,9 @@ window.addEventListener('DOMContentLoaded', async () => {
         ? 'Pay with Cash App'
         : 'Pay with Lightning, Cash App or another Lightning wallet';
     }
+    el('methodName').textContent = window.CPAY_WALLET_MODE === 'cashapp' ? 'Cash App' : 'Cash App · Lightning';
     el('merchantName').textContent = name;
+    el('payTitleName').textContent = name;
     el('merchantAvatar').textContent = ([...name][0] || '$');
     document.title = 'Pay ' + name + ' — CPAY';
     prefillAmount();
@@ -594,7 +609,7 @@ async function startPayment(){
     const requestId = window.cpayRequestId ? window.cpayRequestId(reqScope) : undefined;
     let turnstileToken;
     try { turnstileToken = window.cpayTurnstileToken ? await window.cpayTurnstileToken('pay') : null; }
-    catch (te) { setStatus(te.message || 'Verification failed. Try again.', 'err'); setPaying(false, 'Continue to payment'); return; }
+    catch (te) { setStatus(te.message || 'Verification failed. Try again.', 'err'); setPaying(false, 'Pay'); return; }
     const direct = window.CPAY_SETTLEMENT === 'direct';
     let res, result;
     if (direct){
@@ -623,7 +638,7 @@ async function startPayment(){
     if (!res.ok || !result.paymentId){
       if (res.status === 409 && window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
       setStatus((typeof result.error === 'string' && result.error) || 'Something went wrong. Please try again.', 'err');
-      setPaying(false, 'Continue to payment');
+      setPaying(false, 'Pay');
       return;
     }
     if (window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
@@ -645,7 +660,7 @@ async function startPayment(){
     setStatus(e && e.message === 'timeout'
       ? 'This is taking too long. Check your connection, then try again.'
       : 'Network error. Check your connection and try again.', 'err');
-    setPaying(false, 'Continue to payment');
+    setPaying(false, 'Pay');
   }
 }
     </script>

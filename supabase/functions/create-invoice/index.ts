@@ -15,7 +15,10 @@ const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 const PAYMENT_SERVICE_URL = Deno.env.get("PAYMENT_SERVICE_URL") ?? "";
 const PAYMENT_SERVICE_SECRET = Deno.env.get("PAYMENT_SERVICE_SECRET") ?? "";
 const PAYMENT_SERVICE_AUTH_MODE = serviceAuthMode(Deno.env.get("PAYMENT_SERVICE_AUTH_MODE"));
-const INVOICE_MINUTES = 60;
+// The Lightning invoice behind a BTCPay checkout (Blink, custodial) is only
+// payable for about 5 minutes, so the page's timer and the BTCPay invoice
+// match it instead of showing time that no longer works.
+const INVOICE_MINUTES = 5;
 // BTCPay Server checkout (docs/BTCPAY.md): used only while the owner's
 // Admin → Settings switch btcpay_enabled is on. Receive only.
 const BTCPAY = btcpayConfig(Deno.env);

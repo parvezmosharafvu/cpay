@@ -1787,3 +1787,62 @@ body.legal .draft strong{color:var(--warn,#78350f)}
   .rtable tr.rt-fold.open .rt-toggle{border-color:var(--accent)}
   .rtable tr.rt-fold:not(.open) .rt-toggle:not(:focus-visible){position:absolute;width:1px;height:1px;min-height:0;padding:0;margin:0;overflow:hidden;clip:rect(0 0 0 0);border:0}
 }
+
+/* ---- Default (keypad) checkout, Oct 2026: dark page, green accents ------------
+   Payment page: "Pay <name>", Secure Payment badge, payment method card,
+   amount with USD under it, dark green keypad, one Pay button.
+   Invoice page: close / timer / Help on top, a title, "Awaiting payment…",
+   the QR, two tips, Copy address + Open Cash App at the bottom.
+   These elements exist in every design's markup; only this design shows them. */
+.pay-title,.secure-pill,.method-card,.amount-usd,.inv-title,.inv-tip{display:none}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]){color-scheme:dark;--page-bg:#000;--page-base:#000;--page-fg:#fff;--page-muted:rgba(255,255,255,.65);--text:#fff;--muted:rgba(255,255,255,.7);--faint:rgba(255,255,255,.55);--accent:#3ddc6f;--accent-text:#3ddc6f;--accent-soft:rgba(61,220,111,.12);--accent-ring:rgba(61,220,111,.35);--on-accent:#04130a;--line:rgba(255,255,255,.1);--line-strong:rgba(255,255,255,.18);--surface-2:rgba(255,255,255,.06);--danger:#ff6b60;--key-bg:#232b25;--key-border:1px solid #333d36;--key-hover:#2c362f;--key-fg:#fff;--key-height:52px;--key-radius:14px;--key-weight:700;--amount-size:60px;--btn-bg:#1f8a3c;--btn-hover:#23a046;--btn-radius:16px;justify-content:flex-start}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .checkout-head{display:none}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .checkout-card{--ck-pad:18px;background:#030704;border:1px solid #1b241d;border-radius:28px;box-shadow:none;max-width:420px;margin-top:12px}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) #paymentCard::before{content:"";display:block;width:44px;height:5px;margin:0 auto 14px;border-radius:3px;background:#1c2a20}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .merchant,
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .checkout-currency-note,
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) #quickToggle,
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .quick-amounts,
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) #walletHint{display:none}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .pay-title{display:block;margin:0 0 10px;text-align:center;font-size:24px;font-weight:800;color:#fff;overflow-wrap:anywhere}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .secure-pill{display:flex;align-items:center;gap:6px;width:max-content;max-width:100%;margin:0 auto 16px;padding:7px 14px;border:1px solid #2a6b3a;border-radius:999px;background:rgba(34,197,94,.08);color:#4ade80;font-size:14px;font-weight:700}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .secure-pill svg{width:14px;height:14px}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .method-card{display:flex;flex-direction:column;align-items:center;gap:2px;margin-bottom:14px;padding:14px 16px;border:1px solid #2a332c;border-radius:22px;background:#050906}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .method-icon{display:grid;place-items:center;width:54px;height:54px;margin-bottom:6px;border-radius:15px;background:#1f5f22;color:#fff;font-size:30px;font-weight:800;box-shadow:0 0 30px rgba(34,197,94,.25)}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .method-name{font-size:20px;font-weight:800;color:#fff}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .method-sub{font-size:14px;color:rgba(255,255,255,.6)}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .amount-text{color:#fff}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .amount-usd{display:block;margin-top:2px;text-align:center;font-size:13px;font-weight:700;letter-spacing:.2em;color:rgba(255,255,255,.6)}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .keypad{gap:10px}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .key{font-size:28px}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .key-backspace{color:#3ddc6f}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .pay-btn{background:#1f8a3c;color:#fff;font-size:20px;border-radius:16px}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .pay-btn:disabled{background:#203326;color:rgba(255,255,255,.55)}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .resume-box{background:rgba(255,255,255,.06)}
+:is([data-layout="keypad"] body.checkout:not(.invoice),.theme-stage[data-layout="keypad"][data-stage="pay"]) .direct-note{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:#fff}
+
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) .checkout-head{display:none}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2:not([hidden]){display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-auto-flow:row dense;gap:14px 12px;align-items:center;padding:12px 16px 20px;background:transparent;border:0;box-shadow:none}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 :is(.invoice-top,.amount-due,.status-row,.pay-actions,.action-footer,.quick-actions){display:contents}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 :is(.merchant,.divider,.kicker,#refChip,#statusTimeline,#statusSync,.checkout-review-note,#payBtn,#otherWalletsBtn,.or-rule,.qr-actions,#rawRequest,#payHint,#shareInvoiceBtn,#copyLinkBtn){display:none}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 > *,
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 :is(.amount-value,#statusChip,.direct-note,#copyBtn,#cashAppBtn){grid-column:1/-1;margin:0}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #closeBtn{grid-column:1/3;grid-row:1;justify-self:start;width:56px;height:40px;border:0;border-radius:999px;background:#161616;color:#fff}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #timerPill{grid-column:3/5;grid-row:1;justify-self:center;padding:9px 16px;font-size:16px;font-weight:800;color:#fff;background:#161616;border:0}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #timerPill.urgent{background:rgba(255,69,58,.2);color:#ff6b60}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #timerPill::before{display:none}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #helpBtn{grid-column:5/7;grid-row:1;justify-self:end;padding:10px 16px;border-radius:12px;background:#161616;color:#fff;font-size:15px;font-weight:700;text-decoration:none}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) .inv-title{display:block;order:1;font-size:30px;line-height:1.15;font-weight:800;color:#fff}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 .amount-value{order:2;font-size:18px;font-weight:700;color:rgba(255,255,255,.7)}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 .direct-note{order:3}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #statusChip{order:4;justify-self:center;margin-top:6px;padding:0;background:transparent;border:0;color:rgba(255,255,255,.55);font-size:17px;font-weight:600}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #statusChip::before{display:none}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #statusChip[data-state="detected"]{color:#3ddc6f}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) .qr-link-button{order:5;justify-self:center;width:fit-content;max-width:100%;margin:0;padding:16px;border:1px solid #222;border-radius:30px;background:#0a0a0a}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) .inv-tip{display:block;order:6;padding:12px 14px;border:1px solid #242424;border-radius:16px;background:#0d0d0d;color:#e6e6e6;font-size:14px;line-height:1.5}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) .inv-tip .faint{color:rgba(255,255,255,.5)}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 #copyBtn{order:7;grid-column:1/4;padding:16px 10px;border:1px solid #333;background:#111;color:#fff;font-size:17px}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 #copyBtn.done{background:#1f8a3c;border-color:#1f8a3c;color:#fff}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 #cashAppBtn{order:7;grid-column:4/7;padding:16px 10px;border:0;background:#fff;color:#000;font-size:17px}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #cashAppBtn .ico-cash{display:none}
+:is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) .checkout-foot{display:none}

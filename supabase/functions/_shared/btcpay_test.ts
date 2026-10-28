@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { getPaymentDetailsWithRetry } from "./btcpay.ts";
+import { getPaymentDetailsWithRetry, invoiceRequest } from "./btcpay.ts";
 
 const cfg = { url: "https://btcpay.example.test", storeId: "cpay", apiKey: "unit-test-placeholder" };
 const url = "https://btcpay.example.test/api/v1/stores/cpay/invoices/inv-1/payment-methods";
@@ -53,4 +53,21 @@ Deno.test("Boltpay parity: already-ready BOLT11 needs only one GET", async () =>
   const result = await getPaymentDetailsWithRetry(api.fetcher, cfg, "inv-1", 0);
   assertEquals(result.bolt11, "lnbc1ready");
   assertEquals(api.calls.length, 1);
+});
+
+Deno.test("CPAY BTC-LN request preserves the tested Boltpay Greenfield contract", () => {
+  const request = invoiceRequest({
+    paymentId: "11111111-1111-4111-8111-111111111111",
+    linkId: "22222222-2222-4222-8222-222222222222",
+    slug: "payment-link",
+    amountCents: 515,
+    expiresMinutes: 5,
+    lightningOnly: true,
+  });
+  assertEquals(request.amount, "5.15");
+  assertEquals(request.currency, "USD");
+  assertEquals(request.checkout, {
+    expirationMinutes: 5, paymentMethods: ["BTC-LN"], defaultPaymentMethod: "BTC-LN",
+  });
+  assertEquals(request.metadata.cpayPaymentId, "11111111-1111-4111-8111-111111111111");
 });

@@ -11,9 +11,10 @@
 //      withdrawal limit left) and noted for Admin → Settings, even while off.
 //      Off, or no Lightning address on the primary CPAY wallet: nothing more.
 //   3. A key without Blink's WRITE scope cannot send: recorded, skipped.
-//   4. Move = USD balance − "keep", capped at "largest move" and at what
-//      Blink still lets the account withdraw in its rolling 24 hours; below
-//      "smallest move" nothing happens.
+//   4. Move = USD balance − "keep" (and at most what Blink still lets the
+//      account withdraw in its rolling 24 hours), less a reserve for Blink's
+//      fee (feeReserveCents), capped at "largest move"; below "smallest
+//      move" nothing happens.
 //   5. The invoice comes from the primary CPAY wallet's own Lightning
 //      address (read from the database, never typed in), is checked
 //      (network, exact amount, description hash, expiry), recorded, then
@@ -100,9 +101,20 @@ export function outcome(s: PayStatus): SweepStatus {
   return s === "SUCCESS" || s === "ALREADY_PAID" ? "sent" : s === "PENDING" ? "pending" : "failed";
 }
 
+/**
+ * Cents left in Blink for its own send fee and rate. Blink takes the fee
+ * from the same USD wallet and converts at its own price, so moving the
+ * whole balance fails: 2026-10-28, a 118-cent balance and a 118-cent move
+ * ("Payment amount '119' cents exceeds balance '118'"), every 10 minutes.
+ */
+export function feeReserveCents(availableCents: number): number {
+  return Math.max(3, Math.ceil(availableCents * 0.01));
+}
+
 /** How much to move now, in cents (0 = nothing). remaining = Blink's withdrawal limit left (null = none). */
 export function moveCents(balanceCents: number, c: Pick<SweepConfig, "keepCents" | "minCents" | "maxCents">, remaining: number | null = null): number {
-  const amount = Math.min(balanceCents - c.keepCents, c.maxCents, remaining ?? Infinity);
+  const available = Math.min(balanceCents - c.keepCents, remaining ?? Infinity);
+  const amount = Math.min(available - feeReserveCents(available), c.maxCents);
   return amount >= Math.max(c.minCents, 1) ? amount : 0;
 }
 

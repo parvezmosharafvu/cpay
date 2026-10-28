@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  createHandler, type Deps, moveCents, outcome, type OpenSweep, type Receiving, roomCents, run, type Seen, STALE_AFTER_MS, switchTarget,
+  createHandler, type Deps, feeReserveCents, moveCents, outcome, type OpenSweep, type Receiving, roomCents, run, type Seen, STALE_AFTER_MS, switchTarget,
 } from "./handler.ts";
 import { blinkAccounts, blinkConfig, type UsdWallet } from "../_shared/blink.ts";
 import type { Bolt11 } from "../_shared/bolt11.ts";
@@ -65,17 +65,21 @@ Deno.test("no Blink key: nothing happens", async () => {
   assertEquals(calls.pay.length, 0);
 });
 
-Deno.test("move amount: balance minus keep, capped, Blink's limit left, below the minimum is nothing", () => {
+Deno.test("move amount: balance minus keep and Blink's fee reserve, capped, Blink's limit left, below the minimum is nothing", () => {
   const c = { keepCents: 0, minCents: 500, maxCents: 20_000 };
-  assertEquals(moveCents(10_000, c), 10_000);
-  assertEquals(moveCents(10_000, { ...c, keepCents: 2_000 }), 8_000);
+  assertEquals(moveCents(10_000, c), 9_900);
+  assertEquals(moveCents(10_000, { ...c, keepCents: 2_000 }), 7_920);
   assertEquals(moveCents(90_000, c), 20_000);
   assertEquals(moveCents(2_400, { ...c, keepCents: 2_000 }), 0);
   assertEquals(moveCents(-50, { ...c, minCents: 0 }), 0);
   assertEquals(moveCents(0, { ...c, minCents: 0 }), 0);
-  assertEquals(moveCents(10_000, c, 3_000), 3_000);
+  assertEquals(moveCents(10_000, c, 3_000), 2_970);
   assertEquals(moveCents(10_000, c, 400), 0);
-  assertEquals(moveCents(10_000, c, null), 10_000);
+  assertEquals(moveCents(10_000, c, null), 9_900);
+  // 2026-10-28: a 118-cent balance must not be moved whole (Blink charged 119).
+  assertEquals(moveCents(118, { ...c, minCents: 100 }), 115);
+  assertEquals(feeReserveCents(118), 3);
+  assertEquals(feeReserveCents(20_000), 200);
 });
 
 Deno.test("status mapping", () => {
@@ -91,13 +95,13 @@ Deno.test("sweep: invoice from the primary wallet's address for 98% of the estim
   const base = { ...d };
   d.begin = (b) => { order.push("begin"); return base.begin(b); };
   d.pay = (a, w, b) => { order.push("pay"); return base.pay(a, w, b); };
-  assertEquals(await one(d), { id: "sweep-1", status: "sent", amountCents: 10_000, amountSat: 98_000 });
-  assertEquals(calls.invoice, [["cpay@breez.tips", 98_000_000n]]);
+  assertEquals(await one(d), { id: "sweep-1", status: "sent", amountCents: 9_900, amountSat: 97_020 });
+  assertEquals(calls.invoice, [["cpay@breez.tips", 97_020_000n]]);
   assertEquals(order, ["begin", "pay"]);
   assertEquals(calls.pay, [["1", "usd-1", "lnbc1test1"]]);
   assertEquals(calls.finish, [["sweep-1", "sent", null]]);
   assertEquals(calls.notes, [["1", "sent"]]);
-  assert(calls.alerts[0].includes("$100.00") && calls.alerts[0].includes("Blink #1"));
+  assert(calls.alerts[0].includes("$99.00") && calls.alerts[0].includes("Blink #1"));
 });
 
 Deno.test("several accounts: each is swept with its own wallet and invoice; one failing never stops the others", async () => {
@@ -107,14 +111,14 @@ Deno.test("several accounts: each is swept with its own wallet and invoice; one 
   const out = (await run(d)).accounts as Record<string, Record<string, unknown>>;
   assertEquals(out["1"], { error: "Blink answered 401" });
   assertEquals(out["2"].amountCents, 20_000);
-  assertEquals(out["3"].amountCents, 10_000);
+  assertEquals(out["3"].amountCents, 9_900);
   assertEquals(calls.pay, [["2", "usd-2", "lnbc1test1"], ["3", "usd-3", "lnbc1test2"]]);
   assertEquals(calls.notes[0], ["1", "error: Blink answered 401"]);
 });
 
 Deno.test("Blink's 24-hour withdrawal limit caps the move; none left is noted as daily_limit", async () => {
   let { d, calls } = deps({}, { wallets: { "1": { withdrawRemainingCents: 6_000 } } });
-  assertEquals((await one(d)).amountCents, 6_000);
+  assertEquals((await one(d)).amountCents, 5_940);
   ({ d, calls } = deps({}, { wallets: { "1": { withdrawRemainingCents: 0 } } }));
   assertEquals((await one(d)).skipped, "daily_limit");
   assertEquals(calls.notes, [["1", "daily_limit"]]);

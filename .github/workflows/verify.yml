@@ -463,6 +463,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/passkey_step_up_test.sql
+      - name: Auto approval switch needs a strong admin session and is audited (20261028030000)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/auto_approval_switch_test.sql
       - name: Forwards record their saved wallet, payment id and audit rows (20261021070000)
         env:
           PGPASSWORD: postgres

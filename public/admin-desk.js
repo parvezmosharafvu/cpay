@@ -275,7 +275,10 @@ async function renderApps() {
   if (!el) return;
   const version = ++applicationReadVersion;
   el.innerHTML = typeof deskSkeleton === 'function' ? deskSkeleton(3) : '<p>Loading…</p>';
-  const { data, error } = await adminPanelRead(() => sb.rpc('admin_list_account_applications', { p_status: null }));
+  const [{ data, error }, autoRead] = await Promise.all([
+    adminPanelRead(() => sb.rpc('admin_list_account_applications', { p_status: null })),
+    sb.rpc('cpay_auto_approval_enabled', { p_role: 'freelancer' }),
+  ]);
   if (version !== applicationReadVersion) return;
   if (error) { adminPanelError(el, error.message, renderApps); return; }
   const all = data || [];
@@ -293,8 +296,38 @@ async function renderApps() {
   document.getElementById('applicationApply').onclick = renderApps;
   document.getElementById('applicationRefresh').onclick = renderApps;
   document.getElementById('applicationClear').onclick = () => { applicationFilter = { status: '', search: '' }; renderApps(); };
+  if (!autoRead.error) el.prepend(autoApprovalCard(autoRead.data === true));
   el.querySelectorAll('[data-approve]').forEach(b => { b.onclick = () => review(b.dataset.approve, 'approved'); });
   el.querySelectorAll('[data-reject]').forEach(b => { b.onclick = () => review(b.dataset.reject, 'rejected'); });
+}
+function autoApprovalCard(on) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const label = document.createElement('label');
+  label.className = 'switch';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.id = 'autoApprove';
+  input.checked = on;
+  input.onchange = () => setAutoApproval(input);
+  label.append(input, ' Approve new sign-ups automatically');
+  const note = document.createElement('p');
+  note.className = 'section-note';
+  note.textContent = 'On: a new account is active as soon as it signs up. Off: it waits here for Approve. Accounts already waiting are not changed.';
+  card.append(label, note);
+  return card;
+}
+async function setAutoApproval(input) {
+  const on = input.checked;
+  input.disabled = true;
+  try {
+    const { error } = await sb.rpc('admin_set_auto_approval', { p_role: 'freelancer', p_enabled: on });
+    if (error) throw error;
+    toast(on ? 'New sign-ups are approved automatically' : 'New sign-ups wait for approval', true);
+  } catch (error) {
+    input.checked = !on;
+    toast(error.message || 'The change could not be confirmed. Refresh before trying again.');
+  } finally { input.disabled = false; }
 }
 async function review(id, status) {
   if (applicationBusy.has(id)) return;

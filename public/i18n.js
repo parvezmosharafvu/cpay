@@ -417,32 +417,15 @@
     'Save payment mode': 'পেমেন্ট মোড সংরক্ষণ করুন', 'Balance': 'ব্যালেন্স', 'Instant forward': 'তাৎক্ষণিক ফরোয়ার্ড',
     'Direct (no fee)': 'সরাসরি (ফি নেই)', 'Legal pages': 'আইনি পাতা', 'Wallet link': 'ওয়ালেট লিংক',
     'Settings changes': 'সেটিংস পরিবর্তনের ইতিহাস', 'No changes yet': 'এখনো কোনো পরিবর্তন নেই',
-    // Blink sweep (Admin → Settings)
-    'Blink sweep': 'Blink সুইপ', 'No moves yet': 'এখনো কিছু সরানো হয়নি', 'Note': 'নোট',
-    'Sending': 'পাঠানো হচ্ছে', 'Sent': 'পাঠানো হয়েছে', 'Failed': 'ব্যর্থ', 'Check in Blink': 'Blink-এ দেখে নিন',
-    'Blink sweep: USD to leave in Blink': 'Blink সুইপ: Blink-এ কত USD রেখে দেবে',
-    'Blink sweep: smallest move (USD)': 'Blink সুইপ: সবচেয়ে কম কত সরাবে (USD)',
-    'The primary CPAY wallet has no Lightning address, so nothing is moved.': 'Primary CPAY wallet-এর কোনো Lightning address নেই, তাই কিছু সরানো হবে না।',
-    'Add one Blink API key (Read and Write) per Blink account in Secrets & keys: BLINK_API_KEY, then BLINK_API_KEY_2 up to BLINK_API_KEY_10. Each account is moved separately, up to its own Blink daily withdrawal limit. Runs every 10 minutes.': 'প্রতিটা Blink account-এর জন্য একটা করে API key (Read ও Write) Secrets & keys-এ বসান: BLINK_API_KEY, তারপর BLINK_API_KEY_2 থেকে BLINK_API_KEY_10। প্রতিটা account আলাদাভাবে, তার নিজের Blink দৈনিক withdraw limit পর্যন্ত সরানো হয়। প্রতি ১০ মিনিটে চলে।',
-    'Blink accounts': 'Blink account-গুলো', 'Moves': 'সরানো টাকা', 'Key': 'কী', 'USD balance': 'USD ব্যালেন্স', 'Can send': 'পাঠাতে পারে',
-    'Blink limit left (24 h)': 'Blink limit বাকি (২৪ ঘণ্টা)', 'Moved (24 h)': 'সরানো হয়েছে (২৪ ঘণ্টা)', 'Last check': 'শেষ যাচাই',
-    'No limit reported': 'কোনো limit জানানো হয়নি', 'Sweep is off': 'সুইপ বন্ধ', 'Key cannot send: needs Write': 'এই key পাঠাতে পারে না: Write অনুমতি লাগবে',
-    'Blink daily limit reached': 'Blink-এর দৈনিক limit শেষ', 'Below the smallest move': 'সবচেয়ে কম পরিমাণের নিচে', 'No CPAY address': 'CPAY ঠিকানা নেই',
-    'Moved': 'সরানো হয়েছে', 'Move failed': 'সরানো ব্যর্থ', 'Move pending': 'সরানো অপেক্ষমাণ',
-    'No Blink key seen yet. Add BLINK_API_KEY and wait up to 10 minutes.': 'এখনো কোনো Blink key দেখা যায়নি। BLINK_API_KEY বসিয়ে ১০ মিনিট পর্যন্ত অপেক্ষা করুন।',
-    'BTCPay receive switch: when the Blink account BTCPay pays into has little daily withdrawal limit left, point BTCPay at the Blink account with the most limit left': 'BTCPay receive switch: BTCPay যে Blink account-এ টাকা নেয় তার দৈনিক withdraw limit কমে এলে, BTCPay-কে সবচেয়ে বেশি limit বাকি থাকা Blink account-এ বদলে দেবে',
-    'BTCPay receive switch: switch when the receiving account has less than this withdrawal limit left (USD)': 'BTCPay receive switch: টাকা নেওয়া account-এর withdraw limit এর চেয়ে কম বাকি থাকলে বদলাবে (USD)',
-    'BTCPay receiving account': 'BTCPay যে Blink account-এ টাকা নেয়', 'BTCPay pays into': 'BTCPay এখন টাকা নিচ্ছে',
-    'Enough limit left': 'যথেষ্ট limit বাকি আছে', 'Limit low: the switch is off': 'Limit কম, কিন্তু switch বন্ধ',
-    'Limit low: no other account has enough limit left': 'Limit কম, কিন্তু অন্য কোনো account-এ যথেষ্ট limit বাকি নেই',
-    'Switched less than 30 minutes ago': '৩০ মিনিটের মধ্যে একবার বদলানো হয়েছে', 'Switched': 'বদলানো হয়েছে', 'Switching': 'বদলানো হচ্ছে',
-    'Switch failed': 'বদলানো যায়নি', 'Check BTCPay Lightning settings': 'BTCPay-এর Lightning settings দেখুন',
-    'BTCPay pays into a Blink account CPAY has no key for': 'BTCPay এমন একটা Blink account-এ টাকা নিচ্ছে যার key CPAY-তে নেই',
-    'Not read this run': 'এই run-এ পড়া হয়নি',
-    'BTCPay holds a Blink key that can spend. Add a Read + Receive key as BLINK_RECEIVE_KEY (or _2 …) for that account.': 'BTCPay-তে এমন Blink key আছে যেটা দিয়ে টাকা পাঠানো যায়। ওই account-এর জন্য Read + Receive key BLINK_RECEIVE_KEY (বা _2 …) নামে যোগ করুন।',
-    'Not read yet. The BTCPay API key (BTCPAY_API_KEY) needs Modify store settings on the cpay store to see and switch which Blink account BTCPay pays into.': 'এখনো পড়া হয়নি। BTCPay কোন Blink account-এ টাকা নেয় তা দেখতে ও বদলাতে BTCPay API key (BTCPAY_API_KEY)-এ cpay store-এর Modify store settings অনুমতি লাগবে।',
-    'With the switch on, when the Blink account BTCPay pays into has less withdrawal limit left than the amount set above, CPAY points BTCPay at the Blink account with the most limit left (at most once every 30 minutes). Invoices still open on the old account are checked by CPAY for two days, so none are missed.': 'Switch চালু থাকলে, BTCPay যে Blink account-এ টাকা নেয় তার withdraw limit ওপরের অঙ্কের চেয়ে কম বাকি থাকলে CPAY BTCPay-কে সবচেয়ে বেশি limit বাকি থাকা Blink account-এ বদলে দেয় (৩০ মিনিটে একবারের বেশি নয়)। পুরনো account-এ খোলা invoice-গুলো CPAY দুই দিন ধরে নিজে দেখে, তাই কোনো পেমেন্ট বাদ পড়ে না।',
-    'No BTCPay switches yet': 'এখনো BTCPay বদলানো হয়নি', 'Payments recorded after a switch': 'বদলের পর CPAY নিজে যে পেমেন্ট ধরেছে', 'None yet': 'এখনো কিছু নেই',
+    // Payment-provider settings phrases are in admin-platform-settings.js (CPAY_BN_EXTRA), not here: this file also loads on public pages.
+    'No moves yet': 'এখনো কিছু সরানো হয়নি', 'Note': 'নোট', 'Sending': 'পাঠানো হচ্ছে', 'Sent': 'পাঠানো হয়েছে',
+    'Failed': 'ব্যর্থ', 'The primary CPAY wallet has no Lightning address, so nothing is moved.': 'Primary CPAY wallet-এর কোনো Lightning address নেই, তাই কিছু সরানো হবে না।', 'Moves': 'সরানো টাকা', 'Key': 'কী',
+    'USD balance': 'USD ব্যালেন্স', 'Can send': 'পাঠাতে পারে', 'Moved (24 h)': 'সরানো হয়েছে (২৪ ঘণ্টা)', 'Last check': 'শেষ যাচাই',
+    'No limit reported': 'কোনো limit জানানো হয়নি', 'Sweep is off': 'সুইপ বন্ধ', 'Key cannot send: needs Write': 'এই key পাঠাতে পারে না: Write অনুমতি লাগবে', 'Below the smallest move': 'সবচেয়ে কম পরিমাণের নিচে',
+    'No CPAY address': 'CPAY ঠিকানা নেই', 'Moved': 'সরানো হয়েছে', 'Move failed': 'সরানো ব্যর্থ', 'Move pending': 'সরানো অপেক্ষমাণ',
+    'Enough limit left': 'যথেষ্ট limit বাকি আছে', 'Limit low: the switch is off': 'Limit কম, কিন্তু switch বন্ধ', 'Limit low: no other account has enough limit left': 'Limit কম, কিন্তু অন্য কোনো account-এ যথেষ্ট limit বাকি নেই', 'Switched less than 30 minutes ago': '৩০ মিনিটের মধ্যে একবার বদলানো হয়েছে',
+    'Switched': 'বদলানো হয়েছে', 'Switching': 'বদলানো হচ্ছে', 'Switch failed': 'বদলানো যায়নি', 'Not read this run': 'এই run-এ পড়া হয়নি',
+    'Payments recorded after a switch': 'বদলের পর CPAY নিজে যে পেমেন্ট ধরেছে', 'None yet': 'এখনো কিছু নেই',
     'Features': 'ফিচার চালু/বন্ধ', 'Domains': 'ডোমেইন', 'Secrets & keys': 'গোপন কী ও টোকেন', 'Cloudflare': 'Cloudflare',
     'Domain': 'ডোমেইন', 'Purpose': 'কাজ', 'Add domain': 'ডোমেইন যোগ করুন', 'Turn on': 'চালু করুন', 'Turn off': 'বন্ধ করুন',
     'Main site': 'মূল সাইট', 'Payment links and site': 'পেমেন্ট লিংক ও সাইট', 'Payment links only': 'শুধু পেমেন্ট লিংক',
@@ -924,8 +907,14 @@
     "Minimum Lightning withdrawal is $1": "Lightning-এ সর্বনিম্ন উত্তোলন $1",
     "Enter an amount": "পরিমাণ লিখুন",
     "Sent. The Lightning payment is on its way.": "পাঠানো হয়েছে। Lightning পেমেন্ট পথে আছে।",
-    "365 days": "৩৬৫ দিন"
+    "365 days": "৩৬৫ দিন",
+    "Approve new sign-ups automatically": "নতুন সাইন-আপ নিজে থেকেই অনুমোদন করুন",
+    "On: a new account is active as soon as it signs up. Off: it waits here for Approve. Accounts already waiting are not changed.": "চালু: নতুন account সাইন-আপ করার সাথে সাথেই চালু হয়। বন্ধ: এখানে Approve-এর জন্য অপেক্ষা করে। যারা আগে থেকে অপেক্ষায় আছে তাদের কিছু বদলায় না।",
+    "New sign-ups are approved automatically": "নতুন সাইন-আপ এখন নিজে থেকেই অনুমোদিত হবে",
+    "New sign-ups wait for approval": "নতুন সাইন-আপ এখন অনুমোদনের অপেক্ষায় থাকবে"
   };
+  // Admin-only phrases a page script registered before this file loaded.
+  Object.assign(BN, window.CPAY_BN_EXTRA || {});
   const KEY = 'cpay-lang';
   let lang = 'en';
   try { lang = localStorage.getItem(KEY) === 'bn' ? 'bn' : 'en'; } catch { /* private mode */ }

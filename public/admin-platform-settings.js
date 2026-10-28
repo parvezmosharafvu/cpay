@@ -29,6 +29,12 @@
     'Not read yet. The BTCPay API key (BTCPAY_API_KEY) needs Modify store settings on the cpay store to see and switch which Blink account BTCPay pays into.': 'এখনো পড়া হয়নি। BTCPay কোন Blink account-এ টাকা নেয় তা দেখতে ও বদলাতে BTCPay API key (BTCPAY_API_KEY)-এ cpay store-এর Modify store settings অনুমতি লাগবে।',
     'With the switch on, when the Blink account BTCPay pays into has less withdrawal limit left than the amount set above, CPAY points BTCPay at the Blink account with the most limit left (at most once every 30 minutes). Invoices still open on the old account are checked by CPAY for two days, so none are missed.': 'Switch চালু থাকলে, BTCPay যে Blink account-এ টাকা নেয় তার withdraw limit ওপরের অঙ্কের চেয়ে কম বাকি থাকলে CPAY BTCPay-কে সবচেয়ে বেশি limit বাকি থাকা Blink account-এ বদলে দেয় (৩০ মিনিটে একবারের বেশি নয়)। পুরনো account-এ খোলা invoice-গুলো CPAY দুই দিন ধরে নিজে দেখে, তাই কোনো পেমেন্ট বাদ পড়ে না।',
     'No BTCPay switches yet': 'এখনো BTCPay বদলানো হয়নি',
+    'Blink sweep (Blink → CPAY) is': 'Blink সুইপ (Blink → CPAY) এখন',
+    'On: every 10 minutes the Blink USD balance is moved into the primary CPAY wallet.': 'চালু: প্রতি ১০ মিনিটে Blink-এর USD balance প্রধান CPAY wallet-এ সরানো হয়।',
+    'Off: nothing is moved and the money stays in Blink. A move already in flight is left as it is. The BTCPay receive switch also stops while this is off.': 'বন্ধ: কিছুই সরানো হয় না, টাকা Blink-এই থাকে। যে move আগেই শুরু হয়েছে সেটা যেমন আছে তেমন থাকে। এটা বন্ধ থাকলে BTCPay receive switch-ও থেমে থাকে।',
+    'Amounts, accounts and the move log are under Blink sweep further down.': 'অঙ্ক, account-গুলো আর move-এর তালিকা নিচে Blink সুইপ অংশে আছে।',
+    'Turn on the Blink sweep? Every 10 minutes the Blink USD balance is moved into the primary CPAY wallet.': 'Blink সুইপ চালু করবেন? প্রতি ১০ মিনিটে Blink-এর USD balance প্রধান CPAY wallet-এ সরানো হবে।',
+    'Turn off the Blink sweep? Nothing more is moved from Blink to CPAY until you turn it on again, and the BTCPay receive switch stops too.': 'Blink সুইপ বন্ধ করবেন? আবার চালু না করা পর্যন্ত Blink থেকে CPAY-তে আর কিছু সরানো হবে না, আর BTCPay receive switch-ও থেমে যাবে।',
   });
   const client = window.supabaseClient;
   const host = () => document.getElementById('platformSettings');
@@ -211,8 +217,28 @@
   let lockState = false;
   // manualState: manual payouts only (20261028050000); null when unreadable.
   let manualState = false;
+  // sweepRow: the blink_sweep_enabled setting row (docs/BLINK-SWEEP.md), or
+  // undefined when the setting is not there.
+  let sweepRow;
   function modeHtml(row) {
-    return manualHtml() + autoHtml(row);
+    return manualHtml() + autoHtml(row) + sweepHtml();
+  }
+  // Blink sweep on/off, the same switch as Blink sweep → blink_sweep_enabled
+  // further down (admin_set_platform_setting, aal2, audited). Static
+  // markup; wireMode() fills in the state.
+  function sweepHtml() {
+    if (!sweepRow) return '';
+    return `<h3>${esc(tr('Blink sweep'))}</h3>
+      <div class="card" id="blinkSweepCard">
+        <p><span>${esc(tr('Blink sweep (Blink → CPAY) is'))}</span> <strong id="bsState"></strong></p>
+        <p class="muted">${esc(tr('On: every 10 minutes the Blink USD balance is moved into the primary CPAY wallet.'))}</p>
+        <p class="muted">${esc(tr('Off: nothing is moved and the money stays in Blink. A move already in flight is left as it is. The BTCPay receive switch also stops while this is off.'))}</p>
+        <div class="row" role="group" aria-label="Blink sweep">
+          <button type="button" class="btn ghost" id="bsOn">Turn on</button>
+          <button type="button" class="btn ghost" id="bsOff">Turn off</button>
+        </div>
+        <p class="faint">${esc(tr('Amounts, accounts and the move log are under Blink sweep further down.'))}</p>
+        <div class="faint" id="bsStatus" role="status"></div></div>`;
   }
   function manualHtml() {
     if (manualState === null) return `<h3>Payouts</h3>
@@ -297,6 +323,20 @@
     const lockBtn = el.querySelector('#awLock'); const unlockBtn = el.querySelector('#awUnlock');
     if (lockBtn) lockBtn.onclick = () => lock(true);
     if (unlockBtn) unlockBtn.onclick = () => lock(false);
+    const sweepOn = sweepRow?.value === true;
+    const sweep = async (on) => {
+      const st = el.querySelector('#bsStatus');
+      const msg = on
+        ? 'Turn on the Blink sweep? Every 10 minutes the Blink USD balance is moved into the primary CPAY wallet.'
+        : 'Turn off the Blink sweep? Nothing more is moved from Blink to CPAY until you turn it on again, and the BTCPay receive switch stops too.';
+      if (!window.confirm(tr(msg))) return;
+      if (await commit(() => client.rpc('admin_set_platform_setting', { p_key: 'blink_sweep_enabled', p_value: on }), st)) render();
+    };
+    const bsOn = el.querySelector('#bsOn'); const bsOff = el.querySelector('#bsOff');
+    const bsState = el.querySelector('#bsState');
+    if (bsState) bsState.textContent = tr(sweepOn ? 'On' : 'Off');
+    if (bsOn) { bsOn.disabled = sweepOn; bsOn.classList.toggle('primary', sweepOn); bsOn.classList.toggle('ghost', !sweepOn); bsOn.onclick = () => sweep(true); }
+    if (bsOff) { bsOff.disabled = !sweepOn; bsOff.classList.toggle('primary', !sweepOn); bsOff.classList.toggle('ghost', sweepOn); bsOff.onclick = () => sweep(false); }
   }
   async function feeHtml() {
     const { data, error } = await adminPanelRead(() => client.from('app_settings').select('value').eq('key', 'default_platform_fee_percent').maybeSingle());
@@ -344,6 +384,7 @@
     if (mine !== seq) return;  // a newer render is under way
     if (error) { adminPanelError(el, error.message, render); return; }
     const byKey = Object.fromEntries((data || []).map((r) => [r.key, r]));
+    sweepRow = byKey.blink_sweep_enabled;
     el.innerHTML = `<div class="card-head"><h2>Settings</h2><button id="psRefresh" type="button" class="btn ghost">Refresh settings</button></div><p class="faint">Edits stay in this page until saved. Each Save changes only its own setting.</p>
       <p class="muted">Changes need two-step sign-in and are recorded below. Settings marked ⚠ ask for confirmation.</p>
       ${modeHtml(byKey.payment_mode)}

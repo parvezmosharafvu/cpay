@@ -4,6 +4,7 @@ import { adminMfaHealth } from "../_shared/admin-mfa.ts";
 import { secretMatches } from "../_shared/secret-compare.ts";
 import { configuredCronSecret } from "../_shared/scoped-cron-secret.mjs";
 import { lastSyncedDetail } from "./synced.ts";
+import { probeProvider, providerFailure } from "./provider.ts";
 
 /**
 * CPAY — health monitor
@@ -128,29 +129,17 @@ Deno.serve(async (req) => {
   if (!serviceUrl || !serviceSecret) {
     checks.push({ name: "payment_provider", ok: false, detail: "PAYMENT_SERVICE_URL or PAYMENT_SERVICE_SECRET is not set" });
   } else {
-    try {
-      // /health is unauthenticated on the service; the secret is not sent.
-      const res = await fetch(`${serviceUrl}/health`, {
-        signal: AbortSignal.timeout(10000),
-      });
-      const body = await res.json().catch(() => ({}));
-      // The service's /health does not carry a sync time; the wallet
-      // function records it per wallet in breez_wallet.wallet_status.
-      let synced = "last sync time unavailable";
-      if (res.ok) {
-        const { data: reg, error: regErr } = await supabase.rpc("wallet_registry_list");
-        if (!regErr) synced = lastSyncedDetail(reg, now);
-      }
-      checks.push({
-        name: "payment_provider",
-        ok: res.ok && body.ok === true,
-        detail: res.ok
-          ? synced
-          : `payment service answered ${res.status}: db=${body.db} sdk=${body.sdkConnected} synced=${body.synced} shuttingDown=${body.shuttingDown}`,
-      });
-    } catch (e) {
-      checks.push({ name: "payment_provider", ok: false, detail: `payment service unreachable: ${e}` });
+    // /health is unauthenticated on the service; the secret is not sent.
+    // Asked again once after 5 s before it counts as down (provider.ts).
+    const probe = await probeProvider(fetch, serviceUrl);
+    // The service's /health does not carry a sync time; the wallet
+    // function records it per wallet in breez_wallet.wallet_status.
+    let synced = "last sync time unavailable";
+    if (probe.ok) {
+      const { data: reg, error: regErr } = await supabase.rpc("wallet_registry_list");
+      if (!regErr) synced = lastSyncedDetail(reg, now);
     }
+    checks.push({ name: "payment_provider", ok: probe.ok, detail: probe.ok ? synced : providerFailure(probe) });
   }
 
   // ---------- 3. Is cron still running? ----------

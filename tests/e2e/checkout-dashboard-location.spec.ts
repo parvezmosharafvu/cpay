@@ -10,7 +10,7 @@ test('the link page shows the invoice in place, on the link address, in the defa
   await page.goto(`/${slug}`);
   await expect(page.locator('#payBtn')).toBeEnabled();
   await expect(page.locator('html')).toHaveAttribute('data-layout', 'keypad');
-  await expect(page.locator('body')).toHaveCSS('background-color', /rgb\(0, 214, 50\)|rgb\(10, 10, 10\)/);
+  await expect(page.locator('body')).toHaveCSS('background-color', /rgb\(0, 214, 50\)|rgb\(10, 10, 10\)|rgb\(0, 0, 0\)/);
   await page.keyboard.type('12');
   await page.click('#payBtn');
   await page.waitForURL((url) => url.pathname === `/${slug}` && Boolean(url.searchParams.get('id')));

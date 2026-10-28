@@ -338,7 +338,7 @@ function applyWalletMode(){
 
 /* ---------- status ---------- */
 const STATUS_TEXT = {
-  waiting: 'Waiting for payment',
+  waiting: 'Awaiting payment…',
   detected: 'Payment detected · confirming',
 };
 function setStatus(state){
@@ -449,7 +449,7 @@ async function copyAddress(){
   if (!ok){ toast('Could not copy. Open "Show payment request" and copy it by hand.'); el('rawRequest').open = true; return; }
   btn.textContent = 'Copied';
   btn.classList.add('done');
-  setTimeout(() => { btn.textContent = 'Copy payment request'; btn.classList.remove('done'); }, 2000);
+  setTimeout(() => { btn.textContent = 'Copy address'; btn.classList.remove('done'); }, 2000);
 }
 
 async function copyRefChip(){
@@ -592,7 +592,7 @@ function updateTimerPill(t){
   const m = Math.floor(t/60), s = t%60;
   const pill = el('timerPill');
   pill.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  pill.classList.toggle('urgent', t < 300);
+  pill.classList.toggle('urgent', t < 60);
   pill.setAttribute('aria-label', `Expires in ${m} minutes ${s} seconds`);
 }
 

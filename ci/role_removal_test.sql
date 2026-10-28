@@ -155,7 +155,8 @@ begin
   perform admin_set_role('5c000000-0000-0000-0000-0000000000fb', 'admin');
   perform admin_set_role('5c000000-0000-0000-0000-0000000000fb', 'creator');
   perform admin_update_account_control('5c000000-0000-0000-0000-0000000000fb', 'creator', 'active');
-  perform admin_set_auto_approval('freelancer', false);
+  -- Since 20261028030000 the switch needs a passkey/aal2 session (ci/auto_approval_switch_test.sql).
+  perform pg_temp.refused($q$select admin_set_auto_approval('freelancer', false)$q$, 'Sign in again with your passkey%');
   raise notice 'ok: admins set creator/admin only; reseller toggles unknown';
 end $$;
 reset role;

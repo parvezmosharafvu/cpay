@@ -207,3 +207,24 @@ Public layouts/smoke and wallet browser suites now have local Chromium evidence 
 ## Proposed payment-link rebuild (not deployed)
 
 The owner-supplied future payment-link requirements are compared with the current system in [PAYLINK-GAP.md](PAYLINK-GAP.md). This is a **read-only M0 gap audit**, not a change to the running receiving, fee, settlement or payout behavior. Owner decisions and separate reviewed PRs are required before implementation.
+
+## Payment-link M1 registration changes (code pending rollout)
+
+The payment-link rebuild's first implementation branch adds full name, phone
+(international `+digits` format), an optional Telegram username without
+`@`, and password confirmation to the registration page. New signup metadata
+is stored on the owner's `profiles` row; admins can inspect the contact
+fields only through the guarded applications listing. Phone and Telegram
+values are not independently verified. Historical profiles without those
+fields remain valid.
+
+M1 intentionally disables automatic new-account approval, including the
+legacy admin switch. New applicants stay `pending` until an admin reviews
+them. Existing user roles and account states are unchanged. Profile contact
+fields are not added to the self-service update grant. This is an application
+workflow change only: wallet, payment, fee and withdrawal logic stays as-is.
+
+**Deployment dependency:** add and verify migration
+`20261030010000_paylink_registration_approval.sql` before publishing the
+updated registration/admin pages. Do not claim M1 behavior is live until
+migration, site rollout and staging checks succeed. See [PAYLINK-GAP.md](PAYLINK-GAP.md).

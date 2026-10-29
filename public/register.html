@@ -106,9 +106,12 @@
           <label class="choice-opt"><input type="radio" name="accountType" value="business"><span><strong>Business / Organization</strong><span class="faint">A company, shop or organization</span></span></label>
         </fieldset>
         <div class="field" id="businessField" hidden><label for="businessName">Business or organization name</label><input id="businessName" autocomplete="organization" maxlength="120" aria-describedby="businessHint"><p class="hint" id="businessHint">Shown to the admin who reviews your account.</p></div>
-        <div class="field"><label for="displayName">Display name</label><input id="displayName" autocomplete="name"></div>
+        <div class="field"><label for="displayName">Full name</label><input id="displayName" autocomplete="name" maxlength="80" required></div>
+        <div class="field"><label for="phone">Phone (international format)</label><input id="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="16" placeholder="+8801XXXXXXXXX" required></div>
+        <div class="field"><label for="telegramUsername">Telegram username (optional)</label><input id="telegramUsername" type="text" inputmode="text" autocomplete="off" maxlength="32" placeholder="username_without_at"></div>
         <div class="field"><label for="email">Email</label><input id="email" data-enter-submit="submitBtn" type="email" autocomplete="email" inputmode="email" required></div>
         <div class="field"><label for="password">Password</label><input id="password" data-enter-submit="submitBtn" type="password" autocomplete="new-password" aria-describedby="passwordHint" placeholder="At least 8 characters" minlength="8" required></div>
+        <div class="field"><label for="passwordConfirm">Confirm password</label><input id="passwordConfirm" data-enter-submit="submitBtn" type="password" autocomplete="new-password" minlength="8" required></div>
         <p class="hint" id="passwordHint">At least 8 characters. We send a link to confirm your email.</p>
         <div id="captchaBox" class="captcha-box"></div>
         <button class="btn primary block lg" id="submitBtn" type="button">Create account</button>
@@ -141,11 +144,21 @@ document.querySelectorAll('input[name="accountType"]').forEach((r) => r.addEvent
 document.getElementById('submitBtn').onclick = async () => {
   const displayName = document.getElementById('displayName').value.trim();
   const email = document.getElementById('email').value.trim();
+  const phone = document.getElementById('phone').value.trim();
+  const telegramUsername = document.getElementById('telegramUsername').value.trim();
   const password = document.getElementById('password').value;
+  const passwordConfirm = document.getElementById('passwordConfirm').value;
   const err = document.getElementById('errorMsg'); const ok = document.getElementById('successMsg');
   err.hidden = true; ok.hidden = true;
   if (!email || !password){ err.textContent='Email and password required.'; err.hidden=false; return; }
+  if (!displayName || displayName.length > 80){ err.textContent='Enter your full name (up to 80 characters).'; err.hidden=false; return; }
+  if (!/^\+[1-9][0-9]{6,14}$/.test(phone)){ err.textContent='Enter a phone number with country code, for example +8801XXXXXXXXX.'; err.hidden=false; return; }
+  if (telegramUsername && !/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(telegramUsername)){
+    err.textContent='Telegram username must be 5–32 letters, numbers or underscores, without @.';
+    err.hidden=false; return;
+  }
   if (password.length < 8){ err.textContent='Use at least 8 characters.'; err.hidden=false; return; }
+  if (password !== passwordConfirm){ err.textContent='Passwords do not match.'; err.hidden=false; return; }
   const accountType = accountTypeValue();
   const businessName = document.getElementById('businessName').value.trim();
   if (accountType === 'business' && (businessName.length < 2 || businessName.length > 120)) {
@@ -163,7 +176,8 @@ document.getElementById('submitBtn').onclick = async () => {
     try { captchaToken = window.cpayTurnstileToken ? await window.cpayTurnstileToken('register', { container: document.getElementById('captchaBox') }) : null; }
     catch (te) { err.textContent = te.message || 'Verification failed. Try again.'; err.hidden = false; btn.disabled = false; return; }
     // Profile metadata read by handle_new_user(); a business name only for a business.
-    const meta = { display_name: displayName || undefined, requested_role: 'freelancer', account_type: accountType, business_name: accountType === 'business' ? businessName : undefined };
+    const meta = { display_name: displayName, full_name: displayName, phone, telegram_username: telegramUsername || undefined,
+      requested_role: 'freelancer', account_type: accountType, business_name: accountType === 'business' ? businessName : undefined };
     ({ data, error } = await window.supabaseClient.auth.signUp({
       email, password,
       options: {

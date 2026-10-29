@@ -15,6 +15,15 @@ The payer and the freelancer see one figure: **"You receive X"**.
 
 ## Components
 
+### Proposed payment-link expansion (M0 audit, 2026-10-30)
+
+[PAYLINK-GAP.md](PAYLINK-GAP.md) compares the current source with the owner's
+new payment-link specification and lists the ordered M1–M12 implementation
+work. It is a plan, not deployed behavior: the LND path, creation-time
+commission snapshots and 19:00 settlement statements are not implemented by
+the audit. Existing checkout, fees, daily boundaries and payout rules below
+remain unchanged.
+
 | Part | Where | Notes |
 |---|---|---|
 | Static site | `public/` (no build step), served by Cloudflare Workers (`wrangler.jsonc`) | `404.html` + `invoice-view.js` = the one-page checkout/invoice for any slug |

@@ -180,6 +180,7 @@ async function renderPeople() {
     <div class="scroll"><table class="table rtable"><thead><tr><th>Account</th><th>Role</th><th>Status</th><th class="num">Links</th><th class="num">Platform fee</th><th class="num">Withdraw fee</th><th>Small payments</th><th>Wallet</th><th class="num">Available</th><th>Auto withdraw</th><th></th></tr></thead>
     <tbody>${rows || `<tr><td colspan="11">${typeof deskEmpty === 'function' ? deskEmpty('No accounts match', 'Clear filters or wait for applications.') : '<span class="empty">No accounts</span>'}</td></tr>`}</tbody></table></div>
   </div>`;
+  if (window.cpayAdminExtras) window.cpayAdminExtras.mountInvite();
   if (document.getElementById('peopleStatus')) document.getElementById('peopleStatus').value = statusFilter;
   document.getElementById('peopleRefresh')?.addEventListener('click', renderPeople);
   document.getElementById('peopleSearch')?.addEventListener('input', e => { peopleFilter.search = e.target.value; });

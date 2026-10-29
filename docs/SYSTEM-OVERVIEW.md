@@ -203,3 +203,7 @@ Wallet PWA balances and activity have independent read status, bounded waits and
 ## Local browser evidence — batch 13
 
 Public layouts/smoke and wallet browser suites now have local Chromium evidence recorded in [LOCAL-BROWSER-QA.md](LOCAL-BROWSER-QA.md). Login/register put the keyboard skip link before the language switch. The wallet real-SDK regtest build succeeds with locked dependencies installed. Signed-in section visual QA, Bengali typography, physical-device testing, live payment/authorization checks and release acceptance remain pending. No deployment or legal publication was performed.
+
+## Proposed payment-link rebuild (not deployed)
+
+The owner-supplied future payment-link requirements are compared with the current system in [PAYLINK-GAP.md](PAYLINK-GAP.md). This is a **read-only M0 gap audit**, not a change to the running receiving, fee, settlement or payout behavior. Owner decisions and separate reviewed PRs are required before implementation.

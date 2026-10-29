@@ -131,14 +131,14 @@ begin
   select p.role, p.account_status, a.status into r
     from profiles p join account_applications a on a.user_id = p.id
    where p.id = '5c000000-0000-0000-0000-0000000000e2';
-  if r.role <> 'creator' or r.account_status <> 'active' or r.status <> 'approved' then
-    raise exception 'auto-approved signup: %', row_to_json(r);
+  if r.role <> 'creator' or r.account_status <> 'pending' or r.status <> 'pending' then
+    raise exception 'legacy automatic-approval flag bypassed manual review: %', row_to_json(r);
   end if;
   if cpay_auto_approval_enabled('reseller') is distinct from cpay_auto_approval_enabled('freelancer') then
     raise exception 'auto-approval still depends on the role';
   end if;
   update app_settings set value = 'false' where key = 'auto_approve_freelancer';
-  raise notice 'ok: sign-up asking for reseller with a code becomes a pending freelancer; auto-approve uses the freelancer flag';
+  raise notice 'ok: all signups remain pending, including when the obsolete auto-approval setting is true';
 end $$;
 
 -- ------------------------------------------------------------

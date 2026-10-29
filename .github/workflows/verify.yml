@@ -178,6 +178,7 @@ jobs:
           # suspended admin or a freelancer cannot decide one.
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/account_approval_test.sql
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/paylink_registration_test.sql
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ci/admin_parity_test.sql
 
       - name: Production drift fixes (20261004020000), on the schema before the reseller removal
         env:

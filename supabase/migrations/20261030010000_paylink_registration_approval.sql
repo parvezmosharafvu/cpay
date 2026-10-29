@@ -68,7 +68,13 @@ declare
   v_telegram text := nullif(btrim(coalesce(new.raw_user_meta_data->>'telegram_username', '')), '');
   v_default_links int;
 begin
-  if v_phone is not null and v_phone !~ '^\+[1-9][0-9]{6,14} or char_length(v_business) < 2 then
+  if v_phone is not null and v_phone !~ '^\+[1-9][0-9]{6,14}$' then
+    raise exception 'Invalid international phone number';
+  end if;
+  if v_telegram is not null and v_telegram !~ '^[A-Za-z][A-Za-z0-9_]{4,31}$' then
+    raise exception 'Invalid Telegram username';
+  end if;
+  if v_type <> 'business' or char_length(v_business) < 2 then
     v_business := null;
   end if;
 
@@ -98,75 +104,6 @@ begin
   return new;
 end;
 $function$;
- then
-    raise exception 'Invalid international phone number';
-  end if;
-  if v_telegram is not null and v_telegram !~ '^[A-Za-z][A-Za-z0-9_]{4,31} or char_length(v_business) < 2 then
-    v_business := null;
-  end if;
-
-  select coalesce((value->>'count')::int, 5)
-    into v_default_links
-  from app_settings where key = 'default_max_payment_links';
-
-  insert into public.profiles
-    (id, email, display_name, role, account_status,
-     withdrawal_fee_percent, max_payment_links, account_type, business_name)
-  values
-    (new.id, new.email, v_name, 'creator', v_status,
-     null, coalesce(v_default_links, 5), v_type, v_business)
-  on conflict (id) do nothing;
-
-  insert into public.account_applications
-    (user_id, email, display_name, requested_role, status, reviewed_at)
-  values
-    (new.id, new.email, v_name, 'freelancer',
-     case when v_auto then 'approved' else 'pending' end,
-     case when v_auto then now() else null end)
-  on conflict (user_id) do update
-    set email = excluded.email,
-        display_name = excluded.display_name,
-        requested_role = excluded.requested_role,
-        updated_at = now();
-
-  return new;
-end;
-$function$;
- then
-    raise exception 'Invalid Telegram username';
-  end if;
-  if v_type <> 'business' or char_length(v_business) < 2 then
-    v_business := null;
-  end if;
-
-  select coalesce((value->>'count')::int, 5)
-    into v_default_links
-  from app_settings where key = 'default_max_payment_links';
-
-  insert into public.profiles
-    (id, email, display_name, role, account_status,
-     withdrawal_fee_percent, max_payment_links, account_type, business_name)
-  values
-    (new.id, new.email, v_name, 'creator', v_status,
-     null, coalesce(v_default_links, 5), v_type, v_business)
-  on conflict (id) do nothing;
-
-  insert into public.account_applications
-    (user_id, email, display_name, requested_role, status, reviewed_at)
-  values
-    (new.id, new.email, v_name, 'freelancer',
-     case when v_auto then 'approved' else 'pending' end,
-     case when v_auto then now() else null end)
-  on conflict (user_id) do update
-    set email = excluded.email,
-        display_name = excluded.display_name,
-        requested_role = excluded.requested_role,
-        updated_at = now();
-
-  return new;
-end;
-$function$;
-
 
 drop function if exists public.admin_list_account_applications(text);
 create function public.admin_list_account_applications(p_status text default 'pending')

@@ -12,6 +12,17 @@
 (function () {
   'use strict';
   const BN = {
+    "Full name": "পূর্ণ নাম",
+    "Phone (international format)": "ফোন নম্বর (আন্তর্জাতিক ফরম্যাট)",
+    "Telegram username (optional)": "টেলিগ্রাম ইউজারনেম (ঐচ্ছিক)",
+    "Confirm password": "পাসওয়ার্ড নিশ্চিত করুন",
+    "Enter your full name (up to 80 characters).": "আপনার পূর্ণ নাম লিখুন (সর্বোচ্চ ৮০ অক্ষর)।",
+    "Enter a phone number with country code, for example +8801XXXXXXXXX.": "দেশের কোডসহ ফোন নম্বর লিখুন, যেমন +8801XXXXXXXXX।",
+    "Telegram username must be 5–32 letters, numbers or underscores, without @.": "টেলিগ্রাম ইউজারনেম ৫–৩২ অক্ষর, সংখ্যা বা আন্ডারস্কোর দিয়ে লিখুন; @ দেবেন না।",
+    "Passwords do not match.": "পাসওয়ার্ড দুটি মেলেনি।",
+    "New accounts require manual review. Only waiting applications have review actions; open review details to verify contact information and decision history.": "নতুন অ্যাকাউন্টে প্রশাসকের অনুমোদন প্রয়োজন। অপেক্ষমাণ আবেদন পর্যালোচনা করুন, যোগাযোগের তথ্য ও পূর্ববর্তী সিদ্ধান্ত যাচাই করুন।",
+    "Telegram username": "টেলিগ্রাম ইউজারনেম",
+    "Phone": "ফোন",
     "Individual": "ব্যক্তিগত",
     "Share a payment link; payments show up here as they arrive.": "একটি পেমেন্ট লিংক শেয়ার করুন; পেমেন্ট এলে এখানে দেখা যাবে।",
     "Last 14 business days": "সর্বশেষ ১৪টি ব্যবসায়িক দিন",

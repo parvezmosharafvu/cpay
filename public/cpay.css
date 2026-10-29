@@ -1847,3 +1847,12 @@ body.legal .draft strong{color:var(--warn,#78350f)}
 :is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #cashAppBtn .ico-cash{display:none}
 :is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) .checkout-foot{display:none}
 :is([data-layout="keypad"] body.invoice,.theme-stage[data-layout="keypad"][data-stage="invoice"]) #step2 #otherWalletsBtn{order:8;justify-self:center;width:auto;min-height:40px;padding:8px 16px;border:0;background:transparent;color:#3ddc6f;font-size:15px;font-weight:700}
+
+
+/* Admin reporting and onboarding screens */
+.form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr)); gap:16px; align-items:end; }
+.form-grid > .field:has(textarea) { grid-column:1/-1; }
+.form-grid > [role="alert"],.form-grid > [role="status"] { grid-column:1/-1; margin:0; }
+.security-readiness { margin:16px 0; padding:16px; border:1px solid var(--border,#cbd5e1); border-radius:12px; }
+.security-readiness h4 { margin:0 0 8px; }
+.password-visibility { display:inline-flex; align-self:flex-start; margin-top:6px; min-height:36px; }

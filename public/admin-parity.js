@@ -179,11 +179,13 @@
       if(!row || !KEYS.some(x=>x[0]===key))return;
       if(!window.confirm('Change "'+row.label+'" to '+(next?'ON':'OFF')+'? Check your live receiving setup first.'))return;
       methodBusy=true;b.disabled=true;host.querySelector('#methodsError').textContent='';
+      let saved=false;
       try{
         const write=async()=>{const {error}=await sb.rpc('admin_set_platform_setting',{p_key:key,p_value:next});if(error)throw error;};
         await (window.cpayWithStepUp?window.cpayWithStepUp(write):write());
+        saved=true;
       }catch(e){const msg=host.querySelector('#methodsError');if(msg)msg.textContent=e.message || 'Switch not confirmed';}
-      finally{methodBusy=false;await renderMethods();}
+      finally{methodBusy=false;b.disabled=false;if(saved)await renderMethods();}
     });
   }
 

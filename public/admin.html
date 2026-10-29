@@ -74,6 +74,7 @@
     <button type="button" class="navi" data-tab="locations"><svg class="navi-ico" aria-hidden="true"><use href="#i-link"/></svg><span class="navi-label">Locations</span></button>
     <button type="button" class="navi" data-tab="forwards"><svg class="navi-ico" aria-hidden="true"><use href="#i-out"/></svg><span class="navi-label">Instant forwards</span></button>
     <button type="button" class="navi" data-tab="links"><svg class="navi-ico" aria-hidden="true"><use href="#i-link"/></svg><span class="navi-label">Links</span></button>
+     <button type="button" class="navi" data-tab="statements"><svg class="navi-ico" aria-hidden="true"><use href="#i-file-check"/></svg><span class="navi-label">Admin invoices</span></button>
     <a class="navi" data-tab="wallet" href="#wallet"><svg class="navi-ico" aria-hidden="true"><use href="#i-wallet"/></svg><span class="navi-label">Wallet</span></a>
     <p class="side-label" aria-hidden="true">Operations</p>
     <button type="button" class="navi" data-tab="health"><svg class="navi-ico" aria-hidden="true"><use href="#i-activity"/></svg><span class="navi-label">Health</span></button>
@@ -81,7 +82,8 @@
     <button type="button" class="navi" data-tab="system"><svg class="navi-ico" aria-hidden="true"><use href="#i-server"/></svg><span class="navi-label">System</span></button>
     <button type="button" class="navi" data-tab="audit"><svg class="navi-ico" aria-hidden="true"><use href="#i-list"/></svg><span class="navi-label">Audit</span></button>
     <p class="side-label" aria-hidden="true">Settings</p>
-    <button type="button" class="navi" data-tab="settings"><svg class="navi-ico" aria-hidden="true"><use href="#i-sliders"/></svg><span class="navi-label">Settings</span></button>
+    <button type="button" class="navi" data-tab="methods"><svg class="navi-ico" aria-hidden="true"><use href="#i-wallet"/></svg><span class="navi-label">Payment methods</span></button>
+     <button type="button" class="navi" data-tab="settings"><svg class="navi-ico" aria-hidden="true"><use href="#i-sliders"/></svg><span class="navi-label">Settings</span></button>
     <button type="button" class="navi" data-tab="security"><svg class="navi-ico" aria-hidden="true"><use href="#i-shield"/></svg><span class="navi-label">Security</span></button>
     <button type="button" class="navi navi-guide" data-tab="guide" hidden><svg class="navi-ico" aria-hidden="true"><use href="#i-file-check"/></svg><span class="navi-label">System guide (সিস্টেম গাইড)</span></button>
     <div class="side-foot">
@@ -107,6 +109,8 @@
     <section id="forwards" hidden><div id="instantForwards"></div></section>
     <section id="locations" hidden><div id="adminLocations"></div></section>
     <section id="links" hidden></section>
+    <section id="statements" hidden></section>
+    <section id="methods" hidden></section>
     <section id="wallet" hidden></section>
     <section id="settings" hidden>
       <nav class="row owner-nav" id="ownerSettingsNav" aria-label="Settings sections"></nav>
@@ -175,6 +179,7 @@
 <script src="i18n.js?v=23"></script>
 <script src="admin-locations.js?v=2"></script>
 <script src="admin-guide.js?v=3"></script>
+<script src="admin-parity.js?v=1"></script>
 <script src="shell.js?v=2"></script>
 </body>
 </html>

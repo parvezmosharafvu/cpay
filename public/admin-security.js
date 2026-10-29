@@ -95,6 +95,29 @@
       return card;
     }
     heading.append(el('span', 'badge', String(keys.length)));
+    if (adminDesk) {
+      const readiness = el('div', 'security-readiness');
+      readiness.dataset.role = 'admin-mfa-readiness';
+      const ready = keys.length >= 2, started = keys.length > 0;
+      readiness.append(el('h4', null, 'Admin two-step sign-in'));
+      readiness.append(el('p', ready ? 'ok' : 'hint',
+        ready ? 'Two passkeys are registered. Keep both available as recovery methods.'
+          : started ? 'One passkey registered. Add a second on another device or password manager before enabling stricter access policies.'
+            : 'Setup required: register your first passkey before using protected admin actions.'));
+      readiness.append(el('p', 'faint',
+        'Admin sign-in requires a passkey; password alone cannot complete protected admin access. Authenticator codes are not used.'));
+      if (started) {
+        const verify = el('button', 'btn ghost sm', 'Verify my passkey');
+        verify.type = 'button';
+        verify.dataset.role = 'verify-admin-passkey';
+        verify.onclick = () => securityAction(verify, async () => {
+          const ok = await window.cpayMfa.promptPasskey('Check your registered admin passkey.');
+          if (ok) say('Your passkey sign-in worked.', true);
+        });
+        readiness.append(verify);
+      }
+      card.append(readiness);
+    }
     if (keys.length) {
       const list = el('ul', 'passkey-list');
       for (const k of keys) {

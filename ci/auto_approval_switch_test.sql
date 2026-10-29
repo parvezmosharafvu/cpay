@@ -41,7 +41,8 @@ exception when raise_exception then
   if sqlerrm <> 'Manual account approval is required' then raise; end if;
 end $$;
 -- Disabling is still permitted, audited, and requires a strong session.
-do $$ begin
+do $ begin
+  perform pg_temp.as_claims('a2000000-0000-0000-0000-0000000000ad', '{"aal":"aal2"}');
   perform admin_set_auto_approval('freelancer', false);
 end $$;
 reset role;

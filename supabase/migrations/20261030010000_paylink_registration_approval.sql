@@ -6,10 +6,21 @@
 alter table public.profiles add column if not exists phone text;
 alter table public.profiles add column if not exists telegram_username text;
 
-alter table public.profiles add constraint profiles_paylink_phone_check
-  check (phone is null or phone ~ '^\+[1-9][0-9]{6,14}$');
-alter table public.profiles add constraint profiles_paylink_telegram_check
-  check (telegram_username is null or telegram_username ~ '^[A-Za-z][A-Za-z0-9_]{4,31}$');
+-- Re-apply safe: CI re-runs all post-removal migrations on a populated DB.
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conrelid='public.profiles'::regclass
+                and conname='profiles_paylink_phone_check') then
+    alter table public.profiles add constraint profiles_paylink_phone_check
+      check (phone is null or phone ~ '^\+[1-9][0-9]{6,14}$');
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid='public.profiles'::regclass
+                and conname='profiles_paylink_telegram_check') then
+    alter table public.profiles add constraint profiles_paylink_telegram_check
+      check (telegram_username is null or telegram_username ~ '^[A-Za-z][A-Za-z0-9_]{4,31}$');
+  end if;
+end;
+$$;
 
 comment on column public.profiles.phone is 'International phone number; unverified, nullable for existing accounts.';
 comment on column public.profiles.telegram_username is 'Optional Telegram username without @; not verified/linked.';

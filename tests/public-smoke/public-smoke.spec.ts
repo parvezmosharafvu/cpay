@@ -113,7 +113,7 @@ test('freelancer desk has no Download wallet link and keeps its tabs', async ({ 
   await page.goto('/dashboard.html', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('.side a.navi[href="/assets/wallet.html"]')).toHaveCount(0);
   const tabs = await page.locator('.side .navi[data-tab]').evaluateAll((b) => b.map((x) => x.getAttribute('data-tab')));
-  expect(tabs).toEqual(['home', 'links', 'pay', 'cash', 'chat', 'profile', 'security']);
+  expect(tabs).toEqual(['home', 'links', 'pay', 'reports', 'cash', 'chat', 'profile', 'security']);
   await context.close();
 });
 

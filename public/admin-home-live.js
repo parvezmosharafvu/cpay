@@ -19,17 +19,21 @@ async function renderHomeLive() {
   if (!el) return;
   const version = ++overviewReadVersion;
   el.setAttribute('aria-busy', 'true');
-  const [{ data: stats, error: stErr }, apps, pays, peopleRes] = await Promise.all([
+  const [{ data: stats, error: stErr }, apps, pays, peopleRes, extra] = await Promise.all([
     () => sb.rpc('admin_global_stats'),
     () => sb.rpc('admin_list_account_applications'),
     () => sb.rpc('admin_list_payments', { p_limit: OVERVIEW_PAGE, p_offset: 0, p_search: null }),
     () => sb.rpc('admin_list_business_profiles'),
+    () => sb.rpc('admin_parity_overview'),
   ].map(overviewRead));
   if (version !== overviewReadVersion) return;
   el.setAttribute('aria-busy', 'false');
   const s = Array.isArray(stats) ? stats[0] : stats || {};
   const owed = (peopleRes.data || []).reduce((n, p) => n + Number(p.available || 0), 0);
   const pendingApps = (apps.data || []).filter((a) => ['pending', 'submitted'].includes(String(a.status)));
+  const m = extra.error ? null : extra.data || null;
+  const rate = m?.success_rate_30d === null || m?.success_rate_30d === undefined ? dashValue() : Number(m.success_rate_30d).toFixed(1) + '%';
+  function dashValue() { return '—'; }
   const dash = '—';
   const stat = (label, value, attrs = '') => `<div class="ov-stat"><span class="ov-label">${label}</span><span class="ov-value"${attrs}>${value}</span></div>`;
   const chip = (tab, label, n) => `<a class="ov-chip" href="#${tab}" data-jump-tab="${tab}"><span>${label}</span>${n == null ? '' : `<b>${n}</b>`}</a>`;
@@ -46,6 +50,10 @@ async function renderHomeLive() {
       ${stat('Pending payouts', stErr ? dash : Number(s.pending_withdrawals_count || 0))}
       ${stat('Active accounts', stErr ? dash : Number(s.active_creators || 0))}
       ${stat('Waiting applications', apps.error ? dash : pendingApps.length)}
+      ${stat('Today platform fees', m ? money(m.today_fees) : dash)}
+      ${stat('This month fees', m ? money(m.month_fees) : dash)}
+      ${stat('Active payment links', m ? Number(m.active_links || 0) : dash)}
+      ${stat('30-day payment success', m ? rate : dash)}
     </div>
     <div class="ov-chips">${chip('apps', 'Applications', apps.error ? null : pendingApps.length)}${chip('payouts', 'Payouts', stErr ? null : Number(s.pending_withdrawals_count || 0))}${chip('people', 'Users', null)}${chip('health', 'Service checks', null)}</div>
   </section>

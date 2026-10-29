@@ -117,8 +117,10 @@ test('registration carries a token', async ({ page }) => {
   await page.goto('/register.html');
   await openAuthForm(page);
   await page.fill('#displayName', 'Captcha Signup');
+  await page.fill('#phone', '+8801712345678');
   await page.fill('#email', email);
   await page.fill('#password', PASSWORD);
+  await page.fill('#passwordConfirm', PASSWORD);
   await page.click('#submitBtn');
   await expect.poll(async () => (await db.query('select account_status from profiles where email = $1', [email])).rows[0]?.account_status ?? null,
     { timeout: 15_000 }).toBe('pending');
@@ -166,8 +168,11 @@ test('the sign-up confirmation email can be sent again with a token', async ({ p
     await fakeTurnstile(page);
     await page.goto('/register.html');
     await openAuthForm(page);
+    await page.fill('#displayName', 'Confirmation Applicant');
+    await page.fill('#phone', '+8801712345678');
     await page.fill('#email', email);
     await page.fill('#password', PASSWORD);
+    await page.fill('#passwordConfirm', PASSWORD);
     await page.click('#submitBtn');
     await expect(page.locator('#checkState')).toBeVisible();
     await login(page, { id: '', email, password: PASSWORD });

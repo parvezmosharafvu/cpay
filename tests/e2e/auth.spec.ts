@@ -10,8 +10,10 @@ test('register creates a pending Freelancer application', async ({ page }) => {
   await openAuthForm(page);
   await expectCleanCopy(page);
   await page.fill('#displayName', 'New Person');
+  await page.fill('#phone', '+8801712345678');
   await page.fill('#email', email);
   await page.fill('#password', PASSWORD);
+  await page.fill('#passwordConfirm', PASSWORD);
   await page.click('#submitBtn');
   // The URL can already match before sign-up finishes; wait for the row.
   await expect.poll(async () => (await db.query('select role, account_status from profiles where email = $1', [email])).rows[0] ?? null,
@@ -21,8 +23,11 @@ test('register creates a pending Freelancer application', async ({ page }) => {
 test('register rejects a short password before calling the server', async ({ page }) => {
   await page.goto('/register.html');
   await openAuthForm(page);
+  await page.fill('#displayName', 'Short Password');
+  await page.fill('#phone', '+8801712345678');
   await page.fill('#email', `${uniq('reg')}@test.invalid`);
   await page.fill('#password', 'short');
+  await page.fill('#passwordConfirm', 'short');
   await page.click('#submitBtn');
   await expect(page.locator('#errorMsg')).toHaveText(/at least 8/);
 });

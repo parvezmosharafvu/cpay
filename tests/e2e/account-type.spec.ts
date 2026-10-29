@@ -18,8 +18,10 @@ test('register as a Business / Organization records the type and the name; appro
   await page.getByLabel(/Business \/ Organization/).check();
   await expect(page.locator('#businessField')).toBeVisible();
   await page.fill('#displayName', 'Rina');
+  await page.fill('#phone', '+8801712345678');
   await page.fill('#email', email);
   await page.fill('#password', PASSWORD);
+  await page.fill('#passwordConfirm', PASSWORD);
 
   // The name is required for a business, before anything is sent.
   await page.click('#submitBtn');
@@ -43,8 +45,11 @@ test('register keeps Individual by default and never sends a business name for i
   await page.fill('#businessName', 'Left Behind Co');
   await page.getByLabel(/^Individual/).check();
   await expect(page.locator('#businessField')).toBeHidden();
+  await page.fill('#displayName', 'Individual User');
+  await page.fill('#phone', '+8801712345678');
   await page.fill('#email', email);
   await page.fill('#password', PASSWORD);
+  await page.fill('#passwordConfirm', PASSWORD);
   await page.click('#submitBtn');
   await expect.poll(() => profileOf(email), { timeout: 15_000 }).toEqual({
     role: 'creator', account_status: 'pending', account_type: 'individual', business_name: null,

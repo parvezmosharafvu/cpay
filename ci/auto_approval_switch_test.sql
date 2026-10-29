@@ -1,7 +1,6 @@
--- 20261028030000: Admin → Applications "Approve new sign-ups automatically".
+-- M1: manual approval is mandatory; legacy admin switch cannot enable auto signup.
 -- Only an active admin with a strong (aal2 / passkey) session can change it,
--- each change leaves an audit row, and a sign-up after the change is active
--- (on) or pending (off). BEGIN/ROLLBACK.
+-- disabling remains strong-session protected and audited; every signup is pending. BEGIN/ROLLBACK.
 \set ON_ERROR_STOP on
 begin;
 create or replace function auth.uid() returns uuid language sql stable
@@ -33,35 +32,41 @@ do $$ begin
   perform admin_set_auto_approval('freelancer', true);
   raise exception 'non-admin changed auto approval';
 exception when raise_exception then if sqlerrm <> 'Not authorized' then raise; end if; end $$;
--- A strong admin session turns it on; the switch reads it back.
+-- A strong admin session may NOT enable automatic approval anymore.
 do $$ begin
   perform pg_temp.as_claims('a2000000-0000-0000-0000-0000000000ad', '{"aal":"aal2"}');
   perform admin_set_auto_approval('freelancer', true);
-  if not cpay_auto_approval_enabled('freelancer') then raise exception 'not on after set'; end if;
+  raise exception 'strong admin enabled auto approval';
+exception when raise_exception then
+  if sqlerrm <> 'Manual account approval is required' then raise; end if;
 end $$;
-reset role;
-
-insert into auth.users(id, email) values ('a2000000-0000-0000-0000-0000000000e1', 'aa-new-on@test.invalid');
-do $$ begin
-  if (select account_status from profiles where id = 'a2000000-0000-0000-0000-0000000000e1') <> 'active' then
-    raise exception 'sign-up with auto approval on is not active';
-  end if;
-  if not exists (select 1 from audit_log where action = 'settings.auto_approval'
-                 and actor_id = 'a2000000-0000-0000-0000-0000000000ad' and new_value = '{"value": true}'::jsonb) then
-    raise exception 'no audit row for the change';
-  end if;
-end $$;
-
-set local role authenticated;
+-- Disabling is still permitted, audited, and requires a strong session.
 do $$ begin
   perform pg_temp.as_claims('a2000000-0000-0000-0000-0000000000ad', '{"aal":"aal2"}');
   perform admin_set_auto_approval('freelancer', false);
 end $$;
 reset role;
-insert into auth.users(id, email) values ('a2000000-0000-0000-0000-0000000000e2', 'aa-new-off@test.invalid');
+
+-- Old settings cannot bypass mandatory manual approval, even if a
+-- historical operator value remains true in app_settings.
+update app_settings set value='true'::jsonb where key='auto_approve_freelancer';
 do $$ begin
-  if (select account_status from profiles where id = 'a2000000-0000-0000-0000-0000000000e2') <> 'pending' then
-    raise exception 'sign-up with auto approval off is not pending';
+  if cpay_auto_approval_enabled('freelancer') or cpay_auto_approval_enabled('reseller') then
+    raise exception 'automatic approval still enabled';
+  end if;
+end $$;
+insert into auth.users(id, email) values ('a2000000-0000-0000-0000-0000000000e1', 'aa-new-manual@test.invalid');
+do $$ begin
+  if (select account_status from profiles where id='a2000000-0000-0000-0000-0000000000e1') <> 'pending' or
+     (select status from account_applications where user_id='a2000000-0000-0000-0000-0000000000e1') <> 'pending' then
+    raise exception 'new signup activated without review';
+  end if;
+  if not exists (
+    select 1 from audit_log where action='settings.auto_approval'
+      and actor_id='a2000000-0000-0000-0000-0000000000ad'
+      and new_value='{"value": false}'::jsonb
+  ) then
+    raise exception 'manual approval setting change not audited';
   end if;
 end $$;
 

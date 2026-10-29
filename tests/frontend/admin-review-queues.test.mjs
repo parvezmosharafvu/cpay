@@ -25,16 +25,24 @@ test('applications reads all statuses, renders history, and offers actions only 
  f.get('applicationClear').onclick();await tick();const html=f.get('apps').innerHTML;
  assert.match(html,/data-approve="waiting"/);assert.doesNotMatch(html,/data-approve="done"/);assert.match(html,/&lt;script&gt;note/);assert.match(html,/Review details/);
 });
-test('auto-approve switch shows the saved value, saves a change, and reverts on refusal',async()=>{
- let refuse=false;const f=fixture(async name=>name==='cpay_auto_approval_enabled'?{data:true}:name==='admin_set_auto_approval'?(refuse?{error:{message:'Sign in again with your passkey first, then change settings'}}:{data:null}):{data:[]});
- await f.context.renderApps();const card=f.get('apps').children[0];const sw=card.kids[0].kids[0];
- assert.equal(sw.id,'autoApprove');assert.equal(sw.checked,true);assert.match(card.kids[0].kids[1],/Approve new sign-ups automatically/);
- sw.checked=false;await sw.onchange();assert.equal(JSON.stringify(f.calls.at(-1)),JSON.stringify({name:'admin_set_auto_approval',params:{p_role:'freelancer',p_enabled:false}}));assert.equal(sw.checked,false);
- refuse=true;sw.checked=true;await sw.onchange();assert.equal(sw.checked,false);assert.equal(sw.disabled,false);
+test('new application contacts are escaped and admin review is manual only',async()=>{
+ const f=fixture(async name=>({data:name==='admin_list_account_applications'
+   ? [{id:'fresh',status:'pending',display_name:'New',phone:'<script>',telegram_username:'<unsafe>'}]
+   : []}));
+ await f.context.renderApps();
+ const html=f.get('apps').innerHTML;
+ assert.match(html,/manual review/);
+ assert.match(html,/&lt;script&gt;/);
+ assert.match(html,/&lt;unsafe&gt;/);
+ assert.doesNotMatch(html,/autoApprove/);
+ assert.equal(f.calls.filter(c=>c.name==='cpay_auto_approval_enabled'||c.name==='admin_set_auto_approval').length,0);
 });
-test('auto-approve switch is left out when its value cannot be read',async()=>{
- const f=fixture(async name=>name==='cpay_auto_approval_enabled'?{error:{message:'offline'}}:{data:[]});
- await f.context.renderApps();assert.ok(!f.get('apps').children.some(c=>c.tag==='div'&&c.className==='card'));
+test('manual review does not depend on obsolete auto-approval read',async()=>{
+ const f=fixture(async name=>name==='cpay_auto_approval_enabled'
+   ? {error:{message:'offline'}}:{data:[{id:'new',status:'pending'}]});
+ await f.context.renderApps();
+ assert.match(f.get('apps').innerHTML,/data-approve="new"/);
+ assert.equal(f.calls.filter(c=>c.name==='cpay_auto_approval_enabled').length,0);
 });
 test('application stale reads cannot replace a newer list',async()=>{
  const old=later();let n=0;const f=fixture(async()=>++n===1?old.promise:{data:[{id:'new',display_name:'New response',status:'pending'}]});

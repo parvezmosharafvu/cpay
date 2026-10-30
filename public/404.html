@@ -640,7 +640,145 @@ async function startPayment(){
   }
   clearStatus();
   if (!amount || amount < linkMinAmount || amount > linkMaxAmount){
-    setStatus('Enter an amount between $' + linkMinAmount.toFixed(2) + ' and $' + linkMaxAmount.toFixed(2) + '.', 'err');
+    setStatus('Enter an amount between 
+    return;
+  }
+  setPaying(true, 'Creating payment…');
+  setStatus('Setting up your payment request. This takes a few seconds.', 'loading');
+  // Same attempt (slug + amount) within 10 minutes reuses its request id,
+  // so a retry or the proxy-then-direct fallback returns the same invoice.
+  const reqScope = slug + ':' + amount;
+  try {
+    const requestId = window.cpayRequestId ? window.cpayRequestId(reqScope) : undefined;
+    let turnstileToken;
+    try { turnstileToken = window.cpayTurnstileToken ? await window.cpayTurnstileToken('pay') : null; }
+    catch (te) { setStatus(te.message || 'Verification failed. Try again.', 'err'); setPaying(false, 'Pay'); return; }
+    const direct = window.CPAY_SETTLEMENT === 'direct';
+    let res, result;
+    if (direct){
+      // The merchant's own wallet provider makes this invoice.
+      const r = await window.cpayDirectPay.create({ slug, amount, requestId, turnstileToken: turnstileToken || undefined }, CREATE_TIMEOUT_MS);
+      res = { ok: r.ok, status: r.status };
+      result = r.data;
+      // The link was switched back to the CPAY balance after this page loaded.
+      if (res.status === 409 && result.code === 'custodial_link'){ window.location.reload(); return; }
+    } else {
+      const body = JSON.stringify({ slug, amount, requestId, turnstileToken: turnstileToken || undefined });
+      const post = (url) => withTimeout(fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }), CREATE_TIMEOUT_MS);
+      try {
+        res = await post('/api/create-invoice');
+        if (res.status === 404 || res.status === 405) throw new Error('proxy unavailable');
+      } catch (e) {
+        // A timeout may mean the first request is still being processed;
+        // don't fire a second one (a later retry reuses the request id).
+        if (e && e.message === 'timeout') throw e;
+        res = await post(`${window.SUPABASE_URL}/functions/v1/create-invoice`);
+      }
+      result = await res.json().catch(() => ({}));
+      // The link was switched to direct payments after this page loaded.
+      if (res.status === 409 && result.code === 'direct_link'){ window.location.reload(); return; }
+    }
+    if (!res.ok || !result.paymentId){
+      if (res.status === 409 && window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
+      setStatus((typeof result.error === 'string' && result.error) || 'Something went wrong. Please try again.', 'err');
+      setPaying(false, 'Pay');
+      return;
+    }
+    if (window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
+    sessionStorage.setItem('invoiceSession', JSON.stringify({
+      paymentId: result.paymentId,
+      payCode: result.payCode,
+      payUrl: result.payUrl,
+      cashAppUrl: result.cashAppUrl || '',
+      returnUrl: window.location.pathname,
+      // What the payer typed (before any link fee), so an expired request
+      // can be re-created with the same server-side pricing.
+      baseAmount: amount,
+      settlement: direct ? 'direct' : 'custodial',
+      destination: direct ? String(result.destination || '') : '',
+    }));
+    openInvoiceView(invoiceUrl(result.paymentId, direct ? 'direct' : 'custodial'));
+  } catch (e){
+    console.error('create-invoice failed:', e);
+    setStatus(e && e.message === 'timeout'
+      ? 'This is taking too long. Check your connection, then try again.'
+      : 'Network error. Check your connection and try again.', 'err');
+    setPaying(false, 'Pay');
+  }
+}
+    </script>
+  </body>
+</html>
+ + linkMinAmount.toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' and 
+    return;
+  }
+  setPaying(true, 'Creating payment…');
+  setStatus('Setting up your payment request. This takes a few seconds.', 'loading');
+  // Same attempt (slug + amount) within 10 minutes reuses its request id,
+  // so a retry or the proxy-then-direct fallback returns the same invoice.
+  const reqScope = slug + ':' + amount;
+  try {
+    const requestId = window.cpayRequestId ? window.cpayRequestId(reqScope) : undefined;
+    let turnstileToken;
+    try { turnstileToken = window.cpayTurnstileToken ? await window.cpayTurnstileToken('pay') : null; }
+    catch (te) { setStatus(te.message || 'Verification failed. Try again.', 'err'); setPaying(false, 'Pay'); return; }
+    const direct = window.CPAY_SETTLEMENT === 'direct';
+    let res, result;
+    if (direct){
+      // The merchant's own wallet provider makes this invoice.
+      const r = await window.cpayDirectPay.create({ slug, amount, requestId, turnstileToken: turnstileToken || undefined }, CREATE_TIMEOUT_MS);
+      res = { ok: r.ok, status: r.status };
+      result = r.data;
+      // The link was switched back to the CPAY balance after this page loaded.
+      if (res.status === 409 && result.code === 'custodial_link'){ window.location.reload(); return; }
+    } else {
+      const body = JSON.stringify({ slug, amount, requestId, turnstileToken: turnstileToken || undefined });
+      const post = (url) => withTimeout(fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }), CREATE_TIMEOUT_MS);
+      try {
+        res = await post('/api/create-invoice');
+        if (res.status === 404 || res.status === 405) throw new Error('proxy unavailable');
+      } catch (e) {
+        // A timeout may mean the first request is still being processed;
+        // don't fire a second one (a later retry reuses the request id).
+        if (e && e.message === 'timeout') throw e;
+        res = await post(`${window.SUPABASE_URL}/functions/v1/create-invoice`);
+      }
+      result = await res.json().catch(() => ({}));
+      // The link was switched to direct payments after this page loaded.
+      if (res.status === 409 && result.code === 'direct_link'){ window.location.reload(); return; }
+    }
+    if (!res.ok || !result.paymentId){
+      if (res.status === 409 && window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
+      setStatus((typeof result.error === 'string' && result.error) || 'Something went wrong. Please try again.', 'err');
+      setPaying(false, 'Pay');
+      return;
+    }
+    if (window.cpayForgetRequestId) window.cpayForgetRequestId(reqScope);
+    sessionStorage.setItem('invoiceSession', JSON.stringify({
+      paymentId: result.paymentId,
+      payCode: result.payCode,
+      payUrl: result.payUrl,
+      cashAppUrl: result.cashAppUrl || '',
+      returnUrl: window.location.pathname,
+      // What the payer typed (before any link fee), so an expired request
+      // can be re-created with the same server-side pricing.
+      baseAmount: amount,
+      settlement: direct ? 'direct' : 'custodial',
+      destination: direct ? String(result.destination || '') : '',
+    }));
+    openInvoiceView(invoiceUrl(result.paymentId, direct ? 'direct' : 'custodial'));
+  } catch (e){
+    console.error('create-invoice failed:', e);
+    setStatus(e && e.message === 'timeout'
+      ? 'This is taking too long. Check your connection, then try again.'
+      : 'Network error. Check your connection and try again.', 'err');
+    setPaying(false, 'Pay');
+  }
+}
+    </script>
+  </body>
+</html>
+ + linkMaxAmount.toLocaleString('en-US', { maximumFractionDigits: 2 }) + '.', 'err');
     return;
   }
   setPaying(true, 'Creating payment…');

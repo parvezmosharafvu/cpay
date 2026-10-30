@@ -59,6 +59,7 @@ create table if not exists public.v2_invoices(
   amount_usd numeric(12,2) not null check(amount_usd between 10 and 1000),
   amount_sats bigint not null check(amount_sats>0),
   btc_usd_rate numeric(16,2) not null check(btc_usd_rate>0),
+  btc_rate_sources text[] not null check(cardinality(btc_rate_sources)>=2),
   platform_fee_pct numeric(5,2) not null default 0 check(platform_fee_pct between 0 and 100),
   platform_fee_usd numeric(12,2) not null default 0 check(platform_fee_usd>=0),
   net_usd numeric(12,2) not null check(net_usd>=0),

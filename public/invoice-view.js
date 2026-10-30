@@ -569,9 +569,58 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ---------- timer ---------- */
+// A BTCPay checkout can remain open after the Blink-signed BOLT11 has expired.
+// Use the earlier of the server deadline and the invoice's own BOLT11 expiry.
+// This is display-only: never marks an invoice paid/expired in the ledger.
+// Invalid/unknown invoice formats fall back to the server deadline.
+function bolt11ExpiryMs(input){
+  const raw = String(input || '').trim().replace(/^lightning:/i, '');
+  if (raw.length < 120 || raw.length > 4000 || (raw !== raw.toLowerCase() && raw !== raw.toUpperCase())) return null;
+  const invoice = raw.toLowerCase();
+  const sep = invoice.lastIndexOf('1');
+  const hrp = invoice.slice(0, sep);
+  if (sep < 4 || !/^ln(?:bc|tb|tbs|bcrt)(?:[0-9]+[munp]?)?$/.test(hrp)) return null;
+  const alphabet = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+  const data = [...invoice.slice(sep + 1)].map((c) => alphabet.indexOf(c));
+  if (data.length < 7 + 104 + 6 || data.some((v) => v < 0)) return null;
+  // BOLT11 uses Bech32, not Bech32m. Reject corrupted invoices.
+  const hrpValues = [...hrp].map((c) => c.charCodeAt(0));
+  const values = [
+    ...hrpValues.map((c) => c >> 5), 0, ...hrpValues.map((c) => c & 31), ...data,
+  ];
+  const generators = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+  let chk = 1;
+  for (const value of values) {
+    const top = chk >>> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ value;
+    for (let i = 0; i < 5; i++) if ((top >>> i) & 1) chk ^= generators[i];
+  }
+  if ((chk >>> 0) !== 1) return null;
+  const words = data.slice(0, -6);
+  const tagEnd = words.length - 104;
+  const toNumber = (arr) => arr.reduce((n, w) => n * 32 + w, 0);
+  const timestamp = toNumber(words.slice(0, 7));
+  let expirySeconds = 3600;
+  for (let i = 7; i < tagEnd;) {
+    if (i + 3 > tagEnd) return null;
+    const type = words[i], len = words[i + 1] * 32 + words[i + 2];
+    if (i + 3 + len > tagEnd) return null;
+    if (type === 6 && len > 0 && len <= 7) expirySeconds = toNumber(words.slice(i + 3, i + 3 + len));
+    i += 3 + len;
+  }
+  const expiresAt = (timestamp + expirySeconds) * 1000;
+  return Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : null;
+}
+function effectiveInvoiceExpiryMs(serverExpiresAt, bolt11){
+  const serverMs = new Date(serverExpiresAt).getTime();
+  const boltMs = bolt11ExpiryMs(bolt11);
+  if (boltMs === null) return serverMs;
+  return Number.isFinite(serverMs) ? Math.min(serverMs, boltMs) : boltMs;
+}
+
 function startTimer(expiresAt){
   clearInterval(timerInterval);
-  const expiryMs = new Date(expiresAt).getTime();
+  const expiryMs = effectiveInvoiceExpiryMs(expiresAt, currentPayCode);
   if (!Number.isFinite(expiryMs)) { updateTimerPill(0); return; }
 
   const update = async () => {

@@ -35,7 +35,7 @@ end $$;
 reset role;
 -- A pending v2 payment has no access to legacy BTCPay or wallet settlement.
 insert into public.v2_invoices(link_id,owner_id,request_id,status,amount_usd,amount_sats,btc_usd_rate,
-commission_pct,commission_usd,net_usd,payment_hash,bolt11,expires_at)
+platform_fee_pct,platform_fee_usd,net_usd,payment_hash,bolt11,expires_at)
 select id,owner_id,'d3300000-0000-0000-0000-000000000009','pending',25,2500,100000,0,0,25,
 repeat('a',64),'lnbc2500n1testonly',now()+interval '1 hour' from public.v2_links where slug='v2-test-shop';
 set local role service_role;

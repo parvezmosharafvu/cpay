@@ -19,6 +19,7 @@
 // every branch without a network or a database.
 
 import { formatCents, parseAmountToCents, toCents } from "../_shared/money.ts";
+import { checkLinkAmountCents } from "../_shared/link-amounts.ts";
 import { invoiceChargeCents } from "../create-invoice/invoice-amount.ts";
 import { parseRequestId, sha256Hex, turnstileRemoteIp, verifiedClientKey } from "../create-invoice/guards.ts";
 import { centsToMsat, type Rate } from "../_shared/btc-rate.ts";
@@ -29,7 +30,7 @@ import type { Verification } from "../_shared/lnurl.ts";
 import { secretMatches } from "../_shared/secret-compare.ts";
 import { coarseGeo } from "../_shared/geo.ts";
 
-export type Link = { link_id: string; user_id: string; is_active: boolean; cost_percent: number | string | null; settlement_mode: string };
+export type Link = { link_id: string; user_id: string; is_active: boolean; cost_percent: number | string | null; settlement_mode: string; min_usd?: number | string | null; max_usd?: number | string | null };
 
 export type DirectRow = {
   id: string;
@@ -223,6 +224,8 @@ export function createHandler(deps: Deps): (req: Request) => Promise<Response> {
     if (link === undefined) return json({ error: BUSY }, 503);
     if (!link) return json({ error: "Payment link not found" }, 404);
     if (!link.is_active) return json({ error: "This payment link is no longer active" }, 410);
+    const amountError = checkLinkAmountCents(amountCents, link);
+    if (amountError) return json({ error: amountError }, 400);
     // The page loaded while the link was direct; it has since been switched
     // back. The page reloads on this code and uses the CPAY-balance flow.
     if (link.settlement_mode !== "direct") return json({ error: "This link does not take direct payments.", code: "custodial_link" }, 409);

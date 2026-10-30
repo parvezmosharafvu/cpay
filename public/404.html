@@ -116,6 +116,8 @@
         <button class="classic-toggle" id="classicToggle" aria-expanded="false" aria-controls="classicMore">Show more amounts</button>
       </div>
       <div class="action-section">
+        <p class="hint" id="linkAmountHint" role="status"></p>
+        <p class="hint" id="linkNote" hidden></p>
         <div class="quick-amounts" id="quickAmounts">
           <button class="quick-chip" data-amount="10" aria-label="Set amount to 10 dollars">$10</button>
           <button class="quick-chip" data-amount="20" aria-label="Set amount to 20 dollars">$20</button>
@@ -296,6 +298,8 @@ const RESERVED = ['index','login','register','dashboard','admin','404','config',
 const slug = window.location.pathname.replace(/^\/|\/$/g, '');
 const MIN_AMOUNT = 1;
 const MAX_AMOUNT = 5000;
+let linkMinAmount = MIN_AMOUNT;
+let linkMaxAmount = MAX_AMOUNT;
 let amountStr = '';
 let linkCostPercent = 0;
 function el(id){ return document.getElementById(id); }
@@ -355,6 +359,39 @@ function currentAmount(){
   const n = parseFloat(amountStr);
   return Number.isFinite(n) ? n : 0;
 }
+function updateLinkAmountOptions(opts) {
+  if (!opts || opts.min_usd === null || opts.max_usd === null) return;
+  const min = Number(opts.min_usd), max = Number(opts.max_usd);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min < 10 || max > 1000 || min > max) {
+    throw new Error('Invalid amount options');
+  }
+  linkMinAmount = min;
+  linkMaxAmount = max;
+  const note = String(opts.note || '');
+  if (note) { el('linkNote').textContent = note; el('linkNote').hidden = false; }
+  el('linkAmountHint').textContent = 'Accepted amount: $' + min.toFixed(2) + ' – $' + max.toFixed(2);
+  const choices = Array.isArray(opts.quick_amounts) ? opts.quick_amounts : [10,25,50,100,250,500].filter(n => n >= min && n <= max);
+  const quick = choices.map(Number).filter(n => Number.isFinite(n) && n >= min && n <= max);
+  function paint(host, klass, values) {
+    const elHost = el(host);
+    elHost.replaceChildren();
+    for (const n of values) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = klass;
+      btn.dataset.amount = String(n);
+      btn.setAttribute('aria-label', 'Set amount to ' + n + ' dollars');
+      btn.textContent = '$' + n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+      elHost.append(btn);
+    }
+  }
+  paint('quickAmounts','quick-chip',quick);
+  paint('classicChips','classic-chip',quick.slice(0,3));
+  paint('classicMore','classic-chip',quick.slice(3));
+  el('classicToggle').hidden = quick.length <= 3;
+  el('classicMore').hidden = true;
+  el('classicToggle').setAttribute('aria-expanded','false');
+}
 function renderAmount(){
   const shown = '$' + (amountStr === '' ? '0' : amountStr);
   const display = el('amountDisplay');
@@ -398,7 +435,7 @@ function pressKey(k){
   if (parts.length === 2 && parts[1].length >= 2) return;
   if (amountStr === '0') amountStr = '';
   const next = amountStr + k;
-  if (parseFloat(next) > MAX_AMOUNT) return;
+  if (parseFloat(next) > linkMaxAmount) return;
   if (next.replace('.', '').length > 8) return;
   amountStr = next;
   renderAmount();
@@ -426,7 +463,7 @@ function prefillAmount(){
   const raw = new URLSearchParams(location.search).get('amount') || '';
   if (!/^\d{1,4}(\.\d{1,2})?$/.test(raw)) return;
   const n = parseFloat(raw);
-  if (n >= MIN_AMOUNT && n <= MAX_AMOUNT) amountStr = raw;
+  if (n >= linkMinAmount && n <= linkMaxAmount) amountStr = raw;
 }
 window.addEventListener('DOMContentLoaded', async () => {
   el('loadRetryBtn').addEventListener('click', () => window.location.reload());
@@ -445,6 +482,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     const row = Array.isArray(data) ? data[0] : data;
     if (error && /fetch|network|timeout/i.test(String(error.message || ''))){ showLoadError(); return; }
     if (error || !row || row.is_active === false){ showNotFound(); return; }
+    // A dedicated projection keeps contact and wallet details out of public view.
+    // Older deployments without the new RPC have only legacy links.
+    const options = await withTimeout(window.supabaseClient.rpc('get_link_amount_options', { p_slug: slug }), LOOKUP_TIMEOUT_MS);
+    if (options.error && !['PGRST202','42883'].includes(options.error.code)) { showLoadError(); return; }
+    const opts = Array.isArray(options.data) ? options.data[0] : options.data;
+    if (!options.error) updateLinkAmountOptions(opts);
     const name = row.display_name || slug;
     // Direct links (20261018010000) pay the owner's own wallet through
     // direct-invoice. Pages served before that migration see no field.
@@ -498,7 +541,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const parts = v.split('.');
     if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('');
     if (parts[1] !== undefined) v = parts[0] + '.' + parts[1].slice(0, 2);
-    if (v !== '' && parseFloat(v) > MAX_AMOUNT) v = amountStr;
+    if (v !== '' && parseFloat(v) > linkMaxAmount) v = amountStr;
     amountStr = v;
     e.target.value = v;
     clearStatus();
@@ -596,8 +639,8 @@ async function startPayment(){
     return;
   }
   clearStatus();
-  if (!amount || amount < MIN_AMOUNT || amount > MAX_AMOUNT){
-    setStatus('Enter an amount between $' + MIN_AMOUNT + ' and $' + MAX_AMOUNT.toLocaleString() + '.', 'err');
+  if (!amount || amount < linkMinAmount || amount > linkMaxAmount){
+    setStatus('Enter an amount between $' + linkMinAmount.toFixed(2) + ' and $' + linkMaxAmount.toFixed(2) + '.', 'err');
     return;
   }
   setPaying(true, 'Creating payment…');

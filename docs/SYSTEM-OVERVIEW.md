@@ -228,3 +228,28 @@ workflow change only: wallet, payment, fee and withdrawal logic stays as-is.
 `20261030010000_paylink_registration_approval.sql` before publishing the
 updated registration/admin pages. Do not claim M1 behavior is live until
 migration, site rollout and staging checks succeed. See [PAYLINK-GAP.md](PAYLINK-GAP.md).
+
+## M2: Payment-link amount configuration (migration required)
+
+The payment-link rebuild adds optional per-link \`min_usd\`, \`max_usd\`,
+\`quick_amounts\`, and checkout \`note\`. New links created through the
+member desk receive configured bounds of $10–$1000, six suggested quick
+amounts (10, 25, 50, 100, 250, 500), and an optional note. The link owner
+may subsequently edit the range and choices. SQL constraints and the
+\`set_link_amount_options\` RPC validate values (1–8 unique quick amounts
+inside the range), enforce ownership/active-account status and audit changes.
+
+**Legacy links are compatible:** NULL option columns deliberately preserve
+the previous $1–$5000 global limit unless an owner edits the link. Both the
+CPAY-balance invoice and direct-invoice server routes enforce the configured
+min/max *before* generating a payable invoice. The public checkout reads
+only a four-column projection via \`get_link_amount_options\` and renders
+the note as text, never HTML. The existing service fee, balance accounting,
+settlement, markup and wallet/provider integrations are untouched.
+
+**Deploy order:** apply \`20261030030000_link_amount_options.sql\`,
+deploy the new \`create-invoice\` and \`direct-invoice\` versions, then
+publish updated \`404.html\` and the member desk. Check a test link at
+$9.99, $10, $1000 and $1000.01, then a narrower range; check both receiving
+modes and the old-link legacy behavior. This source-code change alone does
+not establish that the production checkout supports configured bounds.

@@ -22,6 +22,7 @@ create temp table anon_rpc_allowlist(signature text primary key, reason text not
 insert into anon_rpc_allowlist(signature, reason) values
   -- Public by design (checkout, invoice page, store, link previews).
   ('get_invoice_public(uuid)',               'public invoice page'),
+  ('get_link_amount_options(text)',          'active link checkout options only; no owner identity or wallet fields'),
   ('get_link_preview(text)',                 'public payment link page / OG preview'),
   ('get_public_store(uuid)',                 'public creator store: active accounts, public fields only'),
   ('lookup_payment_status(text)',            'public payment status lookup'),

@@ -59,8 +59,8 @@ create table if not exists public.v2_invoices(
   amount_usd numeric(12,2) not null check(amount_usd between 10 and 1000),
   amount_sats bigint not null check(amount_sats>0),
   btc_usd_rate numeric(16,2) not null check(btc_usd_rate>0),
-  commission_pct numeric(5,2) not null default 0 check(commission_pct between 0 and 100),
-  commission_usd numeric(12,2) not null default 0 check(commission_usd>=0),
+  platform_fee_pct numeric(5,2) not null default 0 check(platform_fee_pct between 0 and 100),
+  platform_fee_usd numeric(12,2) not null default 0 check(platform_fee_usd>=0),
   net_usd numeric(12,2) not null check(net_usd>=0),
   payment_hash text unique check(payment_hash is null or payment_hash ~ '^[a-f0-9]{64}$'),
   bolt11 text,
@@ -70,7 +70,7 @@ create table if not exists public.v2_invoices(
   confirmed_sats bigint,
   checked_at timestamptz,
   constraint v2_invoice_request_unique unique(link_id,request_id),
-  constraint v2_invoice_amount_exact check(amount_usd=commission_usd+net_usd),
+  constraint v2_invoice_amount_exact check(amount_usd=platform_fee_usd+net_usd),
   constraint v2_invoice_has_request check (
     status in ('creating','failed') or (payment_hash is not null and bolt11 is not null)
   ),

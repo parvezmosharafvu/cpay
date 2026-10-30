@@ -124,7 +124,7 @@ async function create(req:Request) {
   const quote={
     link_id:link.id,owner_id:link.owner_id,request_id:requestId,
     status:"creating",amount_usd:formatCents(cents),amount_sats:sats,
-    btc_usd_rate:rate.usdPerBtc,commission_pct:0,commission_usd:0,
+    btc_usd_rate:rate.usdPerBtc,platform_fee_pct:0,platform_fee_usd:0,
     net_usd:formatCents(cents),expires_at:expires,
   };
   const inserted=await db.from("v2_invoices").insert(quote).select("id").single();

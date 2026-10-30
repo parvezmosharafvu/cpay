@@ -48,7 +48,7 @@ record or seed during the transition.
 
 ## Current first stage (PR)
 
-The SQL migration adds isolated v2 objects. It does not remove existing
+The SQL migration adds isolated v2 objects. The standalone `public/v2-pay.html` checkout and its JS/CSS demonstrate amount chips, QR, deep links, and invoice state polling via v2-only endpoints. This page is **staging-only** and is not routed to `/<slug>` on public domains. It does not remove existing
 payments, flip receiving routes, or enable \`v2-payments\`. The Edge function
 is included in source but deliberately listed as **undeployed**.
 

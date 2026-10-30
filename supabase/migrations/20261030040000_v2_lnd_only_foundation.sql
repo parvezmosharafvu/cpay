@@ -14,12 +14,12 @@ alter table public.v2_settings enable row level security;
 
 create or replace function public.v2_quick_valid(
  p_choices numeric[],p_min numeric,p_max numeric
-) returns boolean language sql immutable set search_path=public as $
+) returns boolean language sql immutable set search_path=public as $$
  select cardinality(p_choices) between 1 and 8 and
   array_position(p_choices,null) is null and
   (select count(*)=count(distinct x) and bool_and(x between p_min and p_max and scale(x)<=2)
    from unnest(p_choices) a(x))
-$;
+$$;
 revoke all on function public.v2_quick_valid(numeric[],numeric,numeric) from public,anon,authenticated;
 grant execute on function public.v2_quick_valid(numeric[],numeric,numeric) to service_role;
 

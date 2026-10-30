@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { invoiceChargeCents } from "./invoice-amount.ts";
 import { formatCents, parseAmountToCents, toCents } from "../_shared/money.ts";
+import { checkLinkAmountCents } from "../_shared/link-amounts.ts";
 import {
   checkTurnstile, type ExistingPayment, parseRequestId, PUBLIC_LIMITS, replayDecision, sha256Hex, turnstileMode, turnstileRemoteIp, verifiedClientKey,
 } from "./guards.ts";
@@ -107,9 +108,14 @@ if (!link.is_active) return json({ error: "This payment link is no longer active
 // the guarantee is the payments insert trigger (20261018010000), so a read
 // error (or this function running before that migration) carries on.
 const { data: modeRow, error: modeErr } = await supabaseAdmin
-  .from("payment_links").select("settlement_mode").eq("id", link.link_id).maybeSingle();
-if (modeErr) console.error("link mode read failed (the insert trigger still guards):", modeErr.message);
-if (modeRow?.settlement_mode === "direct") {
+  .from("payment_links").select("settlement_mode,min_usd,max_usd").eq("id", link.link_id).maybeSingle();
+if (modeErr || !modeRow) {
+  console.error("link amount-options/mode lookup failed");
+  return json({ error: "Payment service temporarily unavailable" }, 503);
+}
+const limitError = checkLinkAmountCents(amountCents, modeRow);
+if (limitError) return json({ error: limitError }, 400);
+if (modeRow.settlement_mode === "direct") {
   return json({ error: "This link takes direct payments. Refresh the page and try again.", code: "direct_link" }, 409);
 }
 

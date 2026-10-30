@@ -228,3 +228,12 @@ workflow change only: wallet, payment, fee and withdrawal logic stays as-is.
 `20261030010000_paylink_registration_approval.sql` before publishing the
 updated registration/admin pages. Do not claim M1 behavior is live until
 migration, site rollout and staging checks succeed. See [PAYLINK-GAP.md](PAYLINK-GAP.md).
+
+## Fresh v2 rebuild (not deployed)
+
+Source-only work is tracked in [V2-FRESH-REBUILD.md](V2-FRESH-REBUILD.md).
+The isolated v2 tables, LND invoice client, status/reconcile handler and
+staging-only `v2-pay.html` do not change the current production receiving path.
+`v2_settings.checkout_enabled` defaults to false; the Edge handler additionally
+requires `PAYLINK_V2_ENABLED=true`. Do not switch a public route until a real
+LND settlement and all financial-invariant acceptance tests pass.

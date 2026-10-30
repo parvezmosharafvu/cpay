@@ -96,5 +96,5 @@ new-invoice routes, archive legacy code and back up legacy accounting data.
 ## Explicitly not finished by stage A
 
 This is **not** yet a finished parity product: v2 payout ledger/withdrawal,
-daily cycle, user/admin interface, Telegram, OG, account application and
+daily cycle, full user/admin interface, Telegram, OG, account application and
 production LND connection still need full implementation and end-to-end tests.

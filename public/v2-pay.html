@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101114">
+<title>CPAY — Lightning payment</title>
+<link rel="icon" type="image/svg+xml" href="/favicon-payment.svg">
+<link rel="stylesheet" href="/v2-pay.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
+<script src="/config.js"></script>
+<script src="/turnstile.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin="anonymous"></script>
+<script src="/v2-pay.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to payment</a>
+<header class="top"><a class="brand" href="/">⚡ CPAY</a><span>Secure Lightning checkout</span></header>
+<main id="main" class="wrap">
+  <section class="panel" id="loading" role="status"><p>Loading payment link…</p></section>
+  <section class="panel" id="entry" hidden>
+    <div class="eyebrow">Payment request</div>
+    <h1 id="merchant">Pay securely</h1>
+    <p id="note" class="muted" hidden></p>
+    <form id="amountForm">
+      <label for="amount">Amount in USD</label>
+      <div class="money-input"><span aria-hidden="true">$</span><input id="amount" name="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="25.00" required aria-describedby="range" /></div>
+      <p id="range" class="muted"></p>
+      <div id="chips" class="chips" aria-label="Quick payment amounts"></div>
+      <div id="v2Turnstile"></div>
+      <p id="error" class="error" role="alert" aria-live="assertive"></p>
+      <button id="continueBtn" class="primary" type="submit">Continue to payment</button>
+    </form>
+    <p class="foot">Payments are completed in your own Lightning wallet.</p>
+  </section>
+  <section class="panel" id="invoice" hidden>
+    <div class="eyebrow">Lightning invoice</div>
+    <h1 id="invoiceAmount"></h1><p class="muted"><span id="invoiceSats"></span> sats · <span id="countdown"></span></p>
+    <div id="qr" class="qr" role="img" aria-label="Lightning payment QR code"></div>
+    <div class="invoice-code"><code id="bolt11"></code></div>
+    <button id="copyInvoice" class="secondary" type="button">Copy Lightning invoice</button>
+    <a id="cashApp" class="primary link" target="_blank" rel="noopener noreferrer">Open in Cash App</a>
+    <a id="wallet" class="secondary link">Open in Lightning wallet</a>
+    <p id="invoiceStatus" class="muted" role="status" aria-live="polite">Checking for payment…</p>
+    <p class="foot">Confirm the recipient and amount inside your wallet. Pay only once.</p>
+  </section>
+  <section class="panel" id="success" hidden>
+    <div class="success-icon" aria-hidden="true">✓</div><h1>Payment received</h1>
+    <p id="successAmount"></p><p id="receipt" class="muted"></p>
+  </section>
+  <section class="panel" id="expired" hidden>
+    <h1>Invoice expired</h1>
+    <p class="muted">This invoice can no longer be paid. Create a new one.</p>
+    <button id="tryAgain" class="primary" type="button">Create new payment</button>
+  </section>
+  <section class="panel" id="unavailable" hidden>
+    <h1>Payment unavailable</h1><p id="unavailableMessage" class="muted">This payment link is unavailable.</p>
+    <button id="retry" class="secondary" type="button">Try again</button>
+  </section>
+</main>
+<footer class="footer">CPAY · Lightning payments</footer>
+</body></html>

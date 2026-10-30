@@ -12,6 +12,17 @@ revoke all on public.v2_settings from public,anon,authenticated;
 grant select,update on public.v2_settings to service_role;
 alter table public.v2_settings enable row level security;
 
+create or replace function public.v2_quick_valid(
+ p_choices numeric[],p_min numeric,p_max numeric
+) returns boolean language sql immutable set search_path=public as $
+ select cardinality(p_choices) between 1 and 8 and
+  array_position(p_choices,null) is null and
+  (select count(*)=count(distinct x) and bool_and(x between p_min and p_max and scale(x)<=2)
+   from unnest(p_choices) a(x))
+$;
+revoke all on function public.v2_quick_valid(numeric[],numeric,numeric) from public,anon,authenticated;
+grant execute on function public.v2_quick_valid(numeric[],numeric,numeric) to service_role;
+
 create table if not exists public.v2_links(
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id),
@@ -26,7 +37,7 @@ create table if not exists public.v2_links(
   updated_at timestamptz not null default now(),
   check(cardinality(quick_amounts) between 1 and 8),
   check(array_position(quick_amounts,null) is null),
-  check(public.paylink_quick_amounts_valid(quick_amounts,min_usd,max_usd))
+  check(public.v2_quick_valid(quick_amounts,min_usd,max_usd))
 );
 create index if not exists v2_links_owner_idx on public.v2_links(owner_id,created_at desc);
 alter table public.v2_links enable row level security;
@@ -130,8 +141,6 @@ create or replace function public.v2_reconcile_invoice(
 ) returns text language plpgsql security definer set search_path=public as $$
 declare v public.v2_invoices%rowtype; v_new text;
 begin
- if current_user<>'service_role' and session_user<>'service_role' then
-   raise exception 'Service role required'; end if;
  if p_hash is null or p_hash !~ '^[a-f0-9]{64}$' or p_node_state not in ('settled','cancelled','open')
  then raise exception 'Invalid reconciliation'; end if;
  select * into v from public.v2_invoices where payment_hash=p_hash for update;

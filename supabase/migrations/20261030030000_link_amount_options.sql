@@ -46,7 +46,7 @@ begin
   select * into v_link from public.payment_links
     where id=p_link_id and deleted_at is null for update;
   if not found then raise exception 'Payment link not found'; end if;
-  if not (is_admin() or (auth.uid()=v_link.user_id and account_is_active(v_link.user_id))) then
+  if not coalesce(is_admin() or (auth.uid()=v_link.user_id and account_is_active(v_link.user_id)),false) then
     raise exception 'Not authorized';
   end if;
   if p_min_usd is null or p_max_usd is null

@@ -203,6 +203,7 @@ async function renderLinksContent() {
     <td class="table-actions">
       <a class="btn ghost sm" href="/${escapeHtml(l.slug)}" target="_blank" rel="noopener">Preview</a>
       <button type="button" class="btn ghost sm" data-copy-link="${escapeHtml(l.slug)}" aria-label="Copy the link /${escapeHtml(l.slug)}">Copy link</button>
+      <button type="button" class="btn ghost sm" data-edit-amounts="${escapeHtml(l.id)}">Amounts</button>
       <button type="button" class="btn ghost sm" data-toggle-link="${escapeHtml(l.id)}" data-active="${l.is_active ? '1' : '0'}">${l.is_active ? 'Turn off' : 'Turn on'}</button>
       ${showMode ? direct.linkButton(l, ds) : ''}
     </td>
@@ -222,11 +223,18 @@ async function renderLinksContent() {
       <div class="field"><label for="linkName">Display name</label><input id="linkName" placeholder="The name payers see"></div>
       <div class="field"><label for="linkCost">Link cost %</label><input id="linkCost" type="number" min="0" step="0.1" value="${Number(me.cost_percent || 0)}"></div>
       <p class="hint">Added on top of what the payer pays. This is separate from the platform fee.</p>
+      ${amountOptionsFields('new')}
       ${layoutPicker(exp.theme, exp.wallet, exp.invoice)}
       ${direct && ds ? direct.newLinkChoice(ds) : ''}
       <button class="btn primary" id="makeLink" type="button">Create link</button>
       </div>
-    </details>`;
+    </details>
+    <div class="card" id="linkAmountEditor" hidden>
+      <h3 id="linkAmountEditHeading">Edit payment amounts</h3>
+      ${amountOptionsFields('edit')}
+      <div class="row"><button class="btn primary" type="button" id="saveAmountEdit">Save amounts</button>
+      <button class="btn ghost" type="button" id="cancelAmountEdit">Cancel</button></div>
+    </div>`;
   const openComposer = () => {
     document.getElementById('linkComposer').open = true;
     document.getElementById('linkName').focus();
@@ -252,6 +260,23 @@ async function renderLinksContent() {
   };
   bindExperience(exp);
   document.getElementById('makeLink').onclick = makeLink;
+  let editingAmountLink = null;
+  const editor = document.getElementById('linkAmountEditor');
+  document.getElementById('cancelAmountEdit').onclick = () => { editor.hidden = true; editingAmountLink = null; };
+  document.getElementById('saveAmountEdit').onclick = async () => {
+    if (!editingAmountLink) return;
+    const button = document.getElementById('saveAmountEdit');
+    let options;
+    try { options = readLinkAmountOptions('edit'); } catch (e) { toast(e.message); return; }
+    button.disabled = true;
+    try {
+      const error = await saveLinkAmountOptions(editingAmountLink, options);
+      if (error) { toast(error); return; }
+      toast('Payment amounts saved', true);
+      editor.hidden = true; editingAmountLink = null;
+      await renderLinks();
+    } finally { button.disabled = false; }
+  };
   function bindLinkRowActions() {
     el.querySelectorAll('[data-copy-link]').forEach((btn) => {
       btn.onclick = async () => {
@@ -260,6 +285,17 @@ async function renderLinksContent() {
       };
     });
     if (showMode) direct.bindLinkButtons(el, renderLinks);
+    el.querySelectorAll('[data-edit-amounts]').forEach((button) => {
+      button.onclick = () => {
+        const link = (links || []).find(l => String(l.id) === button.dataset.editAmounts);
+        if (!link) return;
+        editingAmountLink = link.id;
+        fillLinkAmountOptions('edit', link);
+        document.getElementById('linkAmountEditHeading').textContent = 'Edit amounts for /' + link.slug;
+        editor.hidden = false;
+        editor.scrollIntoView({block:'start',behavior:'smooth'});
+      };
+    });
     el.querySelectorAll('[data-toggle-link]').forEach((btn) => {
       btn.onclick = async () => {
         const next = btn.dataset.active !== '1';
@@ -279,9 +315,51 @@ async function renderLinksContent() {
   paintRows();
 }
 
+// New configured links use the requested $10–$1000 window. Existing
+// unconfigured links retain their original server limits until edited.
+function amountOptionsFields(prefix) {
+  const id = (name) => prefix + name;
+  return '<div class="grid split link-amount-options">'
+    + '<div class="field"><label for="' + id('Min') + '">Minimum USD</label><input id="' + id('Min') + '" type="number" min="10" max="1000" step="0.01" value="10" required></div>'
+    + '<div class="field"><label for="' + id('Max') + '">Maximum USD</label><input id="' + id('Max') + '" type="number" min="10" max="1000" step="0.01" value="1000" required></div>'
+    + '<div class="field"><label for="' + id('Chips') + '">Quick amounts (comma separated)</label><input id="' + id('Chips') + '" type="text" value="10,25,50,100,250,500" maxlength="120"></div>'
+    + '<div class="field"><label for="' + id('Note') + '">Checkout note (optional)</label><textarea id="' + id('Note') + '" maxlength="240" rows="2"></textarea></div>'
+    + '</div><p class="hint">Choose up to 8 amounts within the link range. Old links without settings retain their previous amount limits.</p>';
+}
+function fillLinkAmountOptions(prefix, link) {
+  document.getElementById(prefix + 'Min').value = link.min_usd ?? 10;
+  document.getElementById(prefix + 'Max').value = link.max_usd ?? 1000;
+  document.getElementById(prefix + 'Chips').value = Array.isArray(link.quick_amounts)
+    ? link.quick_amounts.join(',') : '10,25,50,100,250,500';
+  document.getElementById(prefix + 'Note').value = link.note || '';
+}
+function readLinkAmountOptions(prefix) {
+  const minStr = document.getElementById(prefix + 'Min').value.trim();
+  const maxStr = document.getElementById(prefix + 'Max').value.trim();
+  if (!/^\d{1,4}(\.\d{1,2})?$/.test(minStr) || !/^\d{1,4}(\.\d{1,2})?$/.test(maxStr))
+    throw new Error('Enter amounts with no more than two decimal places.');
+  const min = Number(minStr), max = Number(maxStr);
+  if (min < 10 || max > 1000 || max < min) throw new Error('Minimum and maximum must stay between $10 and $1000.');
+  const parts = document.getElementById(prefix + 'Chips').value.split(/[\s,]+/).filter(Boolean);
+  if (parts.length < 1 || parts.length > 8 || !parts.every(s => /^\d{1,4}(\.\d{1,2})?$/.test(s)))
+    throw new Error('Give 1–8 quick amounts (up to two decimals).');
+  const chips = parts.map(Number);
+  if (new Set(chips).size !== chips.length || chips.some(n => n < min || n > max))
+    throw new Error('Quick amounts must be unique and inside your amount range.');
+  const note = document.getElementById(prefix + 'Note').value.trim();
+  if (note.length > 240) throw new Error('Checkout note is too long.');
+  return { p_min_usd:min, p_max_usd:max, p_quick_amounts:chips, p_note:note };
+}
+async function saveLinkAmountOptions(linkId, options) {
+  const {error} = await sb.rpc('set_link_amount_options',{p_link_id:linkId,...options});
+  return error?.message || null;
+}
+
 async function makeLink() {
   const name = document.getElementById('linkName').value.trim();
   if (!name) return toast('Enter a name');
+  let options;
+  try { options = readLinkAmountOptions('new'); } catch (e) { return toast(e.message); }
   const btn = document.getElementById('makeLink');
   btn.disabled = true;
   const { data, error } = await sb.rpc('create_link_variants', { p_display_name: name, p_styles: ['kebab'] });
@@ -296,6 +374,9 @@ async function makeLink() {
     }
     const costError = await applyLinkCost(link?.id);
     if (costError) { btn.disabled = false; return toast(costError); }
+    if (!link?.id) { btn.disabled = false; return toast('Link was created but could not be loaded. Refresh links.'); }
+    const optionsError = await saveLinkAmountOptions(link.id, options);
+    if (optionsError) { btn.disabled = false; return toast('Link created, but payment amounts were not saved: ' + optionsError); }
     if (link?.id && window.cpayDirect && window.cpayDirect.chosenMode() === 'direct') {
       const { error: modeError } = await sb.rpc('set_link_settlement_mode', { p_link_id: link.id, p_mode: 'direct' });
       if (modeError) { btn.disabled = false; return toast(`Link created, paying your CPAY balance: ${modeError.message}`); }

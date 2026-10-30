@@ -28,6 +28,8 @@ create temp table authenticated_rpc_allowlist(
 insert into authenticated_rpc_allowlist(signature, kind, reason) values
   ('cpay_auto_approval_enabled(text)',                                        'public',        'returns the global freelancer auto-approve flag; no per-user data. Pending review: could be service-role only'),
   ('get_invoice_public(uuid)',                                                'public',        'public invoice page; needs the unguessable payment uuid; presentation fields only'),
+  ('get_link_amount_options(text)',                                               'public',        'public preview of only current link bounds, quick amounts and sanitized text note'),
+  ('set_link_amount_options(uuid, numeric, numeric, numeric[], text)',             'self_or_admin', 'active link owner or admin only; validates per-link limits and audits before/after'),
   ('get_link_preview(text)',                                                  'public',        'public payment-link page / OG preview by slug'),
   ('get_public_store(uuid)',                                                  'public',        'public creator storefront by user uuid; active accounts only, public fields only'),
   ('link_style_options(text)',                                                'public',        'slug suggestions for a name; only says whether a slug is taken'),

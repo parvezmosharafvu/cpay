@@ -116,73 +116,10 @@ revoke all on public.v2_rate_buckets from public,anon,authenticated;
 grant select,insert,update,delete on public.v2_rate_buckets to service_role;
 
 create or replace function public.v2_claim_rate(p_key text,p_max int)
-returns boolean language plpgsql security definer set search_path=public as $
+returns boolean language plpgsql security definer set search_path=public as $$
 declare v_count int;
 begin
- if p_key is null or p_key !~ '^[a-f0-9]{64}
--- is configured; not allowed to infer a percentage from legacy payments.
-create or replace function public.v2_create_link(
- p_slug text,p_display_name text,p_note text default '',
- p_min numeric default 10,p_max numeric default 1000,
- p_quick numeric[] default array[10,25,50,100,250,500]::numeric[]
-) returns uuid language plpgsql security definer set search_path=public as $$
-declare v_id uuid;
-begin
- if auth.uid() is null or not exists(
-   select 1 from public.profiles p where p.id=auth.uid() and p.account_status='active'
- ) then raise exception 'Active account required'; end if;
- if p_slug is null or p_slug ~ '^(admin|login|register|dashboard|api|pay|terms|privacy)$'
-   then raise exception 'Reserved slug'; end if;
- insert into public.v2_links(owner_id,slug,display_name,note,min_usd,max_usd,quick_amounts)
- values(auth.uid(),p_slug,p_display_name,coalesce(p_note,''),p_min,p_max,p_quick) returning id into v_id;
- return v_id;
-end $$;
-revoke all on function public.v2_create_link(text,text,text,numeric,numeric,numeric[]) from public,anon;
-grant execute on function public.v2_create_link(text,text,text,numeric,numeric,numeric[]) to authenticated;
-
-create or replace function public.v2_public_link(p_slug text)
-returns table(slug text,display_name text,note text,min_usd numeric,max_usd numeric,quick_amounts numeric[])
-language sql security definer stable set search_path=public as $$
- select l.slug,l.display_name,l.note,l.min_usd,l.max_usd,l.quick_amounts
- from public.v2_links l join public.profiles p on p.id=l.owner_id
- where l.slug=p_slug and l.active and p.account_status='active' limit 1
-$$;
-revoke all on function public.v2_public_link(text) from public;
-grant execute on function public.v2_public_link(text) to anon,authenticated;
-
--- Call ONLY after the node returned a confirmed settlement. The status gate
--- prevents double credit, including races with the watcher/on-demand lookup.
-create or replace function public.v2_reconcile_invoice(
- p_hash text,p_node_state text,p_paid_sats bigint default null
-) returns text language plpgsql security definer set search_path=public as $$
-declare v public.v2_invoices%rowtype; v_new text;
-begin
- if p_hash is null or p_hash !~ '^[a-f0-9]{64}$' or p_node_state not in ('settled','cancelled','open')
- then raise exception 'Invalid reconciliation'; end if;
- select * into v from public.v2_invoices where payment_hash=p_hash for update;
- if not found then raise exception 'Unknown invoice'; end if;
- if v.status in ('settled','expired','failed') then return v.status; end if;
- if v.status<>'pending' then return v.status; end if;
- if p_node_state='settled' then
-   if p_paid_sats is null or p_paid_sats<v.amount_sats then
-     raise exception 'Unproven invoice amount'; end if;
-   v_new:='settled';
-   update public.v2_invoices set status=v_new,settled_at=now(),confirmed_sats=p_paid_sats,checked_at=now() where id=v.id;
- elsif p_node_state='cancelled' or
-       (p_node_state='open' and now()>v.expires_at+interval '2 minutes') then
-   v_new:='expired';
-   update public.v2_invoices set status=v_new,checked_at=now() where id=v.id;
- else
-   update public.v2_invoices set checked_at=now() where id=v.id;
-   return 'pending';
- end if;
- insert into public.v2_payment_events(invoice_id,old_status,new_status,payment_hash)
- values(v.id,v.status,v_new,p_hash);
- return v_new;
-end $$;
-revoke all on function public.v2_reconcile_invoice(text,text,bigint) from public,anon,authenticated;
-grant execute on function public.v2_reconcile_invoice(text,text,bigint) to service_role;
- or p_max not between 1 and 1000
+ if p_key is null or p_key !~ '^[a-f0-9]{64}$' or p_max not between 1 and 1000
  then raise exception 'Invalid limit request'; end if;
  insert into public.v2_rate_buckets(bucket_key,minute_bucket,requests)
  values(p_key,floor(extract(epoch from now())/60)::bigint,1)
@@ -190,7 +127,7 @@ grant execute on function public.v2_reconcile_invoice(text,text,bigint) to servi
    set requests=public.v2_rate_buckets.requests+1
  returning requests into v_count;
  return v_count<=p_max;
-end $;
+end $$;
 revoke all on function public.v2_claim_rate(text,int) from public,anon,authenticated;
 grant execute on function public.v2_claim_rate(text,int) to service_role;
 

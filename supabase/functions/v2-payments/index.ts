@@ -83,6 +83,9 @@ function publicInvoice(row:{id:string;bolt11:string;amount_usd:unknown;amount_sa
 async function create(req:Request) {
   // Explicit opt-in on both DB and Edge. No fallback to older receiving rails.
   if(env("PAYLINK_V2_ENABLED")!=="true")return json({error:"New checkout is not enabled"},503);
+  const setting=await db.from("v2_settings").select("checkout_enabled").eq("id",true).maybeSingle();
+  if(setting.error||setting.data?.checkout_enabled!==true)
+    return json({error:"New checkout is not enabled"},503);
   let lnd:ReturnType<typeof makeLndClient>;
   try{lnd=client();}catch(e){if(e instanceof LndConfigurationError)return fail();throw e;}
   if(Number(req.headers.get("content-length")||"0")>4096)return json({error:"Request too large"},413);
@@ -175,7 +178,8 @@ async function status(req:Request) {
 async function watch(req:Request) {
   if(!constantTimeEqual(req.headers.get("x-cron-secret")||"",env("CRON_SECRET")))
     return json({error:"Unauthorized"},401);
-  if(env("PAYLINK_V2_ENABLED")!=="true")return json({enabled:false,checked:0});
+  // Even when creating new invoices is disabled, continue reconciling
+  // already issued payables so the accounting ledger never gets stuck.
   const {data,error}=await db.from("v2_invoices").select("payment_hash,amount_sats,expires_at")
     .eq("status","pending").order("created_at",{ascending:true}).limit(50);
   if(error)return fail();

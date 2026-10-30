@@ -12,6 +12,17 @@
 (function () {
   'use strict';
   const BN = {
+    "Amounts": "পরিমাণ",
+    "Minimum USD": "সর্বনিম্ন USD",
+    "Maximum USD": "সর্বোচ্চ USD",
+    "Quick amounts (comma separated)": "দ্রুত পরিমাণ (কমা দিয়ে আলাদা করুন)",
+    "Checkout note (optional)": "চেকআউট নোট (ঐচ্ছিক)",
+    "Edit payment amounts": "পেমেন্টের পরিমাণ সম্পাদনা",
+    "Save amounts": "পরিমাণ সংরক্ষণ",
+    "Accepted amount": "গ্রহণযোগ্য পরিমাণ",
+    "Choose up to 8 amounts within the link range. Old links without settings retain their previous amount limits.": "লিংকের সীমার মধ্যে সর্বোচ্চ ৮টি পরিমাণ বেছে নিন। পুরোনো লিংকের আগের সীমা বজায় থাকবে।",
+    "Payment amounts saved": "পেমেন্টের পরিমাণ সংরক্ষিত হয়েছে",
+    "Invalid amount options": "পরিমাণের সেটিংস সঠিক নয়",
     "Admin invoices": "অ্যাডমিন ইনভয়েস",
     "Payment methods": "পেমেন্ট পদ্ধতি",
     "Reports": "রিপোর্ট",

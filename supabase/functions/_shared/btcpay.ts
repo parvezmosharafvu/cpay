@@ -155,6 +155,34 @@ export function payDetails(methods: BtcpayPaymentMethod[]) {
   };
 }
 
+/**
+ * Boltpay-proven retrieval pattern: the BTC-LN destination can take a moment
+ * to appear after Greenfield creates an invoice. Read the same invoice's
+ * payment methods up to three times, with 800 ms between reads.
+ *
+ * Read-only GET calls only: never create a second invoice or send a payment.
+ * A temporarily missing BOLT11 is not a settlement or routing failure.
+ */
+export async function getPaymentDetailsWithRetry(
+  f: Fetch, cfg: BtcpayConfig, invoiceId: string, retryDelayMs = 800,
+): Promise<ReturnType<typeof payDetails>> {
+  let details = payDetails([]);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0 && retryDelayMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, retryDelayMs));
+    }
+    try {
+      details = payDetails(await getPaymentMethods(f, cfg, invoiceId));
+      if (details.bolt11) return details;
+    } catch (e) {
+      // The checkout link remains available if the optional destination
+      // cannot be read; never expose the BTCPay token or invoice payload.
+      console.warn("BTCPay payment-methods read failed (retryable):", (e as Error)?.name ?? "error");
+    }
+  }
+  return details;
+}
+
 /** BTC decimal string -> integer sats, exact (no float). */
 export function btcToSats(v: unknown): number {
   const m = /^(\d+)(?:\.(\d{0,8})\d*)?$/.exec(String(v ?? "").trim());

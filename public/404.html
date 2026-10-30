@@ -640,7 +640,7 @@ async function startPayment(){
   }
   clearStatus();
   if (!amount || amount < linkMinAmount || amount > linkMaxAmount){
-    setStatus('Enter an amount between 
+    setStatus('Enter an amount between $' + linkMinAmount.toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' and $' + linkMaxAmount.toLocaleString('en-US', { maximumFractionDigits: 2 }) + '.', 'err');
     return;
   }
   setPaying(true, 'Creating payment…');

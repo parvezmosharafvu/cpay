@@ -60,9 +60,10 @@ const db: Db = {
     if (error) return fail("link lookup", error);
     const link = first<{ link_id: string; user_id: string; is_active: boolean; cost_percent: number | null }>(data);
     if (!link) return null;
-    const { data: mode, error: modeErr } = await sb.from("payment_links").select("settlement_mode").eq("id", link.link_id).maybeSingle();
+    const { data: mode, error: modeErr } = await sb.from("payment_links").select("settlement_mode,min_usd,max_usd").eq("id", link.link_id).maybeSingle();
     if (modeErr) return fail("link mode lookup", modeErr);
-    return { ...link, settlement_mode: String(mode?.settlement_mode ?? "custodial") };
+    if (!mode) return undefined;
+    return { ...link, settlement_mode: String(mode.settlement_mode ?? "custodial"), min_usd: mode.min_usd, max_usd: mode.max_usd };
   },
   async profileMaxCents(userId) {
     const { data, error } = await sb.from("profile_limits").select("max_invoice_amount").eq("user_id", userId).maybeSingle();
